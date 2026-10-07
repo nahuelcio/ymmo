@@ -49,7 +49,7 @@ export interface CEnt {
   hitDz: number;
   /** dodge roll animation: start time and (own character only) the predicted path */
   rollAt?: number;
-  roll?: { fx: number; fz: number; tx: number; tz: number; ry: number };
+  roll?: { fx: number; fz: number; tx: number; tz: number; ry: number; at: number };
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
   /** quest giver's floating ! / ? */
@@ -872,10 +872,11 @@ export class Game {
       // predict the roll locally so it starts on the key press, not a round-trip later
       const end = dashEnd(self.pos.x, self.pos.z, dx, dz);
       self.rollAt = now;
-      self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz) };
+      self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
       play('dash');
     }
-    this.serverAction({ t: 'dash', x: self.pos.x + dx * 6, z: self.pos.z + dz * 6 });
+    // send our start point and direction so the server rolls along exactly the same path
+    this.serverAction({ t: 'dash', x: self.roll?.fx ?? self.pos.x, z: self.roll?.fz ?? self.pos.z, dx, dz });
   }
 
   /** Virtual joystick (mobile): dx/dy in -1..1, screen space; null when released. */
@@ -1078,14 +1079,21 @@ export class Game {
    * Returns whether the character is moving (for animation).
    */
   private updateSelf(c: CEnt, now: number, dt: number): boolean {
-    if (c.roll && c.rollAt) {
-      const k = (now - c.rollAt) / ROLL_MS;
+    if (c.roll) {
+      const k = (now - c.roll.at) / ROLL_MS;
       if (k < 1) {
         const e = 1 - (1 - k) * (1 - k); // ease out
         c.pos.x = c.roll.fx + (c.roll.tx - c.roll.fx) * e;
         c.pos.z = c.roll.fz + (c.roll.tz - c.roll.fz) * e;
         c.pos.y = heightAt(c.pos.x, c.pos.z);
         c.ry = c.roll.ry;
+        return false;
+      }
+      // hold at the end until a server snapshot shows the roll (stale ones would pull us back)
+      const srv0 = c.snaps[c.snaps.length - 1];
+      const synced = srv0 && Math.hypot(srv0.x - c.roll.tx, srv0.z - c.roll.tz) < 1.5;
+      if (!synced && now - c.roll.at < ROLL_MS + 800) {
+        c.pos.set(c.roll.tx, heightAt(c.roll.tx, c.roll.tz), c.roll.tz);
         return false;
       }
       c.roll = undefined;

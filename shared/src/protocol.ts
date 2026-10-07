@@ -76,7 +76,7 @@ export type C2S =
   | { t: 'pvpMode'; on: boolean }
   | { t: 'autoLoot'; on: boolean }
   /** dodge roll toward a point */
-  | { t: 'dash'; x: number; z: number }
+  | { t: 'dash'; x: number; z: number; dx: number; dz: number }
   | { t: 'stop' };
 
 export type S2C =

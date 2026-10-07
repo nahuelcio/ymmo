@@ -303,11 +303,15 @@ export class World {
   }
 
   /** Dodge roll: a quick 6 m dash toward (x,z) with a short invulnerability window. */
-  private dash(p: Player, x: number, z: number, now: number) {
+  private dash(p: Player, x: number, z: number, dx: number, dz: number, now: number) {
     if (p.dead) return;
     if (p.has('stun', now)) return this.sys(p, 'Estás aturdido.', 'You are stunned.');
     if ((p.cooldowns.get('dash') ?? 0) > now) return;
-    let dx = x - p.x, dz = z - p.z;
+    // the client predicts the roll from where it sees itself: accept that start if it's close to ours
+    if (Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x - p.x, z - p.z) < 2) {
+      const s = pushOut(x, z, p.radius);
+      this.setPos(p, s.x, s.z);
+    }
     let d = Math.hypot(dx, dz);
     if (!Number.isFinite(d) || d < 0.1) {
       dx = Math.sin(p.ry);
@@ -487,7 +491,7 @@ export class World {
         p.autoLoot = !!m.on;
         return;
       case 'dash':
-        return this.dash(p, Number(m.x), Number(m.z), now);
+        return this.dash(p, Number(m.x), Number(m.z), Number(m.dx), Number(m.dz), now);
     }
   }
 }
