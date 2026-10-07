@@ -1,26 +1,11 @@
 import * as THREE from 'three';
-import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
-import { NPCS, TELEPORTS, ZONES } from '../../../shared/src/data/world';
+import { fbm, heightAt, smoothstep, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { ZONES } from '../../../shared/src/data/world';
+import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist } from '../../../shared/src/layout';
 
 const SKY = 0xa9c6e0;
 
-/** Road segments from the village toward each hunting ground. */
-export const ROADS: [number, number, number, number][] = TELEPORTS.map((t) => {
-  const z = ZONES.find((zz) => zz.id === t.id)!;
-  return [TOWN.x, TOWN.z, z.x, z.z];
-});
-
-function distToSegment(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number]) {
-  const dx = bx - ax, dz = bz - az;
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
-  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
-}
-
-export function roadDist(x: number, z: number): number {
-  let d = Infinity;
-  for (const r of ROADS) d = Math.min(d, distToSegment(x, z, r));
-  return d;
-}
+export { ROADS, roadDist } from '../../../shared/src/layout';
 
 /** Ground colour (sRGB 0..1) used by both terrain mesh and minimap. */
 export function groundColor(x: number, z: number, h: number): [number, number, number] {
@@ -111,13 +96,8 @@ function buildTerrain(): THREE.Mesh {
   return mesh;
 }
 
-function zoneOf(x: number, z: number) {
-  return ZONES.find((zn) => Math.hypot(x - zn.x, z - zn.z) < zn.r * 1.1);
-}
-
 function buildTrees(): THREE.Group {
   const g = new THREE.Group();
-  const rng = mulberry32(7);
   const N = 2600;
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 2.2, 5);
   trunkGeo.translate(0, 1.1, 0);
@@ -132,30 +112,20 @@ function buildTrees(): THREE.Group {
   const col = new THREE.Color();
   let ti = 0, pi = 0, li = 0;
   const hide = new THREE.Matrix4().makeScale(0, 0, 0);
-  for (let i = 0; i < N * 3 && ti < N; i++) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
-    if (Math.hypot(x - TOWN.x, z - TOWN.z) < TOWN.r + 14 || roadDist(x, z) < 6) continue;
-    const h = heightAt(x, z);
-    if (h > 42) continue;
-    const zone = zoneOf(x, z);
-    // keep hunting grounds a bit more open
-    if (zone && rng() < 0.55) continue;
-    const sc = 0.7 + rng() * 0.7;
-    p.set(x, h - 0.1, z);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng() * Math.PI * 2);
-    s.set(sc, sc, sc);
+  for (const t of layoutTrees()) {
+    p.set(t.x, t.h - 0.1, t.z);
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot);
+    s.set(t.sc, t.sc, t.sc);
     m.compose(p, q, s);
     trunks.setMatrixAt(ti, m);
-    const dead = zone?.id === 'wastes';
-    trunks.setColorAt(ti++, col.set(dead ? 0x3a3030 : 0x6b4a2b));
-    if (dead) continue;
-    const pine = h > 10 || zone?.id === 'barracks' ? rng() < 0.8 : rng() < 0.35;
-    if (pine) {
+    trunks.setColorAt(ti++, col.set(t.dead ? 0x3a3030 : 0x6b4a2b));
+    if (t.dead) continue;
+    if (t.pine) {
       pines.setMatrixAt(pi, m);
-      pines.setColorAt(pi++, col.setHSL(0.3 + rng() * 0.05, 0.45, 0.22 + rng() * 0.08));
+      pines.setColorAt(pi++, col.setHSL(0.3 + t.hue * 0.05, 0.45, 0.22 + t.light * 0.08));
     } else {
       leaves.setMatrixAt(li, m);
-      leaves.setColorAt(li++, col.setHSL(0.22 + rng() * 0.08, 0.5, 0.3 + rng() * 0.1));
+      leaves.setColorAt(li++, col.setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1));
     }
   }
   for (const [mesh, used] of [[trunks, ti], [pines, pi], [leaves, li]] as const) {
@@ -171,23 +141,19 @@ function buildTrees(): THREE.Group {
 }
 
 function buildRocks(): THREE.InstancedMesh {
-  const rng = mulberry32(99);
   const N = 500;
   const geo = new THREE.DodecahedronGeometry(1, 0);
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), N);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   const col = new THREE.Color();
   let n = 0;
-  while (n < N) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
-    if (inTown(x, z) || roadDist(x, z) < 4) continue;
-    const sc = 0.3 + rng() * rng() * 2.5;
-    p.set(x, heightAt(x, z) + sc * 0.2, z);
-    q.setFromEuler(new THREE.Euler(rng() * 3, rng() * 3, rng() * 3));
-    s.set(sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6));
+  for (const r of layoutRocks()) {
+    p.set(r.x, r.y, r.z);
+    q.setFromEuler(new THREE.Euler(...r.e));
+    s.set(...r.s);
     m.compose(p, q, s);
     mesh.setMatrixAt(n, m);
-    mesh.setColorAt(n++, col.setHSL(0.08, 0.06, 0.38 + rng() * 0.15));
+    mesh.setColorAt(n++, col.setHSL(0.08, 0.06, 0.38 + r.light * 0.15));
   }
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -246,116 +212,78 @@ function buildTown(): THREE.Group {
   statue.position.set(TOWN.x, y + 2.7, TOWN.z);
   g.add(basin, water, ped, statue);
 
-  // houses in a ring, leaving road gaps
-  const roadAngles = ROADS.map(([ax, az, bx, bz]) => Math.atan2(bz - az, bx - ax));
-  const angDiff = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-  const rng = mulberry32(3);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + 0.1;
-    if (roadAngles.some((ra) => angDiff(a, ra) < 0.32)) continue;
-    const r = 32 + rng() * 8;
-    const hx = TOWN.x + Math.cos(a) * r, hz = TOWN.z + Math.sin(a) * r;
-    const hs = house(5 + rng() * 3, 5 + rng() * 2, rng() < 0.5 ? 0xe0d4b8 : 0xd0c0a0, rng() < 0.5 ? 0x8a3a2a : 0x4a5a7a);
-    hs.position.set(hx, y, hz);
-    hs.rotation.y = -a - Math.PI / 2;
+  const L = layoutTown();
+  for (const h of L.houses) {
+    const hs = house(h.w, h.d, h.wall, h.roof);
+    hs.position.set(h.x, y, h.z);
+    hs.rotation.y = h.rot;
     g.add(hs);
   }
   // merchant stalls behind NPCs
-  for (const n of NPCS) {
+  for (const st of L.stalls) {
     const stall = new THREE.Group();
     stall.add(box(3, 1, 1, 0x7a5a3a, 0, 0.5, 0));
     for (const sx of [-1.4, 1.4]) stall.add(box(0.15, 2.6, 0.15, 0x5a3a20, sx, 1.3, -0.4));
-    const awning = box(3.4, 0.12, 1.8, n.color, 0, 2.6, 0.2);
+    const awning = box(3.4, 0.12, 1.8, st.color, 0, 2.6, 0.2);
     awning.rotation.x = 0.25;
     stall.add(awning);
-    const dirX = Math.sin(n.ry), dirZ = Math.cos(n.ry);
-    stall.position.set(n.x - dirX * 1.6, y, n.z - dirZ * 1.6);
-    stall.rotation.y = n.ry;
+    stall.position.set(st.x, y, st.z);
+    stall.rotation.y = st.rot;
     g.add(stall);
   }
   // palisade
-  for (let i = 0; i < 48; i++) {
-    const a = (i / 48) * Math.PI * 2;
-    if (roadAngles.some((ra) => angDiff(a, ra) < 0.12)) continue;
-    const r = TOWN.r + 2;
-    const wx = TOWN.x + Math.cos(a) * r, wz = TOWN.z + Math.sin(a) * r;
-    const seg = box(7, 3.2, 0.7, 0x7a5a3a, wx, heightAt(wx, wz) + 1.4, wz);
-    seg.rotation.y = -a + Math.PI / 2;
+  for (const w of L.walls) {
+    const seg = box(7, 3.2, 0.7, 0x7a5a3a, w.x, heightAt(w.x, w.z) + 1.4, w.z);
+    seg.rotation.y = w.rot;
     g.add(seg);
-    if (i % 6 === 0) {
-      const tower = box(2, 6, 2, 0x6a4a2a, wx, heightAt(wx, wz) + 3, wz);
-      g.add(tower);
+    if (w.tower) {
+      g.add(box(2, 6, 2, 0x6a4a2a, w.x, heightAt(w.x, w.z) + 3, w.z));
       const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2, 4), mat(0x8a3a2a));
-      roof.position.set(wx, heightAt(wx, wz) + 7, wz);
+      roof.position.set(w.x, heightAt(w.x, w.z) + 7, w.z);
       roof.rotation.y = Math.PI / 4;
       g.add(roof);
     }
   }
   // gate pillars with banners at road exits
-  for (const ra of roadAngles) {
-    for (const off of [-0.11, 0.11]) {
-      const r = TOWN.r + 2;
-      const px = TOWN.x + Math.cos(ra + off) * r, pz = TOWN.z + Math.sin(ra + off) * r;
-      g.add(box(1.2, 5, 1.2, 0x8a8478, px, heightAt(px, pz) + 2.5, pz));
-      const banner = box(0.8, 2, 0.05, 0x8a1a2a, px, heightAt(px, pz) + 3.2, pz);
-      banner.rotation.y = -ra;
-      g.add(banner);
-    }
+  for (const gp of L.gates) {
+    g.add(box(1.2, 5, 1.2, 0x8a8478, gp.x, heightAt(gp.x, gp.z) + 2.5, gp.z));
+    const banner = box(0.8, 2, 0.05, 0x8a1a2a, gp.x, heightAt(gp.x, gp.z) + 3.2, gp.z);
+    banner.rotation.y = gp.rot;
+    g.add(banner);
   }
   return g;
 }
 
 function buildZoneProps(): THREE.Group {
   const g = new THREE.Group();
-  const rng = mulberry32(11);
-  for (const zn of ZONES) {
-    if (zn.id === 'barracks') {
-      // orc tents & totems
-      for (let i = 0; i < 10; i++) {
-        const a = rng() * Math.PI * 2, r = 15 + rng() * zn.r * 0.7;
-        const x = zn.x + Math.cos(a) * r, z = zn.z + Math.sin(a) * r;
-        const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 5), mat(0x7a5a3a));
-        tent.position.set(x, heightAt(x, z) + 2, z);
-        tent.castShadow = true;
-        g.add(tent);
-      }
-      for (let i = 0; i < 8; i++) {
-        const a = rng() * Math.PI * 2, r = rng() * zn.r * 0.8;
-        const x = zn.x + Math.cos(a) * r, z = zn.z + Math.sin(a) * r;
-        g.add(box(0.6, 4, 0.6, 0x5a3a20, x, heightAt(x, z) + 2, z));
-        g.add(box(1.2, 0.8, 0.8, 0xaa3322, x, heightAt(x, z) + 3.6, z));
-      }
-    }
-    if (zn.id === 'wastes') {
-      // ruined pillars & graves
-      for (let i = 0; i < 30; i++) {
-        const a = rng() * Math.PI * 2, r = rng() * zn.r * 0.9;
-        const x = zn.x + Math.cos(a) * r, z = zn.z + Math.sin(a) * r;
-        const h = 1 + rng() * 5;
-        const p = box(1, h, 1, 0x6a6460, x, heightAt(x, z) + h / 2 - 0.2, z);
-        p.rotation.z = (rng() - 0.5) * 0.3;
-        g.add(p);
-      }
-      for (let i = 0; i < 40; i++) {
-        const a = rng() * Math.PI * 2, r = rng() * zn.r * 0.9;
-        const x = zn.x + Math.cos(a) * r, z = zn.z + Math.sin(a) * r;
-        const s = box(0.7, 1, 0.2, 0x8a8480, x, heightAt(x, z) + 0.4, z);
-        s.rotation.y = rng() * 0.6;
-        g.add(s);
-      }
-    }
-    if (zn.id === 'hills') {
-      for (let i = 0; i < 8; i++) {
-        const a = rng() * Math.PI * 2, r = rng() * zn.r * 0.8;
-        const x = zn.x + Math.cos(a) * r, z = zn.z + Math.sin(a) * r;
-        const hut = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 2, 6), mat(0x6a5a3a));
-        hut.position.set(x, heightAt(x, z) + 1, z);
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 2, 6), mat(0x8a7a3a));
-        roof.position.set(x, heightAt(x, z) + 3, z);
-        hut.castShadow = roof.castShadow = true;
-        g.add(hut, roof);
-      }
-    }
+  const zp = layoutZoneProps();
+  for (const { x, z } of zp.tents) {
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 5), mat(0x7a5a3a));
+    tent.position.set(x, heightAt(x, z) + 2, z);
+    tent.castShadow = true;
+    g.add(tent);
+  }
+  for (const { x, z } of zp.totems) {
+    g.add(box(0.6, 4, 0.6, 0x5a3a20, x, heightAt(x, z) + 2, z));
+    g.add(box(1.2, 0.8, 0.8, 0xaa3322, x, heightAt(x, z) + 3.6, z));
+  }
+  for (const { x, z, h, tilt } of zp.ruins) {
+    const p = box(1, h, 1, 0x6a6460, x, heightAt(x, z) + h / 2 - 0.2, z);
+    p.rotation.z = tilt;
+    g.add(p);
+  }
+  for (const { x, z, rot } of zp.graves) {
+    const s = box(0.7, 1, 0.2, 0x8a8480, x, heightAt(x, z) + 0.4, z);
+    s.rotation.y = rot;
+    g.add(s);
+  }
+  for (const { x, z } of zp.huts) {
+    const hut = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 2, 6), mat(0x6a5a3a));
+    hut.position.set(x, heightAt(x, z) + 1, z);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 2, 6), mat(0x8a7a3a));
+    roof.position.set(x, heightAt(x, z) + 3, z);
+    hut.castShadow = roof.castShadow = true;
+    g.add(hut, roof);
   }
   return g;
 }

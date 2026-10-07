@@ -38,6 +38,8 @@ export abstract class Entity {
   /** appearance version: bump to force clients to receive a full record again */
   av = 0;
   cell = '';
+  /** cached path around obstacles (see World.stepToward) */
+  nav: { gx: number; gz: number; at: number; path: { x: number; z: number }[] } | null = null;
   constructor(public id: number, public x: number, public z: number) {}
   abstract hpPct(): number;
   flags(_now: number): number {

@@ -4,6 +4,7 @@ import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
 import { F_CASTING, F_DEAD, F_MOVING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
+import { findPath, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
@@ -99,7 +100,7 @@ export class Game {
   private hoverRing: THREE.Mesh;
   private hoverId: number | null = null;
   /** Client-side predicted move destination for our own character. */
-  private predict: { x: number; z: number; arrivedAt: number } | null = null;
+  private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[] } | null = null;
   private holdMove = false;
   private lastHoldSend = 0;
   private teleportPending = true;
@@ -484,7 +485,9 @@ export class Game {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
     this.net.send({ t: 'move', x: p.x, z: p.z });
-    this.predict = { x: p.x, z: p.z, arrivedAt: 0 };
+    const path = findPath(self.pos.x, self.pos.z, p.x, p.z);
+    const end = path[path.length - 1];
+    this.predict = { x: end.x, z: end.z, arrivedAt: 0, path };
     if (marker) {
       this.clickMarker.position.set(p.x, p.y + 0.08, p.z);
       this.clickMarker.visible = true;
@@ -666,14 +669,17 @@ export class Game {
     const pr = this.predict;
     if (pr && c.flags & F_DEAD) this.predict = null;
     if (this.predict && pr) {
-      const dx = pr.x - c.pos.x, dz = pr.z - c.pos.z;
+      while (pr.path.length > 1 && Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z) < 0.15) pr.path.shift();
+      const wp = pr.path[0];
+      const dx = wp.x - c.pos.x, dz = wp.z - c.pos.z;
       const d = Math.hypot(dx, dz);
       const step = (this.me.speed / 20) * dt;
       let moving = false;
       if (d > 0.05) {
         const k = Math.min(1, step / d);
-        c.pos.x += dx * k;
-        c.pos.z += dz * k;
+        const np = pushOut(c.pos.x + dx * k, c.pos.z + dz * k);
+        c.pos.x = np.x;
+        c.pos.z = np.z;
         let dr = Math.atan2(dx, dz) - c.ry;
         dr = Math.atan2(Math.sin(dr), Math.cos(dr));
         c.ry += dr * Math.min(1, dt * 25);

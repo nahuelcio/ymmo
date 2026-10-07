@@ -4,6 +4,7 @@ import { skillsFor } from '../../../shared/src/data/skills';
 import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
+import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
@@ -101,18 +102,37 @@ export class World {
     this.grid.update(e);
   }
 
-  /** Move e toward (tx,tz). Returns true when within stopDist. */
+  /**
+   * Move e toward (tx,tz) around static obstacles. Returns true when within stopDist.
+   * Straight line when clear, otherwise follows a cached A* path (refreshed as the goal moves).
+   */
   stepToward(e: Entity, tx: number, tz: number, speed: number, dt: number, stopDist: number): boolean {
-    const dx = tx - e.x, dz = tz - e.z;
-    const d = Math.hypot(dx, dz);
+    const d = Math.hypot(tx - e.x, tz - e.z);
     if (d <= stopDist + 0.001) {
       e.moving = false;
+      e.nav = null;
       return true;
     }
-    const step = Math.min(speed * dt, d - stopDist);
+    let wx = tx, wz = tz, wStop = stopDist;
+    if (!lineClear(e.x, e.z, tx, tz)) {
+      const n = e.nav;
+      if (!n || !n.path.length || Math.hypot(n.gx - tx, n.gz - tz) > 1.5 || this.now - n.at > 1500)
+        e.nav = { gx: tx, gz: tz, at: this.now, path: findPath(e.x, e.z, tx, tz) };
+      const path = e.nav!.path;
+      while (path.length > 1 && Math.hypot(path[0].x - e.x, path[0].z - e.z) < 0.15) path.shift();
+      if (path.length > 1 || Math.hypot(path[0].x - tx, path[0].z - tz) > 0.01) {
+        wx = path[0].x;
+        wz = path[0].z;
+        wStop = 0;
+      }
+    } else e.nav = null;
+    const dx = wx - e.x, dz = wz - e.z;
+    const wd = Math.hypot(dx, dz) || 1e-4;
+    const step = Math.min(speed * dt, Math.max(0, wd - wStop));
     e.ry = Math.atan2(dx, dz);
     e.moving = true;
-    this.setPos(e, e.x + (dx / d) * step, e.z + (dz / d) * step);
+    const np = pushOut(e.x + (dx / wd) * step, e.z + (dz / wd) * step, e.radius);
+    this.setPos(e, np.x, np.z);
     return false;
   }
 
@@ -152,7 +172,7 @@ export class World {
         for (let i = 0; i < sp.count; i++) {
           const a = rng() * Math.PI * 2;
           const r = tpl.boss ? 0 : Math.sqrt(rng()) * zone.r * 0.85;
-          const x = zone.x + Math.cos(a) * r, z = zone.z + Math.sin(a) * r;
+          const { x, z } = pushOut(zone.x + Math.cos(a) * r, zone.z + Math.sin(a) * r, 1);
           const m = new Mob(this.newId(), x, z, tpl, x, z, zone.r);
           m.ry = rng() * Math.PI * 2;
           this.mobs.push(m);
@@ -163,8 +183,8 @@ export class World {
   }
 
   townPoint() {
-    const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 6;
-    return { x: TOWN.x + Math.cos(a) * r, z: TOWN.z + Math.sin(a) * r };
+    const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 6;
+    return pushOut(TOWN.x + Math.cos(a) * r, TOWN.z + Math.sin(a) * r);
   }
 
   teleport(p: Player, x: number, z: number) {
