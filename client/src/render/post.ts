@@ -8,23 +8,33 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Settings } from '../settings';
 
-/** Saturation / contrast / vignette in one cheap full-screen pass. */
+/** Sharpen, white balance, saturation, contrast and vignette in one cheap full-screen pass. */
 const GradeShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
+    texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
     saturation: { value: 1 },
     contrast: { value: 1 },
     vignette: { value: 0.3 },
+    warmth: { value: 0 },
+    sharpen: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float saturation, contrast, vignette;
+    uniform vec2 texel;
+    uniform float saturation, contrast, vignette, warmth, sharpen;
     varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
+      if (sharpen > 0.0) {
+        vec3 n = texture2D(tDiffuse, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(texel.x, 0.0)).rgb
+               + texture2D(tDiffuse, vUv + vec2(0.0, texel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, texel.y)).rgb;
+        c.rgb += (c.rgb * 4.0 - n) * sharpen * 0.5;
+      }
+      c.rgb *= vec3(1.0 + warmth * 0.12, 1.0 + warmth * 0.03, 1.0 - warmth * 0.12);
       float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(l), c.rgb, saturation);
       c.rgb = (c.rgb - 0.5) * contrast + 0.5;
@@ -91,6 +101,8 @@ export class PostFX {
       this.grade.uniforms.saturation.value = s.saturation;
       this.grade.uniforms.contrast.value = s.contrast;
       this.grade.uniforms.vignette.value = s.vignette;
+      this.grade.uniforms.warmth.value = s.warmth;
+      this.grade.uniforms.sharpen.value = s.sharpen;
     }
   }
 
@@ -99,8 +111,9 @@ export class PostFX {
     const size = this.renderer.getSize(new THREE.Vector2());
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.composer.setSize(size.x, size.y);
+    const pr = this.renderer.getPixelRatio();
+    this.grade?.uniforms.texel.value.set(1 / (size.x * pr), 1 / (size.y * pr));
     if (this.fxaa) {
-      const pr = this.renderer.getPixelRatio();
       this.fxaa.uniforms.resolution.value.set(1 / (size.x * pr), 1 / (size.y * pr));
     }
   }

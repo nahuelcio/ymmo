@@ -208,6 +208,17 @@ export class Game {
       this.camera.far = s.viewDistance + 80;
       this.camera.updateProjectionMatrix();
     }
+    if (has('toneMapping', 'exposure')) {
+      const tm = s.toneMapping ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+      if (this.renderer.toneMapping !== tm) {
+        this.renderer.toneMapping = tm;
+        this.world.scene.traverse((o) => {
+          const m = (o as THREE.Mesh).material;
+          if (m) for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true;
+        });
+      }
+      this.renderer.toneMappingExposure = s.exposure;
+    }
     if (PostFX.needsRebuild(changed)) this.post.rebuild(s);
     else this.post.tune(s);
     if (has('showFps')) this.fpsEl.style.display = s.showFps ? 'block' : 'none';

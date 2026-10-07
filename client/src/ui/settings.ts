@@ -1,4 +1,4 @@
-import { settings, type Preset, type Settings, type ShadowQ } from '../settings';
+import { LOOKS, settings, type LookPreset, type Preset, type Settings, type ShadowQ } from '../settings';
 import { el, Win } from './dom';
 
 type Opt<T> = [T, string];
@@ -11,7 +11,7 @@ export class SettingsPanel {
   private body: HTMLDivElement;
 
   constructor(root: HTMLElement) {
-    this.win = new Win('settings', 'Settings', 260, 70, 400, root);
+    this.win = new Win('settings', 'Settings', 260, 60, 440, root);
     this.tabs = el('div', 'set-tabs', this.win.body);
     this.body = el('div', 'set-body', this.win.body);
     const foot = el('div', 'row set-foot', this.win.body);
@@ -42,6 +42,9 @@ export class SettingsPanel {
       this.select<number>('FPS limit', 'fpsCap', [[0, 'Unlimited'], [30, '30'], [60, '60'], [120, '120'], [144, '144']]);
       this.check('Show FPS counter', 'showFps');
     } else if (this.tab === 'shaders') {
+      this.lookCards();
+      this.check('Filmic tone mapping (ACES)', 'toneMapping');
+      if (s.toneMapping) this.range('Exposure', 'exposure', 0.6, 1.8, 0.05, (v) => v.toFixed(2));
       this.check('Bloom (glow on bright spots)', 'bloom');
       if (s.bloom) this.range('Bloom strength', 'bloomStrength', 0, 1.5, 0.05, (v) => v.toFixed(2));
       this.check('Ambient occlusion (GTAO, heavy)', 'ao');
@@ -51,6 +54,8 @@ export class SettingsPanel {
         this.range('Saturation', 'saturation', 0, 2, 0.05, (v) => v.toFixed(2));
         this.range('Contrast', 'contrast', 0.5, 1.5, 0.05, (v) => v.toFixed(2));
         this.range('Vignette', 'vignette', 0, 1, 0.05, (v) => v.toFixed(2));
+        this.range('Warmth', 'warmth', -1, 1, 0.05, (v) => (v > 0 ? '+' : '') + v.toFixed(2));
+        this.range('Sharpen', 'sharpen', 0, 1, 0.05, (v) => v.toFixed(2));
       }
       el('div', 'tt-dim set-hint', b, 'Post-processing runs only while at least one shader (or MSAA) is enabled.');
     } else if (this.tab === 'hud') {
@@ -65,6 +70,18 @@ export class SettingsPanel {
       this.check('Invert vertical rotation', 'invertY');
       this.check('Screen shake on hits', 'screenShake');
     }
+  }
+
+  /** One-click visual styles. */
+  private lookCards() {
+    const wrap = el('div', 'look-cards', this.body);
+    for (const [id, l] of Object.entries(LOOKS) as [Exclude<LookPreset, 'custom'>, (typeof LOOKS)['off']][]) {
+      const c = el('button', `look-card look-${id}${settings.s.look === id ? ' sel' : ''}`, wrap);
+      el('b', '', c, l.name);
+      el('span', '', c, l.desc);
+      c.onclick = () => settings.set({ look: id });
+    }
+    if (settings.s.look === 'custom') el('div', 'tt-dim set-hint', this.body, 'Custom look (you tweaked the values below).');
   }
 
   private row(label: string) {
