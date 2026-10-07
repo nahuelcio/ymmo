@@ -12,7 +12,7 @@ APP_DIR=/opt/claudi-mmo
 APP_USER=claudi
 PORT=3001
 NODE_DIR=/opt/node
-export PATH="$NODE_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+export PATH="$NODE_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 as_app() { sudo -u "$APP_USER" env PATH="$PATH" HOME="/home/$APP_USER" bash -c "$1"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Correlo como root (sudo)."; exit 1; }

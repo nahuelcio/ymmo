@@ -4,7 +4,7 @@
 set -euo pipefail
 APP_DIR=/opt/claudi-mmo
 BRANCH="${BRANCH:-main}"
-export PATH="/opt/node/bin:/usr/bin:/bin"
+export PATH="/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 as_app() { sudo -u claudi env PATH="$PATH" HOME=/home/claudi bash -c "$1"; }
 
 OLD=$(as_app "git -C $APP_DIR rev-parse HEAD")
