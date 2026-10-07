@@ -387,6 +387,9 @@ export class World {
         return respawnPlayer(this, p);
       case 'pvpMode':
         return setPvpMode(this, p, !!m.on);
+      case 'autoLoot':
+        p.autoLoot = !!m.on;
+        return;
     }
   }
 }

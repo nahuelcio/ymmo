@@ -177,15 +177,32 @@ function spawnGround(w: World, x: number, z: number, itemId: string, count: numb
   const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 1.5;
   const gi = new GroundItem(w.newId(), x + Math.cos(a) * r, z + Math.sin(a) * r, itemId, count, owners, now + 15000, now + 60000);
   w.add(gi);
+  return gi;
+}
+
+const AUTOLOOT_RANGE = 40;
+
+/** A random nearby owner with auto-loot on, who receives the drop directly. */
+function autoLooter(w: World, m: Mob, owners: Set<number>): Player | null {
+  const ps = [...owners]
+    .map((id) => w.players.get(id))
+    .filter((p): p is Player => !!p && !p.dead && p.autoLoot && Math.hypot(p.x - m.x, p.z - m.z) <= AUTOLOOT_RANGE);
+  return ps.length ? ps[Math.floor(Math.random() * ps.length)] : null;
 }
 
 export function dropLoot(w: World, m: Mob, owners: Set<number>, now: number) {
+  // auto-loot goes through the normal pickup, so a full bag leaves the item on the ground
+  const drop = (item: string, count: number) => {
+    const gi = spawnGround(w, m.x, m.z, item, count, owners, now);
+    const p = autoLooter(w, m, owners);
+    if (p) pickup(w, p, gi, now);
+  };
   const [amin, amax] = m.tpl.adena;
-  spawnGround(w, m.x, m.z, 'adena', Math.round(amin + Math.random() * (amax - amin)), owners, now);
+  drop('adena', Math.round(amin + Math.random() * (amax - amin)));
   for (const d of m.tpl.drops) {
     if (Math.random() >= d.chance) continue;
     const min = d.min ?? 1, max = d.max ?? 1;
-    spawnGround(w, m.x, m.z, d.item, min + Math.floor(Math.random() * (max - min + 1)), owners, now);
+    drop(d.item, min + Math.floor(Math.random() * (max - min + 1)));
   }
 }
 

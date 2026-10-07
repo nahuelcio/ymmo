@@ -24,7 +24,7 @@ export class SettingsPanel {
   private render() {
     const s = settings.s;
     this.tabs.innerHTML = '';
-    for (const [id, label] of [['graphics', 'Gráficos'], ['shaders', 'Shaders'], ['hud', 'Interfaz'], ['camera', 'Cámara']]) {
+    for (const [id, label] of [['graphics', 'Gráficos'], ['shaders', 'Shaders'], ['hud', 'Juego e interfaz'], ['camera', 'Cámara']]) {
       const b = el('button', `chat-tab${id === this.tab ? ' active' : ''}`, this.tabs, label);
       b.onclick = () => {
         this.tab = id;
@@ -59,6 +59,7 @@ export class SettingsPanel {
       }
       el('div', 'tt-dim set-hint', b, 'El post-procesado solo corre si hay al menos un shader (o MSAA) activado.');
     } else if (this.tab === 'hud') {
+      this.check('Auto-loot (el botín va directo al inventario)', 'autoLoot');
       this.range('Tamaño de la interfaz', 'uiScale', 0.7, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.check('Nombres sobre los personajes', 'nameplates');
       this.check('Barras de vida bajo los nombres', 'hpBars');

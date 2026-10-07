@@ -38,6 +38,8 @@ export interface Settings {
   camSensitivity: number;
   screenShake: boolean;
   invertY: boolean;
+  // gameplay
+  autoLoot: boolean;
 }
 
 type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa';
@@ -83,6 +85,7 @@ export const DEFAULTS: Settings = {
   camSensitivity: 1,
   screenShake: true,
   invertY: false,
+  autoLoot: false,
 };
 
 const KEY = 'settings:v2';

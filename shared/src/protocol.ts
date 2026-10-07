@@ -71,6 +71,7 @@ export type C2S =
   | { t: 'partyLeave' }
   | { t: 'respawn' }
   | { t: 'pvpMode'; on: boolean }
+  | { t: 'autoLoot'; on: boolean }
   | { t: 'stop' };
 
 export type S2C =

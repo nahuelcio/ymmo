@@ -229,6 +229,7 @@ export class Game {
     }
     if (PostFX.needsRebuild(changed)) this.post.rebuild(s);
     else this.post.tune(s);
+    if (has('autoLoot')) this.net.send({ t: 'autoLoot', on: s.autoLoot });
     if (has('showFps')) this.fpsEl.style.display = s.showFps ? 'block' : 'none';
     // HUD
     const root = document.documentElement.style;

@@ -62,6 +62,8 @@ export class Player extends Entity {
   pvpUntil = 0;
   /** PvP mode switch (off by default): off = can't attack or be attacked by players, unless PK. */
   pvpOn = false;
+  /** drops go straight to the bag (client setting) */
+  autoLoot = false;
   look: Look = DEFAULT_LOOK;
   lastCombat = 0;
   escapeAt = 0;
