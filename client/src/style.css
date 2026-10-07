@@ -226,7 +226,12 @@ input { font: inherit; user-select: text; }
 
 /* ---------- world labels ---------- */
 .nameplate { font-size: 12px; text-align: center; text-shadow: 0 0 3px #000, 0 0 2px #000, 1px 1px 1px #000; white-space: nowrap; pointer-events: none; }
-.np-title { color: #ffd98a; font-size: 10px; }
+.np-title { color: #ffd98a; font-size: 10px; letter-spacing: 0.3px; }
+.np-npc-name { color: #ffe9a8; font-weight: bold; }
+.np-player { font-weight: bold; }
+.np-self { opacity: 0.85; }
+.np-mob { font-size: 11px; }
+.np-lvl { font-size: 9px; font-weight: normal; color: #c8c8c8; opacity: 0.85; }
 .np-item { color: #e8e2c8; font-size: 10px; }
 .floater { font: bold 15px Tahoma, sans-serif; text-shadow: 0 0 3px #000, 1px 1px 0 #000; animation: floatUp 1.1s ease-out forwards; pointer-events: none; }
 .f-dmg { color: #fff; }

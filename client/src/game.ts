@@ -37,6 +37,33 @@ export interface CEnt {
 }
 
 const INTERP_DELAY = 110;
+/** How long to wait for the server to confirm arrival before trusting it again. */
+const PREDICT_SETTLE_MS = 600;
+/** Local prediction is discarded beyond this much disagreement with the server. */
+const PREDICT_MAX_ERR = 4;
+
+type Pick = { ent?: CEnt; point?: THREE.Vector3 };
+
+// Shared ground decals marking NPCs (gold) and other players (blue).
+const DECAL_GEO = new THREE.RingGeometry(0.78, 0.92, 32).rotateX(-Math.PI / 2);
+const decalMat = (color: number, opacity: number) =>
+  new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+const NPC_DECAL = decalMat(0xffc94a, 0.75);
+const PLAYER_DECAL = decalMat(0x5aa8ff, 0.45);
+
+const svgCursor = (svg: string, x: number, y: number, fallback: string) =>
+  `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${x} ${y}, ${fallback}`;
+const CURSORS = {
+  attack: svgCursor(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M2 2 L16 6 L24 20 L20 24 L6 16 Z" fill="#e33" stroke="#300" stroke-width="1.5"/><path d="M18 22 L26 26 M22 18 L26 26" stroke="#ffd36a" stroke-width="3"/></svg>',
+    2, 2, 'crosshair'),
+  talk: svgCursor(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M3 4 H25 V18 H12 L6 24 V18 H3 Z" fill="#ffd36a" stroke="#4a3200" stroke-width="1.5"/><circle cx="9" cy="11" r="1.6" fill="#4a3200"/><circle cx="14" cy="11" r="1.6" fill="#4a3200"/><circle cx="19" cy="11" r="1.6" fill="#4a3200"/></svg>',
+    3, 4, 'pointer'),
+  pickup: 'grab',
+  select: 'pointer',
+  move: 'default',
+};
 
 export function conColor(diff: number): string {
   if (diff <= -9) return '#9a9a9a';
@@ -69,6 +96,13 @@ export class Game {
   private targetRing: THREE.Mesh;
   private clickMarker: THREE.Mesh;
   private clickAt = 0;
+  private hoverRing: THREE.Mesh;
+  private hoverId: number | null = null;
+  /** Client-side predicted move destination for our own character. */
+  private predict: { x: number; z: number; arrivedAt: number } | null = null;
+  private holdMove = false;
+  private lastHoldSend = 0;
+  private rdown: { x: number; y: number } | null = null;
   private teleportPending = true;
   private last = performance.now();
   private down: { x: number; y: number } | null = null;
@@ -100,7 +134,11 @@ export class Game {
     this.clickMarker = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 24), glow(0x66ff88));
     this.clickMarker.rotation.x = -Math.PI / 2;
     this.clickMarker.visible = false;
-    this.world.scene.add(this.targetRing, this.clickMarker);
+    this.hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), glow(0xffffff));
+    this.hoverRing.rotation.x = -Math.PI / 2;
+    this.hoverRing.visible = false;
+    (this.hoverRing.material as THREE.MeshBasicMaterial).opacity = 0.5;
+    this.world.scene.add(this.targetRing, this.clickMarker, this.hoverRing);
 
     this.ui = new UI(this);
     this.bindNet();
@@ -200,26 +238,40 @@ export class Game {
     const r = c.rec;
     const el = c.labelEl;
     if (r.k === 'p') {
-      const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : r.id === this.me.id ? '#ffffff' : '#e8f0ff';
+      const self = r.id === this.me.id;
+      const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : self ? '#ffffff' : '#7fc4ff';
       el.innerHTML = '';
+      el.className = `nameplate np-player${self ? ' np-self' : ''}`;
       const n = document.createElement('div');
-      n.textContent = r.n;
+      n.textContent = self ? r.n : `${r.n} `;
       n.style.color = color;
+      if (!self) {
+        const l = document.createElement('span');
+        l.className = 'np-lvl';
+        l.textContent = `Lv ${r.l}`;
+        n.appendChild(l);
+      }
       el.appendChild(n);
     } else if (r.k === 'm') {
       el.innerHTML = '';
+      el.className = 'nameplate np-mob';
       const n = document.createElement('div');
-      n.textContent = r.n;
+      n.textContent = `${r.n} `;
       n.style.color = conColor(r.l - this.me.lvl);
+      const l = document.createElement('span');
+      l.className = 'np-lvl';
+      l.textContent = `Lv ${r.l}`;
+      n.appendChild(l);
       el.appendChild(n);
     } else if (r.k === 'n') {
       el.innerHTML = '';
+      el.className = 'nameplate np-npc';
       const t = document.createElement('div');
       t.className = 'np-title';
-      t.textContent = r.title;
+      t.textContent = `<${r.title}>`;
       const n = document.createElement('div');
-      n.textContent = r.n;
-      n.style.color = '#bfe0ff';
+      n.className = 'np-npc-name';
+      n.textContent = `◆ ${r.n}`;
       el.append(t, n);
     } else {
       el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${ITEMS[r.item]?.name ?? r.item}${r.c > 1 ? ` (${r.c})` : ''}`;
@@ -245,8 +297,17 @@ export class Game {
       radius = 0.45;
     }
     root.add(model);
-    const hit = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 8), new THREE.MeshBasicMaterial({ visible: false }));
-    hit.position.y = height / 2;
+    // generous hitbox: easier to click moving targets
+    const hitR = radius * 1.25 + 0.2, hitH = height + 0.4;
+    const hit = new THREE.Mesh(new THREE.CylinderGeometry(hitR, hitR, hitH, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    hit.position.y = hitH / 2;
+    if (r.k === 'n' || (r.k === 'p' && r.id !== this.me.id)) {
+      const decal = new THREE.Mesh(DECAL_GEO, r.k === 'n' ? NPC_DECAL : PLAYER_DECAL);
+      decal.scale.setScalar(Math.max(0.7, radius * 1.3));
+      decal.position.y = 0.06;
+      decal.renderOrder = 1;
+      root.add(decal);
+    }
     hit.userData.entId = r.id;
     root.add(hit);
     const { el, obj } = this.makeLabel();
@@ -279,6 +340,7 @@ export class Game {
       c.snaps = [];
       if (isSelf) {
         this.teleportPending = false;
+        this.predict = null;
         c.pos.set(x, heightAt(x, z), z);
         this.cam.snap(c.pos);
       }
@@ -395,24 +457,39 @@ export class Game {
 
   interact(c: CEnt, ctrl: boolean) {
     const r = c.rec;
-    if (r.k === 'i') return this.net.send({ t: 'pickup', id: r.id });
+    if (r.k === 'i') return this.serverAction({ t: 'pickup', id: r.id });
     if (r.k === 'n') {
       this.setTarget(r.id);
-      return this.net.send({ t: 'talk', id: r.id });
+      return this.serverAction({ t: 'talk', id: r.id });
     }
     if (r.id === this.me.id) return this.setTarget(r.id);
-    if (r.k === 'm') {
-      if (this.targetId === r.id && !(c.flags & F_DEAD)) this.net.send({ t: 'attack', id: r.id, force: false });
-      else this.setTarget(r.id);
-      return;
-    }
-    if (r.k === 'p') {
-      if (ctrl) {
-        this.setTarget(r.id);
-        this.net.send({ t: 'attack', id: r.id, force: true });
-      } else if (this.targetId === r.id && c.flags & (F_RED | F_PURPLE)) {
-        this.net.send({ t: 'attack', id: r.id, force: false });
-      } else this.setTarget(r.id);
+    this.setTarget(r.id);
+    // one click attacks anything hostile (mobs, flagged/PK players); ctrl forces PvP
+    if (this.isHostile(c) || (r.k === 'p' && ctrl)) this.serverAction({ t: 'attack', id: r.id, force: ctrl });
+  }
+
+  isHostile(c: CEnt): boolean {
+    if (c.flags & F_DEAD) return false;
+    if (c.rec.k === 'm') return true;
+    return c.rec.k === 'p' && c.id !== this.me.id && (c.flags & (F_RED | F_PURPLE)) !== 0;
+  }
+
+  /** Action whose movement the server drives: drop local prediction. */
+  private serverAction(m: Parameters<Net['send']>[0]) {
+    this.predict = null;
+    this.holdMove = false;
+    this.net.send(m);
+  }
+
+  moveTo(p: THREE.Vector3, marker: boolean) {
+    const self = this.self;
+    if (!self || self.flags & F_DEAD) return;
+    this.net.send({ t: 'move', x: p.x, z: p.z });
+    this.predict = { x: p.x, z: p.z, arrivedAt: 0 };
+    if (marker) {
+      this.clickMarker.position.set(p.x, p.y + 0.08, p.z);
+      this.clickMarker.visible = true;
+      this.clickAt = performance.now();
     }
   }
 
@@ -420,12 +497,12 @@ export class Game {
     if (this.targetId === null) return;
     const c = this.ents.get(this.targetId);
     if (!c || c.rec.k === 'i') return;
-    if (c.rec.k === 'n') return this.net.send({ t: 'talk', id: c.id });
-    this.net.send({ t: 'attack', id: c.id, force: this.ctrl });
+    if (c.rec.k === 'n') return this.serverAction({ t: 'talk', id: c.id });
+    this.serverAction({ t: 'attack', id: c.id, force: this.ctrl });
   }
 
   useSkill(id: string) {
-    this.net.send({ t: 'skill', skill: id, force: this.ctrl });
+    this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
   }
 
   useItemById(itemId: string) {
@@ -450,45 +527,76 @@ export class Game {
     let best: CEnt | null = null;
     for (const c of this.ents.values())
       if (c.rec.k === 'i' && c.pos.distanceTo(self.pos) < 20 && (!best || c.pos.distanceTo(self.pos) < best.pos.distanceTo(self.pos))) best = c;
-    if (best) this.net.send({ t: 'pickup', id: best.id });
+    if (best) this.serverAction({ t: 'pickup', id: best.id });
   }
 
   // ---------------------------------------------------------------- input
   private bindInput() {
     const el = this.renderer.domElement;
     const pointer = new THREE.Vector2();
-    const pick = (e: PointerEvent | MouseEvent) => {
+    const pick = (e: PointerEvent | MouseEvent, groundOnly = false): Pick => {
       pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
       this.raycaster.setFromCamera(pointer, this.camera);
-      const hits = this.raycaster.intersectObjects(this.hitboxes, false);
-      for (const h of hits) {
-        const c = this.ents.get(h.object.userData.entId as number);
-        if (c && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
+      if (!groundOnly) {
+        const hits = this.raycaster.intersectObjects(this.hitboxes, false);
+        for (const h of hits) {
+          const c = this.ents.get(h.object.userData.entId as number);
+          if (c && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
+        }
       }
       const t = this.raycaster.intersectObject(this.world.terrain, false)[0];
       return t ? { point: t.point } : {};
     };
+    const cursorFor = (c: CEnt | undefined) => {
+      if (!c) return CURSORS.move;
+      if (c.rec.k === 'n') return CURSORS.talk;
+      if (c.rec.k === 'i') return CURSORS.pickup;
+      return this.isHostile(c) || (c.rec.k === 'p' && this.ctrl) ? CURSORS.attack : CURSORS.select;
+    };
+    // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
     el.addEventListener('pointerdown', (e) => {
-      if (e.button === 0) this.down = { x: e.clientX, y: e.clientY };
-    });
-    el.addEventListener('pointerup', (e) => {
-      if (e.button !== 0 || !this.down) return;
-      const moved = Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y);
-      this.down = null;
-      if (moved > 6) return;
+      if (e.button === 2) this.rdown = { x: e.clientX, y: e.clientY };
+      if (e.button !== 0) return;
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
       if (r.ent) this.interact(r.ent, e.ctrlKey);
       else if (r.point) {
-        this.net.send({ t: 'move', x: r.point.x, z: r.point.z });
-        this.clickMarker.position.copy(r.point).add(new THREE.Vector3(0, 0.08, 0));
-        this.clickMarker.visible = true;
-        this.clickAt = performance.now();
+        this.moveTo(r.point, true);
+        this.holdMove = true;
+        this.lastHoldSend = performance.now();
+        el.setPointerCapture(e.pointerId);
+      }
+    });
+    el.addEventListener('pointerup', (e) => {
+      if (e.button === 0) this.holdMove = false;
+      // Right click without dragging the camera: LoL-style smart action.
+      if (e.button === 2 && this.rdown) {
+        const moved = Math.hypot(e.clientX - this.rdown.x, e.clientY - this.rdown.y);
+        this.rdown = null;
+        if (moved > 6) return;
+        const r = pick(e);
+        if (r.ent) {
+          if (r.ent.rec.k === 'p' && !this.isHostile(r.ent) && !e.ctrlKey) this.setTarget(r.ent.id);
+          else this.interact(r.ent, e.ctrlKey);
+        } else if (r.point) this.moveTo(r.point, true);
       }
     });
     el.addEventListener('pointermove', (e) => {
+      if (this.holdMove && e.buttons & 1) {
+        const now = performance.now();
+        if (now - this.lastHoldSend > 90) {
+          const r = pick(e, true);
+          if (r.point) {
+            this.lastHoldSend = now;
+            this.moveTo(r.point, false);
+          }
+        }
+        return;
+      }
       if (e.buttons) return;
-      el.style.cursor = pick(e).ent ? 'pointer' : 'default';
+      const ent = pick(e).ent;
+      this.hoverId = ent?.id ?? null;
+      el.style.cursor = cursorFor(ent);
     });
 
     const typing = () => {
@@ -552,6 +660,65 @@ export class Game {
   }
 
   // ---------------------------------------------------------------- frame
+  /** Red = hostile, gold = NPC, blue = friendly player, white = item. */
+  private entColor(c: CEnt): number {
+    if (this.isHostile(c)) return 0xff4444;
+    if (c.rec.k === 'n') return 0xffc94a;
+    if (c.rec.k === 'i') return 0xffffff;
+    return 0x55aaff;
+  }
+
+  /**
+   * Own character: walk toward the clicked point immediately (client-side prediction),
+   * otherwise follow the newest server position with no interpolation delay.
+   * Returns whether the character is moving (for animation).
+   */
+  private updateSelf(c: CEnt, now: number, dt: number): boolean {
+    const s = c.snaps;
+    const srv = s[s.length - 1];
+    const pr = this.predict;
+    if (pr && c.flags & F_DEAD) this.predict = null;
+    if (this.predict && pr) {
+      const dx = pr.x - c.pos.x, dz = pr.z - c.pos.z;
+      const d = Math.hypot(dx, dz);
+      const step = (this.me.speed / 20) * dt;
+      let moving = false;
+      if (d > 0.05) {
+        const k = Math.min(1, step / d);
+        c.pos.x += dx * k;
+        c.pos.z += dz * k;
+        let dr = Math.atan2(dx, dz) - c.ry;
+        dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+        c.ry += dr * Math.min(1, dt * 25);
+        moving = true;
+      } else if (!pr.arrivedAt) pr.arrivedAt = now;
+      // hand back to the server once it caught up, or if we drifted too far from it
+      const err = Math.hypot(srv.x - c.pos.x, srv.z - c.pos.z);
+      const srvDone = Math.hypot(srv.x - pr.x, srv.z - pr.z) < 0.3;
+      if (err > PREDICT_MAX_ERR || (pr.arrivedAt && (srvDone || now - pr.arrivedAt > PREDICT_SETTLE_MS))) this.predict = null;
+      c.pos.y = heightAt(c.pos.x, c.pos.z);
+      return moving;
+    }
+    // server-driven (chasing a target, picking up...): extrapolate the latest snapshot a little
+    let tx = srv.x, tz = srv.z;
+    const moving = (c.flags & F_MOVING) !== 0;
+    if (moving && s.length > 1) {
+      const a = s[s.length - 2];
+      const span = Math.max(1, srv.t - a.t);
+      const ahead = Math.min(120, now - srv.t);
+      tx += ((srv.x - a.x) / span) * ahead;
+      tz += ((srv.z - a.z) / span) * ahead;
+    }
+    const k = Math.min(1, dt * 18);
+    c.pos.x += (tx - c.pos.x) * k;
+    c.pos.z += (tz - c.pos.z) * k;
+    c.pos.y = heightAt(c.pos.x, c.pos.z);
+    let dr = srv.ry - c.ry;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    c.ry += dr * Math.min(1, dt * 14);
+    return moving;
+  }
+
   private frame() {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
@@ -562,7 +729,9 @@ export class Game {
 
     for (const c of this.ents.values()) {
       const s = c.snaps;
-      if (s.length) {
+      let moving = (c.flags & F_MOVING) !== 0;
+      if (c === self && s.length) moving = this.updateSelf(c, now, dt);
+      else if (s.length) {
         let x = s[s.length - 1].x, z = s[s.length - 1].z, ry = s[s.length - 1].ry;
         for (let i = s.length - 1; i > 0; i--) {
           if (s[i - 1].t <= rt) {
@@ -592,7 +761,7 @@ export class Game {
       // far rigs are tiny on screen: skip their (per-bone) animation
       if (c.rig && dSelf < 60) {
         animate(c.rig, {
-          moving: (c.flags & F_MOVING) !== 0,
+          moving,
           atkAge: now - c.atkAt,
           casting: (c.flags & F_CASTING) !== 0,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
@@ -620,12 +789,18 @@ export class Game {
       this.targetRing.position.y += 0.12;
       const s = Math.max(0.7, t.radius * 1.4);
       this.targetRing.scale.setScalar(s + Math.sin(tSec * 5) * 0.05);
-      (this.targetRing.material as THREE.MeshBasicMaterial).color.set(
-        t.rec.k === 'm' || (t.rec.k === 'p' && t.flags & (F_RED | F_PURPLE) && t.id !== this.me.id) ? 0xff4444 : 0x55aaff,
-      );
+      (this.targetRing.material as THREE.MeshBasicMaterial).color.set(this.entColor(t));
     } else this.targetRing.visible = false;
+    const h = this.hoverId !== null && this.hoverId !== this.targetId ? this.ents.get(this.hoverId) : undefined;
+    if (h) {
+      this.hoverRing.visible = true;
+      this.hoverRing.position.copy(h.pos);
+      this.hoverRing.position.y += 0.1;
+      this.hoverRing.scale.setScalar(Math.max(0.7, h.radius * 1.4));
+      (this.hoverRing.material as THREE.MeshBasicMaterial).color.set(this.entColor(h));
+    } else this.hoverRing.visible = false;
     if (this.clickMarker.visible) {
-      const k = (now - this.clickAt) / 600;
+      const k = (now - this.clickAt) / 400;
       this.clickMarker.visible = k < 1;
       this.clickMarker.scale.setScalar(1 + k);
       (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
