@@ -8,8 +8,9 @@ import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
-import { canAttack, requestSkill, respawnPlayer, setPvpMode } from '../systems/combat';
+import { canAttack, gainXp, requestSkill, respawnPlayer, setPvpMode } from '../systems/combat';
 import * as inv from '../systems/inventory';
+import { acceptQuest, onInventoryChanged, turnInQuest } from '../systems/quests';
 import * as party from '../systems/party';
 import { handleChat } from '../systems/chat';
 
@@ -216,6 +217,7 @@ export class World {
       if (p.invDirty) {
         p.invDirty = false;
         p.send({ t: 'inv', items: p.inv, adena: p.adena });
+        onInventoryChanged(this, p);
       }
     }
   }
@@ -365,6 +367,13 @@ export class World {
         return inv.sell(this, p, m.npc, m.u, Math.floor(Number(m.qty)));
       case 'teleport':
         return inv.gatekeeper(this, p, m.npc, String(m.dest));
+      case 'questAccept':
+        return acceptQuest(this, p, m.npc);
+      case 'questTurnIn': {
+        const xp = turnInQuest(this, p, m.npc);
+        if (xp > 0) gainXp(this, p, xp);
+        return;
+      }
       case 'chat':
         return handleChat(this, p, String(m.text ?? ''));
       case 'partyInvite':

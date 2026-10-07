@@ -31,7 +31,7 @@ export interface NpcDef {
   name: string;
   title: string;
   x: number; z: number; ry: number;
-  kind: 'shop' | 'gatekeeper' | 'talker';
+  kind: 'shop' | 'gatekeeper' | 'talker' | 'quest';
   shop?: string[];
   color: number;
   greeting: string;
@@ -87,4 +87,26 @@ export const NPCS: NpcDef[] = [
     greeting: 'Where would you like to go? For a small fee, of course.' },
   { id: 'luigi', name: 'Luigi', title: 'Village Elder (allegedly)', x: -3, z: -8.5, ry: 0, kind: 'talker', color: 0x7a7468,
     greeting: 'Eh? Who is there? Is this the chat?', lines: LUIGI_LINES, look: { bald: true, beard: 0xe8e8e8, skin: 0xe0b090 } },
+  { id: 'mira', name: 'Mira', title: 'Village Watch', x: 0, z: -24, ry: Math.atan2(0, 24), kind: 'quest', color: 0xc4a574,
+    greeting: 'The south road is crawling with keltirs.' },
+  { id: 'bram', name: 'Bram', title: 'Hunter', x: 22, z: -16, ry: Math.atan2(-22, 16), kind: 'quest', color: 0x6a5030,
+    greeting: 'Wolves have been coming right up to the palisade.' },
+  { id: 'sella', name: 'Sella', title: 'Scout', x: -22, z: -16, ry: Math.atan2(22, 16), kind: 'quest', color: 0x3a6a4a,
+    greeting: 'Goblins in the hills are getting bold.' },
+  { id: 'dorian', name: 'Dorian', title: 'Tracker', x: 26, z: 8, ry: Math.atan2(-26, -8), kind: 'quest', color: 0x4a5a3a,
+    greeting: 'Something with scales is eating the goats.' },
+  { id: 'vessa', name: 'Vessa', title: 'Quartermaster', x: -26, z: 8, ry: Math.atan2(26, -8), kind: 'quest', color: 0x8a6a3a,
+    greeting: 'The barracks will not thin themselves.' },
+  { id: 'harun', name: 'Harun', title: 'Gravedigger', x: 14, z: 26, ry: Math.atan2(-14, -26), kind: 'quest', color: 0x4a4a55,
+    greeting: 'The wastes spit bones back at the living.' },
+  { id: 'nira', name: 'Nira', title: 'Stonecutter', x: -14, z: 26, ry: Math.atan2(14, -26), kind: 'quest', color: 0x7a7a70,
+    greeting: 'The golems are shedding stone all over the waste.' },
+  { id: 'kael', name: 'Kael', title: 'Ranger', x: 108, z: 40, ry: Math.atan2(12, -15), kind: 'quest', color: 0x2f6a38,
+    greeting: 'The elder keltirs lead every pack in this meadow.' },
+  { id: 'grit', name: 'Grit', title: 'Pathfinder', x: 30, z: -138, ry: Math.atan2(-15, -12), kind: 'quest', color: 0x5a7a32,
+    greeting: 'Brutes guard the heart of these hills.' },
+  { id: 'rusk', name: 'Rusk', title: 'Captain', x: -136, z: -44, ry: Math.atan2(-14, 14), kind: 'quest', color: 0x8a3a2a,
+    greeting: 'Their captain still shouts orders from the barracks.' },
+  { id: 'mael', name: 'Mael', title: 'Sister', x: -30, z: 160, ry: Math.atan2(15, 15), kind: 'quest', color: 0x5a3a6a,
+    greeting: 'Kaim Vanul must not be allowed to rise.' },
 ];

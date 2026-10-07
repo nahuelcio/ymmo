@@ -68,6 +68,10 @@ export class Player extends Entity {
   party: Party | null = null;
   pendingInvite: { from: number; until: number } | null = null;
   talkingTo: number | null = null;
+  /** Accepted and finished quests. Progress is the kill counter; collect quests read the inventory. */
+  quests = new Map<string, { progress: number; done: boolean }>();
+  /** Quest ids we already announced as ready, so login does not repeat the message. */
+  questReadyTold = new Set<string>();
   /** last update sent per known entity: [id, x, z, ry, hp, flags] */
   known = new Map<number, number[]>();
   knownAv = new Map<number, number>();
