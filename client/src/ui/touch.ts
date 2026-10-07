@@ -1,5 +1,6 @@
 import type { Game } from '../game';
 import { el } from './dom';
+import { t as tx } from '../lang';
 
 /** Phones and tablets (coarse pointer / touch screen). Desktop never sees the touch UI. */
 export function isTouchDevice(): boolean {
@@ -25,10 +26,10 @@ export class TouchControls {
       b.addEventListener('pointerup', up);
       b.addEventListener('pointercancel', up);
     };
-    btn('tb-attack', '⚔️', 'Atacar', () => g.attackTarget());
-    btn('tb-dash', '💨', 'Rodar', () => g.dash());
-    btn('tb-target', '🎯', 'Objetivo', () => g.nextTarget());
-    btn('tb-loot', '✋', 'Juntar', () => g.pickupNearest());
+    btn('tb-attack', '⚔️', tx('Atacar', 'Attack'), () => g.attackTarget());
+    btn('tb-dash', '💨', tx('Rodar', 'Roll'), () => g.dash());
+    btn('tb-target', '🎯', tx('Objetivo', 'Target'), () => g.nextTarget());
+    btn('tb-loot', '✋', tx('Juntar', 'Loot'), () => g.pickupNearest());
   }
 
   private joystick(root: HTMLElement) {

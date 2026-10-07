@@ -1,12 +1,13 @@
 import type { Game } from '../game';
 import { el } from './dom';
+import { lang, t as tx } from '../lang';
 
 type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce';
 const TABS: { id: string; label: string; show: Ch[] }[] = [
-  { id: 'all', label: 'Todo', show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
+  { id: 'all', label: tx('Todo', 'All'), show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
   { id: 'party', label: 'Party', show: ['party', 'announce'] },
-  { id: 'whisper', label: 'Susurros', show: ['whisper', 'announce'] },
-  { id: 'sys', label: 'Sistema', show: ['sys', 'announce'] },
+  { id: 'whisper', label: tx('Susurros', 'Whispers'), show: ['whisper', 'announce'] },
+  { id: 'sys', label: tx('Sistema', 'System'), show: ['sys', 'announce'] },
 ];
 
 export class Chat {
@@ -35,7 +36,7 @@ export class Chat {
     this.log = el('div', 'chat-log', box);
     this.input = el('input', 'chat-input', box);
     this.input.maxLength = 200;
-    this.input.placeholder = 'Enter para chatear — !grito  #party  "nombre susurro  /help';
+    this.input.placeholder = tx('Enter para chatear — !grito  #party  "nombre susurro  /help', 'Enter to chat — !shout  #party  "name whisper  /help');
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
@@ -77,7 +78,7 @@ export class Chat {
   private renderToggle() {
     const h = this.hidden;
     this.toggleBtn.textContent = h ? (this.unread ? `▲ ${this.unread > 99 ? '99+' : this.unread}` : '▲') : '▼';
-    this.toggleBtn.title = h ? 'Mostrar chat' : 'Ocultar chat';
+    this.toggleBtn.title = h ? tx('Mostrar chat', 'Show chat') : tx('Ocultar chat', 'Hide chat');
     this.toggleBtn.classList.toggle('has-unread', h && this.unread > 0);
   }
 

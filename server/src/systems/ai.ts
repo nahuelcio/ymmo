@@ -2,6 +2,7 @@ import { inTown } from '../../../shared/src/terrain';
 import { Mob } from '../world/entities';
 import { dist, face, type World } from '../world/World';
 import { physDamage } from '../../../shared/src/formulas';
+import { mobName, tr } from '../../../shared/src/i18n';
 import { applyDamage, applyStatus, mobAttack } from './combat';
 
 const LEASH = 50;
@@ -137,5 +138,5 @@ function respawn(w: World, m: Mob) {
   m.dest = null;
   m.av++;
   w.setPos(m, m.homeX, m.homeZ);
-  if (m.tpl.boss) w.broadcast({ t: 'chat', ch: 'announce', from: '', text: `¡El jefe ${m.tpl.name} despertó en los Páramos Malditos!` });
+  if (m.tpl.boss) w.announce((l) => tr(l, `¡El jefe ${m.tpl.name} despertó en los Páramos Malditos!`, `The raid boss ${mobName(m.tpl.id, 'en')} has awakened in the Cursed Wastes!`));
 }

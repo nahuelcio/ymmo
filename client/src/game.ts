@@ -3,6 +3,8 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
 import { MOBS } from '../../shared/src/data/mobs';
+import { itemName, mobName, npcText, zoneName } from '../../shared/src/i18n';
+import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
@@ -262,7 +264,7 @@ export class Game {
       this.me = m.s;
       this.adena = m.s.adena;
       this.ui.onMe();
-      if (prevZone !== m.s.zone) this.ui.hud.banner(m.s.zone);
+      if (prevZone !== m.s.zone) this.ui.hud.banner(zoneName(m.s.zone, lang));
       if (prevLvl !== m.s.lvl) this.refreshQuestMarkers();
     });
     n.on('inv', (m) => {
@@ -325,7 +327,7 @@ export class Game {
         this.fx.pillar(e.pos.clone(), 0xffd966);
         this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
       }
-      if (m.id === this.me.id) this.ui.hud.banner(`¡Nivel ${m.lvl}!`, true);
+      if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
     n.on('chat', (m) => this.ui.chat.add(m.ch, m.from, m.text));
     n.on('error', (m) => this.sys(m.msg));
@@ -369,13 +371,13 @@ export class Game {
         const sw = document.createElement('span');
         sw.className = 'np-pvp';
         sw.textContent = '⚔';
-        sw.title = 'PvP activado';
+        sw.title = tx('PvP activado', 'PvP on');
         n.prepend(sw);
       }
       if (!self) {
         const l = document.createElement('span');
         l.className = 'np-lvl';
-        l.textContent = `Nv ${r.l}`;
+        l.textContent = `${tx('Nv', 'Lv')} ${r.l}`;
         n.appendChild(l);
       }
       el.appendChild(n);
@@ -386,12 +388,12 @@ export class Game {
       el.className = 'nameplate np-mob';
       const n = document.createElement('div');
       const elite = MOBS[r.tpl]?.elite;
-      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${elite ? '👑 ' : ''}${r.n} `;
+      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${elite ? '👑 ' : ''}${mobName(r.tpl, lang)} `;
       if (elite) el.classList.add('np-elite');
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
       l.className = 'np-lvl';
-      l.textContent = `Nv ${r.l}`;
+      l.textContent = `${tx('Nv', 'Lv')} ${r.l}`;
       n.appendChild(l);
       el.appendChild(n);
       this.addHpBar(c);
@@ -401,13 +403,13 @@ export class Game {
       el.className = 'nameplate np-npc';
       const t = document.createElement('div');
       t.className = 'np-title';
-      t.textContent = `<${r.title}>`;
+      t.textContent = `<${npcText(r.npc, 'title', lang)}>`;
       const n = document.createElement('div');
       n.className = 'np-npc-name';
       n.textContent = `◆ ${r.n}`;
       el.append(t, n);
     } else {
-      el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${ITEMS[r.item]?.name ?? r.item}${r.c > 1 ? ` (${r.c})` : ''}`;
+      el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${itemName(r.item, lang)}${r.c > 1 ? ` (${r.c})` : ''}`;
       el.classList.add('np-item');
     }
   }
@@ -673,7 +675,7 @@ export class Game {
     const vol = mine || byMe ? 1 : this.near(t) * 0.45;
     if (m.miss) {
       play('miss', vol);
-      return this.floatText(t, 'Falló', 'f-miss');
+      return this.floatText(t, tx('Falló', 'Miss'), 'f-miss');
     }
     if (m.heal) {
       play('heal', vol * 0.8);
@@ -701,7 +703,7 @@ export class Game {
       else if (m.crit && m.s === this.me.id) this.cam.shake(0.12);
     }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
-    if (m.crit && m.s === this.me.id) this.sys(`¡Crítico! ${m.v} de daño.`);
+    if (m.crit && m.s === this.me.id) this.sys(tx(`¡Crítico! ${m.v} de daño.`, `Critical hit! ${m.v} damage.`));
     if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
   }
 
@@ -871,7 +873,7 @@ export class Game {
   }
 
   useSkill(id: string) {
-    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No hay enemigos cerca.');
+    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
   }
 

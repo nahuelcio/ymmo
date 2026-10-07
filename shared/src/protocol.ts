@@ -46,6 +46,7 @@ export interface PartyMember { id: number; name: string; lvl: number; cls: Class
 
 // Messages are plain JSON objects with a `t` discriminator.
 export type C2S =
+  | { t: 'lang'; lang: 'es' | 'en' }
   | { t: 'login'; user: string; pass: string; register: boolean }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }

@@ -5,6 +5,8 @@ import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/ter
 import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
+import { lang, t as tx } from '../lang';
+import { campName, zoneName } from '../../../shared/src/i18n';
 
 const RES = 256;
 
@@ -62,7 +64,7 @@ export class Minimap {
     zout.onclick = () => (this.viewR = Math.min(300, this.viewR / 0.75));
     this.canvas.onclick = () => this.toggleMap();
 
-    this.mapWin = new Win('worldmap', 'Mapa del Mundo — Frontera de Aden', 200, 60, 540, root);
+    this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = 512;
   }
@@ -87,18 +89,18 @@ export class Minimap {
       ctx.arc(toMap(z.x) * S, toMap(z.z) * S, (z.r / (2 * WORLD_HALF)) * 512, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      this.label(ctx, `${z.name} (${z.levels})`, toMap(z.x) * S, toMap(z.z) * S);
+      this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, toMap(z.x) * S, toMap(z.z) * S);
     }
     ctx.fillStyle = '#ffd966';
     ctx.beginPath();
     ctx.arc(toMap(TOWN.x) * S, toMap(TOWN.z) * S, 6, 0, Math.PI * 2);
     ctx.fill();
-    this.label(ctx, TOWN.name, toMap(TOWN.x) * S, toMap(TOWN.z) * S - 12);
+    this.label(ctx, zoneName(TOWN.name, lang), toMap(TOWN.x) * S, toMap(TOWN.z) * S - 12);
     // hostile camps
     for (const c of CAMPS) {
       const x = toMap(c.x) * S, y = toMap(c.z) * S;
       this.campIcon(ctx, x, y, 9);
-      this.label(ctx, `${c.name} (Nv ${c.level})`, x, y - 12);
+      this.label(ctx, `${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12);
     }
     // quest hunting areas
     for (const { zone, quests } of questAreas(this.g.questTargets())) {
@@ -163,7 +165,7 @@ export class Minimap {
     if (now - this.lastDraw < 150) return;
     this.lastDraw = now;
     const self = this.g.self;
-    this.zoneEl.textContent = this.g.me.zone;
+    this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
     if (!self) return;
     const ctx = this.canvas.getContext('2d')!;
     const W = this.canvas.width;

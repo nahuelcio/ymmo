@@ -5,6 +5,8 @@ import {
   CLASSES, GENDERS, HAIR_COLORS, HAIR_STYLES, RACES, statMods, type ClassType, type Gender, type Look, type Race,
 } from '../../shared/src/data/classes';
 import { allSkillsFor } from '../../shared/src/data/skills';
+import { className, genderDesc, genderName, hairStyle, LANGS, raceDesc, raceName, skillDesc, skillName } from '../../shared/src/i18n';
+import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
 import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
@@ -26,7 +28,13 @@ function screen(): HTMLDivElement {
   const wrap = el('div', 'screen', screens);
   const logo = el('div', 'logo', wrap);
   el('div', 'logo-title', logo, 'CLAUDI');
-  el('div', 'logo-sub', logo, 'Crónica I · El Alba de Aden');
+  el('div', 'logo-sub', logo, t('Crónica I · El Alba de Aden', 'Chronicle I · Dawn of Aden'));
+  // language picker (reloads the page in the chosen language)
+  const lp = el('div', 'lang-pick', screens);
+  for (const L of LANGS) {
+    const b = el('button', `lang-btn${L.id === lang ? ' sel' : ''}`, lp, `${L.flag} ${L.label}`);
+    b.onclick = () => setLang(L.id);
+  }
   return el('div', 'screen-box panel', wrap);
 }
 
@@ -39,12 +47,12 @@ let showError: (m: string) => void = () => {};
 
 function loginScreen() {
   const box = screen();
-  el('h2', '', box, 'Ingresar');
+  el('h2', '', box, t('Ingresar', 'Login'));
   const user = el('input', 'field', box);
-  user.placeholder = 'Cuenta';
+  user.placeholder = t('Cuenta', 'Account');
   user.autocomplete = 'username';
   const pass = el('input', 'field', box);
-  pass.placeholder = 'Contraseña';
+  pass.placeholder = t('Contraseña', 'Password');
   pass.type = 'password';
   pass.autocomplete = 'current-password';
   try {
@@ -53,8 +61,8 @@ function loginScreen() {
     /* ignore */
   }
   const row = el('div', 'row', box);
-  const login = el('button', 'btn primary', row, 'Entrar');
-  const reg = el('button', 'btn', row, 'Crear cuenta');
+  const login = el('button', 'btn primary', row, t('Entrar', 'Login'));
+  const reg = el('button', 'btn', row, t('Crear cuenta', 'Create account'));
   showError = errorLine(box);
   const go = (register: boolean) => {
     try {
@@ -73,22 +81,22 @@ function loginScreen() {
     if (e.key === 'Enter') pass.focus();
   });
   (user.value ? pass : user).focus();
-  el('div', 'hint', box, '¿Primera vez? Elegí un nombre de cuenta y una contraseña, y tocá "Crear cuenta".');
+  el('div', 'hint', box, t('¿Primera vez? Elegí un nombre de cuenta y una contraseña, y tocá "Crear cuenta".', 'New here? Type an account name and password, then "Create account".'));
 }
 
 function charScreen(list: CharSummary[]) {
   const box = screen();
   box.classList.add('wide');
-  el('h2', '', box, 'Elegí tu personaje');
+  el('h2', '', box, t('Elegí tu personaje', 'Select your character'));
   const cols = el('div', 'char-cols', box);
   const left = el('div', 'char-list', cols);
   let selected = list[0]?.id ?? null;
   const renderList = () => {
     left.innerHTML = '';
-    if (!list.length) el('div', 'tt-dim', left, 'Todavía no tenés personajes. Creá uno →');
+    if (!list.length) el('div', 'tt-dim', left, t('Todavía no tenés personajes. Creá uno →', 'No characters yet. Create one →'));
     for (const c of list) {
       const card = el('div', `char-card${c.id === selected ? ' sel' : ''}`, left);
-      card.innerHTML = `<b></b><br><span class="tt-dim">Nv ${c.level} ${GENDERS[c.look.g].name} ${RACES[c.race].name} ${CLASSES[c.cls].name}</span>`;
+      card.innerHTML = `<b></b><br><span class="tt-dim">${t('Nv', 'Lv')} ${c.level} ${genderName(c.look.g, lang)} ${raceName(c.race, lang)} ${className(c.cls, lang)}</span>`;
       card.querySelector('b')!.textContent = c.name;
       card.onclick = () => {
         selected = c.id;
@@ -97,36 +105,36 @@ function charScreen(list: CharSummary[]) {
       card.ondblclick = () => net.send({ t: 'enter', id: c.id });
     }
     const row = el('div', 'row', left);
-    const enter = el('button', 'btn primary', row, 'Entrar al mundo');
+    const enter = el('button', 'btn primary', row, t('Entrar al mundo', 'Enter world'));
     enter.disabled = selected === null;
     enter.onclick = () => selected !== null && net.send({ t: 'enter', id: selected });
-    const del = el('button', 'btn danger', row, 'Borrar');
+    const del = el('button', 'btn danger', row, t('Borrar', 'Delete'));
     del.disabled = selected === null;
     del.onclick = () => {
       const c = list.find((x) => x.id === selected);
-      if (c && confirm(`¿Borrar a ${c.name} para siempre?`)) net.send({ t: 'deleteChar', id: c.id });
+      if (c && confirm(t(`¿Borrar a ${c.name} para siempre?`, `Delete ${c.name} forever?`))) net.send({ t: 'deleteChar', id: c.id });
     };
   };
   renderList();
 
   const right = el('div', 'char-create', cols);
-  el('h3', '', right, 'Crear un personaje nuevo');
+  el('h3', '', right, t('Crear un personaje nuevo', 'Create a new character'));
   const nameRow = el('div', 'name-row', right);
   const name = el('input', 'field', nameRow);
-  name.placeholder = 'Nombre';
+  name.placeholder = t('Nombre', 'Name');
   name.maxLength = 16;
-  const create = el('button', 'btn primary', nameRow, 'Crear');
+  const create = el('button', 'btn primary', nameRow, t('Crear', 'Create'));
   const studio = el('div', 'studio', right);
   const preview = el('div', 'char-preview', studio);
   const opts = el('div', 'studio-opts', studio);
   const label = (t: string) => el('div', 'pick-label', opts, t);
-  label('Raza');
+  label(t('Raza', 'Race'));
   const races = el('div', 'pick', opts);
-  label('Clase');
+  label(t('Clase', 'Class'));
   const classes = el('div', 'pick', opts);
-  label('Género');
+  label(t('Género', 'Gender'));
   const genders = el('div', 'pick', opts);
-  label('Pelo');
+  label(t('Pelo', 'Hair'));
   const styles = el('div', 'pick', opts);
   const colors = el('div', 'pick swatches', opts);
   const desc = el('div', 'tt-dim race-desc', right);
@@ -147,25 +155,25 @@ function charScreen(list: CharSummary[]) {
     }
   };
   const renderPick = () => {
-    pickRow(races, (Object.keys(RACES) as Race[]).map((r) => [r, RACES[r].name]), race, (r) => {
+    pickRow(races, (Object.keys(RACES) as Race[]).map((r) => [r, raceName(r, lang)]), race, (r) => {
       race = r;
       if (!RACES[r].classes.includes(cls)) cls = 'fighter';
     });
-    pickRow(classes, (['fighter', 'mystic'] as ClassType[]).map((c) => [c, CLASSES[c].name]), cls, (c) => (cls = c), (c) => RACES[race].classes.includes(c));
-    pickRow(genders, (['m', 'f'] as Gender[]).map((g) => [g, GENDERS[g].name]), look.g, (g) => (look.g = g));
-    pickRow(styles, HAIR_STYLES.map((n, i) => [i, n]), look.hs, (i) => (look.hs = i));
+    pickRow(classes, (['fighter', 'mystic'] as ClassType[]).map((c) => [c, className(c, lang)]), cls, (c) => (cls = c), (c) => RACES[race].classes.includes(c));
+    pickRow(genders, (['m', 'f'] as Gender[]).map((g) => [g, genderName(g, lang)]), look.g, (g) => (look.g = g));
+    pickRow(styles, HAIR_STYLES.map((_, i) => [i, hairStyle(i, lang)]), look.hs, (i) => (look.hs = i));
     colors.innerHTML = '';
     HAIR_COLORS.forEach((c, i) => {
       const sw = el('button', `swatch${i === look.hc ? ' sel' : ''}`, colors);
       const hex = c >= 0 ? c : RACES[race].hair;
       sw.style.background = `#${hex.toString(16).padStart(6, '0')}`;
-      sw.title = i === 0 ? 'Natural' : '';
+      sw.title = i === 0 ? t('Natural', 'Natural') : '';
       sw.onclick = () => {
         look.hc = i;
         renderPick();
       };
     });
-    desc.textContent = `${RACES[race].desc} ${GENDERS[look.g].desc} ${cls === 'fighter' ? 'El guerrero se luce cuerpo a cuerpo, con golpes potentes.' : 'El místico usa magia: hechizos a distancia, curas y buffs.'}`;
+    desc.textContent = `${raceDesc(race, lang)} ${genderDesc(look.g, lang)} ${cls === 'fighter' ? t('El guerrero se luce cuerpo a cuerpo, con golpes potentes.', 'Fighters excel in melee combat with powerful strikes.') : t('El místico usa magia: hechizos a distancia, curas y buffs.', 'Mystics wield magic: ranged spells, healing and buffs.')}`;
     renderDiff(diff, race, cls, look.g);
   };
   renderPick();
@@ -183,26 +191,26 @@ function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender) {
   const m = statMods(race, g);
   const pct = (v: number) => Math.round((v - 1) * 100);
   const rows: [string, number, string][] = [
-    ['HP', pct(m.hp), '%'], ['MP', pct(m.mp), '%'], ['Atq.F', pct(m.pAtk), '%'], ['Atq.M', pct(m.mAtk), '%'],
-    ['Def.F', pct(m.pDef), '%'], ['Def.M', pct(m.mDef), '%'], ['Velocidad', pct(m.speed), '%'], ['Vel.Atq', pct(m.atkSpd), '%'],
-    ['Vel.Lanz', pct(m.castSpd), '%'], ['Evasión', m.evasion, ''], ['Precisión', m.accuracy, ''], ['Crítico', m.crit, ''],
+    ['HP', pct(m.hp), '%'], ['MP', pct(m.mp), '%'], [t('Atq.F', 'P.Atk'), pct(m.pAtk), '%'], [t('Atq.M', 'M.Atk'), pct(m.mAtk), '%'],
+    [t('Def.F', 'P.Def'), pct(m.pDef), '%'], [t('Def.M', 'M.Def'), pct(m.mDef), '%'], [t('Velocidad', 'Speed'), pct(m.speed), '%'], [t('Vel.Atq', 'Atk.Spd'), pct(m.atkSpd), '%'],
+    [t('Vel.Lanz', 'Cast.Spd'), pct(m.castSpd), '%'], [t('Evasión', 'Evasion'), m.evasion, ''], [t('Precisión', 'Accuracy'), m.accuracy, ''], [t('Crítico', 'Critical'), m.crit, ''],
   ];
   host.innerHTML = '';
-  el('div', 'section', host, `${RACES[race].name} · ${GENDERS[g].name}: stats comparados con Humano Masculino`);
+  el('div', 'section', host, t(`${raceName(race, lang)} · ${genderName(g, lang)}: stats comparados con Humano Masculino`, `${raceName(race, lang)} ${genderName(g, lang)} — stats vs. Human Male`));
   const grid = el('div', 'diff-grid', host);
   for (const [k, v, u] of rows) {
     const cell = el('div', `diff-cell${v > 0 ? ' up' : v < 0 ? ' down' : ''}`, grid);
     el('span', '', cell, k);
     el('b', '', cell, v === 0 ? '—' : `${v > 0 ? '+' : ''}${v}${u}`);
   }
-  el('div', 'section', host, 'Habilidades');
+  el('div', 'section', host, t('Habilidades', 'Skills'));
   const list = el('div', 'diff-skills', host);
   for (const s of allSkillsFor(cls, race, g)) {
-    const tag = s.race ? RACES[s.race].name : s.gender ? GENDERS[s.gender].name : CLASSES[cls].name;
+    const tag = s.race ? raceName(s.race, lang) : s.gender ? genderName(s.gender, lang) : className(cls, lang);
     const row = el('div', `diff-skill${s.race || s.gender ? ' special' : ''}`, list);
-    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">Nv ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
-    row.querySelector('b')!.textContent = s.name;
-    row.querySelector('.ds-desc')!.textContent = s.desc;
+    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">${t('Nv', 'Lv')} ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    row.querySelector('b')!.textContent = skillName(s.id, lang);
+    row.querySelector('.ds-desc')!.textContent = skillDesc(s.id, lang);
   }
 }
 
@@ -251,7 +259,7 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 
 async function boot() {
   const box = screen();
-  el('div', 'tt-dim', box, 'Conectando con el servidor...');
+  el('div', 'tt-dim', box, t('Conectando con el servidor...', 'Connecting to the server...'));
   for (let attempt = 1; ; attempt++) {
     try {
       await net.connect();
@@ -266,8 +274,8 @@ async function boot() {
   }
   net.onClose = () => {
     const d = el('div', 'disconnected', document.body);
-    d.innerHTML = '<div class="panel"><b>Se perdió la conexión con el servidor.</b><br><br></div>';
-    const b = el('button', 'btn primary', d.firstElementChild as HTMLElement, 'Reconectar');
+    d.innerHTML = `<div class="panel"><b>${t('Se perdió la conexión con el servidor.', 'Disconnected from the server.')}</b><br><br></div>`;
+    const b = el('button', 'btn primary', d.firstElementChild as HTMLElement, t('Reconectar', 'Reconnect'));
     b.onclick = () => location.reload();
   };
   net.on('error', (m) => {

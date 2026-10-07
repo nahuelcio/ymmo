@@ -1,5 +1,8 @@
 import { ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
-import { randomLine, TELEPORTS } from '../../../shared/src/data/world';
+import { TELEPORTS } from '../../../shared/src/data/world';
+import { campName, itemName, npcLines, npcText, teleportName, tr } from '../../../shared/src/i18n';
+
+const pickOne = <T>(l: T[]) => l[Math.floor(Math.random() * l.length)];
 import { CAMP_BY_ID } from '../../../shared/src/data/camps';
 import { GroundItem, Mob, Npc, Player } from '../world/entities';
 import { dist, type World } from '../world/World';
@@ -71,7 +74,7 @@ export function equip(w: World, p: Player, uid: number) {
   p.recalc();
   p.av++;
   p.invDirty = true;
-  w.sys(p, `Te equipaste ${def.name}.`);
+  w.sys(p, `Te equipaste ${def.name}.`, `You equipped ${itemName(def.id, 'en')}.`);
 }
 
 export function unequip(w: World, p: Player, slot: Slot) {
@@ -82,7 +85,7 @@ export function unequip(w: World, p: Player, slot: Slot) {
   p.recalc();
   p.av++;
   p.invDirty = true;
-  w.sys(p, `Te sacaste ${ITEMS[cur.i].name}.`);
+  w.sys(p, `Te sacaste ${ITEMS[cur.i].name}.`, `You unequipped ${itemName(cur.i, 'en')}.`);
 }
 
 export function useItem(w: World, p: Player, uid: number, now: number) {
@@ -92,11 +95,11 @@ export function useItem(w: World, p: Player, uid: number, now: number) {
   if (def.slot) return it.s ? unequip(w, p, it.s) : equip(w, p, uid);
   if (!def.use) return;
   const key = `item:${def.id}`;
-  if ((p.cooldowns.get(key) ?? 0) > now) return w.sys(p, `${def.name} todavía no está lista.`);
+  if ((p.cooldowns.get(key) ?? 0) > now) return w.sys(p, `${def.name} todavía no está lista.`, `${itemName(def.id, 'en')} is not ready yet.`);
   if (def.use.escape) {
     if (p.escapeAt) return;
     p.escapeAt = now + 3000;
-    w.sys(p, 'En 3 segundos volvés a la aldea...');
+    w.sys(p, 'En 3 segundos volvés a la aldea...', 'You will be returned to the village in 3 seconds...');
   }
   if (def.use.hp) {
     const before = p.hp;
@@ -105,7 +108,7 @@ export function useItem(w: World, p: Player, uid: number, now: number) {
   }
   if (def.use.mp) {
     p.mp = Math.min(p.stats.maxMp, p.mp + def.use.mp);
-    w.sys(p, `Recuperaste ${def.use.mp} de MP.`);
+    w.sys(p, `Recuperaste ${def.use.mp} de MP.`, `${def.use.mp} MP has been restored.`);
   }
   p.cooldowns.set(key, now + def.use.cd);
   p.send({ t: 'cd', key, ms: def.use.cd });
@@ -117,13 +120,13 @@ export function destroyItem(w: World, p: Player, uid: number) {
   const it = p.inv.find((i) => i.u === uid);
   if (!it || it.s) return;
   consume(p, uid, it.c);
-  w.sys(p, `Destruiste ${ITEMS[it.i].name}.`);
+  w.sys(p, `Destruiste ${ITEMS[it.i].name}.`, `${itemName(it.i, 'en')} has been destroyed.`);
 }
 
 function npcInRange(w: World, p: Player, npcId: number): Npc | null {
   const n = w.ents.get(npcId);
   if (!(n instanceof Npc) || dist(n, p) > NPC_RANGE) {
-    w.sys(p, 'Estás muy lejos del vendedor.');
+    w.sys(p, 'Estás muy lejos del vendedor.', 'You are too far from the merchant.');
     return null;
   }
   return n;
@@ -133,8 +136,9 @@ export function openNpc(w: World, p: Player, n: Npc) {
   p.talkingTo = n.id;
   const d = n.def;
   p.send({
-    t: 'npc', npc: n.id, kind: d.kind, name: d.name, title: d.title, greeting: d.kind === 'talker' ? randomLine(d) : d.greeting, shop: d.shop,
-    dests: d.kind === 'gatekeeper' ? TELEPORTS.map((t) => ({ id: t.id, name: t.name, cost: t.cost })) : undefined,
+    t: 'npc', npc: n.id, kind: d.kind, name: d.name, title: npcText(d.id, 'title', p.lang), shop: d.shop,
+    greeting: d.kind === 'talker' ? pickOne(npcLines(d.id, p.lang)) : npcText(d.id, 'greeting', p.lang),
+    dests: d.kind === 'gatekeeper' ? TELEPORTS.map((t) => ({ id: t.id, name: teleportName(t.id, p.lang), cost: t.cost })) : undefined,
   });
 }
 
@@ -144,11 +148,11 @@ export function buy(w: World, p: Player, npcId: number, itemId: string, qty: num
   const def = ITEMS[itemId];
   if (!def || !(qty >= 1) || qty > (def.stack ? 999 : 10)) return;
   const cost = def.price * qty;
-  if (p.adena < cost) return w.sys(p, 'No te alcanza la adena.');
-  if (!addItem(p, itemId, qty)) return w.sys(p, 'Tenés el inventario lleno.');
+  if (p.adena < cost) return w.sys(p, 'No te alcanza la adena.', 'You do not have enough adena.');
+  if (!addItem(p, itemId, qty)) return w.sys(p, 'Tenés el inventario lleno.', 'Your inventory is full.');
   p.adena -= cost;
   p.invDirty = true;
-  w.sys(p, `Compraste ${qty > 1 ? qty + ' × ' : ''}${def.name} por ${cost} de adena.`);
+  w.sys(p, `Compraste ${qty > 1 ? qty + ' × ' : ''}${def.name} por ${cost} de adena.`, `You bought ${qty > 1 ? qty + ' × ' : ''}${itemName(def.id, 'en')} for ${cost} adena.`);
 }
 
 export function sell(w: World, p: Player, npcId: number, uid: number, qty: number) {
@@ -160,7 +164,7 @@ export function sell(w: World, p: Player, npcId: number, uid: number, qty: numbe
   const gain = Math.floor(def.price / 2) * qty;
   consume(p, uid, qty);
   p.adena += gain;
-  w.sys(p, `Vendiste ${qty > 1 ? qty + ' × ' : ''}${def.name} por ${gain} de adena.`);
+  w.sys(p, `Vendiste ${qty > 1 ? qty + ' × ' : ''}${def.name} por ${gain} de adena.`, `You sold ${qty > 1 ? qty + ' × ' : ''}${itemName(def.id, 'en')} for ${gain} adena.`);
 }
 
 export function gatekeeper(w: World, p: Player, npcId: number, dest: string) {
@@ -168,7 +172,7 @@ export function gatekeeper(w: World, p: Player, npcId: number, dest: string) {
   if (!n || n.def.kind !== 'gatekeeper' || p.dead) return;
   const tp = TELEPORTS.find((t) => t.id === dest);
   if (!tp) return;
-  if (p.adena < tp.cost) return w.sys(p, 'No te alcanza la adena.');
+  if (p.adena < tp.cost) return w.sys(p, 'No te alcanza la adena.', 'You do not have enough adena.');
   p.adena -= tp.cost;
   p.invDirty = true;
   w.teleport(p, tp.x + (Math.random() - 0.5) * 6, tp.z + (Math.random() - 0.5) * 6);
@@ -197,16 +201,17 @@ function openChest(w: World, p: Player, gi: GroundItem, now: number) {
   w.remove(gi);
   if (!camp) return;
   const got: string[] = [];
+  const l = p.lang;
   const give = (item: string, count: number) => {
     if (addItem(p, item, count)) {
       p.invDirty = true;
-      got.push(item === 'adena' ? `${count} de adena` : `${count > 1 ? count + ' × ' : ''}${ITEMS[item].name}`);
+      got.push(`${count > 1 ? count + ' × ' : ''}${itemName(item, l)}`);
     } else spawnGround(w, p.x, p.z, item, count, new Set([p.id]), now);
   };
   const [amin, amax] = camp.chest.adena;
   const adena = Math.round(amin + Math.random() * (amax - amin));
   p.adena += adena;
-  got.push(`${adena} de adena`);
+  got.push(tr(l, `${adena} de adena`, `${adena} adena`));
   for (const l of camp.chest.loot) {
     if (Math.random() >= l.chance) continue;
     const min = l.min ?? 1, max = l.max ?? 1;
@@ -214,7 +219,7 @@ function openChest(w: World, p: Player, gi: GroundItem, now: number) {
   }
   p.invDirty = true;
   w.sendNear(p.x, p.z, { t: 'fx', s: p.id, tg: p.id, skill: 'chest' });
-  w.sys(p, `Abriste el cofre de ${camp.name}: ${got.join(', ')}.`);
+  w.sys(p, `Abriste el cofre de ${camp.name}: ${got.join(', ')}.`, `You opened the ${campName(camp.id, 'en')} chest: ${got.join(', ')}.`);
 }
 
 export function dropLoot(w: World, m: Mob, owners: Set<number>, now: number) {
@@ -243,15 +248,16 @@ export function dropFromPlayer(w: World, p: Player, now: number) {
   }
   p.invDirty = true;
   spawnGround(w, p.x, p.z, it.i, it.c, null, now);
-  w.sys(p, `¡Al morir se te cayó ${ITEMS[it.i].name}!`);
+  w.sys(p, `¡Al morir se te cayó ${ITEMS[it.i].name}!`, `You dropped ${itemName(it.i, 'en')} upon death!`);
 }
 
 export function pickup(w: World, p: Player, gi: GroundItem, now: number) {
   if (!w.ents.has(gi.id)) return;
-  if (gi.owners && now < gi.ownerUntil && !gi.owners.has(p.id)) return w.sys(p, 'Ese objeto es de otra persona.');
+  if (gi.owners && now < gi.ownerUntil && !gi.owners.has(p.id)) return w.sys(p, 'Ese objeto es de otra persona.', 'That item belongs to someone else.');
   if (gi.itemId === 'camp_chest') return openChest(w, p, gi, now);
   const def = ITEMS[gi.itemId];
-  if (!addItem(p, gi.itemId, gi.count)) return w.sys(p, 'Tenés el inventario lleno.');
+  if (!addItem(p, gi.itemId, gi.count)) return w.sys(p, 'Tenés el inventario lleno.', 'Your inventory is full.');
   w.remove(gi);
-  w.sys(p, gi.itemId === 'adena' ? `Juntaste ${gi.count} de adena.` : `Conseguiste ${gi.count > 1 ? gi.count + ' × ' : ''}${def.name}.`);
+  w.sys(p, gi.itemId === 'adena' ? `Juntaste ${gi.count} de adena.` : `Conseguiste ${gi.count > 1 ? gi.count + ' × ' : ''}${def.name}.`,
+    gi.itemId === 'adena' ? `You picked up ${gi.count} adena.` : `You obtained ${gi.count > 1 ? gi.count + ' × ' : ''}${itemName(gi.itemId, 'en')}.`);
 }

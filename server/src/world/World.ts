@@ -7,6 +7,7 @@ import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/pr
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
 import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
+import { campName, npcLines, type Lang } from '../../../shared/src/i18n';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
@@ -161,8 +162,14 @@ export class World {
     for (const p of this.players.values()) p.sendRaw(json);
   }
 
-  sys(p: Player, text: string) {
-    p.send({ t: 'chat', ch: 'sys', from: '', text });
+  /** System message in the player's language (English text optional while migrating). */
+  sys(p: Player, es: string, en?: string) {
+    p.send({ t: 'chat', ch: 'sys', from: '', text: p.lang === 'en' && en !== undefined ? en : es });
+  }
+
+  /** Announcement to everyone, each in their own language. */
+  announce(es: (l: Lang) => string) {
+    for (const p of this.players.values()) p.send({ t: 'chat', ch: 'announce', from: '', text: es(p.lang) });
   }
 
   findPlayer(name: string): Player | undefined {
@@ -223,7 +230,7 @@ export class World {
           const a = (i / Math.max(1, winners.length)) * Math.PI * 2;
           const pos = pushOut(camp.def.x + Math.cos(a) * 3, camp.def.z + Math.sin(a) * 3, 0.6);
           this.add(new GroundItem(this.newId(), pos.x, pos.z, 'camp_chest', 1, new Set([p.id]), now + 180000, now + 180000, camp.def.id));
-          this.sys(p, `¡Despejaste ${camp.def.name}! Te espera un cofre junto a la fogata.`);
+          this.sys(p, `¡Despejaste ${camp.def.name}! Te espera un cofre junto a la fogata.`, `You cleared ${campName(camp.def.id, 'en')}! A chest awaits you by the campfire.`);
         });
       } else if (camp.cleared && now >= camp.respawnAt && camp.mobs.every((m) => !m.dead)) {
         camp.cleared = false;
@@ -283,18 +290,22 @@ export class World {
     for (const e of this.ents.values()) {
       if (!(e instanceof Npc) || e.def.kind !== 'talker' || now < e.nextChatter) continue;
       e.nextChatter = now + 20000 + Math.random() * 25000;
-      if (this.nearPlayers(e.x, e.z, 30).length) this.npcSay(e, randomLine(e.def));
+      if (this.nearPlayers(e.x, e.z, 30).length) this.npcSay(e, Math.random());
     }
   }
 
-  npcSay(n: Npc, text: string) {
-    this.sendNear(n.x, n.z, { t: 'say', id: n.id, name: n.def.name, text }, 40);
+  /** Say a line out loud; r (0..1) picks the same line in every listener's language. */
+  npcSay(n: Npc, r: number) {
+    for (const p of this.nearPlayers(n.x, n.z, 40)) {
+      const lines = npcLines(n.def.id, p.lang);
+      p.send({ t: 'say', id: n.id, name: n.def.name, text: lines[Math.floor(r * lines.length)] });
+    }
   }
 
   /** Dodge roll: a quick 6 m dash toward (x,z) with a short invulnerability window. */
   private dash(p: Player, x: number, z: number, now: number) {
     if (p.dead) return;
-    if (p.has('stun', now)) return this.sys(p, 'Estás aturdido.');
+    if (p.has('stun', now)) return this.sys(p, 'Estás aturdido.', 'You are stunned.');
     if ((p.cooldowns.get('dash') ?? 0) > now) return;
     let dx = x - p.x, dz = z - p.z;
     let d = Math.hypot(dx, dz);

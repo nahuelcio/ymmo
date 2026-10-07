@@ -1,4 +1,5 @@
 import { NPCS } from '../../../shared/src/data/world';
+import { itemName, npcText, questName } from '../../../shared/src/i18n';
 import { QUEST_BY_NPC, QUEST_LIST, type QuestDef, type QuestStatus } from '../../../shared/src/data/quests';
 import { ITEMS } from '../../../shared/src/data/items';
 import { Npc, Player } from '../world/entities';
@@ -60,7 +61,7 @@ function statusOf(p: Player, q: QuestDef): QuestStatus {
 function questNpc(w: World, p: Player, npcId: number): Npc | null {
   const n = w.ents.get(npcId);
   if (!(n instanceof Npc) || n.def.kind !== 'quest' || near(n, p) > NPC_RANGE) {
-    w.sys(p, 'Estás demasiado lejos.');
+    w.sys(p, 'Estás demasiado lejos.', 'You are too far away.');
     return null;
   }
   return n;
@@ -71,7 +72,7 @@ export function openQuest(w: World, p: Player, n: Npc) {
   if (!q) return;
   p.talkingTo = n.id;
   p.send({
-    t: 'npc', npc: n.id, kind: 'quest', name: n.def.name, title: n.def.title, greeting: n.def.greeting,
+    t: 'npc', npc: n.id, kind: 'quest', name: n.def.name, title: npcText(n.def.id, 'title', p.lang), greeting: npcText(n.def.id, 'greeting', p.lang),
     quest: { id: q.id, status: statusOf(p, q), progress: questProgress(p, q) },
   });
 }
@@ -82,11 +83,11 @@ export function acceptQuest(w: World, p: Player, npcId: number) {
   const q = QUEST_BY_NPC[n.def.id];
   if (!q) return;
   const st = p.quests.get(q.id);
-  if (st?.done) return w.sys(p, 'Ya completaste esta misión.');
-  if (st) return w.sys(p, 'Ya estás haciendo esta misión.');
-  if (p.level < q.minLevel) return w.sys(p, `Necesitás ser nivel ${q.minLevel}.`);
+  if (st?.done) return w.sys(p, 'Ya completaste esta misión.', 'You have already completed this task.');
+  if (st) return w.sys(p, 'Ya estás haciendo esta misión.', 'You are already on this task.');
+  if (p.level < q.minLevel) return w.sys(p, `Necesitás ser nivel ${q.minLevel}.`, `You need to be level ${q.minLevel}.`);
   p.quests.set(q.id, { progress: 0, done: false });
-  w.sys(p, `Aceptaste "${q.name}".`);
+  w.sys(p, `Aceptaste "${q.name}".`, `You have accepted "${questName(q.id, 'en')}".`);
   sendQuests(p);
   openQuest(w, p, n);
 }
@@ -98,22 +99,22 @@ export function turnInQuest(w: World, p: Player, npcId: number): number {
   if (!q) return 0;
   const st = p.quests.get(q.id);
   if (!st || st.done) {
-    w.sys(p, 'No tenés nada para entregar.');
+    w.sys(p, 'No tenés nada para entregar.', 'You have nothing to turn in.');
     return 0;
   }
   if (questProgress(p, q) < q.objective.count) {
-    w.sys(p, 'Todavía no terminaste esta misión.');
+    w.sys(p, 'Todavía no terminaste esta misión.', 'You have not finished this task yet.');
     return 0;
   }
   if (q.objective.type === 'collect' && !takeItems(p, q.objective.item, q.objective.count)) {
-    w.sys(p, `No tenés suficiente ${ITEMS[q.objective.item].name}.`);
+    w.sys(p, `No tenés suficiente ${ITEMS[q.objective.item].name}.`, `You do not have enough ${itemName(q.objective.item, 'en')}.`);
     return 0;
   }
   st.done = true;
   p.questReadyTold.delete(q.id);
   p.adena += q.adena;
   p.invDirty = true;
-  w.sys(p, `Completaste "${q.name}" y recibiste ${q.adena.toLocaleString('es-AR')} de adena.`);
+  w.sys(p, `Completaste "${q.name}" y recibiste ${q.adena.toLocaleString('es-AR')} de adena.`, `You have completed "${questName(q.id, 'en')}" and received ${q.adena.toLocaleString('en-US')} adena.`);
   sendQuests(p);
   openQuest(w, p, n);
   return q.xp;
@@ -132,9 +133,9 @@ export function creditKill(w: World, mobId: string, playerIds: Iterable<number>)
       changed = true;
       if (st.progress >= q.objective.count) {
         p.questReadyTold.add(q.id);
-        w.sys(p, `${q.name}: listo. Volvé con ${npcName(q.npc)}.`);
+        w.sys(p, `${q.name}: listo. Volvé con ${npcName(q.npc)}.`, `${questName(q.id, 'en')} is complete. Return to ${npcName(q.npc)}.`);
       } else {
-        w.sys(p, `${q.name}: ${st.progress}/${q.objective.count}.`);
+        w.sys(p, `${q.name}: ${st.progress}/${q.objective.count}.`, `${questName(q.id, 'en')}: ${st.progress}/${q.objective.count}.`);
       }
     }
     if (changed) sendQuests(p);
@@ -151,7 +152,7 @@ export function onInventoryChanged(w: World, p: Player) {
     const ready = countItem(p, q.objective.item) >= q.objective.count;
     if (ready && !p.questReadyTold.has(q.id)) {
       p.questReadyTold.add(q.id);
-      w.sys(p, `${q.name}: listo. Volvé con ${npcName(q.npc)}.`);
+      w.sys(p, `${q.name}: listo. Volvé con ${npcName(q.npc)}.`, `${questName(q.id, 'en')} is complete. Return to ${npcName(q.npc)}.`);
     } else if (!ready) p.questReadyTold.delete(q.id);
   }
   if (active) sendQuests(p);

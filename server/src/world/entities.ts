@@ -4,6 +4,7 @@ import type { MobDef } from '../../../shared/src/data/mobs';
 import type { BuffMods, SkillDef } from '../../../shared/src/data/skills';
 import type { NpcDef } from '../../../shared/src/data/world';
 import { SLOW_MUL, STATUSES, type StatusId } from '../../../shared/src/status';
+import type { Lang } from '../../../shared/src/i18n';
 import { computeStats, mobStats, type Stats } from '../../../shared/src/formulas';
 import { F_CASTING, F_COMBAT, F_DEAD, F_MOVING, F_PVP, type InvItem, type S2C } from '../../../shared/src/protocol';
 
@@ -12,6 +13,8 @@ export const F_RED = 32;
 
 export interface Session {
   accountId: number;
+  /** UI language picked by the client */
+  lang: Lang;
   player: Player | null;
   send(msg: S2C): void;
   /** Send an already-serialized message (lets broadcasts stringify once). */
@@ -120,6 +123,10 @@ export class Player extends Entity {
 
   send(msg: S2C): void {
     this.session.send(msg);
+  }
+
+  get lang(): Lang {
+    return this.session.lang;
   }
 
   sendRaw(json: string): void {

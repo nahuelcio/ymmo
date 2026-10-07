@@ -7,6 +7,16 @@ import { RACES, sanitizeLook, type ClassType, type Race } from '../../shared/src
 import { MAX_LEVEL } from '../../shared/src/data/classes';
 import type { C2S, S2C } from '../../shared/src/protocol';
 import * as db from './db';
+import { isLang, tr, type Lang } from '../../shared/src/i18n';
+
+/** db.ts answers in Spanish; English versions of its messages. */
+const DB_EN: Record<string, string> = {
+  'Ese nombre de cuenta ya está en uso.': 'That account name is taken.',
+  'Cuenta o contraseña incorrecta.': 'Wrong account name or password.',
+  'Ese nombre ya está en uso.': 'That name is already taken.',
+  'Podés tener como máximo 7 personajes.': 'You can have at most 7 characters.',
+};
+const dbMsg = (s: { lang: Lang }, msg: string) => (s.lang === 'en' ? DB_EN[msg] ?? msg : msg);
 import { Player, type Session as ISession } from './world/entities';
 import { primeQuestNotices, savedQuests, sendQuests } from './systems/quests';
 import { World } from './world/World';
@@ -25,6 +35,7 @@ const sessions = new Set<Session>();
 
 class Session implements ISession {
   accountId = 0;
+  lang: Lang = 'es';
   player: Player | null = null;
   msgCount = 0;
   constructor(public ws: WebSocket) {}
@@ -77,7 +88,7 @@ function enterWorld(s: Session, charId: number) {
     }
   }
   const data = db.loadChar(s.accountId, charId);
-  if (!data) return s.send({ t: 'error', msg: 'No se encontró el personaje.' });
+  if (!data) return s.send({ t: 'error', msg: tr(s.lang, 'No se encontró el personaje.', 'Character not found.') });
   const r = data.row;
   const p = new Player(world.newId(), r.x, r.z, s, r.id, r.name, r.race, r.cls, Math.min(r.level, MAX_LEVEL), r.xp, r.hp, r.mp, r.cp, r.adena, r.karma, r.pk, r.pvp);
   p.look = r.look;
@@ -89,32 +100,36 @@ function enterWorld(s: Session, charId: number) {
   world.addPlayer(p);
   s.send({ t: 'enter', self: world.selfState(p), inv: p.inv });
   sendQuests(p);
-  world.sys(p, `¡${p.look.g === 'f' ? 'Bienvenida' : 'Bienvenido'} a Claudi MMO, ${p.name}! Escribí /help para ver los comandos del chat.`);
+  world.sys(p, `¡${p.look.g === 'f' ? 'Bienvenida' : 'Bienvenido'} a Claudi MMO, ${p.name}! Escribí /help para ver los comandos del chat.`, `Welcome to Claudi MMO, ${p.name}! Type /help for chat commands.`);
   console.log(`[world] ${p.name} entered (${world.players.size} online)`);
 }
 
 const NAME_RE = /^[A-Za-z][A-Za-z0-9]{2,15}$/;
 
 function handle(s: Session, m: C2S) {
+  if (m.t === 'lang') {
+    if (isLang(m.lang)) s.lang = m.lang;
+    return;
+  }
   if (s.player) return world.handle(s.player, m);
   switch (m.t) {
     case 'login': {
       const user = String(m.user ?? '').trim(), pass = String(m.pass ?? '');
-      if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return s.send({ t: 'error', msg: 'Cuenta: de 3 a 16 letras, números o _.' });
-      if (pass.length < 4 || pass.length > 64) return s.send({ t: 'error', msg: 'Contraseña: de 4 a 64 caracteres.' });
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return s.send({ t: 'error', msg: tr(s.lang, 'Cuenta: de 3 a 16 letras, números o _.', 'Account: 3-16 letters, numbers or _.') });
+      if (pass.length < 4 || pass.length > 64) return s.send({ t: 'error', msg: tr(s.lang, 'Contraseña: de 4 a 64 caracteres.', 'Password: 4-64 characters.') });
       const r = db.login(user, pass, !!m.register);
-      if (typeof r === 'string') return s.send({ t: 'error', msg: r });
+      if (typeof r === 'string') return s.send({ t: 'error', msg: dbMsg(s, r) });
       s.accountId = r;
       return s.send({ t: 'chars', list: db.listChars(r) });
     }
     case 'createChar': {
       if (!s.accountId) return;
       const name = String(m.name ?? '').trim();
-      if (!NAME_RE.test(name)) return s.send({ t: 'error', msg: 'Nombre: de 3 a 16 letras o números, empezando con una letra.' });
+      if (!NAME_RE.test(name)) return s.send({ t: 'error', msg: tr(s.lang, 'Nombre: de 3 a 16 letras o números, empezando con una letra.', 'Name: 3-16 letters/numbers, starting with a letter.') });
       const race = m.race as Race, cls = m.cls as ClassType;
-      if (!RACES[race] || !RACES[race].classes.includes(cls)) return s.send({ t: 'error', msg: 'Esa combinación de raza y clase no existe.' });
+      if (!RACES[race] || !RACES[race].classes.includes(cls)) return s.send({ t: 'error', msg: tr(s.lang, 'Esa combinación de raza y clase no existe.', 'Invalid race/class combination.') });
       const err = db.createChar(s.accountId, name, race, cls, sanitizeLook(m.look));
-      if (err) return s.send({ t: 'error', msg: err });
+      if (err) return s.send({ t: 'error', msg: dbMsg(s, err) });
       return s.send({ t: 'chars', list: db.listChars(s.accountId) });
     }
     case 'deleteChar': {

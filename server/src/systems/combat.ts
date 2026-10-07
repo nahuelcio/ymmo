@@ -5,6 +5,7 @@ import {
 } from '../../../shared/src/formulas';
 import { inTown } from '../../../shared/src/terrain';
 import type { StatusApply } from '../../../shared/src/status';
+import { mobName, skillName, tr } from '../../../shared/src/i18n';
 import { Entity, Mob, Player, type Intent, type Party } from '../world/entities';
 import { dist, face, type World } from '../world/World';
 import { dropFromPlayer, dropLoot } from './inventory';
@@ -18,27 +19,29 @@ const PVP_OFF_COOLDOWN = 10000;
 export function setPvpMode(w: World, p: Player, on: boolean) {
   if (p.pvpOn === on) return;
   if (!on) {
-    if (p.karma > 0) return w.sys(p, 'No podés desactivar el PvP mientras tengas karma.');
+    if (p.karma > 0) return w.sys(p, 'No podés desactivar el PvP mientras tengas karma.', 'You cannot disable PvP while you have karma.');
     if (p.pvpUntil > w.now || w.now - p.lastCombat < PVP_OFF_COOLDOWN)
-      return w.sys(p, 'No podés desactivar el PvP en combate o con flag. Esperá unos segundos.');
+      return w.sys(p, 'No podés desactivar el PvP en combate o con flag. Esperá unos segundos.', 'You cannot disable PvP while in combat or flagged. Wait a few seconds.');
   }
   p.pvpOn = on;
-  w.sys(p, on ? 'Modo PvP ACTIVADO: podés atacar y ser atacado por otros jugadores con PvP.' : 'Modo PvP DESACTIVADO: los demás jugadores no te pueden atacar.');
+  w.sys(p, on ? 'Modo PvP ACTIVADO: podés atacar y ser atacado por otros jugadores con PvP.' : 'Modo PvP DESACTIVADO: los demás jugadores no te pueden atacar.',
+    on ? 'PvP mode ON: you can attack and be attacked by other PvP players.' : 'PvP mode OFF: other players cannot attack you.');
 }
 
 export function canAttack(_w: World, p: Player, t: Entity, force: boolean, now: number): string | null {
-  if (t.dead) return 'Tu objetivo ya está muerto.';
+  const l = p.lang;
+  if (t.dead) return tr(l, 'Tu objetivo ya está muerto.', 'Your target is already dead.');
   if (t instanceof Mob) return null;
-  if (!(t instanceof Player)) return 'Objetivo inválido.';
-  if (t === p) return 'No te podés atacar a vos mismo.';
-  if (inTown(p.x, p.z) || inTown(t.x, t.z)) return 'No se puede atacar en una zona de paz.';
-  if (p.party && p.party === t.party) return 'No podés atacar a alguien de tu party.';
-  if (!p.pvpOn) return 'Tenés el PvP desactivado. Activalo (botón PvP o /pvp) para pelear con jugadores.';
+  if (!(t instanceof Player)) return tr(l, 'Objetivo inválido.', 'Invalid target.');
+  if (t === p) return tr(l, 'No te podés atacar a vos mismo.', 'You cannot attack yourself.');
+  if (inTown(p.x, p.z) || inTown(t.x, t.z)) return tr(l, 'No se puede atacar en una zona de paz.', 'You cannot attack in a peace zone.');
+  if (p.party && p.party === t.party) return tr(l, 'No podés atacar a alguien de tu party.', 'You cannot attack a party member.');
+  if (!p.pvpOn) return tr(l, 'Tenés el PvP desactivado. Activalo (botón PvP o /pvp) para pelear con jugadores.', 'Your PvP mode is off. Turn it on (PvP button or /pvp) to fight players.');
   // PKs (karma) are always fair game; otherwise both sides must have opted in
-  if (!t.pvpOn && t.karma === 0) return `${t.name} tiene el PvP desactivado.`;
+  if (!t.pvpOn && t.karma === 0) return tr(l, `${t.name} tiene el PvP desactivado.`, `${t.name} has PvP mode off.`);
   if (t.karma > 0 || t.pvpUntil > now) return null;
   if (force) return null;
-  return 'Mantené Ctrl y hacé click para forzar el ataque a otro jugador.';
+  return tr(l, 'Mantené Ctrl y hacé click para forzar el ataque a otro jugador.', 'Hold Ctrl and click to force attack another player.');
 }
 
 function defStats(t: Fighter): { pDef: number; mDef: number; evasion: number } {
@@ -139,17 +142,17 @@ export function gainXp(w: World, p: Player, amount: number) {
   if (amt <= 0 || p.dead) return;
   if (p.karma > 0) {
     p.karma = Math.max(0, p.karma - Math.max(10, Math.round(amt / 3)));
-    if (p.karma === 0) w.sys(p, 'Tu karma quedó limpio.');
+    if (p.karma === 0) w.sys(p, 'Tu karma quedó limpio.', 'Your karma has been cleansed.');
   }
   if (p.level >= MAX_LEVEL) return;
   p.xp += amt;
-  w.sys(p, `Ganaste ${amt} de experiencia.`);
+  w.sys(p, `Ganaste ${amt} de experiencia.`, `You have earned ${amt} experience.`);
   let up = false;
   while (p.level < MAX_LEVEL && p.xp >= xpToNext(p.level)) {
     p.xp -= xpToNext(p.level);
     p.level++;
     up = true;
-    for (const sk of skillsFor(p.cls, p.level, p.race, p.look.g)) if (sk.level === p.level) w.sys(p, `Aprendiste ${sk.name}.`);
+    for (const sk of skillsFor(p.cls, p.level, p.race, p.look.g)) if (sk.level === p.level) w.sys(p, `Aprendiste ${sk.name}.`, `You have learned ${skillName(sk.id, 'en')}.`);
   }
   if (p.level >= MAX_LEVEL) p.xp = 0;
   if (up) {
@@ -159,7 +162,7 @@ export function gainXp(w: World, p: Player, amount: number) {
     p.cp = p.stats.maxCp;
     p.av++;
     w.sendNear(p.x, p.z, { t: 'levelUp', id: p.id, lvl: p.level });
-    w.sys(p, `¡Subiste a nivel ${p.level}!`);
+    w.sys(p, `¡Subiste a nivel ${p.level}!`, `Your level has increased to ${p.level}!`);
   }
 }
 
@@ -217,7 +220,7 @@ export function killMob(w: World, m: Mob, now: number) {
   const owners = best!.party ? new Set(best!.party.members.map((mm) => mm.id)) : new Set([best!.player.id]);
   creditKill(w, m.tpl.id, damaged);
   dropLoot(w, m, owners, now);
-  if (m.tpl.boss) w.broadcast({ t: 'chat', ch: 'announce', from: '', text: `¡${best!.player.name} derrotó al jefe ${m.tpl.name}!` });
+  if (m.tpl.boss) w.announce((l) => tr(l, `¡${best!.player.name} derrotó al jefe ${m.tpl.name}!`, `${best!.player.name} has slain the raid boss ${mobName(m.tpl.id, 'en')}!`));
 }
 
 export function killPlayer(w: World, t: Player, killer: Fighter, now: number) {
@@ -233,22 +236,22 @@ export function killPlayer(w: World, t: Player, killer: Fighter, now: number) {
   w.sendNear(t.x, t.z, { t: 'died', id: t.id, byPlayer });
 
   if (killer instanceof Player) {
-    w.sys(t, `${killer.name} te mató.`);
+    w.sys(t, `${killer.name} te mató.`, `You have been killed by ${killer.name}.`);
     if (t.karma > 0 || t.pvpUntil > now) {
       killer.pvp++;
-      w.sys(killer, `Derrotaste a ${t.name}.`);
+      w.sys(killer, `Derrotaste a ${t.name}.`, `You have defeated ${t.name}.`);
     } else {
       killer.karma += KARMA_PER_PK;
       killer.pk++;
       killer.pvpUntil = 0;
-      w.sys(killer, `Mataste a ${t.name}, que no tenía flag. ¡Sumaste ${KARMA_PER_PK} de karma!`);
+      w.sys(killer, `Mataste a ${t.name}, que no tenía flag. ¡Sumaste ${KARMA_PER_PK} de karma!`, `You murdered ${t.name}, who was not flagged. You gained ${KARMA_PER_PK} karma!`);
     }
     if (killer.intent?.type === 'attack' && killer.intent.id === t.id) killer.intent = null;
   } else {
     const loss = Math.round(xpToNext(t.level) * 0.04 * (t.karma > 0 ? 2 : 1));
     if (loss > 0 && t.xp > 0) {
       t.xp = Math.max(0, t.xp - loss);
-      w.sys(t, `Moriste y perdiste ${loss} de experiencia.`);
+      w.sys(t, `Moriste y perdiste ${loss} de experiencia.`, `You have died and lost ${loss} experience.`);
     }
   }
   if (t.karma > 0 && Math.random() < 0.4) dropFromPlayer(w, t, now);
@@ -267,18 +270,18 @@ export function respawnPlayer(w: World, p: Player) {
 
 export function requestSkill(w: World, p: Player, skillId: string, force: boolean, now: number) {
   const def = SKILLS[skillId];
-  if (!def || !skillAvailable(def, p.cls, p.race, p.look.g) || def.level > p.level) return w.sys(p, 'Todavía no aprendiste esa habilidad.');
+  if (!def || !skillAvailable(def, p.cls, p.race, p.look.g) || def.level > p.level) return w.sys(p, 'Todavía no aprendiste esa habilidad.', 'You have not learned that skill.');
   if (p.dead) return;
-  if (p.has('stun', now)) return w.sys(p, 'Estás aturdido.');
+  if (p.has('stun', now)) return w.sys(p, 'Estás aturdido.', 'You are stunned.');
   if (p.casting) return;
-  if ((p.cooldowns.get(def.id) ?? 0) > now) return w.sys(p, `${def.name} todavía no está lista.`);
-  if (p.mp < def.mp) return w.sys(p, 'No te alcanza el MP.');
+  if ((p.cooldowns.get(def.id) ?? 0) > now) return w.sys(p, `${def.name} todavía no está lista.`, `${skillName(def.id, 'en')} is not ready yet.`);
+  if (p.mp < def.mp) return w.sys(p, 'No te alcanza el MP.', 'Not enough MP.');
   let targetId = p.id;
   const cur = p.target !== null ? w.ents.get(p.target) : undefined;
   if (def.target === 'friend') {
     if (cur instanceof Player && !cur.dead) targetId = cur.id;
   } else if (def.target === 'enemy') {
-    if (!cur) return w.sys(p, 'Primero elegí un objetivo.');
+    if (!cur) return w.sys(p, 'Primero elegí un objetivo.', 'Select a target first.');
     const err = canAttack(w, p, cur, force, now);
     if (err) return w.sys(p, err);
     targetId = cur.id;
@@ -370,7 +373,7 @@ export function finishCast(w: World, p: Player, now: number) {
       t.buffs = t.buffs.filter((b) => b.id !== def.id);
       t.buffs.push({ id: def.id, until: now + def.buff.dur, mods: def.buff.mods });
       t.recalc();
-      w.sys(t, `Recibiste ${def.name}.`);
+      w.sys(t, `Recibiste ${def.name}.`, `${skillName(def.id, 'en')} has been applied.`);
       break;
     }
   }

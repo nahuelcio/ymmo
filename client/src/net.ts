@@ -1,5 +1,6 @@
 import type { C2S, S2C } from '../../shared/src/protocol';
 import { decodeSnap } from '../../shared/src/binary';
+import { lang } from './lang';
 
 type Handler = (m: S2C) => void;
 
@@ -25,7 +26,10 @@ export class Net {
     };
     this.ws.onclose = () => this.onClose?.();
     return new Promise((res, rej) => {
-      this.ws.onopen = () => res();
+      this.ws.onopen = () => {
+        this.send({ t: 'lang', lang });
+        res();
+      };
       this.ws.onerror = () => rej(new Error('Could not connect to the game server.'));
     });
   }

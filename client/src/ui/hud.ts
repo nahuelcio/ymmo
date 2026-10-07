@@ -1,4 +1,4 @@
-import { statusIcons } from '../../../shared/src/status';
+import { STATUS_IDS, STATUSES } from '../../../shared/src/status';
 import { RACES, CLASSES } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
@@ -7,6 +7,8 @@ import { F_DEAD } from '../../../shared/src/protocol';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, setTip } from './dom';
+import { lang, t as tx, fmt } from '../lang';
+import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
 type Slot = { type: 'skill' | 'item'; id: string } | null;
@@ -74,7 +76,7 @@ export class Hud {
     el('span', 'dash-key', this.dashEl, 'Shift');
     el('span', 'dash-icon', this.dashEl, '💨');
     this.dashCd = el('div', 'cd', this.dashEl);
-    this.dashEl.title = 'Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.';
+    this.dashEl.title = tx('Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.', 'Roll (Shift): dodge toward the cursor, briefly invulnerable. Great for getting out of red circles.');
     this.dashEl.onclick = () => g.dash();
 
     this.cast = el('div', 'castbar', root);
@@ -91,19 +93,19 @@ export class Hud {
       b.title = `${label} (${key})`;
       b.onclick = fn;
     };
-    btn('👤', 'Personaje', 'C', () => g.ui.character.win.toggle());
-    btn('🎒', 'Inventario', 'I', () => g.ui.inventory.win.toggle());
-    btn('🗺️', 'Mapa', 'M', () => g.ui.minimap.toggleMap());
-    btn('❓', 'Ayuda', 'H', () => g.ui.help.toggle());
-    btn('⚙', 'Opciones', 'O', () => g.ui.settings.win.toggle());
-    this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: NO');
-    this.pvpBtn.title = 'Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).';
+    btn('👤', tx('Personaje', 'Character'), 'C', () => g.ui.character.win.toggle());
+    btn('🎒', tx('Inventario', 'Inventory'), 'I', () => g.ui.inventory.win.toggle());
+    btn('🗺️', tx('Mapa', 'Map'), 'M', () => g.ui.minimap.toggleMap());
+    btn('❓', tx('Ayuda', 'Help'), 'H', () => g.ui.help.toggle());
+    btn('⚙', tx('Opciones', 'Settings'), 'O', () => g.ui.settings.win.toggle());
+    this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
+    this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
 
     this.bannerEl = el('div', 'banner', root);
 
     this.questRoot = el('div', 'panel quest-tracker', root);
-    el('div', 'quest-head', this.questRoot, 'Misiones');
+    el('div', 'quest-head', this.questRoot, tx('Misiones', 'Quests'));
     this.questList = el('div', '', this.questRoot);
     this.questRoot.style.display = 'none';
   }
@@ -116,10 +118,10 @@ export class Hud {
       if (!q) continue;
       shown++;
       const line = el('div', 'qt-row', this.questList);
-      el('div', 'qt-name', line, q.name);
+      el('div', 'qt-name', line, questField(q, 'name', lang));
       const prog = el('div', 'tt-dim', line);
       const ready = row.progress >= q.objective.count;
-      prog.innerHTML = `${esc(questSummary(q))} <b class="${ready ? 'qt-ready' : ''}">${row.progress}/${q.objective.count}</b>`;
+      prog.innerHTML = `${esc(questSummaryL(q, lang))} <b class="${ready ? 'qt-ready' : ''}">${row.progress}/${q.objective.count}</b>`;
     }
     this.questRoot.style.display = shown ? '' : 'none';
   }
@@ -130,9 +132,9 @@ export class Hud {
 
   onMe() {
     const m = this.g.me;
-    this.pvpBtn.textContent = m.pvpOn ? '⚔ PvP: SÍ' : 'PvP: NO';
+    this.pvpBtn.textContent = m.pvpOn ? tx('⚔ PvP: SÍ', '⚔ PvP: ON') : tx('PvP: NO', 'PvP: OFF');
     this.pvpBtn.classList.toggle('on', m.pvpOn);
-    this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${RACES[m.race].name} ${CLASSES[m.cls].name}</span>`;
+    this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${raceName(m.race, lang)} ${className(m.cls, lang)}</span>`;
     this.cp.set(m.cp, m.maxCp);
     this.hp.set(m.hp, m.maxHp);
     this.mp.set(m.mp, m.maxMp);
@@ -141,7 +143,7 @@ export class Hud {
       this.xp.text.textContent = `XP ${((m.xp / m.xpNeed) * 100).toFixed(2)}%`;
     } else {
       this.xp.set(1, 1);
-      this.xp.text.textContent = 'NIVEL MÁXIMO';
+      this.xp.text.textContent = tx('NIVEL MÁXIMO', 'MAX LEVEL');
     }
     this.buffs.innerHTML = '';
     for (const b of m.buffs) {
@@ -152,7 +154,7 @@ export class Hud {
     }
     if (m.flagged || m.karma > 0) {
       const w = el('div', `buff flag ${m.karma > 0 ? 'karma' : ''}`, this.buffs, m.karma > 0 ? 'PK' : 'PvP');
-      w.title = m.karma > 0 ? `Karma: ${m.karma}` : 'Con flag de PvP';
+      w.title = m.karma > 0 ? `Karma: ${m.karma}` : tx('Con flag de PvP', 'PvP flagged');
     }
     this.refreshSlots();
   }
@@ -193,9 +195,9 @@ export class Hud {
   /** Your own status effects, next to the buffs. */
   setStatuses(flags: number) {
     this.statusEl.innerHTML = '';
-    for (const s of statusIcons(flags)) {
-      const b = el('div', 'buff status', this.statusEl, s.icon);
-      b.title = `${s.name}: ${s.desc}`;
+    for (const id of STATUS_IDS.filter((i) => flags & STATUSES[i].flag)) {
+      const b = el('div', 'buff status', this.statusEl, STATUSES[id].icon);
+      b.title = `${statusName(id, lang)}: ${statusDesc(id, lang)}`;
     }
   }
 
@@ -245,21 +247,21 @@ export class Hud {
     this.lastTargetKey = key;
     const r = t.rec;
     let nameHtml = '';
-    if (r.k === 'm') nameHtml = `<span style="color:${conColor(r.l - this.g.me.lvl)}">${esc(r.n)}</span> <span class="tt-dim">Nv ${r.l}</span>`;
+    if (r.k === 'm') nameHtml = `<span style="color:${conColor(r.l - this.g.me.lvl)}">${esc(mobName(r.tpl, lang))}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l}</span>`;
     else if (r.k === 'p') {
       const c = t.flags & F_RED ? '#ff4040' : t.flags & F_PURPLE ? '#d080ff' : '#fff';
-      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">Nv ${r.l} ${RACES[r.race].name} ${CLASSES[r.cls].name}</span>`;
-    } else if (r.k === 'n') nameHtml = `${esc(r.n)} <span class="tt-dim">${esc(r.title)}</span>`;
-    else nameHtml = esc(r.item === 'adena' ? 'Adena' : ITEMS[r.item]?.name ?? '');
+      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l} ${raceName(r.race, lang)} ${className(r.cls, lang)}</span>`;
+    } else if (r.k === 'n') nameHtml = `${esc(r.n)} <span class="tt-dim">${esc(npcText(r.npc, 'title', lang))}</span>`;
+    else nameHtml = esc(r.item === 'adena' ? 'Adena' : itemName(r.item, lang));
     this.tName.innerHTML = nameHtml + (t.flags & F_DEAD ? ' <span class="tt-dim">(muerto)</span>' : '');
     this.tHp.root.style.display = r.k === 'm' || r.k === 'p' ? '' : 'none';
     this.tHp.set(t.hp, 100);
     this.tHp.text.textContent = `${t.hp}%`;
     this.tActions.innerHTML = '';
     if (r.k === 'p' && r.id !== this.g.me.id) {
-      const inv = el('button', 'btn small', this.tActions, 'Invitar a la party');
+      const inv = el('button', 'btn small', this.tActions, tx('Invitar a la party', 'Invite to party'));
       inv.onclick = () => this.g.net.send({ t: 'partyInvite', name: r.n });
-      const wh = el('button', 'btn small', this.tActions, 'Susurrar');
+      const wh = el('button', 'btn small', this.tActions, tx('Susurrar', 'Whisper'));
       wh.onclick = () => this.g.ui.chat.prefill(`"${r.n} `);
     }
   }
