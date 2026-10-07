@@ -37,6 +37,13 @@ export function questMarker(q: QuestDef, level: number, active: { progress: numb
   return level + QUEST_SOON_LEVELS >= q.minLevel ? 'soon' : null;
 }
 
+/** Mob templates that advance a quest: the kill target, or every mob that drops the item. */
+export function questMobs(q: QuestDef): string[] {
+  const o = q.objective;
+  if (o.type === 'kill') return [o.mob];
+  return Object.values(MOBS).filter((m) => m.drops.some((d) => d.item === o.item)).map((m) => m.id);
+}
+
 export function questLine(q: QuestDef, status: QuestStatus): string {
   if (status === 'locked') return `Volvé cuando llegues a nivel ${q.minLevel}.`;
   if (status === 'available') return q.offer;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
-import { QUEST_BY_NPC, questMarker, type QuestMarker } from '../../shared/src/data/quests';
+import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
 import { findPath, pushOut } from '../../shared/src/collision';
@@ -356,7 +356,7 @@ export class Game {
       el.innerHTML = '';
       el.className = 'nameplate np-mob';
       const n = document.createElement('div');
-      n.textContent = `${r.n} `;
+      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${r.n} `;
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
       l.className = 'np-lvl';
@@ -378,6 +378,16 @@ export class Game {
       el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${ITEMS[r.item]?.name ?? r.item}${r.c > 1 ? ` (${r.c})` : ''}`;
       el.classList.add('np-item');
     }
+  }
+
+  /** Active, unfinished quests → the mob templates that advance them (for map hints). */
+  questTargets(): { quest: string; mobs: Set<string> }[] {
+    const out: { quest: string; mobs: Set<string> }[] = [];
+    for (const a of this.quests) {
+      const q = QUESTS[a.id];
+      if (q && a.progress < q.objective.count) out.push({ quest: q.name, mobs: new Set(questMobs(q)) });
+    }
+    return out;
   }
 
   /** Marker state for a quest giver (by NPC def id), also used by the minimap. */
@@ -406,7 +416,10 @@ export class Game {
   }
 
   refreshQuestMarkers() {
-    for (const c of this.ents.values()) this.refreshQuestMarker(c);
+    for (const c of this.ents.values()) {
+      this.refreshQuestMarker(c);
+      if (c.rec.k === 'm') this.refreshLabel(c);
+    }
   }
 
   private addHpBar(c: CEnt) {

@@ -1,4 +1,4 @@
-import { NPCS, ZONES } from '../../../shared/src/data/world';
+import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WORLD_HALF } from '../../../shared/src/terrain';
 import { F_RED, type Game } from '../game';
@@ -6,6 +6,16 @@ import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
 
 const RES = 256;
+
+/** Hunting grounds where the active quests' mobs spawn. */
+function questAreas(targets: { quest: string; mobs: Set<string> }[]): { zone: ZoneDef; quests: string[] }[] {
+  const out: { zone: ZoneDef; quests: string[] }[] = [];
+  for (const zone of ZONES) {
+    const quests = targets.filter((t) => zone.spawns.some((s) => t.mobs.has(s.mob))).map((t) => t.quest);
+    if (quests.length) out.push({ zone, quests });
+  }
+  return out;
+}
 
 function worldImage(): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -83,6 +93,19 @@ export class Minimap {
     ctx.arc(toMap(TOWN.x) * S, toMap(TOWN.z) * S, 6, 0, Math.PI * 2);
     ctx.fill();
     this.label(ctx, TOWN.name, toMap(TOWN.x) * S, toMap(TOWN.z) * S - 12);
+    // quest hunting areas
+    for (const { zone, quests } of questAreas(this.g.questTargets())) {
+      const x = toMap(zone.x) * S, y = toMap(zone.z) * S, r = (zone.r * 0.85 / (2 * WORLD_HALF)) * 512;
+      ctx.fillStyle = 'rgba(255, 210, 0, 0.18)';
+      ctx.strokeStyle = 'rgba(255, 210, 0, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      quests.forEach((q, i) => this.label(ctx, `★ ${q}`, x, y + 18 + i * 14));
+    }
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
   }
@@ -147,11 +170,32 @@ export class Minimap {
       ctx.fillStyle = '#ffd966';
       ctx.fillRect(x - 2, y - 2, 4, 4);
     }
+    // quest hunting areas (soft yellow) and quest mobs (yellow dots)
+    const targets = this.g.questTargets();
+    for (const { zone } of questAreas(targets)) {
+      const [x, y] = toC(zone.x, zone.z);
+      ctx.fillStyle = 'rgba(255, 210, 0, 0.13)';
+      ctx.strokeStyle = 'rgba(255, 210, 0, 0.7)';
+      ctx.beginPath();
+      ctx.arc(x, y, zone.r * 0.85 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    const questMob = (tpl: string) => targets.some((t) => t.mobs.has(tpl));
     const partyIds = new Set(this.g.ui.partyIds());
     for (const c of this.g.ents.values()) {
       if (c.id === this.g.me.id || c.rec.k === 'n') continue;
       const [x, y] = toC(c.pos.x, c.pos.z);
       if (x < 0 || y < 0 || x > W || y > W) continue;
+      if (c.rec.k === 'm' && !(c.flags & F_DEAD) && questMob(c.rec.tpl)) {
+        ctx.fillStyle = '#ffd200';
+        ctx.strokeStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        continue;
+      }
       if (c.rec.k === 'm') ctx.fillStyle = c.flags & F_DEAD ? '#555' : '#ff5544';
       else if (c.rec.k === 'p') ctx.fillStyle = partyIds.has(c.id) ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
       else ctx.fillStyle = '#ffffff';
