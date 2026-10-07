@@ -1174,7 +1174,8 @@ export class Game {
       }
       if (self) {
         const d = dSelf;
-        const show = c.id === this.targetId || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
+        // player names always show (whenever they're on screen); items, mobs and NPCs fade by distance
+        const show = c.id === this.targetId || c.rec.k === 'p' || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
         c.label.visible = show && onScreen;
         // like WoW: quest markers show from afar, but not across the whole map
         if (c.marker) c.marker.obj.visible = onScreen && d < 90 && c.marker.el.textContent !== '';
