@@ -15,15 +15,23 @@ export class Chat {
   private tab = TABS[0];
   private lines: { ch: Ch; node: HTMLDivElement }[] = [];
   private tabEls: HTMLButtonElement[] = [];
+  private box!: HTMLDivElement;
+  private toggleBtn!: HTMLButtonElement;
+  private unread = 0;
 
   constructor(private g: Game, root: HTMLElement) {
-    const box = el('div', 'panel chat', root);
+    const box = (this.box = el('div', 'panel chat', root));
     const tabs = el('div', 'chat-tabs', box);
     for (const t of TABS) {
       const b = el('button', 'chat-tab', tabs, t.label);
-      b.onclick = () => this.setTab(t.id);
+      b.onclick = () => {
+        this.setTab(t.id);
+        this.setHidden(false);
+      };
       this.tabEls.push(b);
     }
+    this.toggleBtn = el('button', 'chat-toggle', tabs);
+    this.toggleBtn.onclick = () => this.setHidden(!this.hidden);
     this.log = el('div', 'chat-log', box);
     this.input = el('input', 'chat-input', box);
     this.input.maxLength = 200;
@@ -41,6 +49,36 @@ export class Chat {
       } else if (e.key === 'Escape') this.input.blur();
     });
     this.setTab('all');
+    let hidden = false;
+    try {
+      hidden = localStorage.getItem('chatHidden') === '1';
+    } catch {
+      /* storage unavailable */
+    }
+    this.setHidden(hidden);
+  }
+
+  get hidden() {
+    return this.box.classList.contains('collapsed');
+  }
+
+  /** Collapse the chat to just its tab bar (remembered per browser). */
+  setHidden(h: boolean) {
+    this.box.classList.toggle('collapsed', h);
+    if (!h) this.unread = 0;
+    this.renderToggle();
+    try {
+      localStorage.setItem('chatHidden', h ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private renderToggle() {
+    const h = this.hidden;
+    this.toggleBtn.textContent = h ? (this.unread ? `▲ ${this.unread > 99 ? '99+' : this.unread}` : '▲') : '▼';
+    this.toggleBtn.title = h ? 'Mostrar chat' : 'Ocultar chat';
+    this.toggleBtn.classList.toggle('has-unread', h && this.unread > 0);
   }
 
   private setTab(id: string) {
@@ -51,10 +89,12 @@ export class Chat {
   }
 
   focus() {
+    this.setHidden(false);
     this.input.focus();
   }
 
   prefill(text: string) {
+    this.setHidden(false);
     this.input.value = text;
     this.input.focus();
   }
@@ -69,5 +109,9 @@ export class Chat {
     if (this.lines.length > 250) this.lines.shift()!.node.remove();
     if (atBottom) this.log.scrollTop = this.log.scrollHeight;
     if (ch === 'announce') this.g.ui.hud.banner(text);
+    if (this.hidden && ch !== 'sys') {
+      this.unread++;
+      this.renderToggle();
+    }
   }
 }

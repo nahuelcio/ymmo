@@ -336,3 +336,11 @@ input { font: inherit; user-select: text; }
 .qm-available, .qm-ready { color: #ffd200; text-shadow: 0 0 10px rgba(255, 200, 0, 0.75), 0 2px 2px #000; }
 .qm-soon, .qm-active { color: #a8a8a8; -webkit-text-stroke-color: #222; font-size: 26px; }
 @keyframes qmBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+/* collapsible chat */
+.chat-tabs { align-items: center; }
+.chat-toggle { margin-left: auto; background: #14120d; color: var(--gold); border: 1px solid #3a3424; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
+.chat-toggle:hover { border-color: var(--border-hi); }
+.chat-toggle.has-unread { color: #fff; background: #6a4a10; border-color: var(--gold); }
+.chat.collapsed { height: auto; }
+.chat.collapsed .chat-log, .chat.collapsed .chat-input { display: none; }
