@@ -102,7 +102,6 @@ export class Game {
   private predict: { x: number; z: number; arrivedAt: number } | null = null;
   private holdMove = false;
   private lastHoldSend = 0;
-  private rdown: { x: number; y: number } | null = null;
   private teleportPending = true;
   private last = performance.now();
   private down: { x: number; y: number } | null = null;
@@ -555,7 +554,6 @@ export class Game {
     };
     // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
     el.addEventListener('pointerdown', (e) => {
-      if (e.button === 2) this.rdown = { x: e.clientX, y: e.clientY };
       if (e.button !== 0) return;
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
@@ -569,17 +567,6 @@ export class Game {
     });
     el.addEventListener('pointerup', (e) => {
       if (e.button === 0) this.holdMove = false;
-      // Right click without dragging the camera: LoL-style smart action.
-      if (e.button === 2 && this.rdown) {
-        const moved = Math.hypot(e.clientX - this.rdown.x, e.clientY - this.rdown.y);
-        this.rdown = null;
-        if (moved > 6) return;
-        const r = pick(e);
-        if (r.ent) {
-          if (r.ent.rec.k === 'p' && !this.isHostile(r.ent) && !e.ctrlKey) this.setTarget(r.ent.id);
-          else this.interact(r.ent, e.ctrlKey);
-        } else if (r.point) this.moveTo(r.point, true);
-      }
     });
     el.addEventListener('pointermove', (e) => {
       if (this.holdMove && e.buttons & 1) {
