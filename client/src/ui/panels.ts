@@ -242,6 +242,7 @@ export class NpcPanel {
       el('div', 'tt-dim', b, `Reward: ${def.xp.toLocaleString()} XP, ${def.adena.toLocaleString()} adena`);
     }
     if (q.status === 'available') {
+      el('div', 'npc-greet', b, def.story);
       const btn = el('button', 'btn primary', b, 'Accept');
       btn.style.marginTop = '8px';
       btn.onclick = () => this.g.net.send({ t: 'questAccept', npc: m.npc });
