@@ -10,6 +10,8 @@ export interface CharSummary { id: number; name: string; race: Race; cls: ClassT
 export interface EntPlayer {
   id: number; k: 'p'; x: number; z: number; ry: number; n: string; l: number; hp: number;
   race: Race; cls: ClassType; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
+  /** other visible gear: [head, gloves, legs, feet] item ids */
+  eq: (string | null)[];
 }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }

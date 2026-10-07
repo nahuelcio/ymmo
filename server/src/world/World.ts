@@ -239,7 +239,8 @@ export class World {
     const base = { id: e.id, x: round2(e.x), z: round2(e.z), ry: round2(e.ry), hp: e.hpPct(), f: e.flags(now) };
     if (e instanceof Player)
       return { ...base, k: 'p', n: e.name, l: e.level, race: e.race, cls: e.cls, lk: e.look,
-        w: e.equippedIn('weapon')?.i ?? null, a: e.equippedIn('chest')?.i ?? null, nc: e.nameColor(now) };
+        w: e.equippedIn('weapon')?.i ?? null, a: e.equippedIn('chest')?.i ?? null, nc: e.nameColor(now),
+        eq: (['head', 'gloves', 'legs', 'feet'] as const).map((s) => e.equippedIn(s)?.i ?? null) };
     if (e instanceof Mob) return { ...base, k: 'm', n: e.tpl.name, l: e.tpl.level, tpl: e.tpl.id };
     if (e instanceof Npc) return { ...base, k: 'n', n: e.def.name, title: e.def.title, npc: e.def.id };
     const gi = e as GroundItem;

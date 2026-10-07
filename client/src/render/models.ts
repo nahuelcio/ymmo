@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { DEFAULT_LOOK, HAIR_COLORS, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
-import { ITEMS } from '../../../shared/src/data/items';
+import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mat } from './scene';
@@ -84,12 +84,87 @@ function weaponMesh(kind: WeaponKind, color: number): THREE.Group | null {
   return g;
 }
 
+/** Visible equipment worn by a humanoid. */
+export interface Gear { chest?: ItemDef | null; head?: ItemDef | null; gloves?: ItemDef | null; legs?: ItemDef | null; feet?: ItemDef | null }
+
 interface HumanoidOpts {
   skin: number; hair: number; top: number; bottom: number; height: number; bulk: number;
-  weapon: WeaponKind; weaponColor?: number; robe?: boolean; ears?: 'elf' | 'goblin'; tusks?: boolean; beard?: boolean; bald?: boolean; skull?: boolean;
+  weapon: WeaponKind; weaponColor?: number; weaponGrade?: string; robe?: boolean; ears?: 'elf' | 'goblin'; tusks?: boolean; beard?: boolean; bald?: boolean; skull?: boolean;
   hat?: number;
   /** 0 short, 1 long, 2 topknot */
   hairStyle?: number;
+  female?: boolean;
+  gear?: Gear;
+}
+
+/** Self-lit trim for C-grade gear so it reads as "rare" at a glance. */
+const glowCache = new Map<number, THREE.MeshLambertMaterial>();
+function glow(color: number): THREE.MeshLambertMaterial {
+  let m = glowCache.get(color);
+  if (!m) glowCache.set(color, (m = new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.55, flatShading: true })));
+  return m;
+}
+function trim(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
+  const m = part(geo, color, x, y, z);
+  m.material = glow(color);
+  return m;
+}
+const GOLD = 0xe8c060;
+const LEATHER = 0x5a3a20;
+
+function helmet(head: THREE.Group, def: ItemDef): boolean {
+  const c = def.color;
+  if (def.id === 'leather_cap') {
+    head.add(part(new THREE.SphereGeometry(0.215, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), c, 0, 0.02, -0.01));
+    head.add(part(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 8), darker(c, 0.7), 0, 0.03, -0.01));
+    return false; // long hair still shows below a cap
+  }
+  if (def.grade === 'C') {
+    // closed great helm with visor slit and plume
+    head.add(part(B(0.42, 0.44, 0.44), c, 0, 0.03, 0));
+    head.add(part(B(0.3, 0.04, 0.02), 0x111111, 0, 0.04, 0.225));
+    head.add(trim(B(0.44, 0.04, 0.46), GOLD, 0, 0.24, 0));
+    head.add(trim(B(0.04, 0.4, 0.02), GOLD, 0, 0.0, 0.226));
+    const plume = part(B(0.06, 0.18, 0.36), 0xb02020, 0, 0.36, -0.04);
+    head.add(plume);
+    return true;
+  }
+  // open helm with nose guard and cheek plates
+  head.add(part(new THREE.SphereGeometry(0.225, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), c, 0, 0.02, 0));
+  head.add(part(B(0.04, 0.16, 0.04), darker(c, 0.8), 0, -0.02, 0.21));
+  for (const sx of [-1, 1]) head.add(part(B(0.05, 0.16, 0.14), c, sx * 0.19, -0.06, 0.06));
+  return true;
+}
+
+function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean) {
+  const c = def.color, d = 0.3 * Math.sqrt(k);
+  if (def.grade === 'C' && def.id !== 'demons_tunic') {
+    // full plate: breastplate, gorget, big rounded pauldrons
+    torso.add(part(B(0.54 * k, 0.4, d + 0.06), c, 0, 0.42, 0.01));
+    torso.add(part(B(0.3 * k, 0.12, d + 0.04), darker(c, 0.85), 0, 0.66, 0));
+    torso.add(trim(B(0.04, 0.38, 0.02), GOLD, 0, 0.42, d / 2 + 0.05));
+    for (const sx of [-1, 1]) {
+      torso.add(part(new THREE.SphereGeometry(0.17 * k, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), c, sx * 0.31 * k, 0.58, 0));
+      torso.add(trim(B(0.04, 0.04, 0.3), GOLD, sx * 0.31 * k, 0.6, 0));
+    }
+    return;
+  }
+  if (def.grade === 'D' && !def.mp) {
+    // brigandine: studded vest with leather pauldrons
+    for (let r = 0; r < 3; r++)
+      for (const sx of [-0.14, 0, 0.14]) torso.add(part(B(0.035, 0.035, 0.02), 0x2a2a2a, sx * k, 0.24 + r * 0.14, d / 2 + 0.005));
+    for (const sx of [-1, 1]) torso.add(part(B(0.18 * k, 0.07, 0.26), darker(c, 0.8), sx * 0.29 * k, 0.62, 0));
+    return;
+  }
+  if (def.mp) {
+    // caster robes: collar, sash; demon's tunic gets glowing runes
+    torso.add(part(B(0.36 * k, 0.08, d + 0.02), darker(c, 0.7), 0, 0.64, 0));
+    torso.add(part(B(0.08, 0.6, 0.02), darker(c, 1.4), 0, 0.32, d / 2 + 0.01));
+    if (def.grade === 'C') for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
+    return;
+  }
+  // cloth tunic: a simple collar
+  if (!female) torso.add(part(B(0.2, 0.04, d + 0.01), darker(c, 0.7), 0, 0.62, 0));
 }
 
 export function humanoid(o: HumanoidOpts): Rig {
@@ -97,40 +172,52 @@ export function humanoid(o: HumanoidOpts): Rig {
   const body = new THREE.Group();
   root.add(body);
   const k = o.bulk;
+  const g = o.gear ?? {};
+  const legC = g.legs?.color ?? o.bottom;
+  const bootC = g.feet?.color ?? (o.gear ? 0x4a3420 : darker(o.bottom, 0.5));
   const legs: THREE.Object3D[] = [];
   for (const sx of [-1, 1]) {
     const leg = new THREE.Group();
     leg.position.set(sx * 0.12 * k, 0.9, 0);
-    leg.add(part(B(0.17 * k, 0.9, 0.2), o.bottom, 0, -0.45, 0));
-    leg.add(part(B(0.19 * k, 0.12, 0.28), darker(o.bottom, 0.5), 0, -0.86, 0.04));
+    leg.add(part(B(0.17 * k, 0.5, 0.2), legC, 0, -0.25, 0)); // thigh
+    leg.add(part(B(0.15 * k, 0.42, 0.18), darker(legC, 0.92), 0, -0.64, 0)); // shin
+    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), g.legs.grade === 'C' ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
+    const sandals = g.feet?.id === 'leather_sandals';
+    const tall = g.feet && g.feet.grade !== 'NG';
+    if (tall) leg.add(part(B(0.18 * k, 0.26, 0.21), bootC, 0, -0.74, 0.01));
+    leg.add(part(B(0.19 * k, sandals ? 0.05 : 0.12, 0.28), sandals ? LEATHER : bootC, 0, sandals ? -0.89 : -0.86, 0.04));
     body.add(leg);
     legs.push(leg);
   }
   const torso = new THREE.Group();
   torso.position.y = 0.9;
-  torso.add(part(B(0.5 * k, 0.64, 0.28 * Math.sqrt(k)), o.top, 0, 0.32, 0));
-  torso.add(part(B(0.52 * k, 0.08, 0.3 * Math.sqrt(k)), darker(o.top, 0.5), 0, 0.02, 0));
-  if (o.robe) {
-    const skirt = part(new THREE.CylinderGeometry(0.26 * k, 0.4 * k, 0.75, 6), o.top, 0, -0.38, 0);
-    torso.add(skirt);
-  }
+  const d = 0.28 * Math.sqrt(k);
+  if (o.female) {
+    torso.add(part(B(0.46 * k, 0.32, d), o.top, 0, 0.46, 0));
+    torso.add(part(B(0.38 * k, 0.3, d * 0.92), o.top, 0, 0.16, 0));
+  } else torso.add(part(B(0.5 * k, 0.64, d), o.top, 0, 0.32, 0));
+  torso.add(part(B(0.52 * k, 0.08, d + 0.02), o.gear ? LEATHER : darker(o.top, 0.5), 0, 0.02, 0)); // belt
+  if (o.gear) torso.add(part(B(0.07, 0.06, 0.02), GOLD, 0, 0.02, d / 2 + 0.012)); // buckle
+  torso.add(part(new THREE.CylinderGeometry(0.07, 0.08, 0.1, 6), o.skin, 0, 0.68, 0)); // neck
+  if (g.chest) chestArmor(torso, g.chest, k, !!o.female);
+  if (o.robe) torso.add(part(new THREE.CylinderGeometry(0.26 * k, 0.4 * k, 0.75, 6), o.top, 0, -0.38, 0));
   body.add(torso);
+
   const head = new THREE.Group();
   head.position.y = 1.72;
   head.add(part(new THREE.IcosahedronGeometry(0.19, 1), o.skin));
-  if (o.skull) {
-    head.add(part(B(0.06, 0.04, 0.02), 0x111111, -0.07, 0.02, 0.17));
-    head.add(part(B(0.06, 0.04, 0.02), 0x111111, 0.07, 0.02, 0.17));
-  } else {
-    head.add(part(B(0.04, 0.04, 0.02), 0x222222, -0.07, 0.02, 0.17));
-    head.add(part(B(0.04, 0.04, 0.02), 0x222222, 0.07, 0.02, 0.17));
+  const closedHelm = g.head?.grade === 'C';
+  if (!closedHelm) {
+    const eye = o.skull ? B(0.06, 0.04, 0.02) : B(0.04, 0.04, 0.02);
+    for (const sx of [-1, 1]) head.add(part(eye, o.skull ? 0x111111 : 0x222222, sx * 0.07, 0.02, 0.17));
   }
-  if (!o.bald) {
-    head.add(part(new THREE.SphereGeometry(0.205, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.hair, 0, 0.03, -0.02));
+  const hideHair = g.head ? helmet(head, g.head) : false;
+  if (!o.bald && !hideHair) {
+    if (!g.head) head.add(part(new THREE.SphereGeometry(0.205, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.hair, 0, 0.03, -0.02));
     if (o.hairStyle === 1) head.add(part(B(0.36, 0.42, 0.1), o.hair, 0, -0.14, -0.15));
-    if (o.hairStyle === 2) head.add(part(new THREE.IcosahedronGeometry(0.1, 0), o.hair, 0, 0.25, -0.08));
+    if (o.hairStyle === 2 && !g.head) head.add(part(new THREE.IcosahedronGeometry(0.1, 0), o.hair, 0, 0.25, -0.08));
   }
-  if (o.ears) {
+  if (o.ears && !closedHelm) {
     const len = o.ears === 'goblin' ? 0.3 : 0.2;
     for (const sx of [-1, 1]) {
       const ear = part(new THREE.ConeGeometry(0.045, len, 4), o.skin, sx * 0.2, 0.04, 0);
@@ -138,24 +225,29 @@ export function humanoid(o: HumanoidOpts): Rig {
       head.add(ear);
     }
   }
-  if (o.tusks) for (const sx of [-1, 1]) head.add(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xf0f0e0, sx * 0.07, -0.1, 0.16));
-  if (o.beard) head.add(part(B(0.26, 0.24, 0.12), o.hair, 0, -0.18, 0.12));
+  if (o.tusks && !closedHelm) for (const sx of [-1, 1]) head.add(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xf0f0e0, sx * 0.07, -0.1, 0.16));
+  if (o.beard && !closedHelm) head.add(part(B(0.26, 0.24, 0.12), o.hair, 0, -0.18, 0.12));
   if (o.hat !== undefined) {
     head.add(part(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 8), o.hat, 0, 0.12, 0));
     head.add(part(new THREE.ConeGeometry(0.17, 0.45, 8), o.hat, 0, 0.35, 0));
   }
   body.add(head);
+
   const arms: THREE.Group[] = [];
+  const handC = g.gloves?.color ?? o.skin;
   for (const sx of [-1, 1]) {
     const arm = new THREE.Group();
-    arm.position.set(sx * (0.3 * k + 0.02), 1.5, 0);
-    arm.add(part(B(0.13 * k, 0.62, 0.14), o.top, 0, -0.3, 0));
-    arm.add(part(new THREE.IcosahedronGeometry(0.075 * k, 0), o.skin, 0, -0.64, 0));
+    arm.position.set(sx * (0.3 * k * (o.female ? 0.92 : 1) + 0.02), 1.5, 0);
+    arm.add(part(B(0.13 * k, 0.32, 0.14), o.top, 0, -0.15, 0)); // upper arm (sleeve)
+    arm.add(part(B(0.12 * k, 0.3, 0.13), o.gear && !o.robe ? o.skin : o.top, 0, -0.45, 0)); // forearm
+    if (g.gloves) arm.add(part(B(0.15 * k, g.gloves.grade === 'NG' ? 0.08 : 0.14, 0.16), handC, 0, -0.55, 0)); // cuff / gauntlet
+    arm.add(part(new THREE.IcosahedronGeometry(0.075 * k, 0), handC, 0, -0.64, 0));
     body.add(arm);
     arms.push(arm);
   }
   const w = weaponMesh(o.weapon, o.weaponColor ?? 0xc8d0d8);
   if (w) {
+    if (o.weaponGrade === 'C') w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(o.weaponColor ?? 0xffffff)));
     w.position.y = -0.64;
     arms[1].add(w);
   }
@@ -222,18 +314,21 @@ function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind {
   return wt ?? (cls === 'mystic' ? 'staff' : 'sword');
 }
 
-export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK): Rig {
+export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig {
   const r = RACES[race];
   const female = look.g === 'f';
   const hair = HAIR_COLORS[look.hc] >= 0 ? HAIR_COLORS[look.hc] : r.hair;
-  const chestDef = chest ? ITEMS[chest] : null;
+  const it = (id: string | null | undefined) => (id ? ITEMS[id] ?? null : null);
+  const chestDef = it(chest);
+  const [head, gloves, legs, feet] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
   return humanoid({
     skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
-    hairStyle: look.hs,
-    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, robe,
+    hairStyle: look.hs, female,
+    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, robe,
     ears: race === 'elf' || race === 'darkelf' ? 'elf' : undefined, tusks: race === 'orc' && !female, beard: race === 'dwarf' && !female, bald: race === 'orc' && !female && look.hs === 0,
+    gear: { chest: chestDef, head, gloves, legs, feet },
   });
 }
 

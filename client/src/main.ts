@@ -228,7 +228,7 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
       key = k;
       if (model) scene.remove(model);
       const start = CLASSES[cls].startItems.filter((i) => i[2]).map((i) => i[0]);
-      rig = playerModel(race, cls, start[0] ?? null, start[1] ?? null, look);
+      rig = playerModel(race, cls, start[0] ?? null, start[1] ?? null, look, [null, null, start[2] ?? null, null]);
       model = rig.root;
       scene.add(model);
     }
