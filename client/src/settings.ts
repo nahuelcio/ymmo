@@ -13,6 +13,7 @@ export interface Settings {
   viewDistance: number; // fog end / camera far, world units
   fpsCap: number; // 0 = unlimited
   showFps: boolean;
+  foliage: boolean;
   // post-processing shaders
   look: LookPreset;
   toneMapping: boolean; // ACES filmic
@@ -43,13 +44,13 @@ export interface Settings {
   volume: number;
 }
 
-type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa';
+type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage';
 
 export const PRESETS: Record<Exclude<Preset, 'custom'>, Pick<Settings, GraphicsKeys>> = {
-  low: { renderScale: 0.75, antialias: false, shadows: 'off', viewDistance: 220, ao: false, fxaa: false },
-  medium: { renderScale: 1, antialias: false, shadows: 'low', viewDistance: 320, ao: false, fxaa: true },
-  high: { renderScale: 1, antialias: true, shadows: 'medium', viewDistance: 420, ao: false, fxaa: false },
-  ultra: { renderScale: 1.25, antialias: true, shadows: 'high', viewDistance: 600, ao: true, fxaa: false },
+  low: { renderScale: 0.75, antialias: false, shadows: 'off', viewDistance: 220, ao: false, fxaa: false, foliage: false },
+  medium: { renderScale: 1, antialias: false, shadows: 'low', viewDistance: 320, ao: false, fxaa: true, foliage: true },
+  high: { renderScale: 1, antialias: true, shadows: 'medium', viewDistance: 420, ao: false, fxaa: false, foliage: true },
+  ultra: { renderScale: 1.25, antialias: true, shadows: 'high', viewDistance: 600, ao: true, fxaa: false, foliage: true },
 };
 
 type LookKeys = 'bloom' | 'bloomStrength' | 'colorGrade' | 'saturation' | 'contrast' | 'vignette' | 'toneMapping' | 'exposure' | 'warmth' | 'sharpen';

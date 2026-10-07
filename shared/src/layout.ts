@@ -1,7 +1,7 @@
 // Deterministic placement of world props (trees, rocks, town, zone props).
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, TELEPORTS, ZONES } from './data/world';
-import { heightAt, inTown, mulberry32, TOWN, WORLD_HALF } from './terrain';
+import { heightAt, inTown, mulberry32, TOWN, WATER_LEVEL, WORLD_HALF } from './terrain';
 
 /** Road segments from the village toward each hunting ground. */
 export const ROADS: [number, number, number, number][] = TELEPORTS.map((t) => {
@@ -50,7 +50,7 @@ export function layoutTrees(): TreeL[] {
     const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
     if (Math.hypot(x - TOWN.x, z - TOWN.z) < TOWN.r + 14 || roadDist(x, z) < 6) continue;
     const h = heightAt(x, z);
-    if (h > 42) continue;
+    if (h > 42 || h < WATER_LEVEL + 0.8) continue; // no trees on peaks or in ponds
     const zone = zoneOf(x, z);
     // keep hunting grounds a bit more open
     if (zone && rng() < 0.55) continue;

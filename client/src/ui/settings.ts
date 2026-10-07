@@ -39,6 +39,7 @@ export class SettingsPanel {
       this.select<ShadowQ>('Sombras', 'shadows', [['off', 'No'], ['low', 'Bajas'], ['medium', 'Medias'], ['high', 'Altas (suaves)']]);
       this.range('Distancia de visión', 'viewDistance', 150, 700, 10, (v) => `${v} m`);
       this.check('Antialiasing (MSAA)', 'antialias');
+      this.check('Pasto y flores', 'foliage');
       this.select<number>('Límite de FPS', 'fpsCap', [[0, 'Sin límite'], [30, '30'], [60, '60'], [120, '120'], [144, '144']]);
       this.check('Mostrar FPS', 'showFps');
     } else if (this.tab === 'shaders') {

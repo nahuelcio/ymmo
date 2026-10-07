@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { fbm, heightAt, smoothstep, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
-import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist } from '../../../shared/src/layout';
+import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist, zoneOf } from '../../../shared/src/layout';
 
 const SKY = 0xa9c6e0;
 
@@ -26,6 +26,11 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   const town = 1 - smoothstep(TOWN.r - 2, TOWN.r + 6, Math.hypot(x - TOWN.x, z - TOWN.z));
   const dirt = Math.max(road * 0.85, town);
   r += (0.6 + n * 0.08 - r) * dirt; g += (0.52 + n * 0.06 - g) * dirt; b += (0.38 + n * 0.05 - b) * dirt;
+  // pond shores: sand at the waterline, darker silt underwater
+  const sand = (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt);
+  r += (0.74 - r) * sand; g += (0.68 - g) * sand; b += (0.5 - b) * sand;
+  const deep = 1 - smoothstep(WATER_LEVEL - 2.5, WATER_LEVEL - 0.2, h);
+  r += (0.22 - r) * deep; g += (0.32 - g) * deep; b += (0.34 - b) * deep;
   return [r, g, b];
 }
 
@@ -40,6 +45,8 @@ export interface WorldScene {
   scene: THREE.Scene;
   terrain: THREE.Group;
   sun: THREE.DirectionalLight;
+  /** grass & flowers (toggle with the foliage setting) */
+  detail: THREE.Group;
   follow(p: THREE.Vector3): void;
 }
 
@@ -62,14 +69,22 @@ export function createWorldScene(): WorldScene {
   scene.add(terrain);
   scene.add(buildTrees());
   scene.add(buildRocks());
+  scene.add(buildBushes());
+  scene.add(buildWater());
+  const detail = buildDetail();
+  scene.add(detail);
   scene.add(mergeStatic(buildTown()));
   scene.add(mergeStatic(buildZoneProps()));
 
   return {
     scene, terrain, sun,
+    detail,
     follow(p) {
       sun.position.set(p.x + 60, p.y + 120, p.z + 40);
       sun.target.position.copy(p);
+      // grass and flowers only around the player
+      if (detail.visible)
+        for (const ch of detail.children) ch.visible = Math.abs(ch.userData.cx - p.x) < 95 && Math.abs(ch.userData.cz - p.z) < 95;
     },
   };
 }
@@ -101,8 +116,17 @@ function buildTerrain(): THREE.Group {
         c.setRGB(r, gg, b, THREE.SRGBColorSpace);
         colors.set([c.r, c.g, c.b], i * 3);
       }
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geo.computeVertexNormals();
+      // steep slopes turn to bare rock and darken a little: hills read as hills
+      const nrm = geo.attributes.normal as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        const steep = 1 - smoothstep(0.72, 0.93, nrm.getY(i));
+        const o = i * 3;
+        colors[o] += (0.36 - colors[o]) * steep * 0.8;
+        colors[o + 1] += (0.33 - colors[o + 1]) * steep * 0.8;
+        colors[o + 2] += (0.3 - colors[o + 2]) * steep * 0.8;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.receiveShadow = true;
@@ -173,25 +197,44 @@ function mergeStatic(src: THREE.Group): THREE.Group {
 function buildTrees(): THREE.Group {
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 2.2, 5);
   trunkGeo.translate(0, 1.1, 0);
-  const pineGeo = new THREE.ConeGeometry(1.5, 4, 6);
-  pineGeo.translate(0, 3.8, 0);
-  const leafGeo = new THREE.IcosahedronGeometry(1.7, 0);
-  leafGeo.translate(0, 3.4, 0);
-  const trunks: Inst[] = [], pines: Inst[] = [], leaves: Inst[] = [];
+  // pines: three stacked tiers; broadleaf: a cluster of blobs
+  const pineGeo = mergeGeometries([
+    new THREE.ConeGeometry(1.6, 2.2, 7).translate(0, 2.7, 0),
+    new THREE.ConeGeometry(1.25, 1.9, 7).translate(0, 3.8, 0),
+    new THREE.ConeGeometry(0.85, 1.6, 7).translate(0, 4.8, 0),
+  ].map((g) => g.toNonIndexed()))!;
+  const leafGeo = mergeGeometries([
+    new THREE.IcosahedronGeometry(1.45, 0).translate(0, 3.5, 0),
+    new THREE.IcosahedronGeometry(1.0, 0).translate(0.9, 3.0, 0.3),
+    new THREE.IcosahedronGeometry(1.05, 0).translate(-0.8, 3.1, -0.4),
+    new THREE.IcosahedronGeometry(0.85, 0).translate(0.1, 4.4, 0.2),
+  ])!;
+  // dead trees in the wastes get bare branches
+  const deadGeo = mergeGeometries([
+    new THREE.CylinderGeometry(0.18, 0.3, 2.6, 5).translate(0, 1.3, 0),
+    new THREE.CylinderGeometry(0.06, 0.1, 1.2, 4).rotateZ(0.9).translate(0.45, 2.2, 0),
+    new THREE.CylinderGeometry(0.05, 0.08, 1.0, 4).rotateZ(-1.0).translate(-0.4, 2.5, 0.1),
+    new THREE.CylinderGeometry(0.04, 0.07, 0.9, 4).rotateX(0.9).translate(0, 2.0, 0.35),
+  ].map((g) => g.toNonIndexed()))!;
+  const trunks: Inst[] = [], pines: Inst[] = [], leaves: Inst[] = [], deads: Inst[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   for (const t of layoutTrees()) {
     p.set(t.x, t.h - 0.1, t.z);
     q.setFromAxisAngle(up, t.rot);
     s.set(t.sc, t.sc, t.sc);
     const m = new THREE.Matrix4().compose(p, q, s);
-    trunks.push({ m, x: t.x, z: t.z, c: new THREE.Color(t.dead ? 0x3a3030 : 0x6b4a2b) });
-    if (t.dead) continue;
+    if (t.dead) {
+      deads.push({ m, x: t.x, z: t.z, c: new THREE.Color(0x3a3030) });
+      continue;
+    }
+    trunks.push({ m, x: t.x, z: t.z, c: new THREE.Color(0x6b4a2b) });
     if (t.pine) pines.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.3 + t.hue * 0.05, 0.45, 0.22 + t.light * 0.08) });
     else leaves.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1) });
   }
   const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
   const g = new THREE.Group();
   g.add(chunkedInstances(trunkGeo, mat(), trunks), chunkedInstances(pineGeo, mat(), pines), chunkedInstances(leafGeo, mat(), leaves));
+  if (deads.length) g.add(chunkedInstances(deadGeo, mat(), deads));
   return g;
 }
 
@@ -205,6 +248,90 @@ function buildRocks(): THREE.Group {
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
   return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), items);
+}
+
+function buildWater(): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(WORLD_HALF * 2, WORLD_HALF * 2, 1, 1).rotateX(-Math.PI / 2);
+  const water = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x3a7ab0, transparent: true, opacity: 0.72, depthWrite: false }));
+  water.position.y = WATER_LEVEL;
+  water.renderOrder = 2;
+  return water;
+}
+
+/** Can decorative foliage grow here? (not on roads, town, water, rock or snow) */
+function fertile(x: number, z: number, h: number): boolean {
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2;
+}
+
+function buildBushes(): THREE.Group {
+  const rng = mulberry32(21);
+  const geo = mergeGeometries([
+    new THREE.IcosahedronGeometry(0.6, 0).translate(0, 0.45, 0),
+    new THREE.IcosahedronGeometry(0.45, 0).translate(0.45, 0.35, 0.1),
+    new THREE.IcosahedronGeometry(0.42, 0).translate(-0.4, 0.32, -0.15),
+  ])!;
+  const items: Inst[] = [];
+  const q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 4000 && items.length < 1400; i++) {
+    const x = (rng() * 2 - 1) * WORLD_HALF * 0.9, z = (rng() * 2 - 1) * WORLD_HALF * 0.9, h = heightAt(x, z);
+    if (!fertile(x, z, h) || zoneOf(x, z)?.id === 'wastes') continue;
+    const sc = 0.7 + rng() * 0.8;
+    items.push({ m: new THREE.Matrix4().compose(p.set(x, h - 0.1, z), q.setFromAxisAngle(up, rng() * 6.3), sv.set(sc, sc * (0.8 + rng() * 0.4), sc)),
+      x, z, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.45, 0.24 + rng() * 0.1) });
+  }
+  return chunkedInstances(geo, new THREE.MeshLambertMaterial({ flatShading: true }), items);
+}
+
+const DETAIL_CHUNK = 40;
+/** Grass tufts and flowers: dense but tiny, so only chunks near the player are drawn. */
+function buildDetail(): THREE.Group {
+  const g = new THREE.Group();
+  const rng = mulberry32(77);
+  const blade = mergeGeometries([0, 1, 2].map((i) =>
+    new THREE.ConeGeometry(0.07, 0.55, 3).translate(0, 0.27, 0).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0, (i % 2) * 0.06).toNonIndexed()))!;
+  const flower = mergeGeometries([
+    new THREE.CylinderGeometry(0.015, 0.015, 0.4, 3).translate(0, 0.2, 0).toNonIndexed(),
+    new THREE.IcosahedronGeometry(0.08, 0).translate(0, 0.42, 0),
+  ])!;
+  const grassMat = new THREE.MeshLambertMaterial({ flatShading: true });
+  const flowerMat = new THREE.MeshLambertMaterial({ flatShading: true });
+  const FLOWERS = [0xf0e04a, 0xffffff, 0xe85a8a, 0x8a7aff, 0xff8a3a];
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
+  const n = Math.ceil((WORLD_HALF * 2 * 0.86) / DETAIL_CHUNK);
+  for (let cx = 0; cx < n; cx++)
+    for (let cz = 0; cz < n; cz++) {
+      const x0 = -WORLD_HALF * 0.86 + cx * DETAIL_CHUNK, z0 = -WORLD_HALF * 0.86 + cz * DETAIL_CHUNK;
+      const grass: [THREE.Matrix4, THREE.Color][] = [], flowers: [THREE.Matrix4, THREE.Color][] = [];
+      for (let i = 0; i < 520; i++) {
+        const x = x0 + rng() * DETAIL_CHUNK, z = z0 + rng() * DETAIL_CHUNK, h = heightAt(x, z);
+        const r1 = rng(), r2 = rng(), r3 = rng();
+        if (!fertile(x, z, h)) continue;
+        const zone = zoneOf(x, z)?.id;
+        const sc = 0.7 + r1 * 0.9;
+        m.compose(p.set(x, h - 0.05, z), q.setFromAxisAngle(up, r2 * 6.3), sv.set(sc, sc, sc));
+        if (r3 < (zone === 'meadows' ? 0.09 : zone ? 0.015 : 0.04) && zone !== 'wastes') {
+          flowers.push([m.clone(), c.set(FLOWERS[Math.floor(r1 * FLOWERS.length)]).clone()]);
+        } else {
+          // dry yellowed grass in the wastes and barracks, lush elsewhere
+          const dry = zone === 'wastes' ? 1 : zone === 'barracks' ? 0.5 : 0;
+          grass.push([m.clone(), c.setHSL(0.25 - dry * 0.12 + r1 * 0.03, 0.5 - dry * 0.2, 0.3 + r2 * 0.1 + dry * 0.05).clone()]);
+        }
+      }
+      for (const [geo, mt, list] of [[blade, grassMat, grass], [flower, flowerMat, flowers]] as const) {
+        if (!list.length) continue;
+        const im = new THREE.InstancedMesh(geo, mt, list.length);
+        list.forEach(([mm, cc], i) => {
+          im.setMatrixAt(i, mm);
+          im.setColorAt(i, cc);
+        });
+        im.computeBoundingSphere();
+        im.receiveShadow = true;
+        im.userData.cx = x0 + DETAIL_CHUNK / 2;
+        im.userData.cz = z0 + DETAIL_CHUNK / 2;
+        g.add(im);
+      }
+    }
+  return g;
 }
 
 function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0) {
@@ -258,6 +385,46 @@ function buildTown(): THREE.Group {
   statue.add(sword);
   statue.position.set(TOWN.x, y + 2.7, TOWN.z);
   g.add(basin, water, ped, statue);
+
+  // village life: lamp posts around the plaza, barrels and crates by the stalls, flower beds
+  const lampGlow = new THREE.MeshLambertMaterial({ color: 0xffd27a, emissive: 0xffb040, emissiveIntensity: 0.9, flatShading: true });
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    const lx = TOWN.x + Math.cos(a) * 17, lz = TOWN.z + Math.sin(a) * 17;
+    g.add(box(0.14, 3, 0.14, 0x2a2a2a, lx, y + 1.5, lz));
+    g.add(box(0.5, 0.08, 0.08, 0x2a2a2a, lx + Math.cos(a) * 0.2, y + 3, lz + Math.sin(a) * 0.2));
+    const lamp = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), lampGlow);
+    lamp.position.set(lx + Math.cos(a) * 0.4, y + 2.8, lz + Math.sin(a) * 0.4);
+    g.add(lamp);
+  }
+  const rng = mulberry32(5);
+  for (const st of layoutTown().stalls) {
+    for (let k = 0; k < 3; k++) {
+      const ox = st.x + Math.cos(st.rot) * (1.9 + k * 0.6) + (rng() - 0.5) * 0.4, oz = st.z - Math.sin(st.rot) * (1.9 + k * 0.6) + (rng() - 0.5) * 0.4;
+      if (rng() < 0.5) {
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.8, 8), mat(0x7a5030));
+        barrel.position.set(ox, y + 0.4, oz);
+        barrel.castShadow = true;
+        g.add(barrel);
+        const hoop = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.06, 8), mat(0x3a3a3a));
+        hoop.position.set(ox, y + 0.62, oz);
+        g.add(hoop);
+      } else g.add(box(0.6, 0.55, 0.6, 0x9a7a4a, ox, y + 0.28, oz));
+    }
+  }
+  const FLOWER_C = [0xe85a8a, 0xf0e04a, 0xffffff, 0x8a7aff];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.5;
+    const fx = TOWN.x + Math.cos(a) * 9.5, fz = TOWN.z + Math.sin(a) * 9.5;
+    const bed = box(2.2, 0.3, 0.9, 0x6a4a2a, fx, y + 0.15, fz);
+    bed.rotation.y = -a;
+    g.add(bed);
+    for (let k = 0; k < 6; k++) {
+      const fl = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), mat(FLOWER_C[(i + k) % FLOWER_C.length]));
+      fl.position.set(fx + Math.cos(-a) * (k - 2.5) * 0.32, y + 0.4, fz - Math.sin(-a) * (k - 2.5) * 0.32);
+      g.add(fl);
+    }
+  }
 
   const L = layoutTown();
   for (const h of L.houses) {

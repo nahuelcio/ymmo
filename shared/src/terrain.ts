@@ -63,3 +63,5 @@ export function mulberry32(seed: number): () => number {
 }
 
 export const PLAYABLE_HALF = WORLD_HALF * 0.86;
+/** Ponds fill the terrain's hollows up to this height (visual only: shallow, wadeable). */
+export const WATER_LEVEL = -7;

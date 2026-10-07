@@ -1,6 +1,6 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { F_DEAD } from '../../../shared/src/protocol';
-import { heightAt, TOWN, WORLD_HALF } from '../../../shared/src/terrain';
+import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
@@ -26,7 +26,7 @@ function worldImage(): HTMLCanvasElement {
     for (let i = 0; i < RES; i++) {
       const x = (i / RES) * 2 * WORLD_HALF - WORLD_HALF, z = (j / RES) * 2 * WORLD_HALF - WORLD_HALF;
       const h = heightAt(x, z);
-      const [r, g, b] = groundColor(x, z, h);
+      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(x, z, h);
       const shade = 0.85 + Math.min(0.3, h / 120);
       const o = (j * RES + i) * 4;
       img.data[o] = Math.min(255, r * 255 * shade);
