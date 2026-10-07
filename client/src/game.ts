@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
+import { QUEST_BY_NPC, questMarker, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
 import { findPath, pushOut } from '../../shared/src/collision';
@@ -43,6 +44,8 @@ export interface CEnt {
   hitDz: number;
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
+  /** quest giver's floating ! / ? */
+  marker?: { obj: CSS2DObject; el: HTMLDivElement };
 }
 
 const INTERP_DELAY = 110;
@@ -98,6 +101,7 @@ export class Game {
   inv: InvItem[];
   adena = 0;
   quests: { id: string; progress: number }[] = [];
+  questsDone = new Set<string>();
   targetId: number | null = null;
   cooldowns = new Map<string, { end: number; dur: number }>();
   castBar: { end: number; dur: number; name: string } | null = null;
@@ -245,10 +249,12 @@ export class Game {
     n.on('snap', (m) => this.onSnap(m.add, m.upd, m.gone));
     n.on('me', (m) => {
       const prevZone = this.me.zone;
+      const prevLvl = this.me.lvl;
       this.me = m.s;
       this.adena = m.s.adena;
       this.ui.onMe();
       if (prevZone !== m.s.zone) this.ui.hud.banner(m.s.zone);
+      if (prevLvl !== m.s.lvl) this.refreshQuestMarkers();
     });
     n.on('inv', (m) => {
       this.inv = m.items;
@@ -298,6 +304,8 @@ export class Game {
     n.on('npc', (m) => this.ui.npc.open(m));
     n.on('quests', (m) => {
       this.quests = m.list;
+      this.questsDone = new Set(m.done);
+      this.refreshQuestMarkers();
       this.ui.hud.setQuests(m.list);
       this.ui.npc.syncQuest(m.list);
     });
@@ -372,6 +380,35 @@ export class Game {
     }
   }
 
+  /** Marker state for a quest giver (by NPC def id), also used by the minimap. */
+  questMarkerFor(npcId: string): QuestMarker {
+    const q = QUEST_BY_NPC[npcId];
+    if (!q) return null;
+    return questMarker(q, this.me.lvl, this.quests.find((x) => x.id === q.id), this.questsDone.has(q.id));
+  }
+
+  private refreshQuestMarker(c: CEnt) {
+    if (c.rec.k !== 'n' || !QUEST_BY_NPC[c.rec.npc]) return;
+    if (!c.marker) {
+      // outer element is positioned by CSS2DRenderer (transform); the inner one bobs
+      const wrap = document.createElement('div');
+      const el = document.createElement('div');
+      wrap.appendChild(el);
+      const obj = new CSS2DObject(wrap);
+      obj.position.y = c.height + 1.05;
+      c.root.add(obj);
+      c.marker = { obj, el };
+    }
+    const m = this.questMarkerFor(c.rec.npc);
+    c.marker.el.className = m ? `quest-marker qm-${m}` : 'quest-marker';
+    c.marker.el.textContent = m === 'ready' || m === 'active' ? '?' : m ? '!' : '';
+    c.marker.obj.visible = !!m;
+  }
+
+  refreshQuestMarkers() {
+    for (const c of this.ents.values()) this.refreshQuestMarker(c);
+  }
+
   private addHpBar(c: CEnt) {
     const bar = document.createElement('div');
     bar.className = 'np-hp';
@@ -429,6 +466,7 @@ export class Game {
       ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
     };
     this.refreshLabel(c);
+    this.refreshQuestMarker(c);
     return c;
   }
 
@@ -964,6 +1002,7 @@ export class Game {
         const d = dSelf;
         const show = c.id === this.targetId || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
         c.label.visible = show && onScreen;
+        if (c.marker) c.marker.obj.visible = onScreen && c.marker.el.textContent !== '';
       }
     }
 

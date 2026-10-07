@@ -131,6 +131,19 @@ export class Minimap {
     // NPCs (always known)
     for (const n of NPCS) {
       const [x, y] = toC(n.x, n.z);
+      const qm = this.g.questMarkerFor(n.id);
+      if (qm) {
+        // quest givers: ! / ? like over their heads
+        ctx.font = 'bold 13px Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#000';
+        const ch = qm === 'ready' || qm === 'active' ? '?' : '!';
+        ctx.strokeText(ch, x, y + 5);
+        ctx.fillStyle = qm === 'ready' || qm === 'available' ? '#ffd200' : '#9a9a9a';
+        ctx.fillText(ch, x, y + 5);
+        continue;
+      }
       ctx.fillStyle = '#ffd966';
       ctx.fillRect(x - 2, y - 2, 4, 4);
     }

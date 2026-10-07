@@ -329,3 +329,10 @@ input { font: inherit; user-select: text; }
 .look-cinematic { background: linear-gradient(135deg, #1a2a30, #2a1a10); }
 .look-noir { background: linear-gradient(135deg, #3a3a3a, #050505); }
 .set-body { max-height: min(62vh, 560px); overflow-y: auto; padding-right: 4px; }
+
+/* WoW-style quest markers */
+.quest-marker { font: 900 30px/1 Georgia, 'Times New Roman', serif; pointer-events: none; animation: qmBob 1.6s ease-in-out infinite;
+  -webkit-text-stroke: 1.5px #2a1a00; text-shadow: 0 0 6px rgba(0,0,0,0.8), 0 2px 2px #000; }
+.qm-available, .qm-ready { color: #ffd200; text-shadow: 0 0 10px rgba(255, 200, 0, 0.75), 0 2px 2px #000; }
+.qm-soon, .qm-active { color: #a8a8a8; -webkit-text-stroke-color: #222; font-size: 26px; }
+@keyframes qmBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }

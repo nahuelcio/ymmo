@@ -24,6 +24,19 @@ export function questSummary(q: QuestDef): string {
   return `Traer ${o.count} × ${ITEMS[o.item].name}`;
 }
 
+/** How many levels ahead a not-yet-available quest shows a grey "!". */
+export const QUEST_SOON_LEVELS = 3;
+
+export type QuestMarker = 'available' | 'soon' | 'ready' | 'active' | null;
+
+/** WoW-style marker over a quest giver: yellow !/? = actionable, grey = not yet. */
+export function questMarker(q: QuestDef, level: number, active: { progress: number } | undefined, done: boolean): QuestMarker {
+  if (done) return null;
+  if (active) return active.progress >= q.objective.count ? 'ready' : 'active';
+  if (level >= q.minLevel) return 'available';
+  return level + QUEST_SOON_LEVELS >= q.minLevel ? 'soon' : null;
+}
+
 export function questLine(q: QuestDef, status: QuestStatus): string {
   if (status === 'locked') return `Volvé cuando llegues a nivel ${q.minLevel}.`;
   if (status === 'available') return q.offer;

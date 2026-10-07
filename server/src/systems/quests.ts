@@ -39,12 +39,14 @@ export function primeQuestNotices(p: Player) {
 
 export function sendQuests(p: Player) {
   const list: { id: string; progress: number }[] = [];
+  const done: string[] = [];
   for (const q of QUEST_LIST) {
     const st = p.quests.get(q.id);
+    if (st?.done) done.push(q.id);
     if (!st || st.done) continue;
     list.push({ id: q.id, progress: questProgress(p, q) });
   }
-  p.send({ t: 'quests', list });
+  p.send({ t: 'quests', list, done });
 }
 
 function statusOf(p: Player, q: QuestDef): QuestStatus {

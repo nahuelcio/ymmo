@@ -88,7 +88,7 @@ export type S2C =
   | { t: 'levelUp'; id: number; lvl: number }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
-  | { t: 'quests'; list: { id: string; progress: number }[] }
+  | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }
