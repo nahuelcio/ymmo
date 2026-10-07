@@ -5,6 +5,7 @@ import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
 import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
+import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
@@ -255,7 +256,7 @@ export class World {
     const seen = new Set<number>();
     for (const e of this.near(p.x, p.z, AOI)) {
       seen.add(e.id);
-      const u: EntUpd = [e.id, round2(e.x), round2(e.z), round2(e.ry), e.hpPct(), e.flags(now)];
+      const u: EntUpd = [e.id, qPos(e.x), qPos(e.z), qRot(e.ry), e.hpPct(), e.flags(now)];
       const prev = p.known.get(e.id);
       if (!prev || p.knownAv.get(e.id) !== e.av) {
         add.push(this.entRecord(e, now));
@@ -274,7 +275,10 @@ export class World {
         p.knownAv.delete(id);
       }
     }
-    if (add.length || upd.length || gone.length) p.send({ t: 'snap', add, upd, gone });
+    // new entities (rare, full records) as JSON first; the per-tick updates and
+    // despawns go in a compact binary frame (see shared/binary.ts)
+    if (add.length) p.send({ t: 'snap', add, upd: [], gone: [] });
+    if (upd.length || gone.length) p.sendBinary(encodeSnap(upd, gone));
   }
 
   selfState(p: Player): SelfState {

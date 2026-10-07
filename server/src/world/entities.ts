@@ -15,6 +15,7 @@ export interface Session {
   send(msg: S2C): void;
   /** Send an already-serialized message (lets broadcasts stringify once). */
   sendRaw(json: string): void;
+  sendBinary(data: Uint8Array): void;
   /** True when the socket has a large unsent backlog (slow client). */
   congested(): boolean;
 }
@@ -108,6 +109,10 @@ export class Player extends Entity {
 
   sendRaw(json: string): void {
     this.session.sendRaw(json);
+  }
+
+  sendBinary(data: Uint8Array): void {
+    this.session.sendBinary(data);
   }
 
   equipped(): ItemDef[] {

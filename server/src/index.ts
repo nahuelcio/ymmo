@@ -34,6 +34,9 @@ class Session implements ISession {
   sendRaw(json: string) {
     if (this.ws.readyState === this.ws.OPEN) this.ws.send(json);
   }
+  sendBinary(data: Uint8Array) {
+    if (this.ws.readyState === this.ws.OPEN) this.ws.send(data, { binary: true });
+  }
   congested() {
     return this.ws.bufferedAmount > 256 * 1024;
   }

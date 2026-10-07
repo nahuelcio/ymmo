@@ -1,4 +1,5 @@
 import type { C2S, S2C } from '../../shared/src/protocol';
+import { decodeSnap } from '../../shared/src/binary';
 
 type Handler = (m: S2C) => void;
 
@@ -10,8 +11,15 @@ export class Net {
   connect(): Promise<void> {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     this.ws = new WebSocket(`${proto}://${location.host}/ws`);
+    this.ws.binaryType = 'arraybuffer';
     this.ws.onmessage = (ev) => {
-      const m = JSON.parse(ev.data) as S2C;
+      let m: S2C;
+      if (typeof ev.data === 'string') m = JSON.parse(ev.data) as S2C;
+      else {
+        const snap = decodeSnap(ev.data as ArrayBuffer);
+        if (!snap) return;
+        m = { t: 'snap', add: [], upd: snap.upd, gone: snap.gone };
+      }
       for (const h of this.handlers.get(m.t) ?? []) h(m);
       for (const h of this.handlers.get('*') ?? []) h(m);
     };
