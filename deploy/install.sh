@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claudi MMO — one-shot install on a fresh Ubuntu/Debian VPS (run as root).
+# Claudi MMO — one-shot install (latest Node, systemd, nginx, auto-update from git) on a fresh Ubuntu/Debian VPS (run as root).
 #   curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.sh | bash -s mijuego.com   # with HTTPS
 # Re-running it is safe: it updates the code and keeps the database.
@@ -11,6 +11,9 @@ BRANCH="${BRANCH:-main}"
 APP_DIR=/opt/claudi-mmo
 APP_USER=claudi
 PORT=3001
+NODE_DIR=/opt/node
+export PATH="$NODE_DIR/bin:/usr/local/bin:/usr/bin:/bin"
+as_app() { sudo -u "$APP_USER" env PATH="$PATH" HOME="/home/$APP_USER" bash -c "$1"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Correlo como root (sudo)."; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
@@ -19,23 +22,33 @@ echo "==> Paquetes del sistema"
 apt-get update -y
 apt-get install -y curl git nginx ca-certificates gnupg ufw
 
-if ! command -v node >/dev/null || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
-  echo "==> Node.js 22"
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y nodejs
+# Our own latest Node in /opt/node, readable by every user (ignores any nvm / root-only install).
+LATEST=$(curl -fsSL https://nodejs.org/dist/index.json | grep -o '"version":"v[0-9.]*"' | head -1 | cut -d'"' -f4)
+if ! [ -x "$NODE_DIR/bin/node" ] || [ "$("$NODE_DIR/bin/node" -v)" != "$LATEST" ]; then
+  echo "==> Node.js $LATEST (oficial, en $NODE_DIR)"
+  rm -rf "$NODE_DIR"
+  case "$(uname -m)" in x86_64) ARCH=x64 ;; aarch64|arm64) ARCH=arm64 ;; *) echo "Arquitectura no soportada: $(uname -m)"; exit 1 ;; esac
+  TARBALL=$(curl -fsSL https://nodejs.org/dist/latest/SHASUMS256.txt | awk "/linux-$ARCH.tar.xz/ {print \$2}")
+  mkdir -p "$NODE_DIR"
+  curl -fsSL "https://nodejs.org/dist/latest/$TARBALL" | tar -xJ -C "$NODE_DIR" --strip-components=1
+  chmod -R a+rX "$NODE_DIR"
 fi
+echo "    node $("$NODE_DIR/bin/node" -v)"
 
 echo "==> Usuario y código"
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$APP_USER"
+mkdir -p "/home/$APP_USER" && chown "$APP_USER:$APP_USER" "/home/$APP_USER"
 if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" fetch origin "$BRANCH" && git -C "$APP_DIR" reset --hard "origin/$BRANCH"
+  chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+  as_app "cd $APP_DIR && git fetch origin $BRANCH && git reset --hard origin/$BRANCH"
 else
-  git clone --branch "$BRANCH" "$REPO" "$APP_DIR"
+  rm -rf "$APP_DIR"
+  mkdir -p "$APP_DIR" && chown "$APP_USER:$APP_USER" "$APP_DIR"
+  as_app "git clone --branch $BRANCH $REPO $APP_DIR"
 fi
-chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
 echo "==> Dependencias y build del cliente"
-sudo -u "$APP_USER" bash -c "cd $APP_DIR && npm ci --no-audit --no-fund && npm run build"
+as_app "cd $APP_DIR && npm ci --no-audit --no-fund && npm run build"
 
 echo "==> Servicio systemd"
 cat > /etc/systemd/system/claudi-mmo.service <<UNIT
@@ -48,7 +61,8 @@ User=$APP_USER
 WorkingDirectory=$APP_DIR
 Environment=GAME_PORT=$PORT
 Environment=NODE_ENV=production
-ExecStart=$APP_DIR/node_modules/.bin/tsx server/src/index.ts
+Environment=PATH=$NODE_DIR/bin:/usr/bin:/bin
+ExecStart=$NODE_DIR/bin/node $APP_DIR/node_modules/tsx/dist/cli.mjs server/src/index.ts
 Restart=always
 RestartSec=3
 
@@ -104,7 +118,32 @@ find /var/backups/claudi-mmo -name 'game-*.db' -mtime +14 -delete
 CRON
 chmod +x /etc/cron.daily/claudi-mmo-backup
 
+echo "==> Auto-actualización: cada minuto revisa $BRANCH y, si hay commits nuevos, actualiza solo"
+cat > /etc/systemd/system/claudi-mmo-autoupdate.service <<UNIT
+[Unit]
+Description=Claudi MMO: update from git if $BRANCH moved
+
+[Service]
+Type=oneshot
+Environment=BRANCH=$BRANCH
+ExecStart=/bin/bash $APP_DIR/deploy/autoupdate.sh
+UNIT
+cat > /etc/systemd/system/claudi-mmo-autoupdate.timer <<UNIT
+[Unit]
+Description=Check for Claudi MMO updates every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now claudi-mmo-autoupdate.timer
+
 IP=$(curl -fsS https://api.ipify.org || hostname -I | awk '{print $1}')
 echo
 echo "Listo. Abrí: ${DOMAIN:+https://$DOMAIN}${DOMAIN:-http://$IP}"
-echo "Logs: journalctl -u claudi-mmo -f    Actualizar: bash $APP_DIR/deploy/update.sh"
+echo "Logs: journalctl -u claudi-mmo -f    Auto-updates: journalctl -u claudi-mmo-autoupdate -f"
+echo "Se actualiza solo al pushear a $BRANCH (en ~1 min). Forzar: bash $APP_DIR/deploy/update.sh"

@@ -54,4 +54,6 @@ curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.
 curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.sh | bash -s mijuego.com
 ```
 
-Instala Node 22, deja el juego como servicio `claudi-mmo` (systemd) detrás de nginx (con WebSocket), abre el firewall y programa un backup diario de la base en `/var/backups/claudi-mmo`. Para actualizar: `bash /opt/claudi-mmo/deploy/update.sh`. Logs: `journalctl -u claudi-mmo -f`.
+Instala la última versión de Node en `/opt/node`, deja el juego como servicio `claudi-mmo` (systemd) detrás de nginx (con WebSocket), abre el firewall y programa un backup diario de la base en `/var/backups/claudi-mmo`.
+
+**Se actualiza solo**: un timer de systemd revisa `main` cada minuto y, si hay commits nuevos, baja, compila y reinicia (si la compilación falla, vuelve a la versión anterior y no corta el juego). Forzar una actualización: `bash /opt/claudi-mmo/deploy/update.sh`. Logs: `journalctl -u claudi-mmo -f` y `journalctl -u claudi-mmo-autoupdate -f`.
