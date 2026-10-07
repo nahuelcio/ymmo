@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fbm, heightAt, smoothstep, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist } from '../../../shared/src/layout';
@@ -37,7 +38,7 @@ export function mat(color: number): THREE.MeshLambertMaterial {
 
 export interface WorldScene {
   scene: THREE.Scene;
-  terrain: THREE.Mesh;
+  terrain: THREE.Group;
   sun: THREE.DirectionalLight;
   follow(p: THREE.Vector3): void;
 }
@@ -61,8 +62,8 @@ export function createWorldScene(): WorldScene {
   scene.add(terrain);
   scene.add(buildTrees());
   scene.add(buildRocks());
-  scene.add(buildTown());
-  scene.add(buildZoneProps());
+  scene.add(mergeStatic(buildTown()));
+  scene.add(mergeStatic(buildZoneProps()));
 
   return {
     scene, terrain, sun,
@@ -73,91 +74,137 @@ export function createWorldScene(): WorldScene {
   };
 }
 
-function buildTerrain(): THREE.Mesh {
-  const size = WORLD_HALF * 2, seg = 250;
-  const geo = new THREE.PlaneGeometry(size, size, seg, seg);
-  geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const colors = new Float32Array(pos.count * 3);
+// The world is split into square chunks so the camera frustum (and the far plane,
+// i.e. the view distance) can skip everything that isn't on screen. One big mesh or
+// InstancedMesh would always be drawn whole.
+const CHUNK = 200;
+const chunkKey = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+
+function buildTerrain(): THREE.Group {
+  const g = new THREE.Group();
+  g.name = 'terrain';
+  const n = Math.round((WORLD_HALF * 2) / CHUNK), seg = Math.round(250 / n);
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const h = heightAt(x, z);
-    pos.setY(i, h);
-    const [r, g, b] = groundColor(x, z, h);
-    c.setRGB(r, g, b, THREE.SRGBColorSpace);
-    colors.set([c.r, c.g, c.b], i * 3);
+  for (let cx = 0; cx < n; cx++)
+    for (let cz = 0; cz < n; cz++) {
+      const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, seg, seg);
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(-WORLD_HALF + (cx + 0.5) * CHUNK, 0, -WORLD_HALF + (cz + 0.5) * CHUNK);
+      const pos = geo.attributes.position as THREE.BufferAttribute;
+      const colors = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        const h = heightAt(x, z);
+        pos.setY(i, h);
+        const [r, gg, b] = groundColor(x, z, h);
+        c.setRGB(r, gg, b, THREE.SRGBColorSpace);
+        colors.set([c.r, c.g, c.b], i * 3);
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geo.computeVertexNormals();
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.receiveShadow = true;
+      g.add(mesh);
+    }
+  return g;
+}
+
+interface Inst { m: THREE.Matrix4; c: THREE.Color; x: number; z: number }
+
+/** One InstancedMesh per world chunk, each with its own bounds so it can be culled. */
+function chunkedInstances(geo: THREE.BufferGeometry, material: THREE.Material, items: Inst[]): THREE.Group {
+  const g = new THREE.Group();
+  const byChunk = new Map<string, Inst[]>();
+  for (const it of items) {
+    const k = chunkKey(it.x, it.z);
+    let l = byChunk.get(k);
+    if (!l) byChunk.set(k, (l = []));
+    l.push(it);
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  mesh.receiveShadow = true;
-  mesh.name = 'terrain';
-  return mesh;
+  for (const list of byChunk.values()) {
+    const mesh = new THREE.InstancedMesh(geo, material, list.length);
+    list.forEach((it, i) => {
+      mesh.setMatrixAt(i, it.m);
+      mesh.setColorAt(i, it.c);
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.computeBoundingSphere();
+    g.add(mesh);
+  }
+  return g;
+}
+
+/**
+ * Bake a group of static meshes into one mesh per (material, chunk): hundreds of
+ * little boxes become a handful of draw calls that can still be frustum-culled.
+ */
+function mergeStatic(src: THREE.Group): THREE.Group {
+  src.updateMatrixWorld(true);
+  const buckets = new Map<string, { mat: THREE.Material; geos: THREE.BufferGeometry[]; cast: boolean }>();
+  const v = new THREE.Vector3();
+  src.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    const mat = o.material as THREE.Material;
+    o.getWorldPosition(v);
+    const key = `${mat.uuid}|${chunkKey(v.x, v.z)}|${o.castShadow}`;
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, (b = { mat, geos: [], cast: o.castShadow }));
+    const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    b.geos.push(g);
+  });
+  const out = new THREE.Group();
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos);
+    for (const g of b.geos) g.dispose();
+    if (!merged) continue;
+    merged.computeBoundingSphere();
+    const mesh = new THREE.Mesh(merged, b.mat);
+    mesh.castShadow = b.cast;
+    mesh.receiveShadow = true;
+    out.add(mesh);
+  }
+  return out;
 }
 
 function buildTrees(): THREE.Group {
-  const g = new THREE.Group();
-  const N = 2600;
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 2.2, 5);
   trunkGeo.translate(0, 1.1, 0);
   const pineGeo = new THREE.ConeGeometry(1.5, 4, 6);
   pineGeo.translate(0, 3.8, 0);
   const leafGeo = new THREE.IcosahedronGeometry(1.7, 0);
   leafGeo.translate(0, 3.4, 0);
-  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const pines = new THREE.InstancedMesh(pineGeo, new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const leaves = new THREE.InstancedMesh(leafGeo, new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  const col = new THREE.Color();
-  let ti = 0, pi = 0, li = 0;
-  const hide = new THREE.Matrix4().makeScale(0, 0, 0);
+  const trunks: Inst[] = [], pines: Inst[] = [], leaves: Inst[] = [];
+  const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   for (const t of layoutTrees()) {
     p.set(t.x, t.h - 0.1, t.z);
-    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot);
+    q.setFromAxisAngle(up, t.rot);
     s.set(t.sc, t.sc, t.sc);
-    m.compose(p, q, s);
-    trunks.setMatrixAt(ti, m);
-    trunks.setColorAt(ti++, col.set(t.dead ? 0x3a3030 : 0x6b4a2b));
+    const m = new THREE.Matrix4().compose(p, q, s);
+    trunks.push({ m, x: t.x, z: t.z, c: new THREE.Color(t.dead ? 0x3a3030 : 0x6b4a2b) });
     if (t.dead) continue;
-    if (t.pine) {
-      pines.setMatrixAt(pi, m);
-      pines.setColorAt(pi++, col.setHSL(0.3 + t.hue * 0.05, 0.45, 0.22 + t.light * 0.08));
-    } else {
-      leaves.setMatrixAt(li, m);
-      leaves.setColorAt(li++, col.setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1));
-    }
+    if (t.pine) pines.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.3 + t.hue * 0.05, 0.45, 0.22 + t.light * 0.08) });
+    else leaves.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1) });
   }
-  for (const [mesh, used] of [[trunks, ti], [pines, pi], [leaves, li]] as const) {
-    for (let k = used; k < N; k++) mesh.setMatrixAt(k, hide);
-    mesh.count = used;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    g.add(mesh);
-  }
+  const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
+  const g = new THREE.Group();
+  g.add(chunkedInstances(trunkGeo, mat(), trunks), chunkedInstances(pineGeo, mat(), pines), chunkedInstances(leafGeo, mat(), leaves));
   return g;
 }
 
-function buildRocks(): THREE.InstancedMesh {
-  const N = 500;
-  const geo = new THREE.DodecahedronGeometry(1, 0);
-  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), N);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  const col = new THREE.Color();
-  let n = 0;
+function buildRocks(): THREE.Group {
+  const items: Inst[] = [];
+  const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
   for (const r of layoutRocks()) {
     p.set(r.x, r.y, r.z);
-    q.setFromEuler(new THREE.Euler(...r.e));
+    q.setFromEuler(e.set(...r.e));
     s.set(...r.s);
-    m.compose(p, q, s);
-    mesh.setMatrixAt(n, m);
-    mesh.setColorAt(n++, col.setHSL(0.08, 0.06, 0.38 + r.light * 0.15));
+    items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
+  return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), items);
 }
 
 function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0) {

@@ -111,6 +111,9 @@ export class Game {
   private lastRender = 0;
   private fpsFrames = 0;
   private fpsAt = 0;
+  private frustum = new THREE.Frustum();
+  private projView = new THREE.Matrix4();
+  private sphere = new THREE.Sphere();
   private hoverId: number | null = null;
   /** Client-side predicted move destination for our own character. */
   private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[] } | null = null;
@@ -705,7 +708,7 @@ export class Game {
           if (c && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
         }
       }
-      const t = this.raycaster.intersectObject(this.world.terrain, false)[0];
+      const t = this.raycaster.intersectObject(this.world.terrain, true)[0];
       return t ? { point: t.point } : {};
     };
     const cursorFor = (c: CEnt | undefined) => {
@@ -889,6 +892,9 @@ export class Game {
     const tSec = now / 1000;
     const self = this.self;
 
+    // entities outside the camera frustum: hidden, not animated, no nameplate
+    this.camera.updateMatrixWorld();
+    this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
     for (const c of this.ents.values()) {
       const s = c.snaps;
       let moving = (c.flags & F_MOVING) !== 0;
@@ -931,8 +937,12 @@ export class Game {
         }
       }
       const dSelf = self ? c.pos.distanceTo(self.pos) : 0;
+      this.sphere.center.set(c.pos.x, c.pos.y + c.height / 2, c.pos.z);
+      this.sphere.radius = Math.max(c.height, c.radius) + 2; // margin so shadows don't pop
+      const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
+      c.root.visible = onScreen;
       // far rigs are tiny on screen: skip their (per-bone) animation
-      if (c.rig && dSelf < 60) {
+      if (c.rig && onScreen && dSelf < 60) {
         animate(c.rig, {
           moving,
           atkAge: now - c.atkAt,
@@ -947,7 +957,7 @@ export class Game {
       if (self) {
         const d = dSelf;
         const show = c.id === this.targetId || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
-        c.label.visible = show;
+        c.label.visible = show && onScreen;
       }
     }
 
