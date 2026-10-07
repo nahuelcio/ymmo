@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RACES, type ClassType, type Race } from '../../shared/src/data/classes';
+import { RACES, sanitizeLook, type ClassType, type Race } from '../../shared/src/data/classes';
 import { MAX_LEVEL } from '../../shared/src/data/classes';
 import type { C2S, S2C } from '../../shared/src/protocol';
 import * as db from './db';
@@ -75,6 +75,7 @@ function enterWorld(s: Session, charId: number) {
   if (!data) return s.send({ t: 'error', msg: 'Character not found.' });
   const r = data.row;
   const p = new Player(world.newId(), r.x, r.z, s, r.id, r.name, r.race, r.cls, Math.min(r.level, MAX_LEVEL), r.xp, r.hp, r.mp, r.cp, r.adena, r.karma, r.pk, r.pvp);
+  p.look = r.look;
   p.inv = data.items.map((i) => ({ ...i, u: p.nextUid++ }));
   p.recalc();
   s.player = p;
@@ -104,7 +105,7 @@ function handle(s: Session, m: C2S) {
       if (!NAME_RE.test(name)) return s.send({ t: 'error', msg: 'Name: 3-16 letters/numbers, starting with a letter.' });
       const race = m.race as Race, cls = m.cls as ClassType;
       if (!RACES[race] || !RACES[race].classes.includes(cls)) return s.send({ t: 'error', msg: 'Invalid race/class combination.' });
-      const err = db.createChar(s.accountId, name, race, cls);
+      const err = db.createChar(s.accountId, name, race, cls, sanitizeLook(m.look));
       if (err) return s.send({ t: 'error', msg: err });
       return s.send({ t: 'chars', list: db.listChars(s.accountId) });
     }

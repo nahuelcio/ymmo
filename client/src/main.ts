@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 import './style.css';
-import { CLASSES, RACES, type ClassType, type Race } from '../../shared/src/data/classes';
+import * as THREE from 'three';
+import {
+  CLASSES, GENDERS, HAIR_COLORS, HAIR_STYLES, RACES, statMods, type ClassType, type Gender, type Look, type Race,
+} from '../../shared/src/data/classes';
+import { allSkillsFor } from '../../shared/src/data/skills';
+import { animate, playerModel } from './render/models';
 import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
@@ -10,7 +15,12 @@ const screens = document.getElementById('screens')!;
 const net = new Net();
 let inGame = false;
 
+/** Disposer for whatever the current screen owns (e.g. the 3D preview). */
+let cleanup: (() => void) | null = null;
+
 function screen(): HTMLDivElement {
+  cleanup?.();
+  cleanup = null;
   screens.innerHTML = '';
   screens.style.display = '';
   const wrap = el('div', 'screen', screens);
@@ -78,7 +88,7 @@ function charScreen(list: CharSummary[]) {
     if (!list.length) el('div', 'tt-dim', left, 'No characters yet. Create one →');
     for (const c of list) {
       const card = el('div', `char-card${c.id === selected ? ' sel' : ''}`, left);
-      card.innerHTML = `<b></b><br><span class="tt-dim">Lv ${c.level} ${RACES[c.race].name} ${CLASSES[c.cls].name}</span>`;
+      card.innerHTML = `<b></b><br><span class="tt-dim">Lv ${c.level} ${GENDERS[c.look.g].name} ${RACES[c.race].name} ${CLASSES[c.cls].name}</span>`;
       card.querySelector('b')!.textContent = c.name;
       card.onclick = () => {
         selected = c.id;
@@ -104,35 +114,134 @@ function charScreen(list: CharSummary[]) {
   const name = el('input', 'field', right);
   name.placeholder = 'Name';
   name.maxLength = 16;
-  const races = el('div', 'pick', right);
-  const classes = el('div', 'pick', right);
+  const studio = el('div', 'studio', right);
+  const preview = el('div', 'char-preview', studio);
+  const opts = el('div', 'studio-opts', studio);
+  const label = (t: string) => el('div', 'pick-label', opts, t);
+  label('Race');
+  const races = el('div', 'pick', opts);
+  label('Class');
+  const classes = el('div', 'pick', opts);
+  label('Gender');
+  const genders = el('div', 'pick', opts);
+  label('Hair');
+  const styles = el('div', 'pick', opts);
+  const colors = el('div', 'pick swatches', opts);
   const desc = el('div', 'tt-dim race-desc', right);
+  const diff = el('div', 'char-diff', right);
   let race: Race = 'human', cls: ClassType = 'fighter';
+  const look: Look = { g: 'm', hs: 0, hc: 0 };
+  const stopPreview = previewRenderer(preview, () => ({ race, cls, look }));
+
+  const pickRow = <T,>(host: HTMLElement, items: [T, string][], cur: T, set: (v: T) => void, enabled: (v: T) => boolean = () => true) => {
+    host.innerHTML = '';
+    for (const [v, text] of items) {
+      const b = el('button', `pick-btn${v === cur ? ' sel' : ''}`, host, text);
+      b.disabled = !enabled(v);
+      b.onclick = () => {
+        set(v);
+        renderPick();
+      };
+    }
+  };
   const renderPick = () => {
-    races.innerHTML = '';
-    for (const r of Object.keys(RACES) as Race[]) {
-      const b = el('button', `pick-btn${r === race ? ' sel' : ''}`, races, RACES[r].name);
-      b.onclick = () => {
-        race = r;
-        if (!RACES[r].classes.includes(cls)) cls = 'fighter';
+    pickRow(races, (Object.keys(RACES) as Race[]).map((r) => [r, RACES[r].name]), race, (r) => {
+      race = r;
+      if (!RACES[r].classes.includes(cls)) cls = 'fighter';
+    });
+    pickRow(classes, (['fighter', 'mystic'] as ClassType[]).map((c) => [c, CLASSES[c].name]), cls, (c) => (cls = c), (c) => RACES[race].classes.includes(c));
+    pickRow(genders, (['m', 'f'] as Gender[]).map((g) => [g, GENDERS[g].name]), look.g, (g) => (look.g = g));
+    pickRow(styles, HAIR_STYLES.map((n, i) => [i, n]), look.hs, (i) => (look.hs = i));
+    colors.innerHTML = '';
+    HAIR_COLORS.forEach((c, i) => {
+      const sw = el('button', `swatch${i === look.hc ? ' sel' : ''}`, colors);
+      const hex = c >= 0 ? c : RACES[race].hair;
+      sw.style.background = `#${hex.toString(16).padStart(6, '0')}`;
+      sw.title = i === 0 ? 'Natural' : '';
+      sw.onclick = () => {
+        look.hc = i;
         renderPick();
       };
-    }
-    classes.innerHTML = '';
-    for (const c of ['fighter', 'mystic'] as ClassType[]) {
-      const b = el('button', `pick-btn${c === cls ? ' sel' : ''}`, classes, CLASSES[c].name);
-      b.disabled = !RACES[race].classes.includes(c);
-      b.onclick = () => {
-        cls = c;
-        renderPick();
-      };
-    }
-    desc.textContent = `${RACES[race].desc} ${cls === 'fighter' ? 'Fighters excel in melee combat with powerful strikes.' : 'Mystics wield magic: ranged spells, healing and buffs.'}`;
+    });
+    desc.textContent = `${RACES[race].desc} ${GENDERS[look.g].desc} ${cls === 'fighter' ? 'Fighters excel in melee combat with powerful strikes.' : 'Mystics wield magic: ranged spells, healing and buffs.'}`;
+    renderDiff(diff, race, cls, look.g);
   };
   renderPick();
   const create = el('button', 'btn primary', right, 'Create');
-  create.onclick = () => net.send({ t: 'createChar', name: name.value.trim(), race, cls });
+  create.onclick = () => net.send({ t: 'createChar', name: name.value.trim(), race, cls, look });
+  cleanup = stopPreview;
   showError = errorLine(box);
+}
+
+/** Stat differences of race × gender vs. the baseline (Human male), plus the skills you get. */
+function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender) {
+  const m = statMods(race, g);
+  const pct = (v: number) => Math.round((v - 1) * 100);
+  const rows: [string, number, string][] = [
+    ['HP', pct(m.hp), '%'], ['MP', pct(m.mp), '%'], ['P.Atk', pct(m.pAtk), '%'], ['M.Atk', pct(m.mAtk), '%'],
+    ['P.Def', pct(m.pDef), '%'], ['M.Def', pct(m.mDef), '%'], ['Speed', pct(m.speed), '%'], ['Atk.Spd', pct(m.atkSpd), '%'],
+    ['Cast.Spd', pct(m.castSpd), '%'], ['Evasion', m.evasion, ''], ['Accuracy', m.accuracy, ''], ['Critical', m.crit, ''],
+  ];
+  host.innerHTML = '';
+  el('div', 'section', host, `${RACES[race].name} ${GENDERS[g].name} — stats vs. Human Male`);
+  const grid = el('div', 'diff-grid', host);
+  for (const [k, v, u] of rows) {
+    const cell = el('div', `diff-cell${v > 0 ? ' up' : v < 0 ? ' down' : ''}`, grid);
+    el('span', '', cell, k);
+    el('b', '', cell, v === 0 ? '—' : `${v > 0 ? '+' : ''}${v}${u}`);
+  }
+  el('div', 'section', host, 'Skills');
+  const list = el('div', 'diff-skills', host);
+  for (const s of allSkillsFor(cls, race, g)) {
+    const tag = s.race ? RACES[s.race].name : s.gender ? GENDERS[s.gender].name : CLASSES[cls].name;
+    const row = el('div', `diff-skill${s.race || s.gender ? ' special' : ''}`, list);
+    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">Lv ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    row.querySelector('b')!.textContent = s.name;
+    row.querySelector('.ds-desc')!.textContent = s.desc;
+  }
+}
+
+/** Small rotating 3D preview of the character being created. Returns a disposer. */
+function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassType; look: Look }) {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 2));
+  const sun = new THREE.DirectionalLight(0xfff0d0, 2);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+  const cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+  cam.position.set(0, 1.4, 5);
+  cam.lookAt(0, 1, 0);
+  let key = '', model: THREE.Object3D | null = null, rig: ReturnType<typeof playerModel> | null = null;
+  const t0 = performance.now();
+  renderer.setAnimationLoop(() => {
+    const { race, cls, look } = get();
+    const k = `${race}|${cls}|${look.g}|${look.hs}|${look.hc}`;
+    if (k !== key) {
+      key = k;
+      if (model) scene.remove(model);
+      const start = CLASSES[cls].startItems.filter((i) => i[2]).map((i) => i[0]);
+      rig = playerModel(race, cls, start[0] ?? null, start[1] ?? null, look);
+      model = rig.root;
+      scene.add(model);
+    }
+    const w = host.clientWidth, h = host.clientHeight;
+    if (renderer.domElement.width !== Math.floor(w * renderer.getPixelRatio())) {
+      renderer.setSize(w, h, false);
+      cam.aspect = w / h;
+      cam.updateProjectionMatrix();
+    }
+    const t = (performance.now() - t0) / 1000;
+    if (model) model.rotation.y = t * 0.6;
+    if (rig) animate(rig, { moving: false, atkAge: Infinity, casting: false, deadAge: -1, t });
+    renderer.render(scene, cam);
+  });
+  return () => {
+    renderer.setAnimationLoop(null);
+    renderer.dispose();
+  };
 }
 
 async function boot() {
@@ -163,6 +272,8 @@ async function boot() {
   net.on('enter', (m) => {
     if (inGame) return;
     inGame = true;
+    cleanup?.();
+    cleanup = null;
     screens.innerHTML = '';
     screens.style.display = 'none';
     const game = new Game(net, m);

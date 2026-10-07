@@ -1,4 +1,4 @@
-import { CLASSES, MAX_LEVEL, RACES, type ClassType, type Race } from './data/classes';
+import { CLASSES, MAX_LEVEL, statMods, type ClassType, type Gender, type Race } from './data/classes';
 import type { ItemDef } from './data/items';
 import type { MobDef } from './data/mobs';
 import type { BuffMods } from './data/skills';
@@ -18,8 +18,8 @@ export function levelMod(level: number): number {
   return 1 + (level - 1) * 0.1;
 }
 
-export function computeStats(race: Race, cls: ClassType, level: number, equipped: ItemDef[], buffs: BuffMods[]): Stats {
-  const r = RACES[race].mods;
+export function computeStats(race: Race, cls: ClassType, level: number, equipped: ItemDef[], buffs: BuffMods[], gender: Gender = 'm'): Stats {
+  const r = statMods(race, gender);
   const c = CLASSES[cls];
   const lm = levelMod(level);
   let wP = 4, wM = 4, armP = 0, armM = 0, mpBonus = 0;

@@ -317,7 +317,7 @@ export class Game {
     let rig: Rig | null = null;
     let model: THREE.Object3D;
     let height = 1.2, radius = 0.5;
-    if (r.k === 'p') rig = playerModel(r.race, r.cls, r.w, r.a);
+    if (r.k === 'p') rig = playerModel(r.race, r.cls, r.w, r.a, r.lk);
     else if (r.k === 'm') rig = mobModel(r.tpl);
     else if (r.k === 'n') rig = npcModel(r.npc);
     if (rig) {

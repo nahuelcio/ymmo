@@ -1,5 +1,5 @@
 import { MAX_LEVEL } from '../../../shared/src/data/classes';
-import { SKILLS, skillsFor } from '../../../shared/src/data/skills';
+import { SKILLS, skillAvailable, skillsFor } from '../../../shared/src/data/skills';
 import {
   hitChance, KARMA_PER_PK, levelPenalty, magicDamage, mobXp, PARTY_BONUS, physDamage, PVP_FLAG_MS, xpToNext,
 } from '../../../shared/src/formulas';
@@ -115,7 +115,7 @@ export function gainXp(w: World, p: Player, amount: number) {
     p.xp -= xpToNext(p.level);
     p.level++;
     up = true;
-    for (const sk of skillsFor(p.cls, p.level)) if (sk.level === p.level) w.sys(p, `You have learned ${sk.name}.`);
+    for (const sk of skillsFor(p.cls, p.level, p.race, p.look.g)) if (sk.level === p.level) w.sys(p, `You have learned ${sk.name}.`);
   }
   if (p.level >= MAX_LEVEL) p.xp = 0;
   if (up) {
@@ -221,7 +221,7 @@ export function respawnPlayer(w: World, p: Player) {
 
 export function requestSkill(w: World, p: Player, skillId: string, force: boolean, now: number) {
   const def = SKILLS[skillId];
-  if (!def || def.cls !== p.cls || def.level > p.level) return w.sys(p, 'You have not learned that skill.');
+  if (!def || !skillAvailable(def, p.cls, p.race, p.look.g) || def.level > p.level) return w.sys(p, 'You have not learned that skill.');
   if (p.dead) return;
   if (p.casting) return;
   if ((p.cooldowns.get(def.id) ?? 0) > now) return w.sys(p, `${def.name} is not ready yet.`);

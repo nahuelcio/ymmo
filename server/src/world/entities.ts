@@ -1,4 +1,4 @@
-import type { ClassType, Race } from '../../../shared/src/data/classes';
+import { DEFAULT_LOOK, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
 import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import type { MobDef } from '../../../shared/src/data/mobs';
 import type { BuffMods, SkillDef } from '../../../shared/src/data/skills';
@@ -62,6 +62,7 @@ export class Player extends Entity {
   pvpUntil = 0;
   /** PvP mode switch (off by default): off = can't attack or be attacked by players, unless PK. */
   pvpOn = false;
+  look: Look = DEFAULT_LOOK;
   lastCombat = 0;
   escapeAt = 0;
   party: Party | null = null;
@@ -112,7 +113,7 @@ export class Player extends Entity {
   }
 
   recalc(): void {
-    this.stats = computeStats(this.race, this.cls, this.level, this.equipped(), this.buffs.map((b) => b.mods));
+    this.stats = computeStats(this.race, this.cls, this.level, this.equipped(), this.buffs.map((b) => b.mods), this.look.g);
     this.hp = Math.min(this.hp, this.stats.maxHp);
     this.mp = Math.min(this.mp, this.stats.maxMp);
     this.cp = Math.min(this.cp, this.stats.maxCp);

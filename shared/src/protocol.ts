@@ -1,14 +1,14 @@
-import type { ClassType, Race } from './data/classes';
+import type { ClassType, Look, Race } from './data/classes';
 import type { Slot } from './data/items';
 
 /** Name colour: 0 normal, 1 PvP flagged (purple), 2 karma (red). */
 export type NameColor = 0 | 1 | 2;
 
-export interface CharSummary { id: number; name: string; race: Race; cls: ClassType; level: number }
+export interface CharSummary { id: number; name: string; race: Race; cls: ClassType; level: number; look: Look }
 
 export interface EntPlayer {
   id: number; k: 'p'; x: number; z: number; ry: number; n: string; l: number; hp: number;
-  race: Race; cls: ClassType; w: string | null; a: string | null; nc: NameColor; f: number;
+  race: Race; cls: ClassType; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
 }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
@@ -28,7 +28,7 @@ export const F_PVP = 64;
 export interface InvItem { u: number; i: string; c: number; s: Slot | null }
 
 export interface SelfState {
-  id: number; name: string; race: Race; cls: ClassType;
+  id: number; name: string; race: Race; cls: ClassType; look: Look;
   lvl: number; xp: number; xpNeed: number;
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
@@ -44,7 +44,7 @@ export interface PartyMember { id: number; name: string; lvl: number; cls: Class
 // Messages are plain JSON objects with a `t` discriminator.
 export type C2S =
   | { t: 'login'; user: string; pass: string; register: boolean }
-  | { t: 'createChar'; name: string; race: Race; cls: ClassType }
+  | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
   | { t: 'enter'; id: number }
   | { t: 'move'; x: number; z: number }

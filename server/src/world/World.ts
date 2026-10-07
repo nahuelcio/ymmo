@@ -222,7 +222,7 @@ export class World {
   entRecord(e: Entity, now: number): EntAdd {
     const base = { id: e.id, x: round2(e.x), z: round2(e.z), ry: round2(e.ry), hp: e.hpPct(), f: e.flags(now) };
     if (e instanceof Player)
-      return { ...base, k: 'p', n: e.name, l: e.level, race: e.race, cls: e.cls,
+      return { ...base, k: 'p', n: e.name, l: e.level, race: e.race, cls: e.cls, lk: e.look,
         w: e.equippedIn('weapon')?.i ?? null, a: e.equippedIn('chest')?.i ?? null, nc: e.nameColor(now) };
     if (e instanceof Mob) return { ...base, k: 'm', n: e.tpl.name, l: e.tpl.level, tpl: e.tpl.id };
     if (e instanceof Npc) return { ...base, k: 'n', n: e.def.name, title: e.def.title, npc: e.def.id };
@@ -263,13 +263,13 @@ export class World {
   selfState(p: Player): SelfState {
     const s = p.stats;
     return {
-      id: p.id, name: p.name, race: p.race, cls: p.cls,
+      id: p.id, name: p.name, race: p.race, cls: p.cls, look: p.look,
       lvl: p.level, xp: p.xp, xpNeed: xpToNext(p.level),
       hp: Math.ceil(p.hp), maxHp: s.maxHp, mp: Math.floor(p.mp), maxMp: s.maxMp, cp: Math.floor(p.cp), maxCp: s.maxCp,
       pAtk: s.pAtk, mAtk: s.mAtk, pDef: s.pDef, mDef: s.mDef, acc: s.accuracy, eva: s.evasion, crit: s.crit,
       atkSpd: Math.round(60000 / s.atkInterval), speed: Math.round(s.speed * 20),
       adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, flagged: p.pvpUntil > this.now, pvpOn: p.pvpOn,
-      skills: skillsFor(p.cls, p.level).map((sk) => sk.id),
+      skills: skillsFor(p.cls, p.level, p.race, p.look.g).map((sk) => sk.id),
       buffs: p.buffs.map((b) => ({ id: b.id, rem: Math.max(0, Math.round((b.until - this.now) / 1000)) })),
       zone: zoneAt(p.x, p.z),
     };

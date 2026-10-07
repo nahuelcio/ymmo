@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
-import { CLASSES, START_ADENA, type ClassType, type Race } from '../../shared/src/data/classes';
+import { CLASSES, sanitizeLook, START_ADENA, type ClassType, type Look, type Race } from '../../shared/src/data/classes';
 import { TOWN } from '../../shared/src/terrain';
 import type { CharSummary, InvItem } from '../../shared/src/protocol';
 import type { Slot } from '../../shared/src/data/items';
@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY, char_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, slot TEXT);
 CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
 `);
+
+// migration: appearance columns (added after launch)
+for (const col of ["gender TEXT NOT NULL DEFAULT 'm'", 'hair_style INTEGER NOT NULL DEFAULT 0', 'hair_color INTEGER NOT NULL DEFAULT 0']) {
+  try {
+    db.exec(`ALTER TABLE characters ADD COLUMN ${col}`);
+  } catch {
+    /* already there */
+  }
+}
+
+type LookCols = { gender: string; hair_style: number; hair_color: number };
+const lookOf = (r: LookCols): Look => sanitizeLook({ g: r.gender as Look['g'], hs: r.hair_style, hc: r.hair_color });
 
 function hashPass(pass: string): string {
   const salt = randomBytes(16);
@@ -53,21 +65,22 @@ export function login(user: string, pass: string, register: boolean): number | s
   return row.id;
 }
 
-const qChars = db.prepare('SELECT id, name, race, cls, level FROM characters WHERE account_id = ? ORDER BY id');
+const qChars = db.prepare('SELECT id, name, race, cls, level, gender, hair_style, hair_color FROM characters WHERE account_id = ? ORDER BY id');
 export function listChars(accountId: number): CharSummary[] {
-  return qChars.all(accountId) as unknown as CharSummary[];
+  return (qChars.all(accountId) as unknown as (Omit<CharSummary, 'look'> & LookCols)[])
+    .map((r) => ({ id: r.id, name: r.name, race: r.race, cls: r.cls, level: r.level, look: lookOf(r) }));
 }
 
 const qCharByName = db.prepare('SELECT id FROM characters WHERE name = ?');
-const qInsChar = db.prepare(`INSERT INTO characters (account_id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, created)
-  VALUES (?, ?, ?, ?, 1, 0, ?, ?, 99999, 99999, 99999, ?, 0, 0, 0, ?)`);
+const qInsChar = db.prepare(`INSERT INTO characters (account_id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, created, gender, hair_style, hair_color)
+  VALUES (?, ?, ?, ?, 1, 0, ?, ?, 99999, 99999, 99999, ?, 0, 0, 0, ?, ?, ?, ?)`);
 const qInsItem = db.prepare('INSERT INTO items (char_id, item_id, count, slot) VALUES (?, ?, ?, ?)');
 
-export function createChar(accountId: number, name: string, race: Race, cls: ClassType): string | null {
+export function createChar(accountId: number, name: string, race: Race, cls: ClassType, look: Look): string | null {
   if (qCharByName.get(name)) return 'That name is already taken.';
   if (listChars(accountId).length >= 7) return 'You can have at most 7 characters.';
   const a = Math.random() * Math.PI * 2;
-  const r = qInsChar.run(accountId, name, race, cls, TOWN.x + Math.cos(a) * 6, TOWN.z + Math.sin(a) * 6, START_ADENA, Date.now());
+  const r = qInsChar.run(accountId, name, race, cls, TOWN.x + Math.cos(a) * 6, TOWN.z + Math.sin(a) * 6, START_ADENA, Date.now(), look.g, look.hs, look.hc);
   const charId = Number(r.lastInsertRowid);
   for (const [itemId, count, equip] of CLASSES[cls].startItems) {
     qInsItem.run(charId, itemId, count, equip ? ITEMS[itemId].slot ?? null : null);
@@ -85,13 +98,15 @@ export function deleteChar(accountId: number, id: number): void {
 export interface CharRow {
   id: number; account_id: number; name: string; race: Race; cls: ClassType; level: number; xp: number;
   x: number; z: number; hp: number; mp: number; cp: number; adena: number; karma: number; pk: number; pvp: number;
+  look: Look;
 }
 
 const qChar = db.prepare('SELECT * FROM characters WHERE id = ? AND account_id = ?');
 const qItems = db.prepare('SELECT item_id, count, slot FROM items WHERE char_id = ? ORDER BY id');
 export function loadChar(accountId: number, id: number): { row: CharRow; items: Omit<InvItem, 'u'>[] } | null {
-  const row = qChar.get(id, accountId) as unknown as CharRow | undefined;
-  if (!row) return null;
+  const raw = qChar.get(id, accountId) as unknown as (Omit<CharRow, 'look'> & LookCols) | undefined;
+  if (!raw) return null;
+  const row: CharRow = { ...raw, look: lookOf(raw) };
   const items = (qItems.all(id) as { item_id: string; count: number; slot: string | null }[])
     .filter((r) => ITEMS[r.item_id])
     .map((r) => ({ i: r.item_id, c: r.count, s: r.slot as Slot | null }));
@@ -99,7 +114,7 @@ export function loadChar(accountId: number, id: number): { row: CharRow; items: 
 }
 
 const qSaveChar = db.prepare(`UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?`);
-export function saveChar(c: Omit<CharRow, 'account_id' | 'name' | 'race' | 'cls'>, items: InvItem[]): void {
+export function saveChar(c: Omit<CharRow, 'account_id' | 'name' | 'race' | 'cls' | 'look'>, items: InvItem[]): void {
   db.exec('BEGIN');
   try {
     qSaveChar.run(c.level, c.xp, c.x, c.z, c.hp, c.mp, c.cp, c.adena, c.karma, c.pk, c.pvp, c.id);

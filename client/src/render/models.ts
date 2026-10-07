@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
+import { DEFAULT_LOOK, HAIR_COLORS, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
@@ -88,6 +88,8 @@ interface HumanoidOpts {
   skin: number; hair: number; top: number; bottom: number; height: number; bulk: number;
   weapon: WeaponKind; weaponColor?: number; robe?: boolean; ears?: 'elf' | 'goblin'; tusks?: boolean; beard?: boolean; bald?: boolean; skull?: boolean;
   hat?: number;
+  /** 0 short, 1 long, 2 topknot */
+  hairStyle?: number;
 }
 
 export function humanoid(o: HumanoidOpts): Rig {
@@ -123,7 +125,11 @@ export function humanoid(o: HumanoidOpts): Rig {
     head.add(part(B(0.04, 0.04, 0.02), 0x222222, -0.07, 0.02, 0.17));
     head.add(part(B(0.04, 0.04, 0.02), 0x222222, 0.07, 0.02, 0.17));
   }
-  if (!o.bald) head.add(part(new THREE.SphereGeometry(0.205, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.hair, 0, 0.03, -0.02));
+  if (!o.bald) {
+    head.add(part(new THREE.SphereGeometry(0.205, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.hair, 0, 0.03, -0.02));
+    if (o.hairStyle === 1) head.add(part(B(0.36, 0.42, 0.1), o.hair, 0, -0.14, -0.15));
+    if (o.hairStyle === 2) head.add(part(new THREE.IcosahedronGeometry(0.1, 0), o.hair, 0, 0.25, -0.08));
+  }
   if (o.ears) {
     const len = o.ears === 'goblin' ? 0.3 : 0.2;
     for (const sx of [-1, 1]) {
@@ -216,15 +222,18 @@ function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind {
   return wt ?? (cls === 'mystic' ? 'staff' : 'sword');
 }
 
-export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null): Rig {
+export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK): Rig {
   const r = RACES[race];
+  const female = look.g === 'f';
+  const hair = HAIR_COLORS[look.hc] >= 0 ? HAIR_COLORS[look.hc] : r.hair;
   const chestDef = chest ? ITEMS[chest] : null;
   const top = chestDef?.color ?? 0xb0a080;
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
   return humanoid({
-    skin: r.skin, hair: r.hair, top, bottom: darker(top, 0.65), height: r.height, bulk: r.bulk,
+    skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
+    hairStyle: look.hs,
     weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, robe,
-    ears: race === 'elf' || race === 'darkelf' ? 'elf' : undefined, tusks: race === 'orc', beard: race === 'dwarf', bald: race === 'orc',
+    ears: race === 'elf' || race === 'darkelf' ? 'elf' : undefined, tusks: race === 'orc' && !female, beard: race === 'dwarf' && !female, bald: race === 'orc' && !female && look.hs === 0,
   });
 }
 

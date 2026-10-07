@@ -1,5 +1,20 @@
 export type Race = 'human' | 'elf' | 'darkelf' | 'orc' | 'dwarf';
 export type ClassType = 'fighter' | 'mystic';
+export type Gender = 'm' | 'f';
+
+/** Character appearance chosen at creation. */
+export interface Look { g: Gender; hs: number; hc: number }
+
+export const HAIR_STYLES = ['Short', 'Long', 'Topknot'];
+/** index 0 = the race's natural colour */
+export const HAIR_COLORS = [-1, 0x1e1a18, 0x6a3a1a, 0xe8d27a, 0xb03020, 0xe6e6f0, 0x3a5a9a];
+
+export const DEFAULT_LOOK: Look = { g: 'm', hs: 0, hc: 0 };
+
+export function sanitizeLook(l: Partial<Look> | undefined): Look {
+  const n = (v: unknown, max: number) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) < max ? (v as number) : 0);
+  return { g: l?.g === 'f' ? 'f' : 'm', hs: n(l?.hs, HAIR_STYLES.length), hc: n(l?.hc, HAIR_COLORS.length) };
+}
 
 export interface StatMods {
   hp: number; mp: number; pAtk: number; mAtk: number; pDef: number; mDef: number;
@@ -46,6 +61,23 @@ export const CLASSES: Record<ClassType, ClassDef> = {
       ['lesser_healing_potion', 10, false], ['mana_potion', 3, false], ['scroll_of_escape', 1, false]],
   },
 };
+
+export interface GenderDef { name: string; mods: StatMods; desc: string }
+
+export const GENDERS: Record<Gender, GenderDef> = {
+  m: { name: 'Male', mods: { ...base, hp: 1.04, pAtk: 1.03 }, desc: 'Slightly tougher and stronger.' },
+  f: { name: 'Female', mods: { ...base, mp: 1.06, castSpd: 1.04, speed: 1.02, evasion: 2 }, desc: 'Slightly quicker, more mana and faster casting.' },
+};
+
+/** Combined race × gender modifiers (multiplicative %, additive flat stats). */
+export function statMods(race: Race, g: Gender): StatMods {
+  const r = RACES[race].mods, s = GENDERS[g].mods;
+  return {
+    hp: r.hp * s.hp, mp: r.mp * s.mp, pAtk: r.pAtk * s.pAtk, mAtk: r.mAtk * s.mAtk, pDef: r.pDef * s.pDef, mDef: r.mDef * s.mDef,
+    speed: r.speed * s.speed, atkSpd: r.atkSpd * s.atkSpd, castSpd: r.castSpd * s.castSpd,
+    evasion: r.evasion + s.evasion, accuracy: r.accuracy + s.accuracy, crit: r.crit + s.crit,
+  };
+}
 
 export const START_ADENA = 500;
 export const MAX_LEVEL = 20;

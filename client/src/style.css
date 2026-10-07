@@ -266,3 +266,24 @@ input { font: inherit; user-select: text; }
   .menu { bottom: 64px; flex-direction: column; }
   .slot { width: 32px; height: 32px; }
 }
+
+/* ---------- character creation ---------- */
+.studio { display: flex; gap: 10px; margin: 8px 0; }
+.char-preview { flex: 0 0 150px; height: 220px; background: radial-gradient(#2a2a3a, #0d0f16); border: 1px solid #333; border-radius: 3px; }
+.char-preview canvas { width: 100%; height: 100%; display: block; }
+.studio-opts { flex: 1; min-width: 0; }
+.pick-label { color: var(--gold); font-size: 11px; margin-top: 4px; }
+.swatches { gap: 6px; }
+.swatch { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%; border: 2px solid #333; cursor: pointer; padding: 0; }
+.swatch.sel { border-color: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.char-diff .section { margin-top: 6px; }
+.diff-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; font-size: 11px; }
+.diff-cell { display: flex; justify-content: space-between; background: #0d0f16; border: 1px solid #262626; padding: 2px 5px; border-radius: 2px; }
+.diff-cell.up b { color: #6aff8a; }
+.diff-cell.down b { color: #ff6a5a; }
+.diff-cell b { color: #888; }
+.diff-skills { max-height: 170px; overflow-y: auto; font-size: 11px; }
+.diff-skill { display: flex; gap: 6px; align-items: flex-start; padding: 3px 2px; border-bottom: 1px solid #1d1d1d; }
+.diff-skill.special { background: rgba(255, 210, 120, 0.07); }
+.ds-icon { font-size: 16px; width: 20px; text-align: center; }
+@media (max-width: 760px) { .diff-grid { grid-template-columns: repeat(2, 1fr); } .studio { flex-direction: column; } .char-preview { flex-basis: 180px; } }

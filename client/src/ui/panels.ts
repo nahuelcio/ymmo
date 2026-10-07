@@ -1,6 +1,6 @@
 import { CLASSES, RACES } from '../../../shared/src/data/classes';
 import { GRADE_COLOR, ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
-import { SKILLS } from '../../../shared/src/data/skills';
+import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, itemIcon, itemTip, skillIcon, skillTip } from './common';
@@ -107,7 +107,7 @@ export class CharacterPanel {
     }
     el('div', 'section', b, 'Skills');
     const list = el('div', 'skill-list', b);
-    for (const s of Object.values(SKILLS).filter((s) => s.cls === m.cls)) {
+    for (const s of allSkillsFor(m.cls, m.race, m.look.g)) {
       const row = el('div', `skill-row${s.level > m.lvl ? ' locked' : ''}`, list);
       skillIcon(s.id, row);
       el('div', '', row).innerHTML = `<b>${esc(s.name)}</b> <span class="tt-dim">${s.level > m.lvl ? `learn at Lv ${s.level}` : `MP ${s.mp}`}</span><br><span class="tt-dim">${esc(s.desc)}</span>`;
@@ -285,9 +285,9 @@ export function createHelp(root: HTMLElement): Win {
   w.body.innerHTML = `
   <div class="help">
     <h4>Movement & camera</h4>
-    <p><b>Left click</b> the ground to move. <b>Right-drag</b> rotates the camera, <b>wheel</b> zooms. Q/E or arrows also rotate.</p>
+    <p><b>Left click</b> the ground to move (hold it to keep walking toward the cursor). <b>Right-drag</b> rotates the camera, <b>wheel</b> zooms. Q/E or arrows also rotate.</p>
     <h4>Combat</h4>
-    <p>Click a monster to <b>target</b> it, click again (or press <b>Space</b>) to attack. <b>Tab</b> cycles nearby monsters.
+    <p>Click a monster to <b>attack</b> it right away (<b>Space</b> or an attack skill with no target picks the nearest one). <b>Tab</b> cycles nearby monsters.
     Skills and potions are on the shortcut bar: keys <b>1-0</b> or <b>F1-F10</b>. New skills are learned automatically as you level up.</p>
     <h4>Loot</h4>
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Sell materials to any merchant.</p>
@@ -297,7 +297,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, raid boss Kaim Vanul).</p>
     <h4>Party & PvP</h4>
     <p>Target a player → <b>Invite to party</b>. Party members share XP with a bonus.
-    <b>Ctrl+click</b> a player to force attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
+    PvP is <b>off</b> by default: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. <b>Ctrl+click</b> a PvP player to force attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives you karma and turns you <span style="color:#ff4040">red</span> — red players may drop items on death.</p>
     <h4>Windows</h4>
     <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>Enter</b> chat · <b>Esc</b> close/clear target</p>
