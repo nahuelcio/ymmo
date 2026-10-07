@@ -1130,7 +1130,8 @@ export class Game {
         const d = dSelf;
         const show = c.id === this.targetId || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
         c.label.visible = show && onScreen;
-        if (c.marker) c.marker.obj.visible = onScreen && c.marker.el.textContent !== '';
+        // like WoW: quest markers show from afar, but not across the whole map
+        if (c.marker) c.marker.obj.visible = onScreen && d < 90 && c.marker.el.textContent !== '';
       }
     }
 
