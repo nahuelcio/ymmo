@@ -45,6 +45,25 @@ function errorLine(box: HTMLElement) {
 
 let showError: (m: string) => void = () => {};
 
+/** localStorage that never throws (private mode, blocked storage). */
+const store = {
+  get(k: string): string | null {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string | null) {
+    try {
+      if (v === null) localStorage.removeItem(k);
+      else localStorage.setItem(k, v);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
 function loginScreen() {
   const box = screen();
   el('h2', '', box, t('Ingresar', 'Login'));
@@ -60,6 +79,11 @@ function loginScreen() {
   } catch {
     /* ignore */
   }
+  const rem = el('label', 'remember', box);
+  const remBox = el('input', '', rem);
+  remBox.type = 'checkbox';
+  remBox.checked = store.get('remember') !== '0';
+  el('span', '', rem, t('Recordarme en este dispositivo', 'Remember me on this device'));
   const row = el('div', 'row', box);
   const login = el('button', 'btn primary', row, t('Entrar', 'Login'));
   const reg = el('button', 'btn', row, t('Crear cuenta', 'Create account'));
@@ -70,7 +94,8 @@ function loginScreen() {
     } catch {
       /* ignore */
     }
-    net.send({ t: 'login', user: user.value.trim(), pass: pass.value, register });
+    store.set('remember', remBox.checked ? '1' : '0');
+    net.send({ t: 'login', user: user.value.trim(), pass: pass.value, register, remember: remBox.checked });
   };
   login.onclick = () => go(false);
   reg.onclick = () => go(true);
@@ -113,6 +138,13 @@ function charScreen(list: CharSummary[]) {
     del.onclick = () => {
       const c = list.find((x) => x.id === selected);
       if (c && confirm(t(`¿Borrar a ${c.name} para siempre?`, `Delete ${c.name} forever?`))) net.send({ t: 'deleteChar', id: c.id });
+    };
+    const out = el('button', 'btn', row, t('Cerrar sesión', 'Log out'));
+    out.onclick = () => {
+      const tok = store.get('session');
+      if (tok) net.send({ t: 'logout', token: tok });
+      store.set('session', null);
+      loginScreen();
     };
   };
   renderList();
@@ -281,7 +313,14 @@ async function boot() {
   net.on('error', (m) => {
     if (!inGame) showError(m.msg);
   });
-  net.on('chars', (m) => charScreen(m.list));
+  net.on('chars', (m) => {
+    if (m.token) store.set('session', m.token);
+    charScreen(m.list);
+  });
+  net.on('resumeFail', () => {
+    store.set('session', null);
+    loginScreen();
+  });
   net.on('enter', (m) => {
     if (inGame) return;
     inGame = true;
@@ -292,7 +331,9 @@ async function boot() {
     const game = new Game(net, m);
     if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
   });
-  loginScreen();
+  const token = store.get('session');
+  if (token) net.send({ t: 'resume', token });
+  else loginScreen();
 }
 
 boot();

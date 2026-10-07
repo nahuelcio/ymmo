@@ -47,7 +47,9 @@ export interface PartyMember { id: number; name: string; lvl: number; cls: Class
 // Messages are plain JSON objects with a `t` discriminator.
 export type C2S =
   | { t: 'lang'; lang: 'es' | 'en' }
-  | { t: 'login'; user: string; pass: string; register: boolean }
+  | { t: 'login'; user: string; pass: string; register: boolean; remember?: boolean }
+  | { t: 'resume'; token: string }
+  | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
   | { t: 'enter'; id: number }
@@ -79,7 +81,8 @@ export type C2S =
 
 export type S2C =
   | { t: 'error'; msg: string }
-  | { t: 'chars'; list: CharSummary[] }
+  | { t: 'chars'; list: CharSummary[]; token?: string }
+  | { t: 'resumeFail' }
   | { t: 'enter'; self: SelfState; inv: InvItem[] }
   | { t: 'snap'; add: EntAdd[]; upd: EntUpd[]; gone: number[] }
   | { t: 'me'; s: SelfState }

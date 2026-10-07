@@ -409,3 +409,5 @@ input { font: inherit; user-select: text; }
 .lang-pick { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 5; }
 .lang-btn { background: rgba(12,14,22,0.85); color: var(--text); border: 1px solid #3a3424; border-radius: 3px; padding: 5px 9px; cursor: pointer; }
 .lang-btn.sel { border-color: var(--gold); color: var(--gold); }
+
+.remember { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--dim); cursor: pointer; }

@@ -120,8 +120,18 @@ function handle(s: Session, m: C2S) {
       const r = db.login(user, pass, !!m.register);
       if (typeof r === 'string') return s.send({ t: 'error', msg: dbMsg(s, r) });
       s.accountId = r;
-      return s.send({ t: 'chars', list: db.listChars(r) });
+      return s.send({ t: 'chars', list: db.listChars(r), token: m.remember ? db.createSession(r) : undefined });
     }
+    case 'resume': {
+      const id = db.resumeSession(m.token);
+      if (!id) return s.send({ t: 'resumeFail' });
+      s.accountId = id;
+      return s.send({ t: 'chars', list: db.listChars(id) });
+    }
+    case 'logout':
+      db.deleteSession(m.token);
+      s.accountId = 0;
+      return;
     case 'createChar': {
       if (!s.accountId) return;
       const name = String(m.name ?? '').trim();

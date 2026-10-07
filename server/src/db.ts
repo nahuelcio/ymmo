@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { CLASSES, sanitizeLook, START_ADENA, type ClassType, type Look, type Race } from '../../shared/src/data/classes';
 import { TOWN } from '../../shared/src/terrain';
 import type { CharSummary, InvItem } from '../../shared/src/protocol';
@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY, char_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, slot TEXT);
 CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
+CREATE TABLE IF NOT EXISTS sessions (
+  hash TEXT PRIMARY KEY, account_id INTEGER NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS quests (
   char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL,
   PRIMARY KEY (char_id, quest_id));
@@ -67,6 +69,39 @@ export function login(user: string, pass: string, register: boolean): number | s
   }
   if (!row || !checkPass(pass, row.hash)) return 'Cuenta o contraseña incorrecta.';
   return row.id;
+}
+
+// "Remember me": random tokens, only their SHA-256 is stored; 30 days, renewed on use.
+const TOKEN_TTL = 30 * 24 * 3600 * 1000;
+const sha = (t: string) => createHash('sha256').update(t).digest('hex');
+const qInsSession = db.prepare('INSERT INTO sessions (hash, account_id, expires) VALUES (?, ?, ?)');
+const qSession = db.prepare('SELECT account_id, expires FROM sessions WHERE hash = ?');
+const qTouchSession = db.prepare('UPDATE sessions SET expires = ? WHERE hash = ?');
+const qDelSession = db.prepare('DELETE FROM sessions WHERE hash = ?');
+db.prepare('DELETE FROM sessions WHERE expires < ?').run(Date.now());
+
+export function createSession(accountId: number): string {
+  const token = randomBytes(32).toString('base64url');
+  qInsSession.run(sha(token), accountId, Date.now() + TOKEN_TTL);
+  return token;
+}
+
+/** Account id for a valid token (and extends it), or null. */
+export function resumeSession(token: string): number | null {
+  if (typeof token !== 'string' || token.length < 20 || token.length > 100) return null;
+  const h = sha(token);
+  const row = qSession.get(h) as { account_id: number; expires: number } | undefined;
+  if (!row) return null;
+  if (row.expires < Date.now()) {
+    qDelSession.run(h);
+    return null;
+  }
+  qTouchSession.run(Date.now() + TOKEN_TTL, h);
+  return row.account_id;
+}
+
+export function deleteSession(token: string): void {
+  if (typeof token === 'string') qDelSession.run(sha(token));
 }
 
 const qChars = db.prepare('SELECT id, name, race, cls, level, gender, hair_style, hair_color FROM characters WHERE account_id = ? ORDER BY id');
