@@ -20,8 +20,54 @@ export class CameraController {
     this.shakeAmt = Math.max(this.shakeAmt, amount);
   }
 
+  /** Touch gestures (mobile only): one finger drags the camera, two fingers pinch-zoom. */
+  private touches = new Map<number, { x: number; y: number }>();
+  private pinch = 0;
+  /** true once the current touch gesture moved enough to count as a drag (so it isn't a tap) */
+  touchDragged = false;
+  private touchStart = { x: 0, y: 0 };
+
   constructor(public camera: THREE.PerspectiveCamera, el: HTMLElement) {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.touches.size === 1) {
+        this.touchDragged = false;
+        this.touchStart = { x: e.clientX, y: e.clientY };
+      }
+      if (this.touches.size === 2) {
+        const [a, b] = [...this.touches.values()];
+        this.pinch = Math.hypot(a.x - b.x, a.y - b.y);
+        this.touchDragged = true;
+      }
+    });
+    el.addEventListener('pointermove', (e) => {
+      const t = this.touches.get(e.pointerId);
+      if (!t) return;
+      if (this.touches.size === 1) {
+        if (Math.hypot(e.clientX - this.touchStart.x, e.clientY - this.touchStart.y) > 10) this.touchDragged = true;
+        if (this.touchDragged) {
+          const k = settings.s.camSensitivity, inv = settings.s.invertY ? -1 : 1;
+          this.yaw -= (e.clientX - t.x) * 0.008 * k;
+          this.pitch = Math.min(1.35, Math.max(0.05, this.pitch + (e.clientY - t.y) * 0.006 * k * inv));
+        }
+      }
+      t.x = e.clientX;
+      t.y = e.clientY;
+      if (this.touches.size === 2) {
+        const [a, b] = [...this.touches.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (this.pinch > 0) this.targetDist = Math.min(40, Math.max(4, this.targetDist * (this.pinch / d)));
+        this.pinch = d;
+      }
+    });
+    const end = (e: PointerEvent) => {
+      this.touches.delete(e.pointerId);
+      if (this.touches.size < 2) this.pinch = 0;
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
     el.addEventListener('pointerdown', (e) => {
       if (e.button === 2) {
         this.dragging = true;

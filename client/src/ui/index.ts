@@ -4,6 +4,7 @@ import { Win } from './dom';
 import { Hud } from './hud';
 import { Minimap } from './minimap';
 import { SettingsPanel } from './settings';
+import { isTouchDevice, TouchControls } from './touch';
 import { CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
 
 export class UI {
@@ -32,6 +33,18 @@ export class UI {
     this.dialogs = new Dialogs(g, this.root);
     this.help = createHelp(this.root);
     this.settings = new SettingsPanel(this.root);
+    if (isTouchDevice()) {
+      new TouchControls(g, this.root);
+      // small screens: start with the chat folded away (the player can open it with ▲)
+      try {
+        if (localStorage.getItem('touchChatInit') === null) {
+          localStorage.setItem('touchChatInit', '1');
+          this.chat.setHidden(true);
+        }
+      } catch {
+        this.chat.setHidden(true);
+      }
+    }
     let seen = false;
     try {
       seen = localStorage.getItem('helpSeen') === '1';

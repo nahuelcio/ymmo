@@ -358,3 +358,51 @@ input { font: inherit; user-select: text; }
 @media (max-width: 760px) { .dash-btn { left: auto; right: 10px; bottom: 70px; } .status-row { left: 10px; top: 150px; } }
 .np-elite { font-size: 12px; font-weight: bold; }
 .np-elite > div:first-child { text-shadow: 0 0 6px rgba(255, 200, 60, 0.8), 0 0 3px #000; }
+
+/* ---------- mobile / touch controls (body.touch is only set on touch devices) ---------- */
+.touch, .touch #game canvas { touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.touch .dash-btn { display: none; }
+.joy-base { position: absolute; left: calc(18px + env(safe-area-inset-left)); bottom: 86px; width: 130px; height: 130px; border-radius: 50%;
+  background: radial-gradient(rgba(255,255,255,0.10), rgba(0,0,0,0.35)); border: 2px solid rgba(232,207,138,0.45); touch-action: none; z-index: 6; }
+.joy-knob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: radial-gradient(#f3dc8c, #8a6a24); box-shadow: 0 2px 8px rgba(0,0,0,0.6); pointer-events: none; }
+.touch-actions { position: absolute; right: calc(14px + env(safe-area-inset-right)); bottom: 86px; display: grid; grid-template-columns: 64px 64px; gap: 10px; z-index: 6; }
+.touch-btn { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--border); background: radial-gradient(#3a3424, #15130e);
+  color: var(--gold); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none; padding: 0; }
+.touch-btn.pressed { transform: scale(0.92); border-color: var(--gold); background: radial-gradient(#6a5420, #2a2010); }
+.touch-btn .tb-icon { font-size: 24px; line-height: 1; }
+.touch-btn .tb-label { font-size: 9px; margin-top: 2px; }
+.touch-btn.tb-attack { width: 76px; height: 76px; border-color: #c04030; }
+.mb-icon { display: none; }
+.touch .mb-icon { display: inline; font-size: 18px; }
+.touch .mb-label { display: none; }
+.touch .menu { bottom: auto; top: 6px; right: auto; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 3px; }
+.touch .menu .menu-btn { padding: 4px 7px; min-width: 38px; min-height: 36px; }
+.touch .pvp-btn { font-size: 10px; }
+.touch .chat { bottom: auto; top: 118px; width: min(300px, 60vw); height: 160px; }
+.touch .chat.collapsed { height: auto; }
+.touch .shortcuts { transform: translateX(-50%) scale(0.9); transform-origin: bottom center; }
+@media (max-width: 760px) {
+  .touch .shortcuts { transform: translateX(-50%) scale(0.62); }
+  .touch .joy-base { width: 116px; height: 116px; }
+  .touch .touch-actions { grid-template-columns: 58px 58px; gap: 8px; }
+  .touch .touch-btn { width: 58px; height: 58px; }
+  .touch .touch-btn.tb-attack { width: 66px; height: 66px; }
+  .touch .menu { top: auto; bottom: 46px; flex-direction: row; flex-wrap: nowrap; width: auto; }
+  .touch .joy-base { bottom: 100px; }
+  .touch .touch-actions { bottom: 100px; }
+  .touch .chat { top: 96px; }
+  .touch .status { transform: scale(0.82); transform-origin: top left; }
+}
+@media (max-height: 500px) {
+  /* landscape phones */
+  .touch .minimap { transform: scale(0.6); transform-origin: top right; }
+  .touch .status { transform: scale(0.75); transform-origin: top left; }
+  .touch .chat { top: 92px; }
+  .touch .joy-base { bottom: 54px; width: 112px; height: 112px; }
+  .touch .touch-actions { bottom: 54px; grid-template-columns: 56px 56px; gap: 8px; }
+  .touch .touch-btn { width: 56px; height: 56px; }
+  .touch .touch-btn.tb-attack { width: 64px; height: 64px; }
+  .touch .shortcuts { transform: translateX(-50%) scale(0.75); }
+  .touch .quest-tracker { display: none; }
+}

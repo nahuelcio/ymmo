@@ -83,16 +83,19 @@ export class Hud {
 
     // Menu (bottom-right)
     const menu = el('div', 'panel menu', root);
-    const btn = (label: string, key: string, fn: () => void) => {
-      const b = el('button', 'menu-btn', menu, label);
+    // icon + label: on touch screens only the icon shows
+    const btn = (icon: string, label: string, key: string, fn: () => void) => {
+      const b = el('button', 'menu-btn', menu);
+      el('span', 'mb-icon', b, icon);
+      el('span', 'mb-label', b, label);
       b.title = `${label} (${key})`;
       b.onclick = fn;
     };
-    btn('Personaje', 'C', () => g.ui.character.win.toggle());
-    btn('Inventario', 'I', () => g.ui.inventory.win.toggle());
-    btn('Mapa', 'M', () => g.ui.minimap.toggleMap());
-    btn('Ayuda', 'H', () => g.ui.help.toggle());
-    btn('⚙ Opciones', 'O', () => g.ui.settings.win.toggle());
+    btn('👤', 'Personaje', 'C', () => g.ui.character.win.toggle());
+    btn('🎒', 'Inventario', 'I', () => g.ui.inventory.win.toggle());
+    btn('🗺️', 'Mapa', 'M', () => g.ui.minimap.toggleMap());
+    btn('❓', 'Ayuda', 'H', () => g.ui.help.toggle());
+    btn('⚙', 'Opciones', 'O', () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: NO');
     this.pvpBtn.title = 'Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).';
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });

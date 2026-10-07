@@ -842,6 +842,34 @@ export class Game {
     this.serverAction({ t: 'dash', x, z });
   }
 
+  /** Virtual joystick (mobile): dx/dy in -1..1, screen space; null when released. */
+  private joy: { dx: number; dy: number } | null = null;
+  private lastJoySend = 0;
+
+  setJoystick(dx: number, dy: number) {
+    const was = this.joy;
+    this.joy = Math.hypot(dx, dy) > 0.15 ? { dx, dy } : null;
+    if (was && !this.joy) {
+      this.predict = null;
+      this.net.send({ t: 'stop' });
+    }
+  }
+
+  /** Walk a few metres ahead in the joystick direction, relative to the camera. */
+  private driveJoystick(now: number) {
+    const self = this.self;
+    if (!this.joy || !self || now - this.lastJoySend < 110) return;
+    this.lastJoySend = now;
+    const y = this.cam.yaw;
+    const fx = -Math.sin(y), fz = -Math.cos(y); // forward (away from the camera)
+    const rx = Math.cos(y), rz = -Math.sin(y); // screen right
+    const k = Math.min(1, Math.hypot(this.joy.dx, this.joy.dy));
+    const dx = (rx * this.joy.dx - fx * this.joy.dy), dz = (rz * this.joy.dx - fz * this.joy.dy);
+    const d = Math.hypot(dx, dz) || 1;
+    const x = self.pos.x + (dx / d) * 4 * k, z = self.pos.z + (dz / d) * 4 * k;
+    this.moveTo(new THREE.Vector3(x, heightAt(x, z), z), false);
+  }
+
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No hay enemigos cerca.');
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
@@ -897,7 +925,7 @@ export class Game {
     };
     // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
     el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || e.pointerType === 'touch') return; // touch acts on tap (pointerup)
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
       if (r.ent) this.interact(r.ent, e.ctrlKey);
@@ -910,6 +938,13 @@ export class Game {
     });
     el.addEventListener('pointerup', (e) => {
       if (e.button === 0) this.holdMove = false;
+      // mobile: a tap (not a camera drag) selects / attacks / walks
+      if (e.pointerType === 'touch' && !this.cam.touchDragged) {
+        (document.activeElement as HTMLElement | null)?.blur();
+        const r = pick(e);
+        if (r.ent) this.interact(r.ent, false);
+        else if (r.point) this.moveTo(r.point, true);
+      }
     });
     el.addEventListener('pointermove', (e) => {
       this.lastPointer = { x: e.clientX, y: e.clientY };
@@ -1075,6 +1110,7 @@ export class Game {
     // entities outside the camera frustum: hidden, not animated, no nameplate
     this.camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+    this.driveJoystick(now);
     const frozen = now < this.freezeUntil;
     for (const c of this.ents.values()) {
       if (frozen) break;
