@@ -59,6 +59,7 @@ export class SettingsPanel {
       }
       el('div', 'tt-dim set-hint', b, 'El post-procesado solo corre si hay al menos un shader (o MSAA) activado.');
     } else if (this.tab === 'hud') {
+      this.range('Volumen de efectos', 'volume', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : 'Mudo'));
       this.check('Auto-loot (el botín va directo al inventario)', 'autoLoot');
       this.range('Tamaño de la interfaz', 'uiScale', 0.7, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.check('Nombres sobre los personajes', 'nameplates');

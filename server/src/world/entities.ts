@@ -3,6 +3,7 @@ import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import type { MobDef } from '../../../shared/src/data/mobs';
 import type { BuffMods, SkillDef } from '../../../shared/src/data/skills';
 import type { NpcDef } from '../../../shared/src/data/world';
+import { SLOW_MUL, STATUSES, type StatusId } from '../../../shared/src/status';
 import { computeStats, mobStats, type Stats } from '../../../shared/src/formulas';
 import { F_CASTING, F_COMBAT, F_DEAD, F_MOVING, F_PVP, type InvItem, type S2C } from '../../../shared/src/protocol';
 
@@ -29,6 +30,8 @@ export type Intent =
 
 export interface Buff { id: string; until: number; mods: BuffMods }
 
+export interface ActiveStatus { until: number; src: number; dps: number; nextTick: number }
+
 export abstract class Entity {
   abstract readonly kind: 'player' | 'mob' | 'npc' | 'item';
   ry = 0;
@@ -41,10 +44,20 @@ export abstract class Entity {
   cell = '';
   /** cached path around obstacles (see World.stepToward) */
   nav: { gx: number; gz: number; at: number; path: { x: number; z: number }[] } | null = null;
+  /** active status effects (see shared/status.ts and systems/combat.ts) */
+  statuses = new Map<StatusId, ActiveStatus>();
   constructor(public id: number, public x: number, public z: number) {}
   abstract hpPct(): number;
-  flags(_now: number): number {
-    return (this.dead ? F_DEAD : 0) | (this.moving ? F_MOVING : 0);
+  has(s: StatusId, now: number): boolean {
+    return (this.statuses.get(s)?.until ?? 0) > now;
+  }
+  speedMul(now: number): number {
+    return this.has('slow', now) ? SLOW_MUL : 1;
+  }
+  flags(now: number): number {
+    let f = (this.dead ? F_DEAD : 0) | (this.moving ? F_MOVING : 0);
+    for (const [id, st] of this.statuses) if (st.until > now) f |= STATUSES[id].flag;
+    return f;
   }
 }
 
@@ -65,6 +78,8 @@ export class Player extends Entity {
   pvpOn = false;
   /** drops go straight to the bag (client setting) */
   autoLoot = false;
+  /** dodge-roll invulnerability window */
+  dodgeUntil = 0;
   look: Look = DEFAULT_LOOK;
   lastCombat = 0;
   escapeAt = 0;
@@ -157,6 +172,8 @@ export class Mob extends Entity {
   wanderAt = 0;
   dest: { x: number; z: number } | null = null;
   returning = false;
+  specialAt = 0;
+  winding: { x: number; z: number; end: number } | null = null;
 
   constructor(id: number, x: number, z: number, public tpl: MobDef, public homeX: number, public homeZ: number, public zoneR: number) {
     super(id, x, z);

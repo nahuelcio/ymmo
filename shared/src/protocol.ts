@@ -72,6 +72,8 @@ export type C2S =
   | { t: 'respawn' }
   | { t: 'pvpMode'; on: boolean }
   | { t: 'autoLoot'; on: boolean }
+  /** dodge roll toward a point */
+  | { t: 'dash'; x: number; z: number }
   | { t: 'stop' };
 
 export type S2C =
@@ -82,7 +84,7 @@ export type S2C =
   | { t: 'me'; s: SelfState }
   | { t: 'inv'; items: InvItem[]; adena: number }
   | { t: 'target'; id: number | null }
-  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean }
+  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean }
   | { t: 'atk'; s: number; tg: number }
   | { t: 'cast'; s: number; tg: number; skill: string; dur: number }
   | { t: 'fx'; s: number; tg: number; skill: string }
@@ -96,4 +98,6 @@ export type S2C =
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }
   /** an NPC says something out loud (speech bubble + local chat) */
-  | { t: 'say'; id: number; name: string; text: string };
+  | { t: 'say'; id: number; name: string; text: string }
+  /** telegraphed area attack: a red circle filling up for ms before it hits */
+  | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number };

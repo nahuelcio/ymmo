@@ -40,6 +40,7 @@ export interface Settings {
   invertY: boolean;
   // gameplay
   autoLoot: boolean;
+  volume: number;
 }
 
 type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa';
@@ -86,6 +87,7 @@ export const DEFAULTS: Settings = {
   screenShake: true,
   invertY: false,
   autoLoot: false,
+  volume: 0.5,
 };
 
 const KEY = 'settings:v2';

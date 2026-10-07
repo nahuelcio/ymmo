@@ -1,7 +1,8 @@
 import { inTown } from '../../../shared/src/terrain';
 import { Mob } from '../world/entities';
 import { dist, face, type World } from '../world/World';
-import { mobAttack } from './combat';
+import { physDamage } from '../../../shared/src/formulas';
+import { applyDamage, applyStatus, mobAttack } from './combat';
 
 const LEASH = 50;
 const AGGRO_RANGE = 9;
@@ -13,6 +14,10 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       w.grid.update(m);
     }
     if (now >= m.respawnAt) respawn(w, m);
+    return;
+  }
+  if (m.has('stun', now)) {
+    m.moving = false;
     return;
   }
 
@@ -34,6 +39,8 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       if (m.target === null) {
         m.hate.clear();
         m.returning = true;
+        m.specialAt = 0;
+        m.winding = null;
       }
     }
   }
@@ -48,6 +55,23 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
 
   if (m.target !== null) {
     const t = w.players.get(m.target)!;
+    if (m.winding) {
+      m.moving = false;
+      if (now >= m.winding.end) resolveSpecial(w, m, now);
+      return;
+    }
+    const sp = m.tpl.special;
+    if (sp) {
+      if (!m.specialAt) m.specialAt = now + 3000; // grace period after engaging
+      else if (now >= m.specialAt && dist(m, t) <= sp.r + 3) {
+        const c = sp.at === 'self' ? m : t;
+        m.winding = { x: c.x, z: c.z, end: now + sp.windup };
+        m.moving = false;
+        face(m, t);
+        w.sendNear(m.x, m.z, { t: 'tele', id: m.id, x: c.x, z: c.z, r: sp.r, ms: sp.windup });
+        return;
+      }
+    }
     const range = m.tpl.range + t.radius;
     if (dist(m, t) > range) {
       w.stepToward(m, t.x, t.z, m.tpl.speed * 1.25, dt, range - 0.3);
@@ -86,6 +110,20 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
         m.dest = { x: m.homeX + Math.cos(a) * r, z: m.homeZ + Math.sin(a) * r };
       }
     }
+  }
+}
+
+/** The wind-up is over: hit everyone still inside the circle (rolling out or i-frames saves you). */
+function resolveSpecial(w: World, m: Mob, now: number) {
+  const sp = m.tpl.special!, at = m.winding!;
+  m.winding = null;
+  m.specialAt = now + sp.every;
+  m.nextAttack = now + m.tpl.atkInterval * 0.5;
+  for (const p of w.nearPlayers(at.x, at.z, sp.r + 0.5)) {
+    if (p.dead || p.dodgeUntil > now) continue;
+    const dmg = physDamage(m.stats.pAtk, p.stats.pDef, sp.mult, false);
+    applyDamage(w, m, p, dmg, now);
+    if (sp.stun) applyStatus(w, m, p, { id: 'stun', ms: sp.stun }, dmg, now);
   }
 }
 

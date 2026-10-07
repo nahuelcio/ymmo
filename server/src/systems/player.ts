@@ -25,6 +25,11 @@ export function updatePlayer(w: World, p: Player, dt: number, now: number) {
     return;
   }
 
+  if (p.has('stun', now)) {
+    p.moving = false;
+    return;
+  }
+
   if (p.casting) {
     if (now >= p.casting.end) finishCast(w, p, now);
     return;

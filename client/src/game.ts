@@ -14,6 +14,8 @@ import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { PostFX } from './render/post';
 import { settings, type Settings } from './settings';
+import { play, type Sfx } from './audio';
+import { STATUS_MASK, statusIcons } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -49,6 +51,7 @@ export interface CEnt {
 }
 
 const INTERP_DELAY = 110;
+const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
 /** Local prediction is discarded beyond this much disagreement with the server. */
@@ -116,6 +119,9 @@ export class Game {
   private lastRender = 0;
   private fpsFrames = 0;
   private fpsAt = 0;
+  /** hit-stop: entity animation freezes until this time */
+  private freezeUntil = 0;
+  private lastPointer: { x: number; y: number } | null = null;
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
   private sphere = new THREE.Sphere();
@@ -258,11 +264,25 @@ export class Game {
       if (prevLvl !== m.s.lvl) this.refreshQuestMarkers();
     });
     n.on('inv', (m) => {
+      const count = (l: InvItem[]) => l.reduce((a, i) => a + i.c, 0);
+      if (m.adena > this.adena) play('coin', 0.7);
+      else if (count(m.items) > count(this.inv)) play('pickup', 0.7);
       this.inv = m.items;
       this.adena = m.adena;
       this.ui.onInv();
     });
     n.on('dmg', (m) => this.onDmg(m));
+    n.on('tele', (m) => {
+      const c = this.ents.get(m.id);
+      this.fx.telegraph(m.x, m.z, m.r, m.ms);
+      play('warn', c ? this.near(c) : 0.6);
+      setTimeout(() => {
+        play('slam', c ? this.near(c) : 0.6);
+        this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), 0xff6a3a, m.r, 450);
+        const self = this.self;
+        if (self && settings.s.screenShake && Math.hypot(self.pos.x - m.x, self.pos.z - m.z) < m.r + 8) this.cam.shake(0.25);
+      }, m.ms);
+    });
     n.on('say', (m) => {
       this.ui.chat.add('all', m.name, m.text);
       const c = this.ents.get(m.id);
@@ -272,7 +292,9 @@ export class Game {
       const s = this.ents.get(m.s), t = this.ents.get(m.tg);
       if (!s) return;
       s.atkAt = performance.now();
-      if (t && s.pos.distanceTo(t.pos) > 5) {
+      const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
+      if (ranged) play('miss', this.near(s) * 0.5);
+      if (t && ranged) {
         this.fx.projectile(s.pos.clone().setY(s.pos.y + s.height * 0.6), () => t.pos.clone().setY(t.pos.y + t.height * 0.5), 0xd8b070, 260, 0.1);
       }
     });
@@ -280,6 +302,7 @@ export class Game {
       const s = this.ents.get(m.s);
       const def = SKILLS[m.skill];
       if (s && def) this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur));
+      if (s && def && m.dur > 250) play('cast', this.near(s));
       if (m.s === this.me.id && def && m.dur > 0) this.castBar = { end: performance.now() + m.dur, dur: m.dur, name: def.name };
     });
     n.on('fx', (m) => this.onFx(m.s, m.tg, m.skill));
@@ -287,6 +310,7 @@ export class Game {
     n.on('died', (m) => {
       const e = this.ents.get(m.id);
       if (e) e.deadAt = performance.now();
+      if (e) play('death', this.near(e) * (m.id === this.me.id ? 1.3 : 0.6));
       if (m.id === this.me.id) {
         this.castBar = null;
         this.ui.dialogs.death();
@@ -294,6 +318,7 @@ export class Game {
     });
     n.on('levelUp', (m) => {
       const e = this.ents.get(m.id);
+      if (e) play('levelUp', this.near(e));
       if (e) {
         this.fx.pillar(e.pos.clone(), 0xffd966);
         this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
@@ -353,6 +378,7 @@ export class Game {
       }
       el.appendChild(n);
       if (!self) this.addHpBar(c);
+      this.addStatusIcons(c);
     } else if (r.k === 'm') {
       el.innerHTML = '';
       el.className = 'nameplate np-mob';
@@ -365,6 +391,7 @@ export class Game {
       n.appendChild(l);
       el.appendChild(n);
       this.addHpBar(c);
+      this.addStatusIcons(c);
     } else if (r.k === 'n') {
       el.innerHTML = '';
       el.className = 'nameplate np-npc';
@@ -421,6 +448,21 @@ export class Game {
       this.refreshQuestMarker(c);
       if (c.rec.k === 'm') this.refreshLabel(c);
     }
+  }
+
+  /** Status effect icons (stun, slow, bleed, poison) under the name. */
+  private addStatusIcons(c: CEnt) {
+    const st = statusIcons(c.flags);
+    if (!st.length) return;
+    const row = document.createElement('div');
+    row.className = 'np-status';
+    for (const s of st) {
+      const i = document.createElement('span');
+      i.textContent = s.icon;
+      i.title = s.name;
+      row.appendChild(i);
+    }
+    c.labelEl.appendChild(row);
   }
 
   private addHpBar(c: CEnt) {
@@ -542,7 +584,11 @@ export class Game {
       const c = this.ents.get(id);
       if (!c) continue;
       const wasDead = (c.flags & F_DEAD) !== 0;
-      const colorChanged = (c.flags & (F_RED | F_PURPLE | F_PVP)) !== (f & (F_RED | F_PURPLE | F_PVP));
+      const LABEL_BITS = F_RED | F_PURPLE | F_PVP | STATUS_MASK;
+      const colorChanged = (c.flags & LABEL_BITS) !== (f & LABEL_BITS);
+      const STUN = 128;
+      if (f & STUN && !(c.flags & STUN)) play('stun', c.id === this.me.id ? 1 : this.near(c) * 0.6);
+      if (c.id === this.me.id && (c.flags & STATUS_MASK) !== (f & STATUS_MASK)) this.ui.hud.setStatuses(f);
       const hpChanged = c.hp !== hp;
       c.hp = hp;
       c.flags = f;
@@ -591,12 +637,54 @@ export class Game {
     }, 1100);
   }
 
+  /** 0..1 loudness for something happening at c (fades out by ~45 m). */
+  near(c: CEnt): number {
+    const self = this.self;
+    if (!self || c === self) return 1;
+    return Math.max(0, 1 - c.pos.distanceTo(self.pos) / 45);
+  }
+
+  /** Brief white flash on a model when it takes a hit. */
+  private flash(c: CEnt) {
+    const meshes: THREE.Mesh[] = [];
+    c.model.traverse((o) => {
+      if (o instanceof THREE.Mesh && !o.userData.flashing) meshes.push(o);
+    });
+    for (const m of meshes) {
+      m.userData.flashing = m.material;
+      m.material = FLASH_MAT;
+    }
+    setTimeout(() => {
+      for (const m of meshes) {
+        m.material = m.userData.flashing;
+        delete m.userData.flashing;
+      }
+    }, 70);
+  }
+
   private onDmg(m: Extract<S2C, { t: 'dmg' }>) {
     const t = this.ents.get(m.tg);
     if (!t) return;
-    if (m.miss) return this.floatText(t, 'Falló', 'f-miss');
-    if (m.heal) return this.floatText(t, `+${m.v}`, 'f-heal');
-    const mine = m.tg === this.me.id;
+    const mine = m.tg === this.me.id, byMe = m.s === this.me.id;
+    const vol = mine || byMe ? 1 : this.near(t) * 0.45;
+    if (m.miss) {
+      play('miss', vol);
+      return this.floatText(t, 'Falló', 'f-miss');
+    }
+    if (m.heal) {
+      play('heal', vol * 0.8);
+      return this.floatText(t, `+${m.v}`, 'f-heal');
+    }
+    if (m.dot) {
+      play('dot', vol * 0.6);
+      return this.floatText(t, String(m.v), 'f-dot');
+    }
+    let sfx: Sfx = mine ? 'hurt' : m.crit ? 'crit' : 'hit';
+    if (!mine && this.ents.get(m.s)?.rec.k === 'p' && (this.ents.get(m.s)!.rec as { cls?: string }).cls === 'mystic') sfx = 'magic';
+    play(sfx, vol);
+    this.flash(t);
+    // hit-stop: freeze the action for a beat on big hits that involve you
+    if (m.crit && (mine || byMe)) this.freezeUntil = performance.now() + 75;
     const src = this.ents.get(m.s);
     if (src && src !== t) {
       const dx = t.pos.x - src.pos.x, dz = t.pos.z - src.pos.z, d = Math.hypot(dx, dz) || 1;
@@ -618,6 +706,11 @@ export class Game {
     if (!s) return;
     const chest = (e: CEnt) => e.pos.clone().setY(e.pos.y + e.height * 0.6);
     if (skill === 'potion') return this.fx.sparkles(s.pos.clone(), 0xff5555, 700);
+    if (skill === 'dash') {
+      play('dash', this.near(s));
+      this.fx.ring(s.pos.clone(), 0xcfe6ff, 1.6, 350);
+      return;
+    }
     if (skill === 'escape') return this.fx.pillar(s.pos.clone(), 0x66aaff, 3000, 4);
     const def = SKILLS[skill];
     if (!def || !t) return;
@@ -725,6 +818,20 @@ export class Game {
     this.serverAction({ t: 'attack', id: c.id, force: this.ctrl });
   }
 
+  /** Dodge roll toward the mouse cursor (or forward). */
+  dash() {
+    const self = this.self;
+    if (!self || self.flags & F_DEAD) return;
+    let x = self.pos.x + Math.sin(self.ry) * 6, z = self.pos.z + Math.cos(self.ry) * 6;
+    if (this.lastPointer) {
+      const v = new THREE.Vector2((this.lastPointer.x / innerWidth) * 2 - 1, -(this.lastPointer.y / innerHeight) * 2 + 1);
+      this.raycaster.setFromCamera(v, this.camera);
+      const hit = this.raycaster.intersectObject(this.world.terrain, true)[0];
+      if (hit) ({ x, z } = hit.point);
+    }
+    this.serverAction({ t: 'dash', x, z });
+  }
+
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No hay enemigos cerca.');
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
@@ -795,6 +902,7 @@ export class Game {
       if (e.button === 0) this.holdMove = false;
     });
     el.addEventListener('pointermove', (e) => {
+      this.lastPointer = { x: e.clientX, y: e.clientY };
       if (this.holdMove && e.buttons & 1) {
         const now = performance.now();
         if (now - this.lastHoldSend > 90) {
@@ -849,6 +957,7 @@ export class Game {
         case 'p': this.ui.party.toggle(); break;
         case 'z': this.pickupNearest(); break;
         case ' ': e.preventDefault(); this.attackTarget(); break;
+        case 'shift': this.dash(); break;
         case 'tab': e.preventDefault(); this.nextTarget(); break;
         case 'q': this.cam.keys.left = true; break;
         case 'e': this.cam.keys.right = true; break;
@@ -956,7 +1065,9 @@ export class Game {
     // entities outside the camera frustum: hidden, not animated, no nameplate
     this.camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+    const frozen = now < this.freezeUntil;
     for (const c of this.ents.values()) {
+      if (frozen) break;
       const s = c.snaps;
       let moving = (c.flags & F_MOVING) !== 0;
       if (c === self && s.length) moving = this.updateSelf(c, now, dt);

@@ -4,6 +4,7 @@ import {
   hitChance, KARMA_PER_PK, levelPenalty, magicDamage, mobXp, PARTY_BONUS, physDamage, PVP_FLAG_MS, xpToNext,
 } from '../../../shared/src/formulas';
 import { inTown } from '../../../shared/src/terrain';
+import type { StatusApply } from '../../../shared/src/status';
 import { Entity, Mob, Player, type Intent, type Party } from '../world/entities';
 import { dist, face, type World } from '../world/World';
 import { dropFromPlayer, dropLoot } from './inventory';
@@ -61,14 +62,46 @@ export function autoAttack(w: World, p: Player, t: Fighter, now: number) {
 
 export function mobAttack(w: World, m: Mob, t: Player, now: number) {
   w.sendNear(m.x, m.z, { t: 'atk', s: m.id, tg: t.id });
-  if (Math.random() > hitChance(m.stats.accuracy, t.stats.evasion)) return sendMiss(m, t);
+  if (t.dodgeUntil > now || Math.random() > hitChance(m.stats.accuracy, t.stats.evasion)) return sendMiss(m, t);
   const crit = Math.random() * 100 < m.stats.crit;
-  applyDamage(w, m, t, physDamage(m.stats.pAtk, t.stats.pDef, 1, crit), now, crit);
+  const dmg = physDamage(m.stats.pAtk, t.stats.pDef, 1, crit);
+  applyDamage(w, m, t, dmg, now, crit);
+  const oh = m.tpl.onHit;
+  if (oh && Math.random() < (oh.chance ?? 1)) applyStatus(w, m, t, oh, dmg, now);
 }
 
-export function applyDamage(w: World, src: Fighter, t: Fighter, dmg: number, now: number, crit = false) {
+/** Put a status on t (refreshes duration). Damage-over-time scales off the hit that caused it. */
+export function applyStatus(w: World, src: Fighter, t: Fighter, sa: StatusApply, hitDmg: number, now: number) {
   if (t.dead) return;
-  const msg = { t: 'dmg' as const, s: src.id, tg: t.id, v: dmg, crit };
+  const dps = sa.dot ? Math.max(1, Math.round(hitDmg * sa.dot)) : 0;
+  t.statuses.set(sa.id, { until: now + sa.ms, src: src.id, dps, nextTick: now + 1000 });
+  if (sa.id === 'stun') {
+    t.moving = false;
+    if (t instanceof Player) {
+      t.casting = null;
+      t.intent = null;
+    } else t.winding = null; // stunning a mob interrupts its special attack
+  }
+}
+
+/** Expire statuses and tick bleed / poison once per second. */
+export function tickStatuses(w: World, e: Fighter, now: number) {
+  for (const [id, st] of e.statuses) {
+    if (e.dead || st.until <= now) {
+      e.statuses.delete(id);
+      continue;
+    }
+    if (st.dps && now >= st.nextTick) {
+      st.nextTick += 1000;
+      const src = w.ents.get(st.src);
+      applyDamage(w, src instanceof Player || src instanceof Mob ? src : e, e, st.dps, now, false, true);
+    }
+  }
+}
+
+export function applyDamage(w: World, src: Fighter, t: Fighter, dmg: number, now: number, crit = false, dot = false) {
+  if (t.dead) return;
+  const msg = { t: 'dmg' as const, s: src.id, tg: t.id, v: dmg, crit, ...(dot ? { dot } : {}) };
   if (src instanceof Player) {
     src.send(msg);
     src.lastCombat = now;
@@ -227,6 +260,7 @@ export function requestSkill(w: World, p: Player, skillId: string, force: boolea
   const def = SKILLS[skillId];
   if (!def || !skillAvailable(def, p.cls, p.race, p.look.g) || def.level > p.level) return w.sys(p, 'Todavía no aprendiste esa habilidad.');
   if (p.dead) return;
+  if (p.has('stun', now)) return w.sys(p, 'Estás aturdido.');
   if (p.casting) return;
   if ((p.cooldowns.get(def.id) ?? 0) > now) return w.sys(p, `${def.name} todavía no está lista.`);
   if (p.mp < def.mp) return w.sys(p, 'No te alcanza el MP.');
@@ -298,10 +332,12 @@ export function finishCast(w: World, p: Player, now: number) {
           const crit = Math.random() * 100 < p.stats.crit;
           dmg = physDamage(p.stats.pAtk, d.pDef, def.power, crit);
           applyDamage(w, p, tg, dmg, now, crit);
+          if (def.status) applyStatus(w, p, tg, def.status, dmg, now);
         } else {
           const crit = Math.random() < 0.05;
           dmg = magicDamage(p.stats.mAtk, d.mDef, def.power, crit);
           applyDamage(w, p, tg, dmg, now, crit);
+          if (def.status) applyStatus(w, p, tg, def.status, dmg, now);
           if (def.kind === 'drain' && !p.dead) {
             const heal = Math.round(dmg * 0.5);
             p.hp = Math.min(p.stats.maxHp, p.hp + heal);

@@ -342,6 +342,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Combate</h4>
     <p>Hacé click en un monstruo para <b>atacarlo</b> directamente (con <b>Espacio</b> o una habilidad de ataque sin objetivo se elige el más cercano). <b>Tab</b> va pasando por los monstruos cercanos.
     Las habilidades y pociones están en la barra de atajos: teclas <b>1-0</b> o <b>F1-F10</b>. Las habilidades nuevas se aprenden solas al subir de nivel.</p>
+    <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: 💫 aturdido, 🐌 ralentizado, 🩸 sangrado y ☠️ veneno. Aturdir a un jefe le corta el ataque especial.</p>
     <h4>Botín</h4>
     <p>Hacé click en los objetos del piso o apretá <b>Z</b> para juntar el más cercano. Los materiales se los podés vender a cualquier vendedor.</p>
     <h4>Aldea del Alba</h4>

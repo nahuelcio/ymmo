@@ -1,3 +1,4 @@
+import { statusIcons } from '../../../shared/src/status';
 import { RACES, CLASSES } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
@@ -11,6 +12,9 @@ const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', '
 type Slot = { type: 'skill' | 'item'; id: string } | null;
 
 export class Hud {
+  private statusEl!: HTMLDivElement;
+  private dashEl!: HTMLDivElement;
+  private dashCd!: HTMLDivElement;
   private pvpBtn!: HTMLButtonElement;
   private name: HTMLDivElement;
   private cp; private hp; private mp; private xp;
@@ -39,6 +43,7 @@ export class Hud {
     this.mp = bar(st, 'bar-mp');
     this.xp = bar(st, 'bar-xp');
     this.buffs = el('div', 'buffs', root);
+    this.statusEl = el('div', 'status-row', root);
 
     // Target window (top-center)
     this.target = el('div', 'panel target', root);
@@ -64,6 +69,14 @@ export class Hud {
     }
 
     // Cast bar
+    // dodge roll button (Shift) with cooldown sweep
+    this.dashEl = el('div', 'dash-btn', root);
+    el('span', 'dash-key', this.dashEl, 'Shift');
+    el('span', 'dash-icon', this.dashEl, '💨');
+    this.dashCd = el('div', 'cd', this.dashEl);
+    this.dashEl.title = 'Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.';
+    this.dashEl.onclick = () => g.dash();
+
     this.cast = el('div', 'castbar', root);
     this.castFill = el('div', 'castbar-fill', this.cast);
     this.castName = el('span', 'castbar-text', this.cast);
@@ -174,6 +187,15 @@ export class Hud {
     this.lastTargetKey = '';
   }
 
+  /** Your own status effects, next to the buffs. */
+  setStatuses(flags: number) {
+    this.statusEl.innerHTML = '';
+    for (const s of statusIcons(flags)) {
+      const b = el('div', 'buff status', this.statusEl, s.icon);
+      b.title = `${s.name}: ${s.desc}`;
+    }
+  }
+
   banner(text: string, big = false) {
     this.bannerEl.textContent = text;
     this.bannerEl.className = `banner show${big ? ' big' : ''}`;
@@ -194,6 +216,9 @@ export class Hud {
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
     });
+    const dcd = this.g.cooldowns.get('dash');
+    const drem = dcd ? dcd.end - now : 0;
+    this.dashCd.style.height = drem > 0 ? `${(drem / dcd!.dur) * 100}%` : '0';
     // cast bar
     const cb = this.g.castBar;
     if (cb && now < cb.end) {

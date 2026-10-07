@@ -9,7 +9,7 @@ import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
-import { canAttack, gainXp, requestSkill, respawnPlayer, setPvpMode } from '../systems/combat';
+import { canAttack, gainXp, requestSkill, respawnPlayer, setPvpMode, tickStatuses } from '../systems/combat';
 import * as inv from '../systems/inventory';
 import { acceptQuest, onInventoryChanged, turnInQuest } from '../systems/quests';
 import * as party from '../systems/party';
@@ -17,6 +17,8 @@ import { handleChat } from '../systems/chat';
 
 export const AOI = 90;
 const TICK_MS = 50;
+const DASH_CD = 5000;
+const DODGE_MS = 450;
 
 class Grid {
   cells = new Map<string, Set<Entity>>();
@@ -130,7 +132,7 @@ export class World {
     } else e.nav = null;
     const dx = wx - e.x, dz = wz - e.z;
     const wd = Math.hypot(dx, dz) || 1e-4;
-    const step = Math.min(speed * dt, Math.max(0, wd - wStop));
+    const step = Math.min(speed * e.speedMul(this.now) * dt, Math.max(0, wd - wStop));
     e.ry = Math.atan2(dx, dz);
     e.moving = true;
     const np = pushOut(e.x + (dx / wd) * step, e.z + (dz / wd) * step, e.radius);
@@ -207,8 +209,14 @@ export class World {
     const dt = Math.min(0.2, (now - this.now) / 1000);
     this.now = now;
     this.tickN++;
-    for (const p of this.players.values()) updatePlayer(this, p, dt, now);
-    for (const m of this.mobs) updateMob(this, m, dt, now);
+    for (const p of this.players.values()) {
+      if (p.statuses.size) tickStatuses(this, p, now);
+      updatePlayer(this, p, dt, now);
+    }
+    for (const m of this.mobs) {
+      if (m.statuses.size) tickStatuses(this, m, now);
+      updateMob(this, m, dt, now);
+    }
     for (const e of this.ents.values()) if (e instanceof GroundItem && now >= e.expireAt) this.remove(e);
     if (this.tickN % 2 === 0) for (const p of this.players.values()) this.sendSnapshot(p, now);
     if (this.tickN % 4 === 0) for (const p of this.players.values()) this.sendSelf(p);
@@ -234,6 +242,35 @@ export class World {
 
   npcSay(n: Npc, text: string) {
     this.sendNear(n.x, n.z, { t: 'say', id: n.id, name: n.def.name, text }, 40);
+  }
+
+  /** Dodge roll: a quick 6 m dash toward (x,z) with a short invulnerability window. */
+  private dash(p: Player, x: number, z: number, now: number) {
+    if (p.dead) return;
+    if (p.has('stun', now)) return this.sys(p, 'Estás aturdido.');
+    if ((p.cooldowns.get('dash') ?? 0) > now) return;
+    let dx = x - p.x, dz = z - p.z;
+    let d = Math.hypot(dx, dz);
+    if (!Number.isFinite(d) || d < 0.1) {
+      dx = Math.sin(p.ry);
+      dz = Math.cos(p.ry);
+      d = 1;
+    }
+    dx /= d;
+    dz /= d;
+    for (let s = 0; s < 12; s++) {
+      const np = pushOut(p.x + dx * 0.5, p.z + dz * 0.5, p.radius);
+      if (Math.hypot(np.x - p.x, np.z - p.z) < 0.15) break; // ran into a wall
+      this.setPos(p, np.x, np.z);
+    }
+    p.ry = Math.atan2(dx, dz);
+    p.intent = null;
+    p.casting = null;
+    p.moving = false;
+    p.dodgeUntil = now + DODGE_MS;
+    p.cooldowns.set('dash', now + DASH_CD);
+    p.send({ t: 'cd', key: 'dash', ms: DASH_CD });
+    this.sendNear(p.x, p.z, { t: 'fx', s: p.id, tg: p.id, skill: 'dash' });
   }
 
   entRecord(e: Entity, now: number): EntAdd {
@@ -394,6 +431,8 @@ export class World {
       case 'autoLoot':
         p.autoLoot = !!m.on;
         return;
+      case 'dash':
+        return this.dash(p, Number(m.x), Number(m.z), now);
     }
   }
 }

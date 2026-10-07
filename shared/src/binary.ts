@@ -4,12 +4,12 @@
 // Layout (little endian):
 //   u8  type (= SNAP_UPD)
 //   u16 update count, u16 gone count
-//   update × n: u32 id, i16 x·50, i16 z·50, i16 ry·10000, u8 hp%, u8 flags   (12 bytes)
+//   update × n: u32 id, i16 x·50, i16 z·50, i16 ry·10000, u8 hp%, u16 flags   (13 bytes)
 //   gone   × m: u32 id
 import type { EntUpd } from './protocol';
 
 export const SNAP_UPD = 1;
-const UPD_BYTES = 12;
+const UPD_BYTES = 13;
 
 /** Quantize a position the way the wire does (1/50 unit), so diffs match what clients see. */
 export const qPos = (v: number) => Math.round(v * 50) / 50;
@@ -29,7 +29,7 @@ export function encodeSnap(upd: EntUpd[], gone: number[]): Uint8Array {
     v.setInt16(o + 6, Math.round(z * 50), true);
     v.setInt16(o + 8, Math.round(ry * 10000), true);
     v.setUint8(o + 10, Math.max(0, Math.min(255, hp)));
-    v.setUint8(o + 11, f & 0xff);
+    v.setUint16(o + 11, f & 0xffff, true);
     o += UPD_BYTES;
   }
   for (const id of gone) {
@@ -47,7 +47,7 @@ export function decodeSnap(buf: ArrayBuffer): { upd: EntUpd[]; gone: number[] } 
   const gone: number[] = [];
   let o = 5;
   for (let i = 0; i < n; i++, o += UPD_BYTES)
-    upd.push([v.getUint32(o, true), v.getInt16(o + 4, true) / 50, v.getInt16(o + 6, true) / 50, v.getInt16(o + 8, true) / 10000, v.getUint8(o + 10), v.getUint8(o + 11)]);
+    upd.push([v.getUint32(o, true), v.getInt16(o + 4, true) / 50, v.getInt16(o + 6, true) / 50, v.getInt16(o + 8, true) / 10000, v.getUint8(o + 10), v.getUint16(o + 11, true)]);
   for (let i = 0; i < m; i++, o += 4) gone.push(v.getUint32(o, true));
   return { upd, gone };
 }

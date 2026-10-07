@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { heightAt } from '../../../shared/src/terrain';
 
 interface Fx {
   obj: THREE.Object3D;
@@ -13,6 +14,8 @@ const GEO = {
   ring: new THREE.RingGeometry(0.8, 1, 32),
   pillar: new THREE.CylinderGeometry(0.9, 0.9, 1, 16, 1, true),
   spark: new THREE.OctahedronGeometry(0.08, 0),
+  disc: new THREE.CircleGeometry(1, 40),
+  edge: new THREE.RingGeometry(0.96, 1, 64),
 };
 
 /** Tiny effect system: projectiles, bursts, rings and pillars of light. */
@@ -88,6 +91,24 @@ export class FxManager {
         p.position.set(Math.cos(a + k * 4) * r, k * 2.2 * s, Math.sin(a + k * 4) * r);
       }
       mat.opacity = 1 - k;
+    });
+  }
+
+  /** Telegraphed area attack: red outline plus a disc that fills up until it lands. */
+  telegraph(x: number, z: number, r: number, ms: number) {
+    const g = new THREE.Group();
+    g.position.set(x, heightAt(x, z) + 0.15, z);
+    const edgeMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.9, depthWrite: false });
+    const fillMat = new THREE.MeshBasicMaterial({ color: 0xff3a20, transparent: true, opacity: 0.28, depthWrite: false });
+    const edge = new THREE.Mesh(GEO.edge, edgeMat);
+    edge.rotation.x = -Math.PI / 2;
+    edge.scale.setScalar(r);
+    const fill = new THREE.Mesh(GEO.disc, fillMat);
+    fill.rotation.x = -Math.PI / 2;
+    g.add(edge, fill);
+    this.add(g, ms, (k) => {
+      fill.scale.setScalar(r * Math.max(0.02, k));
+      edgeMat.opacity = 0.6 + 0.35 * Math.sin(k * Math.PI * 8);
     });
   }
 

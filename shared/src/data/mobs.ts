@@ -1,3 +1,5 @@
+import type { StatusApply } from '../status';
+
 export type MobShape = 'beast' | 'goblin' | 'orc' | 'golem' | 'undead' | 'spider';
 
 export interface Drop { item: string; chance: number; min?: number; max?: number }
@@ -18,6 +20,10 @@ export interface MobDef {
   defMult?: number;
   respawn?: number; // ms
   boss?: boolean;
+  /** status their basic hits can apply */
+  onHit?: StatusApply;
+  /** telegraphed area attack: wind-up shown on the ground, dodgeable */
+  special?: { r: number; windup: number; mult: number; every: number; at: 'self' | 'target'; stun?: number };
   adena: [number, number];
   drops: Drop[];
 }
@@ -37,7 +43,7 @@ const list: MobDef[] = [
     drops: [{ item: 'goblin_ear', chance: 0.3 }, { item: 'broadsword', chance: 0.015 }, { item: 'healing_potion', chance: 0.05 }] },
   { id: 'wolf', name: 'Lobo', level: 7, shape: 'beast', color: 0x6a6a70, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1300, range: 2, adena: [30, 55],
     drops: [{ item: 'wolf_pelt', chance: 0.35, max: 2 }, { item: 'reinforced_boots', chance: 0.01 }] },
-  { id: 'goblin_brute', name: 'Bruto Goblin', level: 8, shape: 'orc', color: 0x4f7f2a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1600, range: 2, hpMult: 1.2, adena: [40, 70],
+  { id: 'goblin_brute', name: 'Bruto Goblin', level: 8, shape: 'orc', color: 0x4f7f2a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1600, range: 2, hpMult: 1.2, special: { r: 3, windup: 1100, mult: 1.8, every: 9000, at: 'self' }, adena: [40, 70],
     drops: [{ item: 'goblin_ear', chance: 0.4, max: 2 }, { item: 'iron_hammer', chance: 0.015 }, { item: 'brigandine_helm', chance: 0.01 }] },
   { id: 'hill_lizard', name: 'Lagarto de las Colinas', level: 9, shape: 'beast', color: 0x4a8a6a, scale: 1.0, aggressive: true, speed: 5, atkInterval: 1400, range: 2, adena: [45, 80],
     drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'reinforced_gloves', chance: 0.012 }, { item: 'mana_potion', chance: 0.05 }] },
@@ -46,22 +52,22 @@ const list: MobDef[] = [
     drops: [{ item: 'orc_tusk', chance: 0.3 }, { item: 'brigandine_gaiters', chance: 0.012 }, { item: 'healing_potion', chance: 0.08 }] },
   { id: 'orc_archer', name: 'Arquero Orco', level: 12, shape: 'orc', color: 0x7a7a3a, scale: 0.95, aggressive: true, speed: 4.5, atkInterval: 2000, range: 14, atkMult: 0.85, adena: [80, 130],
     drops: [{ item: 'orc_tusk', chance: 0.3 }, { item: 'karmian_stockings', chance: 0.012 }] },
-  { id: 'orc_shaman', name: 'Chamán Orco', level: 13, shape: 'orc', color: 0x8a5a7a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1800, range: 10, adena: [90, 150],
+  { id: 'orc_shaman', name: 'Chamán Orco', level: 13, shape: 'orc', color: 0x8a5a7a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1800, range: 10, onHit: { id: 'slow', ms: 3000, chance: 0.3 }, adena: [90, 150],
     drops: [{ item: 'orc_tusk', chance: 0.3 }, { item: 'staff_of_life', chance: 0.01 }, { item: 'karmian_tunic', chance: 0.01 }, { item: 'mana_potion', chance: 0.1 }] },
-  { id: 'werewolf', name: 'Hombre Lobo', level: 14, shape: 'beast', color: 0x4a3a30, scale: 1.4, aggressive: true, speed: 6, atkInterval: 1200, range: 2.4, adena: [100, 170],
+  { id: 'werewolf', name: 'Hombre Lobo', level: 14, shape: 'beast', color: 0x4a3a30, scale: 1.4, aggressive: true, speed: 6, atkInterval: 1200, range: 2.4, onHit: { id: 'bleed', ms: 5000, chance: 0.25, dot: 0.2 }, adena: [100, 170],
     drops: [{ item: 'wolf_pelt', chance: 0.5, max: 3 }, { item: 'sword_of_revolution', chance: 0.01 }, { item: 'brigandine_tunic', chance: 0.01 }] },
-  { id: 'orc_captain', name: 'Capitán Orco', level: 15, shape: 'orc', color: 0x8a2a2a, scale: 1.35, aggressive: true, speed: 5, atkInterval: 1500, range: 2.6, hpMult: 2.5, atkMult: 1.2, respawn: 60000, adena: [250, 450],
+  { id: 'orc_captain', name: 'Capitán Orco', level: 15, shape: 'orc', color: 0x8a2a2a, scale: 1.35, aggressive: true, speed: 5, atkInterval: 1500, range: 2.6, hpMult: 2.5, atkMult: 1.2, respawn: 60000, special: { r: 4.5, windup: 1200, mult: 2.2, every: 8000, at: 'self', stun: 1500 }, adena: [250, 450],
     drops: [{ item: 'orc_tusk', chance: 1, min: 2, max: 4 }, { item: 'war_hammer', chance: 0.05 }, { item: 'brigandine_tunic', chance: 0.05 }] },
   // Cursed Wastes 15-20
   { id: 'skeleton', name: 'Soldado Esqueleto', level: 16, shape: 'undead', color: 0xd8d4c0, scale: 1.0, aggressive: true, speed: 5, atkInterval: 1400, range: 2.2, adena: [130, 210],
     drops: [{ item: 'cursed_bone', chance: 0.3 }, { item: 'full_plate_helmet', chance: 0.006 }] },
   { id: 'zombie', name: 'Zombi Podrido', level: 17, shape: 'undead', color: 0x6a8a5a, scale: 1.05, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.2, hpMult: 1.4, adena: [140, 230],
     drops: [{ item: 'cursed_bone', chance: 0.4, max: 2 }, { item: 'healing_potion', chance: 0.12 }] },
-  { id: 'stone_golem', name: 'Gólem de Piedra', level: 18, shape: 'golem', color: 0x8a8580, scale: 1.4, aggressive: false, speed: 3.5, atkInterval: 2000, range: 2.6, hpMult: 1.6, defMult: 1.3, adena: [170, 260],
+  { id: 'stone_golem', name: 'Gólem de Piedra', level: 18, shape: 'golem', color: 0x8a8580, scale: 1.4, aggressive: false, speed: 3.5, atkInterval: 2000, range: 2.6, hpMult: 1.6, defMult: 1.3, special: { r: 4.5, windup: 1400, mult: 2.4, every: 10000, at: 'self', stun: 1200 }, adena: [170, 260],
     drops: [{ item: 'stone_fragment', chance: 0.5, max: 2 }, { item: 'full_plate_armor', chance: 0.006 }] },
-  { id: 'cave_spider', name: 'Araña de las Cavernas', level: 19, shape: 'spider', color: 0x3a2a4a, scale: 1.2, aggressive: true, speed: 6, atkInterval: 1200, range: 2.2, adena: [180, 280],
+  { id: 'cave_spider', name: 'Araña de las Cavernas', level: 19, shape: 'spider', color: 0x3a2a4a, scale: 1.2, aggressive: true, speed: 6, atkInterval: 1200, range: 2.2, onHit: { id: 'poison', ms: 6000, chance: 0.3, dot: 0.18 }, adena: [180, 280],
     drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'demons_tunic', chance: 0.006 }, { item: 'sages_staff', chance: 0.005 }] },
-  { id: 'kaim_vanul', name: 'Kaim Vanul', level: 22, shape: 'undead', color: 0x6a2a8a, scale: 2.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 3.5, hpMult: 14, atkMult: 1.4, defMult: 1.2, respawn: 300000, boss: true, adena: [3000, 6000],
+  { id: 'kaim_vanul', name: 'Kaim Vanul', level: 22, shape: 'undead', color: 0x6a2a8a, scale: 2.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 3.5, hpMult: 14, atkMult: 1.4, defMult: 1.2, respawn: 300000, boss: true, onHit: { id: 'slow', ms: 3000, chance: 0.25 }, special: { r: 6, windup: 1500, mult: 2.6, every: 7000, at: 'target' }, adena: [3000, 6000],
     drops: [{ item: 'samurai_longsword', chance: 0.25 }, { item: 'sages_staff', chance: 0.25 }, { item: 'full_plate_armor', chance: 0.2 }, { item: 'demons_tunic', chance: 0.2 }, { item: 'cursed_bone', chance: 1, min: 5, max: 10 }] },
 ];
 
