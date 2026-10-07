@@ -8,6 +8,7 @@ import { MAX_LEVEL } from '../../shared/src/data/classes';
 import type { C2S, S2C } from '../../shared/src/protocol';
 import * as db from './db';
 import { Player, type Session as ISession } from './world/entities';
+import { primeQuestNotices, savedQuests, sendQuests } from './systems/quests';
 import { World } from './world/World';
 
 const PORT = Number(process.env.GAME_PORT ?? 3001);
@@ -43,6 +44,7 @@ function savePlayer(p: Player) {
     { id: p.charId, level: p.level, xp: p.xp, x: p.x, z: p.z, hp: Math.max(1, p.hp), mp: p.mp, cp: p.cp,
       adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp },
     p.inv,
+    savedQuests(p),
   );
 }
 
@@ -77,10 +79,13 @@ function enterWorld(s: Session, charId: number) {
   const p = new Player(world.newId(), r.x, r.z, s, r.id, r.name, r.race, r.cls, Math.min(r.level, MAX_LEVEL), r.xp, r.hp, r.mp, r.cp, r.adena, r.karma, r.pk, r.pvp);
   p.look = r.look;
   p.inv = data.items.map((i) => ({ ...i, u: p.nextUid++ }));
+  for (const q of data.quests) p.quests.set(q.id, { progress: q.progress, done: q.done });
+  primeQuestNotices(p);
   p.recalc();
   s.player = p;
   world.addPlayer(p);
   s.send({ t: 'enter', self: world.selfState(p), inv: p.inv });
+  sendQuests(p);
   world.sys(p, `Welcome to Claudi MMO, ${p.name}! Type /help for chat commands.`);
   console.log(`[world] ${p.name} entered (${world.players.size} online)`);
 }

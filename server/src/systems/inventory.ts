@@ -29,6 +29,27 @@ export function addItem(p: Player, itemId: string, count: number): boolean {
   return true;
 }
 
+export function countItem(p: Player, itemId: string): number {
+  let n = 0;
+  for (const it of p.inv) if (it.i === itemId && !it.s) n += it.c;
+  return n;
+}
+
+export function takeItems(p: Player, itemId: string, count: number): boolean {
+  if (countItem(p, itemId) < count) return false;
+  let left = count;
+  for (let i = p.inv.length - 1; i >= 0 && left > 0; i--) {
+    const it = p.inv[i];
+    if (it.i !== itemId || it.s) continue;
+    const take = Math.min(it.c, left);
+    it.c -= take;
+    left -= take;
+    if (it.c <= 0) p.inv.splice(i, 1);
+  }
+  p.invDirty = true;
+  return true;
+}
+
 function consume(p: Player, uid: number, count: number) {
   const idx = p.inv.findIndex((i) => i.u === uid);
   if (idx < 0) return;

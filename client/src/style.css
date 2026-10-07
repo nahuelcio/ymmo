@@ -108,6 +108,11 @@ input { font: inherit; user-select: text; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
 
 .party { position: absolute; left: 10px; top: 112px; width: 200px; padding: 6px 8px; }
+.quest-tracker { position: absolute; right: 10px; top: 214px; width: 180px; padding: 6px 8px; }
+.quest-head { color: var(--gold); margin-bottom: 4px; font-family: Georgia, serif; }
+.qt-row { padding: 3px 0; border-top: 1px solid #2a2a2a; }
+.qt-name { color: var(--gold); }
+.qt-ready { color: #8fdc8f; }
 .party-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); margin-bottom: 4px; }
 .party-member { padding: 4px 0; border-top: 1px solid #2a2a2a; cursor: pointer; }
 .pm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

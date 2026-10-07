@@ -1,5 +1,6 @@
 import { RACES, CLASSES } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
+import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
@@ -24,6 +25,8 @@ export class Hud {
   private castName: HTMLSpanElement;
   private bannerEl: HTMLDivElement;
   private bannerTimer = 0;
+  private questRoot: HTMLDivElement;
+  private questList: HTMLDivElement;
   private lastTargetKey = '';
   private slotsKey = '';
 
@@ -82,6 +85,27 @@ export class Hud {
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
 
     this.bannerEl = el('div', 'banner', root);
+
+    this.questRoot = el('div', 'panel quest-tracker', root);
+    el('div', 'quest-head', this.questRoot, 'Quests');
+    this.questList = el('div', '', this.questRoot);
+    this.questRoot.style.display = 'none';
+  }
+
+  setQuests(list: { id: string; progress: number }[]) {
+    this.questList.innerHTML = '';
+    let shown = 0;
+    for (const row of list) {
+      const q = QUESTS[row.id];
+      if (!q) continue;
+      shown++;
+      const line = el('div', 'qt-row', this.questList);
+      el('div', 'qt-name', line, q.name);
+      const prog = el('div', 'tt-dim', line);
+      const ready = row.progress >= q.objective.count;
+      prog.innerHTML = `${esc(questSummary(q))} <b class="${ready ? 'qt-ready' : ''}">${row.progress}/${q.objective.count}</b>`;
+    }
+    this.questRoot.style.display = shown ? '' : 'none';
   }
 
   private itemCount(id: string) {
