@@ -1,5 +1,6 @@
 import type { ClassType, Look, Race } from './data/classes';
 import type { Slot } from './data/items';
+import type { QuestStatus } from './data/quests';
 
 /** Name colour: 0 normal, 1 PvP flagged (purple), 2 karma (red). */
 export type NameColor = 0 | 1 | 2;
@@ -60,6 +61,8 @@ export type C2S =
   | { t: 'buy'; npc: number; item: string; qty: number }
   | { t: 'sell'; npc: number; u: number; qty: number }
   | { t: 'teleport'; npc: number; dest: string }
+  | { t: 'questAccept'; npc: number }
+  | { t: 'questTurnIn'; npc: number }
   | { t: 'chat'; text: string }
   | { t: 'partyInvite'; name: string }
   | { t: 'partyRespond'; accept: boolean }
@@ -84,7 +87,8 @@ export type S2C =
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[] }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
+  | { t: 'quests'; list: { id: string; progress: number }[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }

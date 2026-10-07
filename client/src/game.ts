@@ -97,6 +97,7 @@ export class Game {
   me: SelfState;
   inv: InvItem[];
   adena = 0;
+  quests: { id: string; progress: number }[] = [];
   targetId: number | null = null;
   cooldowns = new Map<string, { end: number; dur: number }>();
   castBar: { end: number; dur: number; name: string } | null = null;
@@ -295,6 +296,11 @@ export class Game {
     n.on('chat', (m) => this.ui.chat.add(m.ch, m.from, m.text));
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
+    n.on('quests', (m) => {
+      this.quests = m.list;
+      this.ui.hud.setQuests(m.list);
+      this.ui.npc.syncQuest(m.list);
+    });
     n.on('partyInvite', (m) => this.ui.dialogs.invite(m.from));
     n.on('party', (m) => this.ui.party.set(m.members));
     n.on('teleported', () => {

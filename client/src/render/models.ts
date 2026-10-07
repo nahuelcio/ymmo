@@ -272,7 +272,7 @@ export function npcModel(npcId: string): Rig {
   const n = NPCS.find((x) => x.id === npcId)!;
   const rig = humanoid({ skin: n.look?.skin ?? 0xe8b996, hair: n.look?.beard ?? 0x3a2a1a, top: n.color, bottom: darker(n.color, 0.6),
     height: n.kind === 'talker' ? 0.93 : 1, bulk: 1, weapon: null, robe: true,
-    hat: n.kind === 'gatekeeper' ? 0x4a1a4a : undefined, bald: n.look?.bald, beard: n.look?.beard !== undefined });
+    hat: n.kind === 'gatekeeper' ? 0x4a1a4a : n.kind === 'quest' ? 0xc8a050 : undefined, bald: n.look?.bald, beard: n.look?.beard !== undefined });
   if (n.kind === 'talker' && rig.torso) rig.torso.rotation.x = 0.25; // old man's stoop
   return rig;
 }

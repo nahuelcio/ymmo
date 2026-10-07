@@ -7,6 +7,7 @@ import { TOWN } from '../../shared/src/terrain';
 import type { CharSummary, InvItem } from '../../shared/src/protocol';
 import type { Slot } from '../../shared/src/data/items';
 import { ITEMS } from '../../shared/src/data/items';
+import { QUESTS } from '../../shared/src/data/quests';
 
 const dataDir = fileURLToPath(new URL('../data/', import.meta.url));
 mkdirSync(dataDir, { recursive: true });
@@ -24,6 +25,9 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY, char_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, slot TEXT);
 CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
+CREATE TABLE IF NOT EXISTS quests (
+  char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL,
+  PRIMARY KEY (char_id, quest_id));
 `);
 
 // migration: appearance columns (added after launch)
@@ -90,9 +94,13 @@ export function createChar(accountId: number, name: string, race: Race, cls: Cla
 
 const qDelChar = db.prepare('DELETE FROM characters WHERE id = ? AND account_id = ?');
 const qDelItems = db.prepare('DELETE FROM items WHERE char_id = ?');
+const qDelQuests = db.prepare('DELETE FROM quests WHERE char_id = ?');
 export function deleteChar(accountId: number, id: number): void {
   const r = qDelChar.run(id, accountId);
-  if (r.changes) qDelItems.run(id);
+  if (r.changes) {
+    qDelItems.run(id);
+    qDelQuests.run(id);
+  }
 }
 
 export interface CharRow {
@@ -101,25 +109,34 @@ export interface CharRow {
   look: Look;
 }
 
+export interface SavedQuest { id: string; progress: number; done: boolean }
+
 const qChar = db.prepare('SELECT * FROM characters WHERE id = ? AND account_id = ?');
 const qItems = db.prepare('SELECT item_id, count, slot FROM items WHERE char_id = ? ORDER BY id');
-export function loadChar(accountId: number, id: number): { row: CharRow; items: Omit<InvItem, 'u'>[] } | null {
+const qQuests = db.prepare('SELECT quest_id, progress, done FROM quests WHERE char_id = ?');
+export function loadChar(accountId: number, id: number): { row: CharRow; items: Omit<InvItem, 'u'>[]; quests: SavedQuest[] } | null {
   const raw = qChar.get(id, accountId) as unknown as (Omit<CharRow, 'look'> & LookCols) | undefined;
   if (!raw) return null;
   const row: CharRow = { ...raw, look: lookOf(raw) };
   const items = (qItems.all(id) as { item_id: string; count: number; slot: string | null }[])
     .filter((r) => ITEMS[r.item_id])
     .map((r) => ({ i: r.item_id, c: r.count, s: r.slot as Slot | null }));
-  return { row, items };
+  const quests = (qQuests.all(id) as { quest_id: string; progress: number; done: number }[])
+    .filter((r) => QUESTS[r.quest_id])
+    .map((r) => ({ id: r.quest_id, progress: r.progress, done: r.done !== 0 }));
+  return { row, items, quests };
 }
 
 const qSaveChar = db.prepare(`UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?`);
-export function saveChar(c: Omit<CharRow, 'account_id' | 'name' | 'race' | 'cls' | 'look'>, items: InvItem[]): void {
+const qInsQuest = db.prepare('INSERT INTO quests (char_id, quest_id, progress, done) VALUES (?, ?, ?, ?)');
+export function saveChar(c: Omit<CharRow, 'account_id' | 'name' | 'race' | 'cls' | 'look'>, items: InvItem[], quests: SavedQuest[]): void {
   db.exec('BEGIN');
   try {
     qSaveChar.run(c.level, c.xp, c.x, c.z, c.hp, c.mp, c.cp, c.adena, c.karma, c.pk, c.pvp, c.id);
     qDelItems.run(c.id);
     for (const it of items) qInsItem.run(c.id, it.i, it.c, it.s);
+    qDelQuests.run(c.id);
+    for (const q of quests) if (QUESTS[q.id]) qInsQuest.run(c.id, q.id, q.progress, q.done ? 1 : 0);
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');

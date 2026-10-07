@@ -1,5 +1,6 @@
 import { CLASSES, RACES } from '../../../shared/src/data/classes';
 import { GRADE_COLOR, ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
+import { QUESTS, questLine, questSummary } from '../../../shared/src/data/quests';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
@@ -137,6 +138,18 @@ export class NpcPanel {
     if (this.win.visible && this.msg) this.render();
   }
 
+  /** Keep an open quest dialog in step with the tracker. */
+  syncQuest(list: { id: string; progress: number }[]) {
+    const q = this.msg?.kind === 'quest' ? this.msg.quest : undefined;
+    if (!q || !this.win.visible || (q.status !== 'active' && q.status !== 'ready')) return;
+    const live = list.find((row) => row.id === q.id);
+    const def = QUESTS[q.id];
+    if (!live || !def) return;
+    q.progress = live.progress;
+    q.status = live.progress >= def.objective.count ? 'ready' : 'active';
+    this.render();
+  }
+
   private render() {
     const m = this.msg!;
     const g = this.g;
@@ -151,6 +164,10 @@ export class NpcPanel {
       bye.onclick = () => this.win.hide();
       const c = g.ents.get(m.npc);
       if (c) g.speech(c, m.greeting);
+      return;
+    }
+    if (m.kind === 'quest') {
+      this.renderQuest(m, b);
       return;
     }
     if (m.kind === 'gatekeeper') {
@@ -208,6 +225,32 @@ export class NpcPanel {
       }
     }
     el('div', 'inv-footer', b).innerHTML = `<span class="adena">🪙 ${g.adena.toLocaleString()} Adena</span>`;
+  }
+
+  private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement) {
+    const q = m.quest;
+    const def = q ? QUESTS[q.id] : undefined;
+    if (!q || !def) return;
+    el('div', 'section', b, def.name);
+    el('div', '', b, questSummary(def));
+    el('div', 'npc-greet', b, `"${questLine(def, q.status)}"`);
+    if (q.status === 'active' || q.status === 'ready') {
+      const row = el('div', '', b);
+      row.innerHTML = `Progress: <b class="${q.progress >= def.objective.count ? 'qt-ready' : ''}">${q.progress}/${def.objective.count}</b>`;
+    }
+    if (q.status !== 'done') {
+      el('div', 'tt-dim', b, `Reward: ${def.xp.toLocaleString()} XP, ${def.adena.toLocaleString()} adena`);
+    }
+    if (q.status === 'available') {
+      el('div', 'npc-greet', b, def.story);
+      const btn = el('button', 'btn primary', b, 'Accept');
+      btn.style.marginTop = '8px';
+      btn.onclick = () => this.g.net.send({ t: 'questAccept', npc: m.npc });
+    } else if (q.status === 'ready') {
+      const btn = el('button', 'btn primary', b, 'Complete');
+      btn.style.marginTop = '8px';
+      btn.onclick = () => this.g.net.send({ t: 'questTurnIn', npc: m.npc });
+    }
   }
 }
 
@@ -302,7 +345,8 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Loot</h4>
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Sell materials to any merchant.</p>
     <h4>Village of Dawn</h4>
-    <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b> the Gatekeeper, who teleports you to the hunting grounds. Old <b>Luigi</b> by the fountain will happily tell you about the chat. At length.</p>
+    <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b> the Gatekeeper, who teleports you to the hunting grounds. Old <b>Luigi</b> by the fountain will happily tell you about the chat. At length.
+    Quest givers in gold hats stand around the square (one every few levels) and one waits at each hunting ground.</p>
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, raid boss Kaim Vanul).</p>
     <h4>Party & PvP</h4>

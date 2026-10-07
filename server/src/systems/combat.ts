@@ -7,6 +7,7 @@ import { inTown } from '../../../shared/src/terrain';
 import { Entity, Mob, Player, type Intent, type Party } from '../world/entities';
 import { dist, face, type World } from '../world/World';
 import { dropFromPlayer, dropLoot } from './inventory';
+import { creditKill } from './quests';
 
 type Fighter = Player | Mob;
 
@@ -141,10 +142,12 @@ export function killMob(w: World, m: Mob, now: number) {
 
   // Group damage dealers into units (solo players or parties)
   const units = new Map<string, { dmg: number; party: Party | null; player: Player }>();
+  const damaged = new Set<number>();
   let total = 0;
   for (const [id, dmg] of m.hate) {
     const pl = w.players.get(id);
     if (!pl) continue;
+    damaged.add(id);
     total += dmg;
     const key = pl.party ? `p${pl.party.id}` : `c${pl.id}`;
     const u = units.get(key) ?? { dmg: 0, party: pl.party, player: pl };
@@ -170,6 +173,7 @@ export function killMob(w: World, m: Mob, now: number) {
     }
   }
   const owners = best!.party ? new Set(best!.party.members.map((mm) => mm.id)) : new Set([best!.player.id]);
+  creditKill(w, m.tpl.id, damaged);
   dropLoot(w, m, owners, now);
   if (m.tpl.boss) w.broadcast({ t: 'chat', ch: 'announce', from: '', text: `${best!.player.name} has slain the raid boss ${m.tpl.name}!` });
 }

@@ -3,6 +3,7 @@ import { Mob, Npc, Player, GroundItem } from '../world/entities';
 import { dist, face, type World } from '../world/World';
 import { autoAttack, canAttack, finishCast, processSkillIntent } from './combat';
 import { pickup, openNpc } from './inventory';
+import { openQuest } from './quests';
 
 export function updatePlayer(w: World, p: Player, dt: number, now: number) {
   if (p.dead) return;
@@ -84,7 +85,8 @@ export function updatePlayer(w: World, p: Player, dt: number, now: number) {
       if (w.stepToward(p, t.x, t.z, s.speed, dt, 2.5)) {
         p.intent = null;
         face(p, t);
-        openNpc(w, p, t);
+        if (t.def.kind === 'quest') openQuest(w, p, t);
+        else openNpc(w, p, t);
       }
       break;
     }
