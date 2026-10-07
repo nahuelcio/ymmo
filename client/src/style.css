@@ -289,3 +289,6 @@ input { font: inherit; user-select: text; }
 .diff-skill.special { background: rgba(255, 210, 120, 0.08); border-color: #6a5a30; }
 .ds-icon { font-size: 18px; width: 22px; text-align: center; flex: 0 0 22px; }
 @media (max-width: 760px) { .diff-grid, .diff-skills { grid-template-columns: repeat(2, 1fr); } .diff-skills { grid-template-columns: 1fr; } .studio { flex-direction: column; } .char-preview { flex-basis: 180px; } }
+.name-row { display: flex; gap: 8px; align-items: stretch; }
+.name-row .field { flex: 1; margin: 0; }
+.name-row .btn { padding: 0 22px; }

@@ -111,9 +111,11 @@ function charScreen(list: CharSummary[]) {
 
   const right = el('div', 'char-create', cols);
   el('h3', '', right, 'Create a new character');
-  const name = el('input', 'field', right);
+  const nameRow = el('div', 'name-row', right);
+  const name = el('input', 'field', nameRow);
   name.placeholder = 'Name';
   name.maxLength = 16;
+  const create = el('button', 'btn primary', nameRow, 'Create');
   const studio = el('div', 'studio', right);
   const preview = el('div', 'char-preview', studio);
   const opts = el('div', 'studio-opts', studio);
@@ -167,10 +169,13 @@ function charScreen(list: CharSummary[]) {
     renderDiff(diff, race, cls, look.g);
   };
   renderPick();
-  const create = el('button', 'btn primary', right, 'Create');
   create.onclick = () => net.send({ t: 'createChar', name: name.value.trim(), race, cls, look });
+  name.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') create.click();
+  });
   cleanup = stopPreview;
-  showError = errorLine(box);
+  showError = errorLine(right);
+  right.insertBefore(right.lastElementChild!, studio);
 }
 
 /** Stat differences of race × gender vs. the baseline (Human male), plus the skills you get. */
