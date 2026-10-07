@@ -6,6 +6,36 @@ import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist, zoneOf
 
 const SKY = 0xa9c6e0;
 
+/** Sky palette per region: zenith, horizon (also fog), ground bounce, sun colour & strength, cloud tint. */
+interface SkyPal { top: number; horizon: number; ground: number; sun: number; sunI: number; hemi: number; cloud: number }
+const SKIES: Record<string, SkyPal> = {
+  town: { top: 0x4a86d0, horizon: 0xb8d4ec, ground: 0x5a4a35, sun: 0xfff0d0, sunI: 2.4, hemi: 1.6, cloud: 0xffffff },
+  meadows: { top: 0x3a8ae0, horizon: 0xcfe6f6, ground: 0x5a5a35, sun: 0xfff6dc, sunI: 2.6, hemi: 1.7, cloud: 0xffffff },
+  hills: { top: 0x5a8cc0, horizon: 0xc8d6d8, ground: 0x4a4a30, sun: 0xfff0d8, sunI: 2.3, hemi: 1.5, cloud: 0xeef2f4 },
+  barracks: { top: 0x5a4a78, horizon: 0xe8a070, ground: 0x4a3020, sun: 0xffb070, sunI: 2.1, hemi: 1.3, cloud: 0xf0b890 },
+  wastes: { top: 0x24203a, horizon: 0x7a7088, ground: 0x2a2228, sun: 0xc8b8e8, sunI: 1.4, hemi: 1.0, cloud: 0x5a5468 },
+};
+
+const SkyShader = {
+  uniforms: {
+    top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() }, ground: { value: new THREE.Color() },
+    sunDir: { value: new THREE.Vector3(0.45, 0.8, 0.3).normalize() }, sunColor: { value: new THREE.Color() },
+  },
+  vertexShader: /* glsl */ `
+    varying vec3 vDir;
+    void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform vec3 top, horizon, ground, sunColor, sunDir;
+    varying vec3 vDir;
+    void main() {
+      float h = vDir.y;
+      vec3 c = h > 0.0 ? mix(horizon, top, pow(smoothstep(0.0, 0.55, h), 0.8)) : mix(horizon, ground, smoothstep(0.0, 0.25, -h));
+      float s = max(dot(normalize(vDir), sunDir), 0.0);
+      c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.18); // sun disc + glow
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+};
+
 export { ROADS, roadDist } from '../../../shared/src/layout';
 
 /** Ground colour (sRGB 0..1) used by both terrain mesh and minimap. */
@@ -47,6 +77,9 @@ export interface WorldScene {
   sun: THREE.DirectionalLight;
   /** grass & flowers (toggle with the foliage setting) */
   detail: THREE.Group;
+  sky: THREE.Mesh;
+  /** per-frame: keep the sky around the camera and blend its palette by region */
+  updateSky(camera: THREE.Camera, far: number, dt: number): void;
   follow(p: THREE.Vector3): void;
 }
 
@@ -55,7 +88,34 @@ export function createWorldScene(): WorldScene {
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, 90, 420);
 
-  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 1.6));
+  const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 1.6);
+  scene.add(hemi);
+  // sky dome (follows the camera; scaled to sit just inside the far plane)
+  const skyMat = new THREE.ShaderMaterial({ ...SkyShader, side: THREE.BackSide, depthWrite: false, fog: false });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), skyMat);
+  sky.renderOrder = -1;
+  sky.frustumCulled = false;
+  scene.add(sky);
+  const clouds = buildClouds();
+  scene.add(clouds);
+  const pal = { ...SKIES.town };
+  const cur = { top: new THREE.Color(pal.top), horizon: new THREE.Color(pal.horizon), ground: new THREE.Color(pal.ground), sun: new THREE.Color(pal.sun), cloud: new THREE.Color(pal.cloud), sunI: pal.sunI, hemi: pal.hemi };
+  const tgt = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), cloud: new THREE.Color(), sunI: 0, hemi: 0 };
+  const tmp = new THREE.Color();
+  /** Blend the palettes of nearby zones (town as the base) at world position (x,z). */
+  const paletteAt = (x: number, z: number) => {
+    const base = SKIES.town;
+    tgt.top.set(base.top); tgt.horizon.set(base.horizon); tgt.ground.set(base.ground); tgt.sun.set(base.sun); tgt.cloud.set(base.cloud);
+    tgt.sunI = base.sunI; tgt.hemi = base.hemi;
+    for (const zn of ZONES) {
+      const w = 1 - smoothstep(zn.r * 0.6, zn.r * 1.5, Math.hypot(x - zn.x, z - zn.z));
+      if (w <= 0) continue;
+      const p = SKIES[zn.id];
+      tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
+      tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
+      tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;
+    }
+  };
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -79,6 +139,34 @@ export function createWorldScene(): WorldScene {
   return {
     scene, terrain, sun,
     detail,
+    sky,
+    updateSky(camera: THREE.Camera, far: number, dt: number) {
+      sky.position.copy(camera.position);
+      sky.scale.setScalar(far * 0.92);
+      clouds.position.set(camera.position.x, 0, camera.position.z);
+      const drift = (performance.now() / 1000) * 1.5;
+      clouds.children.forEach((c, i) => {
+        const u = c.userData as { x: number; z: number };
+        c.position.x = ((u.x + drift + 600) % 1200) - 600;
+        c.position.z = u.z + Math.sin(drift * 0.01 + i) * 4;
+      });
+      // ease the sky towards the current region's palette
+      paletteAt(camera.position.x, camera.position.z);
+      const k = Math.min(1, dt * 0.8);
+      cur.top.lerp(tgt.top, k); cur.horizon.lerp(tgt.horizon, k); cur.ground.lerp(tgt.ground, k);
+      cur.sun.lerp(tgt.sun, k); cur.cloud.lerp(tgt.cloud, k);
+      cur.sunI += (tgt.sunI - cur.sunI) * k; cur.hemi += (tgt.hemi - cur.hemi) * k;
+      const u = skyMat.uniforms;
+      u.top.value.copy(cur.top); u.horizon.value.copy(cur.horizon); u.ground.value.copy(cur.ground); u.sunColor.value.copy(cur.sun);
+      (scene.fog as THREE.Fog).color.copy(cur.horizon);
+      (scene.background as THREE.Color).copy(cur.horizon);
+      sun.color.copy(cur.sun);
+      sun.intensity = cur.sunI;
+      hemi.intensity = cur.hemi;
+      hemi.color.copy(cur.horizon).lerp(tmp.set(0xffffff), 0.4);
+      CLOUD_MAT.color.copy(cur.cloud);
+      CLOUD_MAT.emissive.copy(cur.cloud).multiplyScalar(0.45);
+    },
     follow(p) {
       sun.position.set(p.x + 60, p.y + 120, p.z + 40);
       sun.target.position.copy(p);
@@ -248,6 +336,31 @@ function buildRocks(): THREE.Group {
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
   return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), items);
+}
+
+const CLOUD_MAT = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, fog: false, emissive: 0x606060 });
+
+/** Low-poly cloud puffs high above, drifting with the wind. */
+function buildClouds(): THREE.Group {
+  const g = new THREE.Group();
+  const rng = mulberry32(31);
+  const puff = mergeGeometries([
+    new THREE.IcosahedronGeometry(9, 0),
+    new THREE.IcosahedronGeometry(7, 0).translate(10, -1.5, 2),
+    new THREE.IcosahedronGeometry(6.5, 0).translate(-9, -2, -1),
+    new THREE.IcosahedronGeometry(5, 0).translate(3, 3.5, -3),
+  ])!;
+  for (let i = 0; i < 34; i++) {
+    const m = new THREE.Mesh(puff, CLOUD_MAT);
+    const x = (rng() * 2 - 1) * 600, z = (rng() * 2 - 1) * 600;
+    m.userData = { x, z };
+    m.position.set(x, 110 + rng() * 40, z);
+    m.scale.set(1.6 + rng() * 1.8, 0.7 + rng() * 0.4, 1.3 + rng() * 1.2);
+    m.rotation.y = rng() * 6;
+    m.frustumCulled = false;
+    g.add(m);
+  }
+  return g;
 }
 
 function buildWater(): THREE.Mesh {

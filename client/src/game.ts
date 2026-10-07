@@ -1139,6 +1139,7 @@ export class Game {
     if (self) {
       this.cam.update(dt, self.pos);
       this.world.follow(self.pos);
+      this.world.updateSky(this.camera, this.camera.far, dt);
     }
     const t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
     if (t) {
