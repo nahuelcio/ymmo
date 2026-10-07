@@ -13,7 +13,7 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       m.hidden = true;
       w.grid.update(m);
     }
-    if (now >= m.respawnAt) respawn(w, m);
+    if (now >= m.respawnAt && w.canRespawn(m, now)) respawn(w, m);
     return;
   }
   if (m.has('stun', now)) {

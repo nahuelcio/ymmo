@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
-import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps, roadDist, zoneOf } from '../../../shared/src/layout';
+import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, zoneOf } from '../../../shared/src/layout';
 
 const SKY = 0xa9c6e0;
 
@@ -135,6 +135,8 @@ export function createWorldScene(): WorldScene {
   scene.add(detail);
   scene.add(mergeStatic(buildTown()));
   scene.add(mergeStatic(buildZoneProps()));
+  const { props: campProps, flames } = buildCamps();
+  scene.add(mergeStatic(campProps), flames);
 
   return {
     scene, terrain, sun,
@@ -164,6 +166,9 @@ export function createWorldScene(): WorldScene {
       sun.intensity = cur.sunI;
       hemi.intensity = cur.hemi;
       hemi.color.copy(cur.horizon).lerp(tmp.set(0xffffff), 0.4);
+      // campfires flicker
+      const ft = performance.now() / 1000;
+      flames.children.forEach((f, i) => f.scale.set(1, 0.8 + Math.sin(ft * 13 + i * 1.7) * 0.15 + Math.sin(ft * 7.3 + i) * 0.1, 1));
       CLOUD_MAT.color.copy(cur.cloud);
       CLOUD_MAT.emissive.copy(cur.cloud).multiplyScalar(0.45);
     },
@@ -373,7 +378,7 @@ function buildWater(): THREE.Mesh {
 
 /** Can decorative foliage grow here? (not on roads, town, water, rock or snow) */
 function fertile(x: number, z: number, h: number): boolean {
-  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2;
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
 }
 
 function buildBushes(): THREE.Group {
@@ -579,6 +584,67 @@ function buildTown(): THREE.Group {
     g.add(banner);
   }
   return g;
+}
+
+const FLAME_OUT = new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0xff5a00, emissiveIntensity: 1, flatShading: true });
+const FLAME_IN = new THREE.MeshLambertMaterial({ color: 0xffe060, emissive: 0xffd040, emissiveIntensity: 1, flatShading: true });
+
+/** Hostile camps: tents, a crackling campfire, a broken palisade of sharpened logs and the banner. */
+function buildCamps(): { props: THREE.Group; flames: THREE.Group } {
+  const g = new THREE.Group(), flames = new THREE.Group();
+  for (const c of layoutCamps()) {
+    const y0 = (x: number, z: number) => heightAt(x, z);
+    for (const t of c.tents) {
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(2.4, 3, 5), mat(0x7a6040));
+      tent.position.set(t.x, y0(t.x, t.z) + 1.5, t.z);
+      tent.rotation.y = t.rot;
+      tent.castShadow = true;
+      g.add(tent);
+      const flap = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 3), mat(0x2a1a10));
+      flap.position.set(t.x - Math.cos(-t.rot) * 1.7, y0(t.x, t.z) + 0.8, t.z - Math.sin(-t.rot) * 1.7);
+      g.add(flap);
+      const pole = box(0.08, 0.8, 0.08, 0x4a3020, t.x, y0(t.x, t.z) + 3.2, t.z);
+      g.add(pole);
+    }
+    for (const w of c.walls) {
+      const wy = y0(w.x, w.z);
+      for (let k = -3; k <= 3; k++) {
+        const lx = w.x + Math.cos(-w.rot) * k * 1.05, lz = w.z + Math.sin(-w.rot) * k * 1.05;
+        const h = 2.2 + ((k * 7 + 3) % 5) * 0.15;
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, h, 6), mat(0x6a4a2a));
+        log.position.set(lx, wy + h / 2 - 0.2, lz);
+        log.castShadow = true;
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.5, 6), mat(0x8a6a4a));
+        tip.position.set(lx, wy + h - 0.2 + 0.25, lz);
+        g.add(log, tip);
+      }
+    }
+    // campfire: stone ring, crossed logs, flames
+    const fx = c.fire.x, fz = c.fire.z, fy = y0(fx, fz);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), mat(0x6a6660));
+      st.position.set(fx + Math.cos(a) * 0.75, fy + 0.1, fz + Math.sin(a) * 0.75);
+      g.add(st);
+    }
+    for (const r of [0.4, -0.5, 1.6]) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 5), mat(0x3a2414));
+      log.rotation.set(Math.PI / 2, r, 0.3);
+      log.position.set(fx, fy + 0.15, fz);
+      g.add(log);
+    }
+    for (const [r, h, m, dx, dz] of [[0.35, 1.1, FLAME_OUT, 0, 0], [0.22, 0.8, FLAME_OUT, 0.18, 0.1], [0.2, 0.7, FLAME_IN, -0.1, -0.05]] as const) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(r, h, 5).translate(0, h / 2, 0), m);
+      f.position.set(fx + dx, fy + 0.1, fz + dz);
+      flames.add(f);
+    }
+    // banner with the camp's colour and a skull
+    const bx = c.banner.x, bz = c.banner.z, by = y0(bx, bz);
+    g.add(box(0.12, 4.2, 0.12, 0x4a3020, bx, by + 2.1, bz));
+    g.add(box(1.1, 1.6, 0.05, c.camp.banner, bx + 0.6, by + 3.3, bz));
+    g.add(box(0.36, 0.36, 0.07, 0xe8e0cc, bx + 0.6, by + 3.4, bz));
+  }
+  return { props: g, flames };
 }
 
 function buildZoneProps(): THREE.Group {

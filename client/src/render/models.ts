@@ -621,11 +621,16 @@ function goblinRig(id: string, skin: number, scale: number): Rig {
     hood(h, 0x3a4a2a);
     cape(tor, 0x3a4a2a, 0.9);
   }
+  if (id === 'gremlin_chief') {
+    // bone crown and a ragged red cape
+    for (let i = 0; i < 4; i++) h.add(part(new THREE.ConeGeometry(0.03, 0.14, 4), 0xe8e0c8, (i - 1.5) * 0.08, 0.22, 0.05));
+    cape(tor, 0x8a2a20, 0.8);
+  }
   return { ...rig, pose: 'hunch' };
 }
 
 function orcRig(id: string, skin: number, scale: number): Rig {
-  const archer = id === 'orc_archer', shaman = id === 'orc_shaman', captain = id === 'orc_captain';
+  const archer = id === 'orc_archer', shaman = id === 'orc_shaman', captain = id === 'orc_captain' || id === 'orc_warlord';
   const rig = humanoid({ skin, hair: 0x1a1a1a, top: shaman ? 0x6a2a5a : captain ? 0x4a2020 : 0x5a4030, bottom: 0x3a2a20, height: scale, bulk: 1.3,
     weapon: archer ? 'bow' : shaman ? 'staff' : 'axe', weaponColor: shaman ? 0xff44aa : captain ? 0xc0a050 : 0x8a8f95, tusks: true, bald: !archer, robe: shaman });
   const h = rig.head!, tor = rig.torso!;
@@ -661,6 +666,17 @@ function orcRig(id: string, skin: number, scale: number): Rig {
 
 function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig {
   if (id === 'skeleton') return skeleton(scale);
+  if (id === 'crypt_knight') {
+    // armoured skeleton knight: great helm, cape, gauntlets
+    const rig = skeleton(scale);
+    const h = rig.head!, tor = rig.torso!;
+    h.add(part(B(0.4, 0.3, 0.4), 0x6a6a72, 0, 0.1, 0));
+    h.add(part(B(0.3, 0.04, 0.02), 0x111111, 0, 0.05, 0.205));
+    h.add(part(B(0.04, 0.3, 0.32), 0x5a1a2a, 0, 0.32, -0.02));
+    tor.add(part(B(0.46, 0.34, 0.26), 0x6a6a72, 0, 0.55, 0));
+    cape(tor, 0x3a1a4a, 1.2);
+    return rig;
+  }
   if (boss) {
     // Kaim Vanul: floating lich in tattered robes, bone crown, glowing staff
     const rig = humanoid({ skin: 0xd8d0c0, hair: 0x222222, top: 0x3a1050, bottom: 0x2a0a3a, height: scale, bulk: 0.9, weapon: 'staff', weaponColor: 0xb050ff,
@@ -762,6 +778,17 @@ export function itemModel(itemId: string): THREE.Group {
   const g = new THREE.Group();
   const def = ITEMS[itemId];
   const c = def?.color ?? 0xffffff;
+  if (itemId === 'camp_chest') {
+    g.add(part(B(0.9, 0.5, 0.6), 0x7a4a24, 0, 0.25, 0));
+    g.add(part(B(0.92, 0.22, 0.62), 0x8a5a2a, 0, 0.6, 0).rotateX(-0.05));
+    for (const sx of [-0.35, 0.35]) g.add(trim(B(0.06, 0.74, 0.64), 0xe8c060, sx, 0.37, 0));
+    g.add(trim(B(0.14, 0.16, 0.04), 0xe8c060, 0, 0.45, 0.32));
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.35, 3, 8, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffd24d, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+    beam.position.y = 1.5;
+    g.add(beam);
+    return g;
+  }
   if (itemId === 'adena') {
     for (let i = 0; i < 5; i++) g.add(part(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 10), 0xffcc33, (i % 2) * 0.12 - 0.06, 0.02 + i * 0.035, ((i >> 1) % 2) * 0.08));
     g.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 10), 0xffdd55, 0.15, 0.02, -0.1));

@@ -5,7 +5,7 @@ export type Grade = 'NG' | 'D' | 'C';
 export interface ItemDef {
   id: string;
   name: string;
-  type: 'weapon' | 'armor' | 'consumable' | 'material' | 'currency';
+  type: 'weapon' | 'armor' | 'consumable' | 'material' | 'currency' | 'chest';
   slot?: Slot;
   grade?: Grade;
   weaponType?: 'sword' | 'staff' | 'blunt';
@@ -61,6 +61,7 @@ const list: ItemDef[] = [
   { id: 'goblin_ear', name: 'Oreja de Goblin', type: 'material', stack: true, price: 45, icon: '👂', color: 0x77aa55 },
   { id: 'orc_tusk', name: 'Colmillo de Orco', type: 'material', stack: true, price: 80, icon: '🦷', color: 0xeeeecc },
   { id: 'stone_fragment', name: 'Fragmento de Piedra', type: 'material', stack: true, price: 110, icon: '🪨', color: 0x888888 },
+  { id: 'camp_chest', name: 'Cofre del Campamento', type: 'chest', price: 0, icon: '🧰', color: 0x8a5a2a, desc: 'Botín del campamento. Abrilo para quedarte con lo que tiene.' },
   { id: 'cursed_bone', name: 'Hueso Maldito', type: 'material', stack: true, price: 150, icon: '💀', color: 0xbbbbaa },
 ];
 

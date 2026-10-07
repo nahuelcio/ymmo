@@ -1,6 +1,7 @@
 // Deterministic placement of world props (trees, rocks, town, zone props).
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, TELEPORTS, ZONES } from './data/world';
+import { CAMPS, type CampDef } from './data/camps';
 import { heightAt, inTown, mulberry32, TOWN, WATER_LEVEL, WORLD_HALF } from './terrain';
 
 /** Road segments from the village toward each hunting ground. */
@@ -19,6 +20,11 @@ export function roadDist(x: number, z: number): number {
   let d = Infinity;
   for (const r of ROADS) d = Math.min(d, distToSegment(x, z, r));
   return d;
+}
+
+/** Within r of a hostile camp's centre (keeps camps clear of trees and props). */
+export function nearCamp(x: number, z: number, r: number): boolean {
+  return CAMPS.some((c) => Math.hypot(x - c.x, z - c.z) < r);
 }
 
 export function zoneOf(x: number, z: number) {
@@ -50,7 +56,7 @@ export function layoutTrees(): TreeL[] {
     const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
     if (Math.hypot(x - TOWN.x, z - TOWN.z) < TOWN.r + 14 || roadDist(x, z) < 6) continue;
     const h = heightAt(x, z);
-    if (h > 42 || h < WATER_LEVEL + 0.8) continue; // no trees on peaks or in ponds
+    if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) continue; // no trees on peaks, in ponds or in camps
     const zone = zoneOf(x, z);
     // keep hunting grounds a bit more open
     if (zone && rng() < 0.55) continue;
@@ -79,7 +85,8 @@ export function layoutRocks(): RockL[] {
     const sc = 0.3 + rng() * rng() * 2.5;
     const e: [number, number, number] = [rng() * 3, rng() * 3, rng() * 3];
     const s: [number, number, number] = [sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6)];
-    rocks.push({ x, z, y: heightAt(x, z) + sc * 0.2, sc, e, s, light: rng() });
+    const light = rng();
+    if (!nearCamp(x, z, 17)) rocks.push({ x, z, y: heightAt(x, z) + sc * 0.2, sc, e, s, light });
   }
   return rocks;
 }
@@ -148,5 +155,36 @@ export function layoutZoneProps(): ZonePropsL {
     }
     if (zn.id === 'hills') for (let i = 0; i < 8; i++) zp.huts.push(at(zn, zn.r * 0.8));
   }
+  const clear = <T extends { x: number; z: number }>(l: T[]) => l.filter((p) => !nearCamp(p.x, p.z, 19));
+  zp.tents = clear(zp.tents); zp.totems = clear(zp.totems); zp.ruins = clear(zp.ruins); zp.graves = clear(zp.graves); zp.huts = clear(zp.huts);
   return (zoneProps = zp);
+}
+
+export interface CampL {
+  camp: CampDef;
+  tents: { x: number; z: number; rot: number }[];
+  walls: { x: number; z: number; rot: number }[];
+  fire: { x: number; z: number };
+  banner: { x: number; z: number };
+}
+
+let camps: CampL[] | null = null;
+/** Hostile camp props: tents around a campfire, a broken palisade ring and the camp banner. */
+export function layoutCamps(): CampL[] {
+  if (camps) return camps;
+  camps = CAMPS.map((camp) => {
+    const rng = mulberry32(camp.x * 31 + camp.z);
+    const tents = [0, 1, 2].map((i) => {
+      const a = (i / 3) * Math.PI * 2 + rng() * 0.5;
+      return { x: camp.x + Math.cos(a) * 9, z: camp.z + Math.sin(a) * 9, rot: -a };
+    });
+    const walls: CampL['walls'] = [];
+    for (let i = 0; i < 12; i++) {
+      if (i % 4 === 0 || rng() < 0.25) continue; // gaps and broken stretches
+      const a = (i / 12) * Math.PI * 2;
+      walls.push({ x: camp.x + Math.cos(a) * 15, z: camp.z + Math.sin(a) * 15, rot: -a + Math.PI / 2 });
+    }
+    return { camp, tents, walls, fire: { x: camp.x, z: camp.z }, banner: { x: camp.x + 2.5, z: camp.z + 2.5 } };
+  });
+  return camps;
 }

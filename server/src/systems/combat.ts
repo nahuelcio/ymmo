@@ -173,6 +173,15 @@ export function killMob(w: World, m: Mob, now: number) {
   m.respawnAt = now + (m.tpl.respawn ?? 15000 + Math.random() * 15000);
   w.sendNear(m.x, m.z, { t: 'died', id: m.id, byPlayer: false });
 
+  if (m.campId) {
+    const camp = w.camps.get(m.campId);
+    if (camp) for (const id of m.hate.keys()) {
+      const pl = w.players.get(id);
+      camp.contributors.add(id);
+      if (pl?.party) for (const mm of pl.party.members) camp.contributors.add(mm.id);
+    }
+  }
+
   // Group damage dealers into units (solo players or parties)
   const units = new Map<string, { dmg: number; party: Party | null; player: Player }>();
   const damaged = new Set<number>();

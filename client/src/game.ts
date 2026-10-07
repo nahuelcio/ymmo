@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
+import { MOBS } from '../../shared/src/data/mobs';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
@@ -384,7 +385,9 @@ export class Game {
       el.innerHTML = '';
       el.className = 'nameplate np-mob';
       const n = document.createElement('div');
-      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${r.n} `;
+      const elite = MOBS[r.tpl]?.elite;
+      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${elite ? '👑 ' : ''}${r.n} `;
+      if (elite) el.classList.add('np-elite');
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
       l.className = 'np-lvl';
@@ -707,6 +710,12 @@ export class Game {
     if (!s) return;
     const chest = (e: CEnt) => e.pos.clone().setY(e.pos.y + e.height * 0.6);
     if (skill === 'potion') return this.fx.sparkles(s.pos.clone(), 0xff5555, 700);
+    if (skill === 'chest') {
+      play('coin');
+      this.fx.sparkles(s.pos.clone(), 0xffd24d, 1200);
+      this.fx.pillar(s.pos.clone(), 0xffd24d, 1000, 3);
+      return;
+    }
     if (skill === 'dash') {
       play('dash', this.near(s));
       this.fx.ring(s.pos.clone(), 0xcfe6ff, 1.6, 350);

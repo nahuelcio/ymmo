@@ -1,4 +1,5 @@
 import { MOBS } from '../../../shared/src/data/mobs';
+import { CAMPS, type CampDef } from '../../../shared/src/data/camps';
 import { NPCS, randomLine, ZONES, zoneAt } from '../../../shared/src/data/world';
 import { skillsFor } from '../../../shared/src/data/skills';
 import { xpToNext } from '../../../shared/src/formulas';
@@ -74,6 +75,8 @@ export class World {
   players = new Map<number, Player>();
   mobs: Mob[] = [];
   parties = new Set<Party>();
+  /** hostile camps: their mobs, who fought there, and when they come back */
+  camps = new Map<string, { def: CampDef; mobs: Mob[]; contributors: Set<number>; cleared: boolean; respawnAt: number }>();
   grid = new Grid(30);
   now = Date.now();
   private nextId = 1;
@@ -184,6 +187,49 @@ export class World {
         }
       }
     }
+    for (const def of CAMPS) {
+      const camp = { def, mobs: [] as Mob[], contributors: new Set<number>(), cleared: false, respawnAt: 0 };
+      const place = (tplId: string, minR: number, maxR: number) => {
+        const a = rng() * Math.PI * 2, r = minR + rng() * (maxR - minR);
+        const { x, z } = pushOut(def.x + Math.cos(a) * r, def.z + Math.sin(a) * r, 1);
+        const m = new Mob(this.newId(), x, z, MOBS[tplId], x, z, 20);
+        m.ry = rng() * Math.PI * 2;
+        m.campId = def.id;
+        camp.mobs.push(m);
+        this.mobs.push(m);
+        this.add(m);
+      };
+      place(def.leader, 2.5, 4);
+      for (const sp of def.mobs) for (let i = 0; i < sp.count; i++) place(sp.mob, 4, 13);
+      this.camps.set(def.id, camp);
+    }
+  }
+
+  /** Camp mobs never respawn one by one: the whole camp comes back after it was cleared. */
+  canRespawn(m: Mob, now: number): boolean {
+    if (!m.campId) return true;
+    const camp = this.camps.get(m.campId)!;
+    return camp.cleared && now >= camp.respawnAt;
+  }
+
+  private updateCamps(now: number) {
+    for (const camp of this.camps.values()) {
+      if (!camp.cleared && camp.mobs.every((m) => m.dead)) {
+        camp.cleared = true;
+        camp.respawnAt = now + camp.def.respawn;
+        // one chest per player who fought here (and is still around), placed around the fire
+        const winners = [...camp.contributors].map((id) => this.players.get(id)).filter((p): p is Player => !!p && dist(p, camp.def) < 120).slice(0, 6);
+        winners.forEach((p, i) => {
+          const a = (i / Math.max(1, winners.length)) * Math.PI * 2;
+          const pos = pushOut(camp.def.x + Math.cos(a) * 3, camp.def.z + Math.sin(a) * 3, 0.6);
+          this.add(new GroundItem(this.newId(), pos.x, pos.z, 'camp_chest', 1, new Set([p.id]), now + 180000, now + 180000, camp.def.id));
+          this.sys(p, `¡Despejaste ${camp.def.name}! Te espera un cofre junto a la fogata.`);
+        });
+      } else if (camp.cleared && now >= camp.respawnAt && camp.mobs.every((m) => !m.dead)) {
+        camp.cleared = false;
+        camp.contributors.clear();
+      }
+    }
   }
 
   townPoint() {
@@ -222,6 +268,7 @@ export class World {
     if (this.tickN % 4 === 0) for (const p of this.players.values()) this.sendSelf(p);
     if (this.tickN % 10 === 0) party.sendPartyUpdates(this);
     if (this.tickN % 20 === 0) this.npcChatter(now);
+    if (this.tickN % 5 === 0) this.updateCamps(now);
     for (const p of this.players.values()) {
       if (p.invDirty) {
         p.invDirty = false;

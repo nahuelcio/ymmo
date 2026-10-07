@@ -1,5 +1,5 @@
 // Static world collision + pathfinding, shared by server (authoritative) and client (prediction).
-import { layoutRocks, layoutTown, layoutTrees, layoutZoneProps } from './layout';
+import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps } from './layout';
 import { PLAYABLE_HALF, TOWN } from './terrain';
 
 /** Circle (r) or oriented box (hw/hd half extents, rot = three.js rotation.y). */
@@ -34,6 +34,12 @@ function buildObstacles(): Obstacle[] {
   for (const r of zp.ruins) o.push(circle(r.x, r.z, 0.65));
   for (const g of zp.graves) o.push(circle(g.x, g.z, 0.35));
   for (const h of zp.huts) o.push(circle(h.x, h.z, 2.2));
+  for (const c of layoutCamps()) {
+    for (const t of c.tents) o.push(circle(t.x, t.z, 2.3));
+    for (const w of c.walls) o.push(obb(w.x, w.z, 3.6, 0.35, w.rot));
+    o.push(circle(c.fire.x, c.fire.z, 0.9));
+    o.push(circle(c.banner.x, c.banner.z, 0.3));
+  }
   return o;
 }
 

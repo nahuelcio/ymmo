@@ -1,4 +1,5 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
+import { CAMPS } from '../../../shared/src/data/camps';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { F_RED, type Game } from '../game';
@@ -93,6 +94,12 @@ export class Minimap {
     ctx.arc(toMap(TOWN.x) * S, toMap(TOWN.z) * S, 6, 0, Math.PI * 2);
     ctx.fill();
     this.label(ctx, TOWN.name, toMap(TOWN.x) * S, toMap(TOWN.z) * S - 12);
+    // hostile camps
+    for (const c of CAMPS) {
+      const x = toMap(c.x) * S, y = toMap(c.z) * S;
+      this.campIcon(ctx, x, y, 9);
+      this.label(ctx, `${c.name} (Nv ${c.level})`, x, y - 12);
+    }
     // quest hunting areas
     for (const { zone, quests } of questAreas(this.g.questTargets())) {
       const x = toMap(zone.x) * S, y = toMap(zone.z) * S, r = (zone.r * 0.85 / (2 * WORLD_HALF)) * 512;
@@ -108,6 +115,24 @@ export class Minimap {
     }
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
+  }
+
+  /** Crossed swords on a red disc. */
+  private campIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+    ctx.fillStyle = '#8a1a14';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#f0e0c0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.55, y - r * 0.55); ctx.lineTo(x + r * 0.55, y + r * 0.55);
+    ctx.moveTo(x + r * 0.55, y - r * 0.55); ctx.lineTo(x - r * 0.55, y + r * 0.55);
+    ctx.stroke();
+    ctx.lineWidth = 1;
   }
 
   private label(ctx: CanvasRenderingContext2D, t: string, x: number, y: number) {
@@ -182,6 +207,10 @@ export class Minimap {
       ctx.stroke();
     }
     const questMob = (tpl: string) => targets.some((t) => t.mobs.has(tpl));
+    for (const c of CAMPS) {
+      const [x, y] = toC(c.x, c.z);
+      if (x > -10 && y > -10 && x < W + 10 && y < W + 10) this.campIcon(ctx, x, y, 6);
+    }
     const partyIds = new Set(this.g.ui.partyIds());
     for (const c of this.g.ents.values()) {
       if (c.id === this.g.me.id || c.rec.k === 'n') continue;

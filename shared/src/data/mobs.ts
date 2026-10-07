@@ -20,6 +20,8 @@ export interface MobDef {
   defMult?: number;
   respawn?: number; // ms
   boss?: boolean;
+  /** camp leader: tougher, marked on its nameplate */
+  elite?: boolean;
   /** status their basic hits can apply */
   onHit?: StatusApply;
   /** telegraphed area attack: wind-up shown on the ground, dodgeable */
@@ -69,6 +71,15 @@ const list: MobDef[] = [
     drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'demons_tunic', chance: 0.006 }, { item: 'sages_staff', chance: 0.005 }] },
   { id: 'kaim_vanul', name: 'Kaim Vanul', level: 22, shape: 'undead', color: 0x6a2a8a, scale: 2.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 3.5, hpMult: 14, atkMult: 1.4, defMult: 1.2, respawn: 300000, boss: true, onHit: { id: 'slow', ms: 3000, chance: 0.25 }, special: { r: 6, windup: 1500, mult: 2.6, every: 7000, at: 'target' }, adena: [3000, 6000],
     drops: [{ item: 'samurai_longsword', chance: 0.25 }, { item: 'sages_staff', chance: 0.25 }, { item: 'full_plate_armor', chance: 0.2 }, { item: 'demons_tunic', chance: 0.2 }, { item: 'cursed_bone', chance: 1, min: 5, max: 10 }] },
+  // Camp leaders (elite)
+  { id: 'gremlin_chief', name: 'Jefe Gremlin', level: 4, shape: 'goblin', color: 0x5f8e2a, scale: 0.85, aggressive: true, speed: 4.5, atkInterval: 1300, range: 1.8, hpMult: 3, atkMult: 1.3, elite: true,
+    special: { r: 3, windup: 1100, mult: 1.6, every: 9000, at: 'self' }, adena: [60, 120], drops: [{ item: 'lesser_healing_potion', chance: 0.5 }] },
+  { id: 'goblin_chieftain', name: 'Cacique Goblin', level: 9, shape: 'orc', color: 0x3f6f2a, scale: 1.15, aggressive: true, speed: 5, atkInterval: 1500, range: 2.2, hpMult: 3.5, atkMult: 1.3, elite: true,
+    special: { r: 3.5, windup: 1200, mult: 1.9, every: 8500, at: 'self', stun: 1200 }, adena: [150, 260], drops: [{ item: 'goblin_ear', chance: 1, min: 2, max: 3 }] },
+  { id: 'orc_warlord', name: 'Señor de la Guerra Orco', level: 14, shape: 'orc', color: 0x6a3a2a, scale: 1.45, aggressive: true, speed: 5, atkInterval: 1500, range: 2.6, hpMult: 4, atkMult: 1.3, elite: true,
+    special: { r: 4.5, windup: 1200, mult: 2.2, every: 8000, at: 'self', stun: 1500 }, adena: [400, 700], drops: [{ item: 'orc_tusk', chance: 1, min: 2, max: 4 }] },
+  { id: 'crypt_knight', name: 'Caballero de la Cripta', level: 18, shape: 'undead', color: 0xc8c4b0, scale: 1.3, aggressive: true, speed: 4.5, atkInterval: 1400, range: 2.6, hpMult: 4.5, atkMult: 1.35, elite: true,
+    onHit: { id: 'bleed', ms: 5000, chance: 0.3, dot: 0.2 }, special: { r: 4.5, windup: 1300, mult: 2.4, every: 8000, at: 'self' }, adena: [700, 1100], drops: [{ item: 'cursed_bone', chance: 1, min: 2, max: 3 }] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));

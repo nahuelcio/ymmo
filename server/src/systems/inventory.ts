@@ -1,5 +1,6 @@
 import { ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
 import { randomLine, TELEPORTS } from '../../../shared/src/data/world';
+import { CAMP_BY_ID } from '../../../shared/src/data/camps';
 import { GroundItem, Mob, Npc, Player } from '../world/entities';
 import { dist, type World } from '../world/World';
 
@@ -190,6 +191,32 @@ function autoLooter(w: World, m: Mob, owners: Set<number>): Player | null {
   return ps.length ? ps[Math.floor(Math.random() * ps.length)] : null;
 }
 
+/** Roll a camp chest's loot straight into the opener's bag (overflow drops at their feet). */
+function openChest(w: World, p: Player, gi: GroundItem, now: number) {
+  const camp = gi.campId ? CAMP_BY_ID[gi.campId] : undefined;
+  w.remove(gi);
+  if (!camp) return;
+  const got: string[] = [];
+  const give = (item: string, count: number) => {
+    if (addItem(p, item, count)) {
+      p.invDirty = true;
+      got.push(item === 'adena' ? `${count} de adena` : `${count > 1 ? count + ' × ' : ''}${ITEMS[item].name}`);
+    } else spawnGround(w, p.x, p.z, item, count, new Set([p.id]), now);
+  };
+  const [amin, amax] = camp.chest.adena;
+  const adena = Math.round(amin + Math.random() * (amax - amin));
+  p.adena += adena;
+  got.push(`${adena} de adena`);
+  for (const l of camp.chest.loot) {
+    if (Math.random() >= l.chance) continue;
+    const min = l.min ?? 1, max = l.max ?? 1;
+    give(l.item, min + Math.floor(Math.random() * (max - min + 1)));
+  }
+  p.invDirty = true;
+  w.sendNear(p.x, p.z, { t: 'fx', s: p.id, tg: p.id, skill: 'chest' });
+  w.sys(p, `Abriste el cofre de ${camp.name}: ${got.join(', ')}.`);
+}
+
 export function dropLoot(w: World, m: Mob, owners: Set<number>, now: number) {
   // auto-loot goes through the normal pickup, so a full bag leaves the item on the ground
   const drop = (item: string, count: number) => {
@@ -222,6 +249,7 @@ export function dropFromPlayer(w: World, p: Player, now: number) {
 export function pickup(w: World, p: Player, gi: GroundItem, now: number) {
   if (!w.ents.has(gi.id)) return;
   if (gi.owners && now < gi.ownerUntil && !gi.owners.has(p.id)) return w.sys(p, 'Ese objeto es de otra persona.');
+  if (gi.itemId === 'camp_chest') return openChest(w, p, gi, now);
   const def = ITEMS[gi.itemId];
   if (!addItem(p, gi.itemId, gi.count)) return w.sys(p, 'Tenés el inventario lleno.');
   w.remove(gi);

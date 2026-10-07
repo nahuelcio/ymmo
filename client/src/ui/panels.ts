@@ -347,6 +347,8 @@ export function createHelp(root: HTMLElement): Win {
     <p>Hacé click en los objetos del piso o apretá <b>Z</b> para juntar el más cercano. Los materiales se los podés vender a cualquier vendedor.</p>
     <h4>Aldea del Alba</h4>
     <p>Hablá con <b>Lia</b> (pociones), <b>Gerald</b> (armas), <b>Hilda</b> (armaduras) y <b>Roxxy</b>, la Guardiana del Portal, que te lleva a las zonas de caza. Los vecinos con misiones te pagan por darles una mano. Y el viejo <b>Luigi</b>, al lado de la fuente, te va a contar todo sobre el chat. Todo.</p>
+    <h4>Campamentos hostiles</h4>
+    <p>Cada zona tiene un campamento marcado con ⚔ en el mapa, defendido por un jefe 👑 <b>élite</b>. Si limpiás el campamento entero, aparece un <b>cofre</b> junto a la fogata para cada uno que peleó. El campamento se vuelve a llenar unos minutos después.</p>
     <h4>Zonas de caza</h4>
     <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul).</p>
     <h4>Party y PvP</h4>

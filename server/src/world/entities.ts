@@ -173,6 +173,8 @@ export class Mob extends Entity {
   dest: { x: number; z: number } | null = null;
   returning = false;
   specialAt = 0;
+  /** set for mobs that belong to a hostile camp */
+  campId: string | null = null;
   winding: { x: number; z: number; end: number } | null = null;
 
   constructor(id: number, x: number, z: number, public tpl: MobDef, public homeX: number, public homeZ: number, public zoneR: number) {
@@ -206,7 +208,7 @@ export class Npc extends Entity {
 export class GroundItem extends Entity {
   readonly kind = 'item' as const;
   constructor(id: number, x: number, z: number, public itemId: string, public count: number,
-    public owners: Set<number> | null, public ownerUntil: number, public expireAt: number) {
+    public owners: Set<number> | null, public ownerUntil: number, public expireAt: number, public campId: string | null = null) {
     super(id, x, z);
     this.ry = Math.random() * Math.PI * 2;
   }
