@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
-import { F_CASTING, F_DEAD, F_MOVING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
+import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
 import { findPath, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
@@ -245,6 +245,13 @@ export class Game {
       const n = document.createElement('div');
       n.textContent = self ? r.n : `${r.n} `;
       n.style.color = color;
+      if (c.flags & F_PVP) {
+        const sw = document.createElement('span');
+        sw.className = 'np-pvp';
+        sw.textContent = '⚔';
+        sw.title = 'PvP mode on';
+        n.prepend(sw);
+      }
       if (!self) {
         const l = document.createElement('span');
         l.className = 'np-lvl';
@@ -376,7 +383,7 @@ export class Game {
       const c = this.ents.get(id);
       if (!c) continue;
       const wasDead = (c.flags & F_DEAD) !== 0;
-      const colorChanged = (c.flags & (F_RED | F_PURPLE)) !== (f & (F_RED | F_PURPLE));
+      const colorChanged = (c.flags & (F_RED | F_PURPLE | F_PVP)) !== (f & (F_RED | F_PURPLE | F_PVP));
       c.hp = hp;
       c.flags = f;
       c.rec.hp = hp;
@@ -471,7 +478,9 @@ export class Game {
   isHostile(c: CEnt): boolean {
     if (c.flags & F_DEAD) return false;
     if (c.rec.k === 'm') return true;
-    return c.rec.k === 'p' && c.id !== this.me.id && (c.flags & (F_RED | F_PURPLE)) !== 0;
+    if (c.rec.k !== 'p' || c.id === this.me.id) return false;
+    if (c.flags & F_RED) return this.me.pvpOn;
+    return this.me.pvpOn && (c.flags & F_PVP) !== 0 && (c.flags & F_PURPLE) !== 0;
   }
 
   /** Action whose movement the server drives: drop local prediction. */

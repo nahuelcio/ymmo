@@ -134,6 +134,8 @@ input { font: inherit; user-select: text; }
 .menu { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 3px; padding: 4px; }
 .menu-btn { background: linear-gradient(#2a261c, #15130e); color: var(--gold); border: 1px solid var(--border); border-radius: 3px; padding: 6px 9px; cursor: pointer; }
 .menu-btn:hover { border-color: var(--border-hi); }
+.pvp-btn.on { color: #fff; background: linear-gradient(#8a2020, #4a0d0d); border-color: #d04040; }
+.np-pvp { color: #ff6a5a; font-size: 10px; margin-right: 3px; }
 
 .banner {
   position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font: 400 22px Georgia, serif; color: #fff4d0;

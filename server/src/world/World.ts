@@ -8,7 +8,7 @@ import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
-import { canAttack, requestSkill, respawnPlayer } from '../systems/combat';
+import { canAttack, requestSkill, respawnPlayer, setPvpMode } from '../systems/combat';
 import * as inv from '../systems/inventory';
 import * as party from '../systems/party';
 import { handleChat } from '../systems/chat';
@@ -268,7 +268,7 @@ export class World {
       hp: Math.ceil(p.hp), maxHp: s.maxHp, mp: Math.floor(p.mp), maxMp: s.maxMp, cp: Math.floor(p.cp), maxCp: s.maxCp,
       pAtk: s.pAtk, mAtk: s.mAtk, pDef: s.pDef, mDef: s.mDef, acc: s.accuracy, eva: s.evasion, crit: s.crit,
       atkSpd: Math.round(60000 / s.atkInterval), speed: Math.round(s.speed * 20),
-      adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, flagged: p.pvpUntil > this.now,
+      adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, flagged: p.pvpUntil > this.now, pvpOn: p.pvpOn,
       skills: skillsFor(p.cls, p.level).map((sk) => sk.id),
       buffs: p.buffs.map((b) => ({ id: b.id, rem: Math.max(0, Math.round((b.until - this.now) / 1000)) })),
       zone: zoneAt(p.x, p.z),
@@ -361,6 +361,8 @@ export class World {
         return party.leave(this, p, false);
       case 'respawn':
         return respawnPlayer(this, p);
+      case 'pvpMode':
+        return setPvpMode(this, p, !!m.on);
     }
   }
 }

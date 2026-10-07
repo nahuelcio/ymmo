@@ -2,6 +2,7 @@ import { zoneAt } from '../../../shared/src/data/world';
 import type { Player } from '../world/entities';
 import type { World } from '../world/World';
 import * as party from './party';
+import { setPvpMode } from './combat';
 
 const LOCAL_RANGE = 100;
 
@@ -34,8 +35,10 @@ export function handleChat(w: World, p: Player, raw: string) {
         if (p.dead) return;
         p.escapeAt = w.now + 10000;
         return w.sys(p, 'You will be returned to the village in 10 seconds...');
+      case 'pvp':
+        return setPvpMode(w, p, arg ? arg.toLowerCase() === 'on' : !p.pvpOn);
       case 'help':
-        return w.sys(p, 'Chat: !shout  #party  "name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck');
+        return w.sys(p, 'Chat: !shout  #party  "name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off]');
       default:
         return w.sys(p, `Unknown command /${cmd}. Type /help.`);
     }

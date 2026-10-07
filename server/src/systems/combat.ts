@@ -10,6 +10,20 @@ import { dropFromPlayer, dropLoot } from './inventory';
 
 type Fighter = Player | Mob;
 
+const PVP_OFF_COOLDOWN = 10000;
+
+/** Turn PvP mode on/off. Can't hide from a fight: turning off needs 10 s out of combat and no flag. */
+export function setPvpMode(w: World, p: Player, on: boolean) {
+  if (p.pvpOn === on) return;
+  if (!on) {
+    if (p.karma > 0) return w.sys(p, 'You cannot disable PvP while you have karma.');
+    if (p.pvpUntil > w.now || w.now - p.lastCombat < PVP_OFF_COOLDOWN)
+      return w.sys(p, 'You cannot disable PvP while in combat or flagged. Wait a few seconds.');
+  }
+  p.pvpOn = on;
+  w.sys(p, on ? 'PvP mode ON: you can attack and be attacked by other PvP players.' : 'PvP mode OFF: other players cannot attack you.');
+}
+
 export function canAttack(_w: World, p: Player, t: Entity, force: boolean, now: number): string | null {
   if (t.dead) return 'Your target is already dead.';
   if (t instanceof Mob) return null;
@@ -17,6 +31,9 @@ export function canAttack(_w: World, p: Player, t: Entity, force: boolean, now: 
   if (t === p) return 'You cannot attack yourself.';
   if (inTown(p.x, p.z) || inTown(t.x, t.z)) return 'You cannot attack in a peace zone.';
   if (p.party && p.party === t.party) return 'You cannot attack a party member.';
+  if (!p.pvpOn) return 'Your PvP mode is off. Turn it on (PvP button or /pvp) to fight players.';
+  // PKs (karma) are always fair game; otherwise both sides must have opted in
+  if (!t.pvpOn && t.karma === 0) return `${t.name} has PvP mode off.`;
   if (t.karma > 0 || t.pvpUntil > now) return null;
   if (force) return null;
   return 'Hold Ctrl and click to force attack another player.';

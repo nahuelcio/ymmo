@@ -10,6 +10,7 @@ const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', '
 type Slot = { type: 'skill' | 'item'; id: string } | null;
 
 export class Hud {
+  private pvpBtn!: HTMLButtonElement;
   private name: HTMLDivElement;
   private cp; private hp; private mp; private xp;
   private buffs: HTMLDivElement;
@@ -75,6 +76,9 @@ export class Hud {
     btn('Inventory', 'I', () => g.ui.inventory.win.toggle());
     btn('Map', 'M', () => g.ui.minimap.toggleMap());
     btn('Help', 'H', () => g.ui.help.toggle());
+    this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: OFF');
+    this.pvpBtn.title = 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).';
+    this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
 
     this.bannerEl = el('div', 'banner', root);
   }
@@ -85,6 +89,8 @@ export class Hud {
 
   onMe() {
     const m = this.g.me;
+    this.pvpBtn.textContent = m.pvpOn ? '⚔ PvP: ON' : 'PvP: OFF';
+    this.pvpBtn.classList.toggle('on', m.pvpOn);
     this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${RACES[m.race].name} ${CLASSES[m.cls].name}</span>`;
     this.cp.set(m.cp, m.maxCp);
     this.hp.set(m.hp, m.maxHp);

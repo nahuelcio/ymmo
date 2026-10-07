@@ -22,6 +22,8 @@ export const F_DEAD = 1;
 export const F_MOVING = 2;
 export const F_CASTING = 4;
 export const F_COMBAT = 8;
+/** Player has PvP mode enabled (can attack / be attacked by other PvP players). */
+export const F_PVP = 64;
 
 export interface InvItem { u: number; i: string; c: number; s: Slot | null }
 
@@ -31,7 +33,7 @@ export interface SelfState {
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
   atkSpd: number; speed: number;
-  adena: number; karma: number; pk: number; pvp: number; flagged: boolean;
+  adena: number; karma: number; pk: number; pvp: number; flagged: boolean; pvpOn: boolean;
   skills: string[];
   buffs: { id: string; rem: number }[];
   zone: string;
@@ -63,6 +65,7 @@ export type C2S =
   | { t: 'partyRespond'; accept: boolean }
   | { t: 'partyLeave' }
   | { t: 'respawn' }
+  | { t: 'pvpMode'; on: boolean }
   | { t: 'stop' };
 
 export type S2C =

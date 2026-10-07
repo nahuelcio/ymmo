@@ -4,7 +4,7 @@ import type { MobDef } from '../../../shared/src/data/mobs';
 import type { BuffMods, SkillDef } from '../../../shared/src/data/skills';
 import type { NpcDef } from '../../../shared/src/data/world';
 import { computeStats, mobStats, type Stats } from '../../../shared/src/formulas';
-import { F_CASTING, F_COMBAT, F_DEAD, F_MOVING, type InvItem, type S2C } from '../../../shared/src/protocol';
+import { F_CASTING, F_COMBAT, F_DEAD, F_MOVING, F_PVP, type InvItem, type S2C } from '../../../shared/src/protocol';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -60,6 +60,8 @@ export class Player extends Entity {
   casting: { skill: SkillDef; targetId: number; end: number } | null = null;
   cooldowns = new Map<string, number>();
   pvpUntil = 0;
+  /** PvP mode switch (off by default): off = can't attack or be attacked by players, unless PK. */
+  pvpOn = false;
   lastCombat = 0;
   escapeAt = 0;
   party: Party | null = null;
@@ -127,7 +129,7 @@ export class Player extends Entity {
   flags(now: number): number {
     const nc = this.nameColor(now);
     return super.flags(now) | (this.casting ? F_CASTING : 0) | (now - this.lastCombat < 4000 ? F_COMBAT : 0)
-      | (nc === 1 ? F_PURPLE : nc === 2 ? F_RED : 0);
+      | (nc === 1 ? F_PURPLE : nc === 2 ? F_RED : 0) | (this.pvpOn ? F_PVP : 0);
   }
 }
 
