@@ -23,7 +23,7 @@ apt-get update -y
 apt-get install -y curl git nginx ca-certificates gnupg ufw
 
 # Our own latest Node in /opt/node, readable by every user (ignores any nvm / root-only install).
-LATEST=$(curl -fsSL https://nodejs.org/dist/index.json | grep -o '"version":"v[0-9.]*"' | head -1 | cut -d'"' -f4)
+LATEST=$(curl -fsSL https://nodejs.org/dist/index.json | grep -o '"version":"v[0-9.]*"' | sed -n 1p | cut -d'"' -f4)
 if ! [ -x "$NODE_DIR/bin/node" ] || [ "$("$NODE_DIR/bin/node" -v)" != "$LATEST" ]; then
   echo "==> Node.js $LATEST (oficial, en $NODE_DIR)"
   rm -rf "$NODE_DIR"
