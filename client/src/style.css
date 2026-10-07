@@ -56,7 +56,8 @@ input { font: inherit; user-select: text; }
 /* ---------- login / char select ---------- */
 #screens { position: fixed; inset: 0; z-index: 100; }
 .screen {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: safe center; gap: 24px;
+  overflow-y: auto; padding: 16px 0;
   background: radial-gradient(ellipse at 50% 30%, #2a2f48 0%, #10121c 60%, #06070b 100%);
 }
 .logo { text-align: center; }
@@ -67,12 +68,13 @@ input { font: inherit; user-select: text; }
 }
 .logo-sub { color: var(--gold); letter-spacing: 4px; margin-top: 6px; font-family: Georgia, serif; }
 .screen-box { width: min(360px, calc(100vw - 32px)); padding: 18px 20px; }
-.screen-box.wide { width: min(760px, calc(100vw - 32px)); }
+.screen-box.wide { width: min(1040px, calc(100vw - 32px)); }
 .screen-box h2 { margin: 0 0 8px; color: var(--gold); font: 400 18px Georgia, serif; }
 .screen-box h3 { margin: 0 0 6px; color: var(--gold); font: 400 15px Georgia, serif; }
 .form-error { color: #ff8a7a; min-height: 18px; margin-top: 8px; }
 .char-cols { display: flex; gap: 20px; flex-wrap: wrap; }
-.char-list, .char-create { flex: 1 1 300px; }
+.char-list { flex: 0 1 240px; }
+.char-create { flex: 1 1 520px; }
 .char-card { padding: 8px 10px; border: 1px solid #333; border-radius: 3px; margin-bottom: 6px; cursor: pointer; background: #0d0f16; }
 .char-card.sel { border-color: var(--border-hi); background: #1d1a12; }
 .pick { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
@@ -282,8 +284,8 @@ input { font: inherit; user-select: text; }
 .diff-cell.up b { color: #6aff8a; }
 .diff-cell.down b { color: #ff6a5a; }
 .diff-cell b { color: #888; }
-.diff-skills { max-height: 170px; overflow-y: auto; font-size: 11px; }
-.diff-skill { display: flex; gap: 6px; align-items: flex-start; padding: 3px 2px; border-bottom: 1px solid #1d1d1d; }
-.diff-skill.special { background: rgba(255, 210, 120, 0.07); }
-.ds-icon { font-size: 16px; width: 20px; text-align: center; }
-@media (max-width: 760px) { .diff-grid { grid-template-columns: repeat(2, 1fr); } .studio { flex-direction: column; } .char-preview { flex-basis: 180px; } }
+.diff-skills { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; }
+.diff-skill { display: flex; gap: 8px; align-items: flex-start; padding: 5px 6px; background: #0d0f16; border: 1px solid #262626; border-radius: 3px; line-height: 1.35; }
+.diff-skill.special { background: rgba(255, 210, 120, 0.08); border-color: #6a5a30; }
+.ds-icon { font-size: 18px; width: 22px; text-align: center; flex: 0 0 22px; }
+@media (max-width: 760px) { .diff-grid, .diff-skills { grid-template-columns: repeat(2, 1fr); } .diff-skills { grid-template-columns: 1fr; } .studio { flex-direction: column; } .char-preview { flex-basis: 180px; } }
