@@ -489,8 +489,11 @@ export class Game {
     if (!c) return;
     this.world.scene.remove(c.root);
     c.label.element.remove();
-    // model geometries are shared (see models.ts); only the hitbox is per-entity
+    // part geometries are shared (see models.ts); baked limb meshes and the hitbox are per-entity
     c.hit.geometry.dispose();
+    c.root.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.userData.baked) o.geometry.dispose();
+    });
     this.hitboxes = this.hitboxes.filter((h) => h !== c.hit);
     this.ents.delete(id);
   }

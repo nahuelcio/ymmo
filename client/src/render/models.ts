@@ -3,6 +3,7 @@ import { DEFAULT_LOOK, HAIR_COLORS, RACES, type ClassType, type Look, type Race 
 import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat } from './scene';
 
 export interface Rig {
@@ -323,13 +324,13 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const [head, gloves, legs, feet] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
-  return humanoid({
+  return bake(humanoid({
     skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
     hairStyle: look.hs, female,
     weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, robe,
     ears: race === 'elf' || race === 'darkelf' ? 'elf' : undefined, tusks: race === 'orc' && !female, beard: race === 'dwarf' && !female, bald: race === 'orc' && !female && look.hs === 0,
     gear: { chest: chestDef, head, gloves, legs, feet },
-  });
+  }));
 }
 
 export function mobModel(tplId: string): Rig {
@@ -360,7 +361,7 @@ export function mobModel(tplId: string): Rig {
         weapon: t.boss ? 'staff' : 'sword', weaponColor: t.boss ? 0xaa44ff : 0x888888, bald: true, skull: true, robe: !!t.boss, hat: t.boss ? 0x2a0a3a : undefined });
       break;
   }
-  return rig;
+  return bake(rig);
 }
 
 export function npcModel(npcId: string): Rig {
@@ -369,7 +370,7 @@ export function npcModel(npcId: string): Rig {
     height: n.kind === 'talker' ? 0.93 : 1, bulk: 1, weapon: null, robe: true,
     hat: n.kind === 'gatekeeper' ? 0x4a1a4a : n.kind === 'quest' ? 0xc8a050 : undefined, bald: n.look?.bald, beard: n.look?.beard !== undefined });
   if (n.kind === 'talker' && rig.torso) rig.torso.rotation.x = 0.25; // old man's stoop
-  return rig;
+  return bake(rig);
 }
 
 export function itemModel(itemId: string): THREE.Group {
@@ -389,6 +390,51 @@ export function itemModel(itemId: string): THREE.Group {
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/** One material for every baked part: colours live in the vertices. */
+const VCOLOR = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+
+/**
+ * Merge the plain-coloured parts of every group in a rig (legs, arms, torso,
+ * head, weapon...) into one mesh per group, so a character costs a handful of
+ * draw calls instead of ~40 while still animating per limb. Self-lit trims keep
+ * their own material. Baked geometries are per-entity: dispose them on removal
+ * (they carry userData.baked).
+ */
+export function bake(rig: Rig): Rig {
+  const c = new THREE.Color();
+  const visit = (g: THREE.Object3D) => {
+    const plain = g.children.filter((o): o is THREE.Mesh => {
+      if (!(o instanceof THREE.Mesh) || o.children.length) return false;
+      const m = o.material as THREE.MeshLambertMaterial;
+      return m instanceof THREE.MeshLambertMaterial && !m.transparent && m.emissive.getHex() === 0;
+    });
+    if (plain.length > 1) {
+      const geos = plain.map((o) => {
+        o.updateMatrix();
+        const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrix);
+        for (const name of Object.keys(geo.attributes)) if (name !== 'position' && name !== 'normal') geo.deleteAttribute(name);
+        c.copy((o.material as THREE.MeshLambertMaterial).color);
+        const n = geo.attributes.position.count, col = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        return geo;
+      });
+      const merged = mergeGeometries(geos);
+      for (const geo of geos) geo.dispose();
+      if (merged) {
+        for (const o of plain) g.remove(o);
+        const mesh = new THREE.Mesh(merged, VCOLOR);
+        mesh.castShadow = true;
+        mesh.userData.baked = true;
+        g.add(mesh);
+      }
+    }
+    for (const child of [...g.children]) if (!(child instanceof THREE.Mesh)) visit(child);
+  };
+  visit(rig.root);
+  return rig;
+}
 
 export function animate(rig: Rig, s: AnimState) {
   const { body, legs, armL, armR, torso } = rig;
