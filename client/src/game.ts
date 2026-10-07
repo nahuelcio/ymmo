@@ -35,6 +35,11 @@ export interface CEnt {
   deadAt: number;
   height: number;
   radius: number;
+  /** hit reaction: time + direction away from the attacker */
+  hitAt: number;
+  hitDx: number;
+  hitDz: number;
+  hpFill: HTMLDivElement | null;
 }
 
 const INTERP_DELAY = 110;
@@ -237,6 +242,7 @@ export class Game {
   refreshLabel(c: CEnt) {
     const r = c.rec;
     const el = c.labelEl;
+    c.hpFill = null;
     if (r.k === 'p') {
       const self = r.id === this.me.id;
       const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : self ? '#ffffff' : '#7fc4ff';
@@ -259,6 +265,7 @@ export class Game {
         n.appendChild(l);
       }
       el.appendChild(n);
+      if (!self) this.addHpBar(c);
     } else if (r.k === 'm') {
       el.innerHTML = '';
       el.className = 'nameplate np-mob';
@@ -270,6 +277,7 @@ export class Game {
       l.textContent = `Lv ${r.l}`;
       n.appendChild(l);
       el.appendChild(n);
+      this.addHpBar(c);
     } else if (r.k === 'n') {
       el.innerHTML = '';
       el.className = 'nameplate np-npc';
@@ -284,6 +292,24 @@ export class Game {
       el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${ITEMS[r.item]?.name ?? r.item}${r.c > 1 ? ` (${r.c})` : ''}`;
       el.classList.add('np-item');
     }
+  }
+
+  private addHpBar(c: CEnt) {
+    const bar = document.createElement('div');
+    bar.className = 'np-hp';
+    c.hpFill = document.createElement('div');
+    bar.appendChild(c.hpFill);
+    c.labelEl.appendChild(bar);
+    this.updateHpBar(c);
+  }
+
+  /** Nameplate HP bar: only shown once damaged (or when targeted). */
+  private updateHpBar(c: CEnt) {
+    if (!c.hpFill) return;
+    c.hpFill.style.width = `${c.hp}%`;
+    c.hpFill.className = this.isHostile(c) || c.rec.k === 'm' ? 'hp-foe' : 'hp-friend';
+    const bar = c.hpFill.parentElement!;
+    bar.style.display = (c.hp < 100 || c.id === this.targetId) && !(c.flags & F_DEAD) ? 'block' : 'none';
   }
 
   private buildEnt(r: EntAdd): CEnt {
@@ -322,7 +348,7 @@ export class Game {
     root.add(obj);
     const c: CEnt = {
       id: r.id, rec: r, rig, root, model, hit, label: obj, labelEl: el, snaps: [], pos: new THREE.Vector3(r.x, heightAt(r.x, r.z), r.z),
-      ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
+      ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
     };
     this.refreshLabel(c);
     return c;
@@ -384,9 +410,11 @@ export class Game {
       if (!c) continue;
       const wasDead = (c.flags & F_DEAD) !== 0;
       const colorChanged = (c.flags & (F_RED | F_PURPLE | F_PVP)) !== (f & (F_RED | F_PURPLE | F_PVP));
+      const hpChanged = c.hp !== hp;
       c.hp = hp;
       c.flags = f;
       c.rec.hp = hp;
+      if (hpChanged || wasDead !== ((f & F_DEAD) !== 0)) this.updateHpBar(c);
       if (wasDead && !(f & F_DEAD)) c.deadAt = -1;
       if (!wasDead && f & F_DEAD && c.deadAt < 0) c.deadAt = performance.now();
       if (colorChanged) this.refreshLabel(c);
@@ -418,6 +446,15 @@ export class Game {
     if (m.miss) return this.floatText(t, 'Miss', 'f-miss');
     if (m.heal) return this.floatText(t, `+${m.v}`, 'f-heal');
     const mine = m.tg === this.me.id;
+    const src = this.ents.get(m.s);
+    if (src && src !== t) {
+      const dx = t.pos.x - src.pos.x, dz = t.pos.z - src.pos.z, d = Math.hypot(dx, dz) || 1;
+      t.hitAt = performance.now();
+      t.hitDx = dx / d;
+      t.hitDz = dz / d;
+    }
+    if (mine) this.cam.shake(m.crit ? 0.35 : 0.08);
+    else if (m.crit && m.s === this.me.id) this.cam.shake(0.12);
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
     if (m.crit && m.s === this.me.id) this.sys(`Critical hit! ${m.v} damage.`);
     if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
@@ -457,7 +494,11 @@ export class Game {
   // ---------------------------------------------------------------- actions
   setTarget(id: number | null) {
     if (this.targetId === id) return;
+    const prev = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
     this.targetId = id;
+    if (prev) this.updateHpBar(prev);
+    const cur = id !== null ? this.ents.get(id) : undefined;
+    if (cur) this.updateHpBar(cur);
     this.net.send({ t: 'target', id });
     this.ui.onTargetChanged();
   }
@@ -504,7 +545,26 @@ export class Game {
     }
   }
 
+  /** Our current target if it's a living enemy, else auto-pick the nearest one. */
+  private ensureEnemyTarget(): boolean {
+    const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+    if (cur && this.isHostile(cur)) return true;
+    if (cur && cur.rec.k === 'p' && this.ctrl) return true;
+    const self = this.self;
+    if (!self) return false;
+    let best: CEnt | null = null, bd = 25;
+    for (const c of this.ents.values()) {
+      if (c.rec.k !== 'm' || c.flags & F_DEAD) continue;
+      const d = c.pos.distanceTo(self.pos);
+      if (d < bd) { bd = d; best = c; }
+    }
+    if (best) this.setTarget(best.id);
+    return !!best;
+  }
+
   attackTarget() {
+    const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+    if (!cur || cur.flags & F_DEAD || (cur.rec.k !== 'n' && cur.rec.k !== 'i' && !this.isHostile(cur) && !this.ctrl)) this.ensureEnemyTarget();
     if (this.targetId === null) return;
     const c = this.ents.get(this.targetId);
     if (!c || c.rec.k === 'i') return;
@@ -513,6 +573,7 @@ export class Game {
   }
 
   useSkill(id: string) {
+    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No enemy nearby.');
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
   }
 
@@ -759,6 +820,17 @@ export class Game {
       }
       c.root.position.copy(c.pos);
       c.model.rotation.y = c.ry;
+      if (c.rig) {
+        const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;
+        if (hk > 0) {
+          c.model.position.set(c.hitDx * 0.18 * hk, 0, c.hitDz * 0.18 * hk);
+          c.model.scale.set(1 + 0.08 * hk, 1 - 0.06 * hk, 1 + 0.08 * hk);
+        } else if (c.hitAt) {
+          c.hitAt = 0;
+          c.model.position.set(0, 0, 0);
+          c.model.scale.set(1, 1, 1);
+        }
+      }
       const dSelf = self ? c.pos.distanceTo(self.pos) : 0;
       // far rigs are tiny on screen: skip their (per-bone) animation
       if (c.rig && dSelf < 60) {
