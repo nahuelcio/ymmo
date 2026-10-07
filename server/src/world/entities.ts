@@ -13,6 +13,10 @@ export interface Session {
   accountId: number;
   player: Player | null;
   send(msg: S2C): void;
+  /** Send an already-serialized message (lets broadcasts stringify once). */
+  sendRaw(json: string): void;
+  /** True when the socket has a large unsent backlog (slow client). */
+  congested(): boolean;
 }
 
 export type Intent =
@@ -59,7 +63,8 @@ export class Player extends Entity {
   party: Party | null = null;
   pendingInvite: { from: number; until: number } | null = null;
   talkingTo: number | null = null;
-  known = new Map<number, string>();
+  /** last update sent per known entity: [id, x, z, ry, hp, flags] */
+  known = new Map<number, number[]>();
   knownAv = new Map<number, number>();
   lastMe = '';
   invDirty = true;
@@ -88,6 +93,10 @@ export class Player extends Entity {
 
   send(msg: S2C): void {
     this.session.send(msg);
+  }
+
+  sendRaw(json: string): void {
+    this.session.sendRaw(json);
   }
 
   equipped(): ItemDef[] {
