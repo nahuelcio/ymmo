@@ -102,6 +102,7 @@ export function layoutTown(): TownL {
   }
   // merchant stalls behind NPCs
   for (const n of NPCS) {
+    if (n.kind === 'talker') continue;
     const dirX = Math.sin(n.ry), dirZ = Math.cos(n.ry);
     town.stalls.push({ x: n.x - dirX * 1.6, z: n.z - dirZ * 1.6, rot: n.ry, color: n.color });
   }

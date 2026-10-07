@@ -143,6 +143,16 @@ export class NpcPanel {
     const b = this.win.body;
     b.innerHTML = '';
     el('div', 'npc-greet', b, `"${m.greeting}"`);
+    if (m.kind === 'talker') {
+      const row = el('div', 'row', b);
+      const more = el('button', 'btn', row, 'Keep listening...');
+      more.onclick = () => g.net.send({ t: 'talk', id: m.npc });
+      const bye = el('button', 'btn', row, 'Slowly back away');
+      bye.onclick = () => this.win.hide();
+      const c = g.ents.get(m.npc);
+      if (c) g.speech(c, m.greeting);
+      return;
+    }
     if (m.kind === 'gatekeeper') {
       for (const d of m.dests ?? []) {
         const row = el('div', 'shop-row', b);
@@ -292,7 +302,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Loot</h4>
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Sell materials to any merchant.</p>
     <h4>Village of Dawn</h4>
-    <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b> the Gatekeeper, who teleports you to the hunting grounds.</p>
+    <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b> the Gatekeeper, who teleports you to the hunting grounds. Old <b>Luigi</b> by the fountain will happily tell you about the chat. At length.</p>
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, raid boss Kaim Vanul).</p>
     <h4>Party & PvP</h4>

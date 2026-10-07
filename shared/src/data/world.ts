@@ -31,10 +31,41 @@ export interface NpcDef {
   name: string;
   title: string;
   x: number; z: number; ry: number;
-  kind: 'shop' | 'gatekeeper';
+  kind: 'shop' | 'gatekeeper' | 'talker';
   shop?: string[];
   color: number;
   greeting: string;
+  /** talkers: random lines said on click and, now and then, out loud */
+  lines?: string[];
+  look?: { bald?: boolean; beard?: number; skin?: number };
+}
+
+const LUIGI_LINES = [
+  'In my day the chat had only one channel. And it was a pigeon.',
+  'Have you seen my /who? I left it right here, next to the shout.',
+  'Type ! before you speak, son, otherwise the chat cannot hear you. Or was it #?',
+  'They told me "whisper" so I whispered. Nobody answered. Typical chat.',
+  'The chat is down! ...no wait, I was reading the minimap.',
+  'Back when I was an adventurer we chatted in ALL CAPS and we LIKED IT.',
+  'I sent a party invite to a goblin once. He said "lol". Lovely chap.',
+  'Enter to chat, Escape to escape. Escape what? The chat, son. Nobody escapes the chat.',
+  '/loc says I am in the Village of Dawn. Lies. I am in the chat.',
+  'Somebody shouted "LF healer" in 1998 and I have been waiting ever since.',
+  'Is this the System tab? It smells like the System tab.',
+  'The chat log scrolls up when you are not looking. I have proof. Well, I had it.',
+  'My grandson says "brb". I said bring me back too. He never did.',
+  'Does this chat have emojis? I tried 💥 and a potion came out.',
+  'Whisper to me, whisper back, whisper louder... why is it called whisper if I type it?',
+  'In the old chronicles the chat was a scroll. You had to roll it. With your hands!',
+  'Hush! I am buffering. Wait. That is not me, that is the chat.',
+  'Two hundred characters per message is plenty. In my day we had three. "hi."',
+  'Have you met Roxxy? She teleports you. I teleport too, into the chat, look: hello.',
+  'Never type your password in the chat. I typed mine. It was "chat". Now everyone knows.',
+];
+
+export function randomLine(n: NpcDef): string {
+  const l = n.lines ?? [n.greeting];
+  return l[Math.floor(Math.random() * l.length)];
 }
 
 export const TELEPORTS = [
@@ -54,4 +85,6 @@ export const NPCS: NpcDef[] = [
     greeting: 'Protect yourself before you wreck yourself.' },
   { id: 'gatekeeper', name: 'Roxxy', title: 'Gatekeeper', x: 12, z: 12, ry: -Math.PI / 2, kind: 'gatekeeper', color: 0x8a3a8a,
     greeting: 'Where would you like to go? For a small fee, of course.' },
+  { id: 'luigi', name: 'Luigi', title: 'Village Elder (allegedly)', x: -3, z: -8.5, ry: 0, kind: 'talker', color: 0x7a7468,
+    greeting: 'Eh? Who is there? Is this the chat?', lines: LUIGI_LINES, look: { bald: true, beard: 0xe8e8e8, skin: 0xe0b090 } },
 ];

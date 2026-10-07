@@ -1,5 +1,5 @@
 import { MOBS } from '../../../shared/src/data/mobs';
-import { NPCS, ZONES, zoneAt } from '../../../shared/src/data/world';
+import { NPCS, randomLine, ZONES, zoneAt } from '../../../shared/src/data/world';
 import { skillsFor } from '../../../shared/src/data/skills';
 import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
@@ -211,12 +211,26 @@ export class World {
     if (this.tickN % 2 === 0) for (const p of this.players.values()) this.sendSnapshot(p, now);
     if (this.tickN % 4 === 0) for (const p of this.players.values()) this.sendSelf(p);
     if (this.tickN % 10 === 0) party.sendPartyUpdates(this);
+    if (this.tickN % 20 === 0) this.npcChatter(now);
     for (const p of this.players.values()) {
       if (p.invDirty) {
         p.invDirty = false;
         p.send({ t: 'inv', items: p.inv, adena: p.adena });
       }
     }
+  }
+
+  /** Talker NPCs (Luigi) mumble out loud every 20-45 s when someone is around. */
+  private npcChatter(now: number) {
+    for (const e of this.ents.values()) {
+      if (!(e instanceof Npc) || e.def.kind !== 'talker' || now < e.nextChatter) continue;
+      e.nextChatter = now + 20000 + Math.random() * 25000;
+      if (this.nearPlayers(e.x, e.z, 30).length) this.npcSay(e, randomLine(e.def));
+    }
+  }
+
+  npcSay(n: Npc, text: string) {
+    this.sendNear(n.x, n.z, { t: 'say', id: n.id, name: n.def.name, text }, 40);
   }
 
   entRecord(e: Entity, now: number): EntAdd {

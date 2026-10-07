@@ -42,6 +42,7 @@ export interface CEnt {
   hitDx: number;
   hitDz: number;
   hpFill: HTMLDivElement | null;
+  bubble?: HTMLDivElement | null;
 }
 
 const INTERP_DELAY = 110;
@@ -240,6 +241,11 @@ export class Game {
       this.ui.onInv();
     });
     n.on('dmg', (m) => this.onDmg(m));
+    n.on('say', (m) => {
+      this.ui.chat.add('all', m.name, m.text);
+      const c = this.ents.get(m.id);
+      if (c) this.speech(c, m.text);
+    });
     n.on('atk', (m) => {
       const s = this.ents.get(m.s), t = this.ents.get(m.tg);
       if (!s) return;
@@ -477,6 +483,23 @@ export class Game {
       this.removeEnt(id);
     }
     if (add.length) this.ui.onTargetChanged();
+  }
+
+  /** Speech bubble above an entity's head for a few seconds. */
+  speech(c: CEnt, text: string) {
+    c.bubble?.remove();
+    const el = document.createElement('div');
+    el.className = 'speech';
+    el.textContent = text;
+    const obj = new CSS2DObject(el);
+    obj.position.set(0, c.height + 1.35, 0);
+    c.root.add(obj);
+    c.bubble = el;
+    setTimeout(() => {
+      c.root.remove(obj);
+      el.remove();
+      if (c.bubble === el) c.bubble = null;
+    }, 6000);
   }
 
   private floatText(c: CEnt, text: string, cls: string) {

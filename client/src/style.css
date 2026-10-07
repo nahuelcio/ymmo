@@ -310,3 +310,5 @@ input { font: inherit; user-select: text; }
 .set-row input[type=checkbox] { accent-color: #c8a050; width: 15px; height: 15px; }
 .set-hint { margin-top: 8px; }
 .set-foot { margin-top: 8px; justify-content: flex-end; }
+.speech { max-width: 220px; white-space: normal; background: rgba(250, 245, 230, 0.95); color: #2a2418; font-size: 12px; padding: 5px 8px; border-radius: 8px; border: 1px solid #8a7a50; box-shadow: 0 2px 6px rgba(0,0,0,0.5); pointer-events: none; text-align: center; }
+.speech::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: rgba(250, 245, 230, 0.95); }

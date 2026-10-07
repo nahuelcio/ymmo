@@ -165,6 +165,7 @@ export class Mob extends Entity {
 
 export class Npc extends Entity {
   readonly kind = 'npc' as const;
+  nextChatter = 0;
   constructor(id: number, public def: NpcDef) {
     super(id, def.x, def.z);
     this.ry = def.ry;

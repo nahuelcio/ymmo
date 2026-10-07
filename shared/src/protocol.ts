@@ -84,7 +84,9 @@ export type S2C =
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[] }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'party'; members: PartyMember[] | null }
-  | { t: 'teleported' };
+  | { t: 'teleported' }
+  /** an NPC says something out loud (speech bubble + local chat) */
+  | { t: 'say'; id: number; name: string; text: string };

@@ -1,5 +1,5 @@
 import { ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
-import { TELEPORTS } from '../../../shared/src/data/world';
+import { randomLine, TELEPORTS } from '../../../shared/src/data/world';
 import { GroundItem, Mob, Npc, Player } from '../world/entities';
 import { dist, type World } from '../world/World';
 
@@ -111,7 +111,7 @@ export function openNpc(w: World, p: Player, n: Npc) {
   p.talkingTo = n.id;
   const d = n.def;
   p.send({
-    t: 'npc', npc: n.id, kind: d.kind, name: d.name, title: d.title, greeting: d.greeting, shop: d.shop,
+    t: 'npc', npc: n.id, kind: d.kind, name: d.name, title: d.title, greeting: d.kind === 'talker' ? randomLine(d) : d.greeting, shop: d.shop,
     dests: d.kind === 'gatekeeper' ? TELEPORTS.map((t) => ({ id: t.id, name: t.name, cost: t.cost })) : undefined,
   });
 }
