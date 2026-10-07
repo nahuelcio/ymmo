@@ -43,3 +43,15 @@ shared/src   protocol.ts, formulas.ts, terrain.ts, data/*
 server/src   index.ts (http+ws), db.ts, world/World.ts, world/entities.ts, systems/{player,combat,ai,inventory,party,chat}.ts
 client/src   main.ts (login), game.ts (núcleo), render/{scene,models,camera,fx}.ts, ui/*
 ```
+
+## Deploy en un VPS (Ubuntu/Debian)
+
+Como root, en el servidor:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.sh | bash
+# con dominio y HTTPS (el dominio tiene que apuntar a la IP del VPS):
+curl -fsSL https://raw.githubusercontent.com/nahuelcio/ymmo/main/deploy/install.sh | bash -s mijuego.com
+```
+
+Instala Node 22, deja el juego como servicio `claudi-mmo` (systemd) detrás de nginx (con WebSocket), abre el firewall y programa un backup diario de la base en `/var/backups/claudi-mmo`. Para actualizar: `bash /opt/claudi-mmo/deploy/update.sh`. Logs: `journalctl -u claudi-mmo -f`.
