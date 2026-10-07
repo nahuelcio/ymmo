@@ -78,10 +78,11 @@ export class Game {
     this.inv = enter.inv;
     this.adena = enter.self.adena;
     const host = document.getElementById('game')!;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // Antialiasing is redundant on high-DPI screens; cap the pixel ratio to keep fill-rate sane.
+    this.renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.5, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     host.appendChild(this.renderer.domElement);
     this.labels = new CSS2DRenderer();
     this.labels.domElement.className = 'labels';
@@ -264,9 +265,8 @@ export class Game {
     if (!c) return;
     this.world.scene.remove(c.root);
     c.label.element.remove();
-    c.root.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose();
-    });
+    // model geometries are shared (see models.ts); only the hitbox is per-entity
+    c.hit.geometry.dispose();
     this.hitboxes = this.hitboxes.filter((h) => h !== c.hit);
     this.ents.delete(id);
   }
@@ -588,7 +588,9 @@ export class Game {
       }
       c.root.position.copy(c.pos);
       c.model.rotation.y = c.ry;
-      if (c.rig) {
+      const dSelf = self ? c.pos.distanceTo(self.pos) : 0;
+      // far rigs are tiny on screen: skip their (per-bone) animation
+      if (c.rig && dSelf < 60) {
         animate(c.rig, {
           moving: (c.flags & F_MOVING) !== 0,
           atkAge: now - c.atkAt,
@@ -596,12 +598,12 @@ export class Game {
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
         });
-      } else {
+      } else if (!c.rig) {
         c.model.rotation.y = tSec * 1.5;
         c.model.position.y = 0.1 + Math.sin(tSec * 3 + c.id) * 0.05;
       }
       if (self) {
-        const d = c.pos.distanceTo(self.pos);
+        const d = dSelf;
         const show = c.id === this.targetId || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
         c.label.visible = show;
       }
@@ -614,7 +616,8 @@ export class Game {
     const t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
     if (t) {
       this.targetRing.visible = true;
-      this.targetRing.position.copy(t.pos).add(new THREE.Vector3(0, 0.12, 0));
+      this.targetRing.position.copy(t.pos);
+      this.targetRing.position.y += 0.12;
       const s = Math.max(0.7, t.radius * 1.4);
       this.targetRing.scale.setScalar(s + Math.sin(tSec * 5) * 0.05);
       (this.targetRing.material as THREE.MeshBasicMaterial).color.set(

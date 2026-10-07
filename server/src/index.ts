@@ -28,7 +28,13 @@ class Session implements ISession {
   msgCount = 0;
   constructor(public ws: WebSocket) {}
   send(msg: S2C) {
-    if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(msg));
+    this.sendRaw(JSON.stringify(msg));
+  }
+  sendRaw(json: string) {
+    if (this.ws.readyState === this.ws.OPEN) this.ws.send(json);
+  }
+  congested() {
+    return this.ws.bufferedAmount > 256 * 1024;
   }
 }
 
@@ -129,7 +135,11 @@ const server = createServer((req, res) => {
   res.end(readFileSync(file));
 });
 
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
+// Snapshots are repetitive JSON: deflate shrinks them ~4-6x for a little CPU (level 1, small window).
+const wss = new WebSocketServer({
+  server, path: '/ws', maxPayload: 16 * 1024,
+  perMessageDeflate: { threshold: 256, zlibDeflateOptions: { level: 1, memLevel: 7 }, serverMaxWindowBits: 12, concurrencyLimit: 8 },
+});
 wss.on('connection', (ws) => {
   const s = new Session(ws);
   sessions.add(s);

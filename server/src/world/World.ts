@@ -125,11 +125,13 @@ export class World {
   }
 
   sendNear(x: number, z: number, msg: S2C, r = AOI) {
-    for (const p of this.nearPlayers(x, z, r)) p.send(msg);
+    let json: string | undefined;
+    for (const p of this.nearPlayers(x, z, r)) p.sendRaw((json ??= JSON.stringify(msg)));
   }
 
   broadcast(msg: S2C) {
-    for (const p of this.players.values()) p.send(msg);
+    const json = JSON.stringify(msg);
+    for (const p of this.players.values()) p.sendRaw(json);
   }
 
   sys(p: Player, text: string) {
@@ -209,20 +211,22 @@ export class World {
   }
 
   private sendSnapshot(p: Player, now: number) {
+    // slow client: let the socket drain; the next snapshot diffs against what it last got
+    if (p.session.congested()) return;
     const add: EntAdd[] = [];
     const upd: EntUpd[] = [];
     const seen = new Set<number>();
     for (const e of this.near(p.x, p.z, AOI)) {
       seen.add(e.id);
       const u: EntUpd = [e.id, round2(e.x), round2(e.z), round2(e.ry), e.hpPct(), e.flags(now)];
-      const sig = u.join(',');
-      if (!p.known.has(e.id) || p.knownAv.get(e.id) !== e.av) {
+      const prev = p.known.get(e.id);
+      if (!prev || p.knownAv.get(e.id) !== e.av) {
         add.push(this.entRecord(e, now));
         p.knownAv.set(e.id, e.av);
-        p.known.set(e.id, sig);
-      } else if (p.known.get(e.id) !== sig) {
+        p.known.set(e.id, u);
+      } else if (prev[1] !== u[1] || prev[2] !== u[2] || prev[3] !== u[3] || prev[4] !== u[4] || prev[5] !== u[5]) {
         upd.push(u);
-        p.known.set(e.id, sig);
+        p.known.set(e.id, u);
       }
     }
     const gone: number[] = [];

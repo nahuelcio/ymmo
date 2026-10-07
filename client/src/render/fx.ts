@@ -7,6 +7,14 @@ interface Fx {
   update: (k: number) => void;
 }
 
+// Effect geometries are shared by every effect instance; only materials are per-effect.
+const GEO = {
+  orb: new THREE.IcosahedronGeometry(1, 1),
+  ring: new THREE.RingGeometry(0.8, 1, 32),
+  pillar: new THREE.CylinderGeometry(0.9, 0.9, 1, 16, 1, true),
+  spark: new THREE.OctahedronGeometry(0.08, 0),
+};
+
 /** Tiny effect system: projectiles, bursts, rings and pillars of light. */
 export class FxManager {
   private list: Fx[] = [];
@@ -22,7 +30,8 @@ export class FxManager {
   }
 
   projectile(from: THREE.Vector3, to: () => THREE.Vector3, color: number, dur = 300, size = 0.25) {
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(size, 1), this.glow(color));
+    const m = new THREE.Mesh(GEO.orb, this.glow(color));
+    m.scale.setScalar(size);
     const start = from.clone();
     this.add(m, dur, (k) => {
       m.position.lerpVectors(start, to(), k);
@@ -32,7 +41,7 @@ export class FxManager {
   }
 
   burst(pos: THREE.Vector3, color: number, size = 1, dur = 400) {
-    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), this.glow(color, 0.8));
+    const m = new THREE.Mesh(GEO.orb, this.glow(color, 0.8));
     m.position.copy(pos);
     this.add(m, dur, (k) => {
       m.scale.setScalar(size * (0.2 + k));
@@ -41,7 +50,7 @@ export class FxManager {
   }
 
   ring(pos: THREE.Vector3, color: number, radius = 2, dur = 600) {
-    const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 32), this.glow(color));
+    const m = new THREE.Mesh(GEO.ring, this.glow(color));
     m.rotation.x = -Math.PI / 2;
     m.position.copy(pos).add(new THREE.Vector3(0, 0.1, 0));
     this.add(m, dur, (k) => {
@@ -51,10 +60,11 @@ export class FxManager {
   }
 
   pillar(pos: THREE.Vector3, color: number, dur = 1500, height = 6) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, height, 16, 1, true), this.glow(color, 0.5));
+    const m = new THREE.Mesh(GEO.pillar, this.glow(color, 0.5));
+    m.scale.y = height;
     m.position.copy(pos).add(new THREE.Vector3(0, height / 2, 0));
     this.add(m, dur, (k) => {
-      m.scale.set(1 - k * 0.6, 1, 1 - k * 0.6);
+      m.scale.set(1 - k * 0.6, height, 1 - k * 0.6);
       (m.material as THREE.MeshBasicMaterial).opacity = 0.5 * (1 - k);
       m.rotation.y += 0.05;
     });
@@ -66,7 +76,7 @@ export class FxManager {
     const mat = this.glow(color);
     const parts: THREE.Mesh[] = [];
     for (let i = 0; i < 10; i++) {
-      const p = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), mat);
+      const p = new THREE.Mesh(GEO.spark, mat);
       const a = (i / 10) * Math.PI * 2;
       p.userData = { a, r: 0.5 + Math.random() * 0.4, s: 0.5 + Math.random() };
       parts.push(p);
@@ -88,10 +98,7 @@ export class FxManager {
       if (k >= 1) {
         this.scene.remove(f.obj);
         f.obj.traverse((o) => {
-          if (o instanceof THREE.Mesh) {
-            o.geometry.dispose();
-            (o.material as THREE.Material).dispose();
-          }
+          if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose();
         });
         return false;
       }

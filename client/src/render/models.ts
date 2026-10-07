@@ -25,8 +25,28 @@ export interface AnimState {
   t: number; // seconds
 }
 
+/**
+ * Geometries are shared between every model that uses an identical shape, so spawning
+ * an entity doesn't upload new buffers to the GPU. Keyed by type + vertex positions
+ * (covers rotateX() & co). Shared geometries must never be disposed.
+ */
+const geoCache = new Map<string, THREE.BufferGeometry>();
+function shared(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position').array;
+  let h = 0;
+  for (let i = 0; i < pos.length; i++) h = (Math.imul(h, 31) + Math.round(pos[i] * 1e4)) | 0;
+  const key = `${geo.type}:${pos.length}:${h}`;
+  const hit = geoCache.get(key);
+  if (hit) {
+    geo.dispose();
+    return hit;
+  }
+  geoCache.set(key, geo);
+  return geo;
+}
+
 function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat(color));
+  const m = new THREE.Mesh(shared(geo), mat(color));
   m.position.set(x, y, z);
   m.castShadow = true;
   return m;
