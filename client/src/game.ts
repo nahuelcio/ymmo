@@ -11,6 +11,8 @@ import { FxManager } from './render/fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, type Rig } from './render/models';
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
+import { PostFX } from './render/post';
+import { settings, type Settings } from './settings';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -103,6 +105,11 @@ export class Game {
   private clickMarker: THREE.Mesh;
   private clickAt = 0;
   private hoverRing: THREE.Mesh;
+  private post: PostFX;
+  private fpsEl: HTMLDivElement;
+  private lastRender = 0;
+  private fpsFrames = 0;
+  private fpsAt = 0;
   private hoverId: number | null = null;
   /** Client-side predicted move destination for our own character. */
   private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[] } | null = null;
@@ -117,11 +124,8 @@ export class Game {
     this.inv = enter.inv;
     this.adena = enter.self.adena;
     const host = document.getElementById('game')!;
-    // Antialiasing is redundant on high-DPI screens; cap the pixel ratio to keep fill-rate sane.
-    this.renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 1.5, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // MSAA, shadows, resolution etc. come from the settings (see applySettings / PostFX)
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     host.appendChild(this.renderer.domElement);
     this.labels = new CSS2DRenderer();
     this.labels.domElement.className = 'labels';
@@ -131,6 +135,10 @@ export class Game {
     this.world = createWorldScene();
     this.cam = new CameraController(this.camera, this.renderer.domElement);
     this.fx = new FxManager(this.world.scene);
+    this.post = new PostFX(this.renderer, this.world.scene, this.camera);
+    this.fpsEl = document.createElement('div');
+    this.fpsEl.className = 'fps';
+    host.appendChild(this.fpsEl);
 
     const glow = (c: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 40), glow(0xff4444));
@@ -149,7 +157,8 @@ export class Game {
     this.bindNet();
     this.bindInput();
     addEventListener('resize', () => this.resize());
-    this.resize();
+    this.applySettings(settings.s, Object.keys(settings.s) as (keyof Settings)[]);
+    settings.on((s, changed) => this.applySettings(s, changed));
     this.ui.onMe();
     this.ui.onInv();
     this.renderer.setAnimationLoop(() => this.frame());
@@ -165,6 +174,49 @@ export class Game {
     this.labels.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.post.resize();
+  }
+
+  private applySettings(s: Settings, changed: (keyof Settings)[]) {
+    const has = (...k: (keyof Settings)[]) => k.some((x) => changed.includes(x));
+    if (has('renderScale')) {
+      this.renderer.setPixelRatio(Math.max(0.4, Math.min(3, Math.min(devicePixelRatio, 1.5) * s.renderScale)));
+      this.resize();
+    }
+    if (has('shadows')) {
+      const sun = this.world.sun;
+      const on = s.shadows !== 'off';
+      if (this.renderer.shadowMap.enabled !== on) {
+        this.renderer.shadowMap.enabled = on;
+        // shadow on/off changes shader programs
+        this.world.scene.traverse((o) => {
+          const m = (o as THREE.Mesh).material;
+          if (m) for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true;
+        });
+      }
+      this.renderer.shadowMap.type = s.shadows === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      const size = s.shadows === 'low' ? 1024 : s.shadows === 'medium' ? 2048 : 4096;
+      sun.shadow.mapSize.set(size, size);
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+    }
+    if (has('viewDistance')) {
+      const fog = this.world.scene.fog as THREE.Fog;
+      fog.far = s.viewDistance;
+      fog.near = s.viewDistance * 0.22;
+      this.camera.far = s.viewDistance + 80;
+      this.camera.updateProjectionMatrix();
+    }
+    if (PostFX.needsRebuild(changed)) this.post.rebuild(s);
+    else this.post.tune(s);
+    if (has('showFps')) this.fpsEl.style.display = s.showFps ? 'block' : 'none';
+    // HUD
+    const root = document.documentElement.style;
+    root.setProperty('--ui-scale', String(s.uiScale));
+    root.setProperty('--chat-alpha', String(s.chatOpacity));
+    document.body.classList.toggle('no-hpbars', !s.hpBars);
+    document.body.classList.toggle('no-minimap', !s.minimap);
+    this.labels.domElement.style.display = s.nameplates ? '' : 'none';
   }
 
   sys(text: string) {
@@ -428,6 +480,7 @@ export class Game {
   }
 
   private floatText(c: CEnt, text: string, cls: string) {
+    if (!settings.s.damageNumbers) return;
     const el = document.createElement('div');
     el.className = `floater ${cls}`;
     el.textContent = text;
@@ -453,8 +506,10 @@ export class Game {
       t.hitDx = dx / d;
       t.hitDz = dz / d;
     }
-    if (mine) this.cam.shake(m.crit ? 0.35 : 0.08);
-    else if (m.crit && m.s === this.me.id) this.cam.shake(0.12);
+    if (settings.s.screenShake) {
+      if (mine) this.cam.shake(m.crit ? 0.35 : 0.08);
+      else if (m.crit && m.s === this.me.id) this.cam.shake(0.12);
+    }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
     if (m.crit && m.s === this.me.id) this.sys(`Critical hit! ${m.v} damage.`);
     if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
@@ -692,6 +747,7 @@ export class Game {
         case 'c': this.ui.character.win.toggle(); break;
         case 'm': this.ui.minimap.toggleMap(); break;
         case 'h': this.ui.help.toggle(); break;
+        case 'o': this.ui.settings.win.toggle(); break;
         case 'p': this.ui.party.toggle(); break;
         case 'z': this.pickupNearest(); break;
         case ' ': e.preventDefault(); this.attackTarget(); break;
@@ -784,6 +840,15 @@ export class Game {
 
   private frame() {
     const now = performance.now();
+    const cap = settings.s.fpsCap;
+    if (cap && now - this.lastRender < 1000 / cap - 1.5) return;
+    this.lastRender = now;
+    this.fpsFrames++;
+    if (now - this.fpsAt >= 500) {
+      if (settings.s.showFps) this.fpsEl.textContent = `${Math.round((this.fpsFrames * 1000) / (now - this.fpsAt))} FPS`;
+      this.fpsFrames = 0;
+      this.fpsAt = now;
+    }
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     const rt = now - INTERP_DELAY;
@@ -881,7 +946,7 @@ export class Game {
     }
     this.fx.update();
     this.ui.update(now);
-    this.renderer.render(this.world.scene, this.camera);
+    this.post.render();
     this.labels.render(this.world.scene, this.camera);
   }
 }

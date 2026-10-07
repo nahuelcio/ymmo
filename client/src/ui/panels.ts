@@ -300,7 +300,7 @@ export function createHelp(root: HTMLElement): Win {
     PvP is <b>off</b> by default: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. <b>Ctrl+click</b> a PvP player to force attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives you karma and turns you <span style="color:#ff4040">red</span> — red players may drop items on death.</p>
     <h4>Windows</h4>
-    <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>Enter</b> chat · <b>Esc</b> close/clear target</p>
+    <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>O</b> settings · <b>Enter</b> chat · <b>Esc</b> close/clear target</p>
   </div>`;
   return w;
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { heightAt } from '../../../shared/src/terrain';
+import { settings } from '../settings';
 
 /** L2-style third person orbit camera: right-drag rotates, wheel zooms. */
 export class CameraController {
@@ -31,8 +32,9 @@ export class CameraController {
     });
     el.addEventListener('pointermove', (e) => {
       if (!this.dragging) return;
-      this.yaw -= (e.clientX - this.lastX) * 0.006;
-      this.pitch = Math.min(1.35, Math.max(0.05, this.pitch + (e.clientY - this.lastY) * 0.005));
+      const k = settings.s.camSensitivity, inv = settings.s.invertY ? -1 : 1;
+      this.yaw -= (e.clientX - this.lastX) * 0.006 * k;
+      this.pitch = Math.min(1.35, Math.max(0.05, this.pitch + (e.clientY - this.lastY) * 0.005 * k * inv));
       this.lastX = e.clientX;
       this.lastY = e.clientY;
     });

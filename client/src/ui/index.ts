@@ -3,6 +3,7 @@ import { Chat } from './chat';
 import { Win } from './dom';
 import { Hud } from './hud';
 import { Minimap } from './minimap';
+import { SettingsPanel } from './settings';
 import { CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
 
 export class UI {
@@ -16,6 +17,7 @@ export class UI {
   minimap: Minimap;
   dialogs: Dialogs;
   help: Win;
+  settings: SettingsPanel;
 
   constructor(private g: Game) {
     this.root = document.getElementById('ui')!;
@@ -29,6 +31,7 @@ export class UI {
     this.minimap = new Minimap(g, this.root);
     this.dialogs = new Dialogs(g, this.root);
     this.help = createHelp(this.root);
+    this.settings = new SettingsPanel(this.root);
     let seen = false;
     try {
       seen = localStorage.getItem('helpSeen') === '1';

@@ -76,6 +76,7 @@ export class Hud {
     btn('Inventory', 'I', () => g.ui.inventory.win.toggle());
     btn('Map', 'M', () => g.ui.minimap.toggleMap());
     btn('Help', 'H', () => g.ui.help.toggle());
+    btn('⚙ Settings', 'O', () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: OFF');
     this.pvpBtn.title = 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).';
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
