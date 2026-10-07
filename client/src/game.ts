@@ -8,7 +8,7 @@ import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
-import { findPath, pushOut } from '../../shared/src/collision';
+import { dashEnd, findPath, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
@@ -18,7 +18,7 @@ import { UI } from './ui';
 import { PostFX } from './render/post';
 import { settings, type Settings } from './settings';
 import { play, type Sfx } from './audio';
-import { STATUS_MASK, statusIcons } from '../../shared/src/status';
+import { STATUS_MASK, STATUSES, statusIcons } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -47,6 +47,9 @@ export interface CEnt {
   hitAt: number;
   hitDx: number;
   hitDz: number;
+  /** dodge roll animation: start time and (own character only) the predicted path */
+  rollAt?: number;
+  roll?: { fx: number; fz: number; tx: number; tz: number; ry: number };
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
   /** quest giver's floating ! / ? */
@@ -59,6 +62,8 @@ const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const PREDICT_SETTLE_MS = 600;
 /** Local prediction is discarded beyond this much disagreement with the server. */
 const PREDICT_MAX_ERR = 4;
+/** Dodge roll animation length. */
+const ROLL_MS = 280;
 
 type Pick = { ent?: CEnt; point?: THREE.Vector3 };
 
@@ -719,7 +724,10 @@ export class Game {
       return;
     }
     if (skill === 'dash') {
-      play('dash', this.near(s));
+      if (s !== this.self || !s.rollAt || performance.now() - s.rollAt > ROLL_MS) {
+        play('dash', this.near(s));
+        s.rollAt = performance.now();
+      }
       this.fx.ring(s.pos.clone(), 0xcfe6ff, 1.6, 350);
       return;
     }
@@ -834,14 +842,40 @@ export class Game {
   dash() {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
-    let x = self.pos.x + Math.sin(self.ry) * 6, z = self.pos.z + Math.cos(self.ry) * 6;
-    if (this.lastPointer) {
+    // toward the cursor; facing direction if the cursor is on the character (or off the ground)
+    let dx = Math.sin(self.ry), dz = Math.cos(self.ry);
+    if (this.lastPointer && !this.joy) {
       const v = new THREE.Vector2((this.lastPointer.x / innerWidth) * 2 - 1, -(this.lastPointer.y / innerHeight) * 2 + 1);
       this.raycaster.setFromCamera(v, this.camera);
       const hit = this.raycaster.intersectObject(this.world.terrain, true)[0];
-      if (hit) ({ x, z } = hit.point);
+      const hx = hit ? hit.point.x - self.pos.x : 0, hz = hit ? hit.point.z - self.pos.z : 0;
+      const d = Math.hypot(hx, hz);
+      if (d > 1.2) {
+        dx = hx / d;
+        dz = hz / d;
+      }
+    } else if (this.joy) {
+      const d = Math.hypot(this.joy.dx, this.joy.dy);
+      if (d > 0.1) {
+        // joystick is screen-space: rotate by the camera yaw
+        const fwd = new THREE.Vector3();
+        this.camera.getWorldDirection(fwd);
+        const fl = Math.hypot(fwd.x, fwd.z) || 1;
+        const fx = fwd.x / fl, fz = fwd.z / fl;
+        dx = (fx * -this.joy.dy + -fz * this.joy.dx) / d;
+        dz = (fz * -this.joy.dy + fx * this.joy.dx) / d;
+      }
     }
-    this.serverAction({ t: 'dash', x, z });
+    const now = performance.now();
+    const ready = (this.cooldowns.get('dash')?.end ?? 0) <= now && !(self.flags & STATUSES.stun.flag);
+    if (ready) {
+      // predict the roll locally so it starts on the key press, not a round-trip later
+      const end = dashEnd(self.pos.x, self.pos.z, dx, dz);
+      self.rollAt = now;
+      self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz) };
+      play('dash');
+    }
+    this.serverAction({ t: 'dash', x: self.pos.x + dx * 6, z: self.pos.z + dz * 6 });
   }
 
   /** Virtual joystick (mobile): dx/dy in -1..1, screen space; null when released. */
@@ -1044,6 +1078,18 @@ export class Game {
    * Returns whether the character is moving (for animation).
    */
   private updateSelf(c: CEnt, now: number, dt: number): boolean {
+    if (c.roll && c.rollAt) {
+      const k = (now - c.rollAt) / ROLL_MS;
+      if (k < 1) {
+        const e = 1 - (1 - k) * (1 - k); // ease out
+        c.pos.x = c.roll.fx + (c.roll.tx - c.roll.fx) * e;
+        c.pos.z = c.roll.fz + (c.roll.tz - c.roll.fz) * e;
+        c.pos.y = heightAt(c.pos.x, c.pos.z);
+        c.ry = c.roll.ry;
+        return false;
+      }
+      c.roll = undefined;
+    }
     const s = c.snaps;
     const srv = s[s.length - 1];
     const pr = this.predict;
@@ -1152,6 +1198,25 @@ export class Game {
           c.model.scale.set(1 + 0.08 * hk, 1 - 0.06 * hk, 1 + 0.08 * hk);
         } else if (c.hitAt) {
           c.hitAt = 0;
+          c.model.position.set(0, 0, 0);
+          c.model.scale.set(1, 1, 1);
+        }
+      }
+      if (c.rig && c.rollAt) {
+        // forward tumble around the body's centre, tucked in
+        const k = (now - c.rollAt) / ROLL_MS;
+        const h = c.height * 0.5;
+        if (k < 1) {
+          const th = (1 - (1 - k) * (1 - k)) * Math.PI * 2;
+          const tuck = Math.sin(k * Math.PI);
+          c.model.rotation.order = 'YXZ';
+          c.model.rotation.x = th;
+          const fwd = -h * Math.sin(th);
+          c.model.position.set(Math.sin(c.ry) * fwd, h - h * Math.cos(th) - tuck * h * 0.35, Math.cos(c.ry) * fwd);
+          c.model.scale.set(1, 1 - tuck * 0.25, 1);
+        } else {
+          c.rollAt = 0;
+          c.model.rotation.x = 0;
           c.model.position.set(0, 0, 0);
           c.model.scale.set(1, 1, 1);
         }

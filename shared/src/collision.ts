@@ -280,3 +280,15 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
   }
   return out;
 }
+
+export const DASH_DIST = 6;
+/** End of a dodge roll from (x,z) along unit (dx,dz): 0.5 m steps, stops at walls. Shared so the client predicts it exactly. */
+export function dashEnd(x: number, z: number, dx: number, dz: number, r = WALK_RADIUS): { x: number; z: number } {
+  for (let s = 0; s < DASH_DIST * 2; s++) {
+    const np = pushOut(x + dx * 0.5, z + dz * 0.5, r);
+    if (Math.hypot(np.x - x, np.z - z) < 0.15) break; // ran into a wall
+    x = np.x;
+    z = np.z;
+  }
+  return { x, z };
+}

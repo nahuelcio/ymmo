@@ -5,7 +5,7 @@ import { skillsFor } from '../../../shared/src/data/skills';
 import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
-import { findPath, lineClear, pushOut } from '../../../shared/src/collision';
+import { dashEnd, findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
 import { campName, npcLines, type Lang } from '../../../shared/src/i18n';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
@@ -316,11 +316,8 @@ export class World {
     }
     dx /= d;
     dz /= d;
-    for (let s = 0; s < 12; s++) {
-      const np = pushOut(p.x + dx * 0.5, p.z + dz * 0.5, p.radius);
-      if (Math.hypot(np.x - p.x, np.z - p.z) < 0.15) break; // ran into a wall
-      this.setPos(p, np.x, np.z);
-    }
+    const end = dashEnd(p.x, p.z, dx, dz, p.radius);
+    this.setPos(p, end.x, end.z);
     p.ry = Math.atan2(dx, dz);
     p.intent = null;
     p.casting = null;
