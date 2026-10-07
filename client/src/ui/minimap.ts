@@ -51,7 +51,7 @@ export class Minimap {
     zout.onclick = () => (this.viewR = Math.min(300, this.viewR / 0.75));
     this.canvas.onclick = () => this.toggleMap();
 
-    this.mapWin = new Win('worldmap', 'World Map — Aden Frontier', 200, 60, 540, root);
+    this.mapWin = new Win('worldmap', 'Mapa del Mundo — Frontera de Aden', 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = 512;
   }

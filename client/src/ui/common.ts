@@ -1,6 +1,8 @@
-import { GRADE_COLOR, ITEMS } from '../../../shared/src/data/items';
+import { GRADE_COLOR, ITEMS, type Slot } from '../../../shared/src/data/items';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { el, esc } from './dom';
+export const SLOT_NAME: Record<Slot, string> = { head: 'Cabeza', weapon: 'Arma', chest: 'Torso', gloves: 'Guantes', legs: 'Piernas', feet: 'Pies' };
+export const WEAPON_TYPE: Record<string, string> = { sword: 'Espada', staff: 'Báculo', blunt: 'Contundente' };
 
 export function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
@@ -28,20 +30,20 @@ export function itemTip(itemId: string, count = 1): string {
   const d = ITEMS[itemId];
   if (!d) return '';
   const lines: string[] = [];
-  const gradeTxt = d.grade ? ` <span style="color:${GRADE_COLOR[d.grade]}">[${d.grade === 'NG' ? 'No Grade' : d.grade + '-Grade'}]</span>` : '';
+  const gradeTxt = d.grade ? ` <span style="color:${GRADE_COLOR[d.grade]}">[${d.grade === 'NG' ? 'Sin grado' : 'Grado ' + d.grade}]</span>` : '';
   lines.push(`<div class="tt-title">${esc(d.name)}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
-  if (d.type === 'weapon') lines.push(`P.Atk ${d.pAtk} &nbsp; M.Atk ${d.mAtk}<br><span class="tt-dim">${d.weaponType}</span>`);
-  if (d.type === 'armor') lines.push(`P.Def ${d.pDef ?? 0}${d.mDef ? ` &nbsp; M.Def ${d.mDef}` : ''}${d.mp ? ` &nbsp; MP +${d.mp}` : ''}<br><span class="tt-dim">${d.slot}</span>`);
+  if (d.type === 'weapon') lines.push(`Atq.F ${d.pAtk} &nbsp; Atq.M ${d.mAtk}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}</span>`);
+  if (d.type === 'armor') lines.push(`Def.F ${d.pDef ?? 0}${d.mDef ? ` &nbsp; Def.M ${d.mDef}` : ''}${d.mp ? ` &nbsp; MP +${d.mp}` : ''}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
   if (d.desc) lines.push(esc(d.desc));
-  if (d.type !== 'currency') lines.push(`<span class="tt-dim">Value: ${d.price} adena</span>`);
+  if (d.type !== 'currency') lines.push(`<span class="tt-dim">Valor: ${d.price} de adena</span>`);
   return lines.join('<br>');
 }
 
 export function skillTip(skillId: string): string {
   const s = SKILLS[skillId];
   if (!s) return '';
-  return `<div class="tt-title">${esc(s.name)} <span class="tt-dim">Lv ${s.level}</span></div>${esc(s.desc)}<br>
-    <span class="tt-dim">MP ${s.mp} · Cast ${(s.cast / 1000).toFixed(1)}s · Reuse ${(s.cooldown / 1000).toFixed(0)}s${s.range > 3 ? ` · Range ${s.range}` : ''}</span>`;
+  return `<div class="tt-title">${esc(s.name)} <span class="tt-dim">Nv ${s.level}</span></div>${esc(s.desc)}<br>
+    <span class="tt-dim">MP ${s.mp} · Lanzamiento ${(s.cast / 1000).toFixed(1)} s · Recarga ${(s.cooldown / 1000).toFixed(0)} s${s.range > 3 ? ` · Alcance ${s.range}` : ''}</span>`;
 }
 
 export function bar(parent: HTMLElement, cls: string): { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement; set(cur: number, max: number): void } {

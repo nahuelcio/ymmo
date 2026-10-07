@@ -61,11 +61,11 @@ const qInsAccount = db.prepare('INSERT INTO accounts (user, hash, created) VALUE
 export function login(user: string, pass: string, register: boolean): number | string {
   const row = qAccount.get(user) as { id: number; hash: string } | undefined;
   if (register) {
-    if (row) return 'That account name is taken.';
+    if (row) return 'Ese nombre de cuenta ya está en uso.';
     const r = qInsAccount.run(user, hashPass(pass), Date.now());
     return Number(r.lastInsertRowid);
   }
-  if (!row || !checkPass(pass, row.hash)) return 'Wrong account name or password.';
+  if (!row || !checkPass(pass, row.hash)) return 'Cuenta o contraseña incorrecta.';
   return row.id;
 }
 
@@ -81,8 +81,8 @@ const qInsChar = db.prepare(`INSERT INTO characters (account_id, name, race, cls
 const qInsItem = db.prepare('INSERT INTO items (char_id, item_id, count, slot) VALUES (?, ?, ?, ?)');
 
 export function createChar(accountId: number, name: string, race: Race, cls: ClassType, look: Look): string | null {
-  if (qCharByName.get(name)) return 'That name is already taken.';
-  if (listChars(accountId).length >= 7) return 'You can have at most 7 characters.';
+  if (qCharByName.get(name)) return 'Ese nombre ya está en uso.';
+  if (listChars(accountId).length >= 7) return 'Podés tener como máximo 7 personajes.';
   const a = Math.random() * Math.PI * 2;
   const r = qInsChar.run(accountId, name, race, cls, TOWN.x + Math.cos(a) * 6, TOWN.z + Math.sin(a) * 6, START_ADENA, Date.now(), look.g, look.hs, look.hc);
   const charId = Number(r.lastInsertRowid);

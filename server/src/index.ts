@@ -74,7 +74,7 @@ function enterWorld(s: Session, charId: number) {
     }
   }
   const data = db.loadChar(s.accountId, charId);
-  if (!data) return s.send({ t: 'error', msg: 'Character not found.' });
+  if (!data) return s.send({ t: 'error', msg: 'No se encontró el personaje.' });
   const r = data.row;
   const p = new Player(world.newId(), r.x, r.z, s, r.id, r.name, r.race, r.cls, Math.min(r.level, MAX_LEVEL), r.xp, r.hp, r.mp, r.cp, r.adena, r.karma, r.pk, r.pvp);
   p.look = r.look;
@@ -86,7 +86,7 @@ function enterWorld(s: Session, charId: number) {
   world.addPlayer(p);
   s.send({ t: 'enter', self: world.selfState(p), inv: p.inv });
   sendQuests(p);
-  world.sys(p, `Welcome to Claudi MMO, ${p.name}! Type /help for chat commands.`);
+  world.sys(p, `¡${p.look.g === 'f' ? 'Bienvenida' : 'Bienvenido'} a Claudi MMO, ${p.name}! Escribí /help para ver los comandos del chat.`);
   console.log(`[world] ${p.name} entered (${world.players.size} online)`);
 }
 
@@ -97,8 +97,8 @@ function handle(s: Session, m: C2S) {
   switch (m.t) {
     case 'login': {
       const user = String(m.user ?? '').trim(), pass = String(m.pass ?? '');
-      if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return s.send({ t: 'error', msg: 'Account: 3-16 letters, numbers or _.' });
-      if (pass.length < 4 || pass.length > 64) return s.send({ t: 'error', msg: 'Password: 4-64 characters.' });
+      if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return s.send({ t: 'error', msg: 'Cuenta: de 3 a 16 letras, números o _.' });
+      if (pass.length < 4 || pass.length > 64) return s.send({ t: 'error', msg: 'Contraseña: de 4 a 64 caracteres.' });
       const r = db.login(user, pass, !!m.register);
       if (typeof r === 'string') return s.send({ t: 'error', msg: r });
       s.accountId = r;
@@ -107,9 +107,9 @@ function handle(s: Session, m: C2S) {
     case 'createChar': {
       if (!s.accountId) return;
       const name = String(m.name ?? '').trim();
-      if (!NAME_RE.test(name)) return s.send({ t: 'error', msg: 'Name: 3-16 letters/numbers, starting with a letter.' });
+      if (!NAME_RE.test(name)) return s.send({ t: 'error', msg: 'Nombre: de 3 a 16 letras o números, empezando con una letra.' });
       const race = m.race as Race, cls = m.cls as ClassType;
-      if (!RACES[race] || !RACES[race].classes.includes(cls)) return s.send({ t: 'error', msg: 'Invalid race/class combination.' });
+      if (!RACES[race] || !RACES[race].classes.includes(cls)) return s.send({ t: 'error', msg: 'Esa combinación de raza y clase no existe.' });
       const err = db.createChar(s.accountId, name, race, cls, sanitizeLook(m.look));
       if (err) return s.send({ t: 'error', msg: err });
       return s.send({ t: 'chars', list: db.listChars(s.accountId) });

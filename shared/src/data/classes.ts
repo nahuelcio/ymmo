@@ -5,7 +5,7 @@ export type Gender = 'm' | 'f';
 /** Character appearance chosen at creation. */
 export interface Look { g: Gender; hs: number; hc: number }
 
-export const HAIR_STYLES = ['Short', 'Long', 'Topknot'];
+export const HAIR_STYLES = ['Corto', 'Largo', 'Rodete'];
 /** index 0 = the race's natural colour */
 export const HAIR_COLORS = [-1, 0x1e1a18, 0x6a3a1a, 0xe8d27a, 0xb03020, 0xe6e6f0, 0x3a5a9a];
 
@@ -32,15 +32,15 @@ export interface RaceDef {
 const base: StatMods = { hp: 1, mp: 1, pAtk: 1, mAtk: 1, pDef: 1, mDef: 1, speed: 1, atkSpd: 1, castSpd: 1, evasion: 0, accuracy: 0, crit: 0 };
 
 export const RACES: Record<Race, RaceDef> = {
-  human: { name: 'Human', skin: 0xe8b996, hair: 0x5a3a1e, height: 1, bulk: 1, classes: ['fighter', 'mystic'], mods: { ...base }, desc: 'Balanced in every way.' },
-  elf: { name: 'Elf', skin: 0xf3d6bd, hair: 0xe8d27a, height: 1.05, bulk: 0.9, classes: ['fighter', 'mystic'],
-    mods: { ...base, hp: 0.95, pAtk: 0.95, speed: 1.1, atkSpd: 1.05, castSpd: 1.1, evasion: 3, accuracy: 2, mDef: 1.05 }, desc: 'Swift and graceful.' },
-  darkelf: { name: 'Dark Elf', skin: 0x9a8fa8, hair: 0xe6e6f0, height: 1.05, bulk: 0.9, classes: ['fighter', 'mystic'],
-    mods: { ...base, hp: 0.9, pAtk: 1.1, mAtk: 1.12, speed: 1.05, crit: 2, pDef: 0.95 }, desc: 'Deadly but fragile.' },
-  orc: { name: 'Orc', skin: 0x6f8f4e, hair: 0x2a2a2a, height: 1.12, bulk: 1.25, classes: ['fighter', 'mystic'],
-    mods: { ...base, hp: 1.2, mp: 1.1, pAtk: 1.1, mAtk: 0.95, speed: 0.95, atkSpd: 0.95, evasion: -2 }, desc: 'Brutal strength and stamina.' },
-  dwarf: { name: 'Dwarf', skin: 0xd9a77e, hair: 0xa0522d, height: 0.78, bulk: 1.3, classes: ['fighter'],
-    mods: { ...base, hp: 1.15, pAtk: 1.05, pDef: 1.08, speed: 0.92, crit: 1 }, desc: 'Sturdy craftsmen. Fighters only.' },
+  human: { name: 'Humano', skin: 0xe8b996, hair: 0x5a3a1e, height: 1, bulk: 1, classes: ['fighter', 'mystic'], mods: { ...base }, desc: 'Equilibrado en todo.' },
+  elf: { name: 'Elfo', skin: 0xf3d6bd, hair: 0xe8d27a, height: 1.05, bulk: 0.9, classes: ['fighter', 'mystic'],
+    mods: { ...base, hp: 0.95, pAtk: 0.95, speed: 1.1, atkSpd: 1.05, castSpd: 1.1, evasion: 3, accuracy: 2, mDef: 1.05 }, desc: 'Rápido y elegante.' },
+  darkelf: { name: 'Elfo Oscuro', skin: 0x9a8fa8, hair: 0xe6e6f0, height: 1.05, bulk: 0.9, classes: ['fighter', 'mystic'],
+    mods: { ...base, hp: 0.9, pAtk: 1.1, mAtk: 1.12, speed: 1.05, crit: 2, pDef: 0.95 }, desc: 'Letal, pero frágil.' },
+  orc: { name: 'Orco', skin: 0x6f8f4e, hair: 0x2a2a2a, height: 1.12, bulk: 1.25, classes: ['fighter', 'mystic'],
+    mods: { ...base, hp: 1.2, mp: 1.1, pAtk: 1.1, mAtk: 0.95, speed: 0.95, atkSpd: 0.95, evasion: -2 }, desc: 'Fuerza bruta y mucho aguante.' },
+  dwarf: { name: 'Enano', skin: 0xd9a77e, hair: 0xa0522d, height: 0.78, bulk: 1.3, classes: ['fighter'],
+    mods: { ...base, hp: 1.15, pAtk: 1.05, pDef: 1.08, speed: 0.92, crit: 1 }, desc: 'Artesanos duros como la piedra. Solo guerreros.' },
 };
 
 export interface ClassDef {
@@ -51,12 +51,12 @@ export interface ClassDef {
 
 export const CLASSES: Record<ClassType, ClassDef> = {
   fighter: {
-    name: 'Fighter', baseHp: 100, hpLvl: 18, baseMp: 30, mpLvl: 6, cpRatio: 0.5, atkInterval: 900,
+    name: 'Guerrero', baseHp: 100, hpLvl: 18, baseMp: 30, mpLvl: 6, cpRatio: 0.5, atkInterval: 900,
     startItems: [['short_sword', 1, true], ['apprentice_tunic', 1, true], ['apprentice_stockings', 1, true],
       ['lesser_healing_potion', 10, false], ['scroll_of_escape', 1, false]],
   },
   mystic: {
-    name: 'Mystic', baseHp: 80, hpLvl: 12, baseMp: 60, mpLvl: 14, cpRatio: 0.3, atkInterval: 1200,
+    name: 'Místico', baseHp: 80, hpLvl: 12, baseMp: 60, mpLvl: 14, cpRatio: 0.3, atkInterval: 1200,
     startItems: [['apprentice_wand', 1, true], ['apprentice_tunic', 1, true], ['apprentice_stockings', 1, true],
       ['lesser_healing_potion', 10, false], ['mana_potion', 3, false], ['scroll_of_escape', 1, false]],
   },
@@ -65,8 +65,8 @@ export const CLASSES: Record<ClassType, ClassDef> = {
 export interface GenderDef { name: string; mods: StatMods; desc: string }
 
 export const GENDERS: Record<Gender, GenderDef> = {
-  m: { name: 'Male', mods: { ...base, hp: 1.04, pAtk: 1.03 }, desc: 'Slightly tougher and stronger.' },
-  f: { name: 'Female', mods: { ...base, mp: 1.06, castSpd: 1.04, speed: 1.02, evasion: 2 }, desc: 'Slightly quicker, more mana and faster casting.' },
+  m: { name: 'Masculino', mods: { ...base, hp: 1.04, pAtk: 1.03 }, desc: 'Algo más de vida y de fuerza.' },
+  f: { name: 'Femenino', mods: { ...base, mp: 1.06, castSpd: 1.04, speed: 1.02, evasion: 2 }, desc: 'Algo más de velocidad, de maná y de rapidez para lanzar.' },
 };
 
 /** Combined race × gender modifiers (multiplicative %, additive flat stats). */

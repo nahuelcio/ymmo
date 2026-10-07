@@ -53,17 +53,17 @@ type LookKeys = 'bloom' | 'bloomStrength' | 'colorGrade' | 'saturation' | 'contr
 
 /** Visual styles: a bundle of shader values. */
 export const LOOKS: Record<Exclude<LookPreset, 'custom'>, { name: string; desc: string; v: Pick<Settings, LookKeys> }> = {
-  off: { name: 'Off', desc: 'Raw colours, no post shaders.',
+  off: { name: 'Sin efectos', desc: 'Colores crudos, sin post-procesado.',
     v: { bloom: false, bloomStrength: 0.35, colorGrade: false, saturation: 1, contrast: 1, vignette: 0, toneMapping: false, exposure: 1, warmth: 0, sharpen: 0 } },
-  natural: { name: 'Natural', desc: 'Filmic tone mapping, soft glow, a touch of clarity.',
+  natural: { name: 'Natural', desc: 'Tone mapping cinematográfico, brillo suave y un toque de nitidez.',
     v: { bloom: true, bloomStrength: 0.25, colorGrade: true, saturation: 1.08, contrast: 1.04, vignette: 0.2, toneMapping: true, exposure: 1.15, warmth: 0.05, sharpen: 0.25 } },
-  vivid: { name: 'Vivid', desc: 'Punchy saturated colours, crisp edges.',
+  vivid: { name: 'Vívido', desc: 'Colores saturados y bordes bien nítidos.',
     v: { bloom: true, bloomStrength: 0.4, colorGrade: true, saturation: 1.35, contrast: 1.1, vignette: 0.25, toneMapping: true, exposure: 1.2, warmth: 0.05, sharpen: 0.4 } },
-  aden: { name: 'Aden (fantasy)', desc: 'Golden warm light and strong glow, classic MMO fantasy.',
+  aden: { name: 'Aden (fantasía)', desc: 'Luz dorada y cálida con mucho brillo, fantasía MMO clásica.',
     v: { bloom: true, bloomStrength: 0.65, colorGrade: true, saturation: 1.18, contrast: 1.08, vignette: 0.35, toneMapping: true, exposure: 1.2, warmth: 0.3, sharpen: 0.2 } },
-  cinematic: { name: 'Cinematic', desc: 'Muted, contrasty, heavy vignette.',
+  cinematic: { name: 'Cine', desc: 'Apagado, con contraste y viñeta marcada.',
     v: { bloom: true, bloomStrength: 0.5, colorGrade: true, saturation: 0.85, contrast: 1.18, vignette: 0.6, toneMapping: true, exposure: 1.05, warmth: 0.12, sharpen: 0.15 } },
-  noir: { name: 'Noir', desc: 'Black and white.',
+  noir: { name: 'Noir', desc: 'Blanco y negro.',
     v: { bloom: true, bloomStrength: 0.3, colorGrade: true, saturation: 0, contrast: 1.3, vignette: 0.65, toneMapping: true, exposure: 1.1, warmth: 0, sharpen: 0.3 } },
 };
 

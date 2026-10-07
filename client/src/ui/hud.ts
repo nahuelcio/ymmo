@@ -75,19 +75,19 @@ export class Hud {
       b.title = `${label} (${key})`;
       b.onclick = fn;
     };
-    btn('Character', 'C', () => g.ui.character.win.toggle());
-    btn('Inventory', 'I', () => g.ui.inventory.win.toggle());
-    btn('Map', 'M', () => g.ui.minimap.toggleMap());
-    btn('Help', 'H', () => g.ui.help.toggle());
-    btn('⚙ Settings', 'O', () => g.ui.settings.win.toggle());
-    this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: OFF');
-    this.pvpBtn.title = 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).';
+    btn('Personaje', 'C', () => g.ui.character.win.toggle());
+    btn('Inventario', 'I', () => g.ui.inventory.win.toggle());
+    btn('Mapa', 'M', () => g.ui.minimap.toggleMap());
+    btn('Ayuda', 'H', () => g.ui.help.toggle());
+    btn('⚙ Opciones', 'O', () => g.ui.settings.win.toggle());
+    this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, 'PvP: NO');
+    this.pvpBtn.title = 'Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).';
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
 
     this.bannerEl = el('div', 'banner', root);
 
     this.questRoot = el('div', 'panel quest-tracker', root);
-    el('div', 'quest-head', this.questRoot, 'Quests');
+    el('div', 'quest-head', this.questRoot, 'Misiones');
     this.questList = el('div', '', this.questRoot);
     this.questRoot.style.display = 'none';
   }
@@ -114,7 +114,7 @@ export class Hud {
 
   onMe() {
     const m = this.g.me;
-    this.pvpBtn.textContent = m.pvpOn ? '⚔ PvP: ON' : 'PvP: OFF';
+    this.pvpBtn.textContent = m.pvpOn ? '⚔ PvP: SÍ' : 'PvP: NO';
     this.pvpBtn.classList.toggle('on', m.pvpOn);
     this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${RACES[m.race].name} ${CLASSES[m.cls].name}</span>`;
     this.cp.set(m.cp, m.maxCp);
@@ -125,7 +125,7 @@ export class Hud {
       this.xp.text.textContent = `XP ${((m.xp / m.xpNeed) * 100).toFixed(2)}%`;
     } else {
       this.xp.set(1, 1);
-      this.xp.text.textContent = 'MAX LEVEL';
+      this.xp.text.textContent = 'NIVEL MÁXIMO';
     }
     this.buffs.innerHTML = '';
     for (const b of m.buffs) {
@@ -136,7 +136,7 @@ export class Hud {
     }
     if (m.flagged || m.karma > 0) {
       const w = el('div', `buff flag ${m.karma > 0 ? 'karma' : ''}`, this.buffs, m.karma > 0 ? 'PK' : 'PvP');
-      w.title = m.karma > 0 ? `Karma: ${m.karma}` : 'PvP flagged';
+      w.title = m.karma > 0 ? `Karma: ${m.karma}` : 'Con flag de PvP';
     }
     this.refreshSlots();
   }
@@ -217,21 +217,21 @@ export class Hud {
     this.lastTargetKey = key;
     const r = t.rec;
     let nameHtml = '';
-    if (r.k === 'm') nameHtml = `<span style="color:${conColor(r.l - this.g.me.lvl)}">${esc(r.n)}</span> <span class="tt-dim">Lv ${r.l}</span>`;
+    if (r.k === 'm') nameHtml = `<span style="color:${conColor(r.l - this.g.me.lvl)}">${esc(r.n)}</span> <span class="tt-dim">Nv ${r.l}</span>`;
     else if (r.k === 'p') {
       const c = t.flags & F_RED ? '#ff4040' : t.flags & F_PURPLE ? '#d080ff' : '#fff';
-      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">Lv ${r.l} ${RACES[r.race].name} ${CLASSES[r.cls].name}</span>`;
+      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">Nv ${r.l} ${RACES[r.race].name} ${CLASSES[r.cls].name}</span>`;
     } else if (r.k === 'n') nameHtml = `${esc(r.n)} <span class="tt-dim">${esc(r.title)}</span>`;
     else nameHtml = esc(r.item === 'adena' ? 'Adena' : ITEMS[r.item]?.name ?? '');
-    this.tName.innerHTML = nameHtml + (t.flags & F_DEAD ? ' <span class="tt-dim">(dead)</span>' : '');
+    this.tName.innerHTML = nameHtml + (t.flags & F_DEAD ? ' <span class="tt-dim">(muerto)</span>' : '');
     this.tHp.root.style.display = r.k === 'm' || r.k === 'p' ? '' : 'none';
     this.tHp.set(t.hp, 100);
     this.tHp.text.textContent = `${t.hp}%`;
     this.tActions.innerHTML = '';
     if (r.k === 'p' && r.id !== this.g.me.id) {
-      const inv = el('button', 'btn small', this.tActions, 'Invite to party');
+      const inv = el('button', 'btn small', this.tActions, 'Invitar a la party');
       inv.onclick = () => this.g.net.send({ t: 'partyInvite', name: r.n });
-      const wh = el('button', 'btn small', this.tActions, 'Whisper');
+      const wh = el('button', 'btn small', this.tActions, 'Susurrar');
       wh.onclick = () => this.g.ui.chat.prefill(`"${r.n} `);
     }
   }

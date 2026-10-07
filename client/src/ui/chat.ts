@@ -3,10 +3,10 @@ import { el } from './dom';
 
 type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce';
 const TABS: { id: string; label: string; show: Ch[] }[] = [
-  { id: 'all', label: 'All', show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
+  { id: 'all', label: 'Todo', show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
   { id: 'party', label: 'Party', show: ['party', 'announce'] },
-  { id: 'whisper', label: 'Whisper', show: ['whisper', 'announce'] },
-  { id: 'sys', label: 'System', show: ['sys', 'announce'] },
+  { id: 'whisper', label: 'Susurros', show: ['whisper', 'announce'] },
+  { id: 'sys', label: 'Sistema', show: ['sys', 'announce'] },
 ];
 
 export class Chat {
@@ -27,7 +27,7 @@ export class Chat {
     this.log = el('div', 'chat-log', box);
     this.input = el('input', 'chat-input', box);
     this.input.maxLength = 200;
-    this.input.placeholder = 'Enter to chat — !shout  #party  "name whisper  /help';
+    this.input.placeholder = 'Enter para chatear — !grito  #party  "nombre susurro  /help';
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {

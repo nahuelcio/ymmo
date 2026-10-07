@@ -26,7 +26,7 @@ function screen(): HTMLDivElement {
   const wrap = el('div', 'screen', screens);
   const logo = el('div', 'logo', wrap);
   el('div', 'logo-title', logo, 'CLAUDI');
-  el('div', 'logo-sub', logo, 'Chronicle I · Dawn of Aden');
+  el('div', 'logo-sub', logo, 'Crónica I · El Alba de Aden');
   return el('div', 'screen-box panel', wrap);
 }
 
@@ -39,12 +39,12 @@ let showError: (m: string) => void = () => {};
 
 function loginScreen() {
   const box = screen();
-  el('h2', '', box, 'Login');
+  el('h2', '', box, 'Ingresar');
   const user = el('input', 'field', box);
-  user.placeholder = 'Account';
+  user.placeholder = 'Cuenta';
   user.autocomplete = 'username';
   const pass = el('input', 'field', box);
-  pass.placeholder = 'Password';
+  pass.placeholder = 'Contraseña';
   pass.type = 'password';
   pass.autocomplete = 'current-password';
   try {
@@ -53,8 +53,8 @@ function loginScreen() {
     /* ignore */
   }
   const row = el('div', 'row', box);
-  const login = el('button', 'btn primary', row, 'Login');
-  const reg = el('button', 'btn', row, 'Create account');
+  const login = el('button', 'btn primary', row, 'Entrar');
+  const reg = el('button', 'btn', row, 'Crear cuenta');
   showError = errorLine(box);
   const go = (register: boolean) => {
     try {
@@ -73,22 +73,22 @@ function loginScreen() {
     if (e.key === 'Enter') pass.focus();
   });
   (user.value ? pass : user).focus();
-  el('div', 'hint', box, 'New here? Type an account name and password, then "Create account".');
+  el('div', 'hint', box, '¿Primera vez? Elegí un nombre de cuenta y una contraseña, y tocá "Crear cuenta".');
 }
 
 function charScreen(list: CharSummary[]) {
   const box = screen();
   box.classList.add('wide');
-  el('h2', '', box, 'Select your character');
+  el('h2', '', box, 'Elegí tu personaje');
   const cols = el('div', 'char-cols', box);
   const left = el('div', 'char-list', cols);
   let selected = list[0]?.id ?? null;
   const renderList = () => {
     left.innerHTML = '';
-    if (!list.length) el('div', 'tt-dim', left, 'No characters yet. Create one →');
+    if (!list.length) el('div', 'tt-dim', left, 'Todavía no tenés personajes. Creá uno →');
     for (const c of list) {
       const card = el('div', `char-card${c.id === selected ? ' sel' : ''}`, left);
-      card.innerHTML = `<b></b><br><span class="tt-dim">Lv ${c.level} ${GENDERS[c.look.g].name} ${RACES[c.race].name} ${CLASSES[c.cls].name}</span>`;
+      card.innerHTML = `<b></b><br><span class="tt-dim">Nv ${c.level} ${GENDERS[c.look.g].name} ${RACES[c.race].name} ${CLASSES[c.cls].name}</span>`;
       card.querySelector('b')!.textContent = c.name;
       card.onclick = () => {
         selected = c.id;
@@ -97,36 +97,36 @@ function charScreen(list: CharSummary[]) {
       card.ondblclick = () => net.send({ t: 'enter', id: c.id });
     }
     const row = el('div', 'row', left);
-    const enter = el('button', 'btn primary', row, 'Enter world');
+    const enter = el('button', 'btn primary', row, 'Entrar al mundo');
     enter.disabled = selected === null;
     enter.onclick = () => selected !== null && net.send({ t: 'enter', id: selected });
-    const del = el('button', 'btn danger', row, 'Delete');
+    const del = el('button', 'btn danger', row, 'Borrar');
     del.disabled = selected === null;
     del.onclick = () => {
       const c = list.find((x) => x.id === selected);
-      if (c && confirm(`Delete ${c.name} forever?`)) net.send({ t: 'deleteChar', id: c.id });
+      if (c && confirm(`¿Borrar a ${c.name} para siempre?`)) net.send({ t: 'deleteChar', id: c.id });
     };
   };
   renderList();
 
   const right = el('div', 'char-create', cols);
-  el('h3', '', right, 'Create a new character');
+  el('h3', '', right, 'Crear un personaje nuevo');
   const nameRow = el('div', 'name-row', right);
   const name = el('input', 'field', nameRow);
-  name.placeholder = 'Name';
+  name.placeholder = 'Nombre';
   name.maxLength = 16;
-  const create = el('button', 'btn primary', nameRow, 'Create');
+  const create = el('button', 'btn primary', nameRow, 'Crear');
   const studio = el('div', 'studio', right);
   const preview = el('div', 'char-preview', studio);
   const opts = el('div', 'studio-opts', studio);
   const label = (t: string) => el('div', 'pick-label', opts, t);
-  label('Race');
+  label('Raza');
   const races = el('div', 'pick', opts);
-  label('Class');
+  label('Clase');
   const classes = el('div', 'pick', opts);
-  label('Gender');
+  label('Género');
   const genders = el('div', 'pick', opts);
-  label('Hair');
+  label('Pelo');
   const styles = el('div', 'pick', opts);
   const colors = el('div', 'pick swatches', opts);
   const desc = el('div', 'tt-dim race-desc', right);
@@ -165,7 +165,7 @@ function charScreen(list: CharSummary[]) {
         renderPick();
       };
     });
-    desc.textContent = `${RACES[race].desc} ${GENDERS[look.g].desc} ${cls === 'fighter' ? 'Fighters excel in melee combat with powerful strikes.' : 'Mystics wield magic: ranged spells, healing and buffs.'}`;
+    desc.textContent = `${RACES[race].desc} ${GENDERS[look.g].desc} ${cls === 'fighter' ? 'El guerrero se luce cuerpo a cuerpo, con golpes potentes.' : 'El místico usa magia: hechizos a distancia, curas y buffs.'}`;
     renderDiff(diff, race, cls, look.g);
   };
   renderPick();
@@ -183,24 +183,24 @@ function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender) {
   const m = statMods(race, g);
   const pct = (v: number) => Math.round((v - 1) * 100);
   const rows: [string, number, string][] = [
-    ['HP', pct(m.hp), '%'], ['MP', pct(m.mp), '%'], ['P.Atk', pct(m.pAtk), '%'], ['M.Atk', pct(m.mAtk), '%'],
-    ['P.Def', pct(m.pDef), '%'], ['M.Def', pct(m.mDef), '%'], ['Speed', pct(m.speed), '%'], ['Atk.Spd', pct(m.atkSpd), '%'],
-    ['Cast.Spd', pct(m.castSpd), '%'], ['Evasion', m.evasion, ''], ['Accuracy', m.accuracy, ''], ['Critical', m.crit, ''],
+    ['HP', pct(m.hp), '%'], ['MP', pct(m.mp), '%'], ['Atq.F', pct(m.pAtk), '%'], ['Atq.M', pct(m.mAtk), '%'],
+    ['Def.F', pct(m.pDef), '%'], ['Def.M', pct(m.mDef), '%'], ['Velocidad', pct(m.speed), '%'], ['Vel.Atq', pct(m.atkSpd), '%'],
+    ['Vel.Lanz', pct(m.castSpd), '%'], ['Evasión', m.evasion, ''], ['Precisión', m.accuracy, ''], ['Crítico', m.crit, ''],
   ];
   host.innerHTML = '';
-  el('div', 'section', host, `${RACES[race].name} ${GENDERS[g].name} — stats vs. Human Male`);
+  el('div', 'section', host, `${RACES[race].name} · ${GENDERS[g].name}: stats comparados con Humano Masculino`);
   const grid = el('div', 'diff-grid', host);
   for (const [k, v, u] of rows) {
     const cell = el('div', `diff-cell${v > 0 ? ' up' : v < 0 ? ' down' : ''}`, grid);
     el('span', '', cell, k);
     el('b', '', cell, v === 0 ? '—' : `${v > 0 ? '+' : ''}${v}${u}`);
   }
-  el('div', 'section', host, 'Skills');
+  el('div', 'section', host, 'Habilidades');
   const list = el('div', 'diff-skills', host);
   for (const s of allSkillsFor(cls, race, g)) {
     const tag = s.race ? RACES[s.race].name : s.gender ? GENDERS[s.gender].name : CLASSES[cls].name;
     const row = el('div', `diff-skill${s.race || s.gender ? ' special' : ''}`, list);
-    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">Lv ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">Nv ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
     row.querySelector('b')!.textContent = s.name;
     row.querySelector('.ds-desc')!.textContent = s.desc;
   }
@@ -251,7 +251,7 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 
 async function boot() {
   const box = screen();
-  el('div', 'tt-dim', box, 'Connecting to the server...');
+  el('div', 'tt-dim', box, 'Conectando con el servidor...');
   for (let attempt = 1; ; attempt++) {
     try {
       await net.connect();
@@ -266,8 +266,8 @@ async function boot() {
   }
   net.onClose = () => {
     const d = el('div', 'disconnected', document.body);
-    d.innerHTML = '<div class="panel"><b>Disconnected from the server.</b><br><br></div>';
-    const b = el('button', 'btn primary', d.firstElementChild as HTMLElement, 'Reconnect');
+    d.innerHTML = '<div class="panel"><b>Se perdió la conexión con el servidor.</b><br><br></div>';
+    const b = el('button', 'btn primary', d.firstElementChild as HTMLElement, 'Reconectar');
     b.onclick = () => location.reload();
   };
   net.on('error', (m) => {

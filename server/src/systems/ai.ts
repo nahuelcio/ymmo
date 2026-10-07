@@ -99,5 +99,5 @@ function respawn(w: World, m: Mob) {
   m.dest = null;
   m.av++;
   w.setPos(m, m.homeX, m.homeZ);
-  if (m.tpl.boss) w.broadcast({ t: 'chat', ch: 'announce', from: '', text: `The raid boss ${m.tpl.name} has awakened in the Cursed Wastes!` });
+  if (m.tpl.boss) w.broadcast({ t: 'chat', ch: 'announce', from: '', text: `¡El jefe ${m.tpl.name} despertó en los Páramos Malditos!` });
 }

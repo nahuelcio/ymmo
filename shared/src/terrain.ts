@@ -1,7 +1,7 @@
 // Deterministic terrain shared by server and client so both agree on ground height.
 
 export const WORLD_HALF = 500;
-export const TOWN = { x: 0, z: 0, r: 50, name: 'Village of Dawn' };
+export const TOWN = { x: 0, z: 0, r: 50, name: 'Aldea del Alba' };
 const SEED = 1337;
 
 function hash2(ix: number, iz: number): number {

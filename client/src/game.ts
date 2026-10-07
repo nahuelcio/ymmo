@@ -291,7 +291,7 @@ export class Game {
         this.fx.pillar(e.pos.clone(), 0xffd966);
         this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
       }
-      if (m.id === this.me.id) this.ui.hud.banner(`Level ${m.lvl}!`, true);
+      if (m.id === this.me.id) this.ui.hud.banner(`¡Nivel ${m.lvl}!`, true);
     });
     n.on('chat', (m) => this.ui.chat.add(m.ch, m.from, m.text));
     n.on('error', (m) => this.sys(m.msg));
@@ -333,13 +333,13 @@ export class Game {
         const sw = document.createElement('span');
         sw.className = 'np-pvp';
         sw.textContent = '⚔';
-        sw.title = 'PvP mode on';
+        sw.title = 'PvP activado';
         n.prepend(sw);
       }
       if (!self) {
         const l = document.createElement('span');
         l.className = 'np-lvl';
-        l.textContent = `Lv ${r.l}`;
+        l.textContent = `Nv ${r.l}`;
         n.appendChild(l);
       }
       el.appendChild(n);
@@ -352,7 +352,7 @@ export class Game {
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
       l.className = 'np-lvl';
-      l.textContent = `Lv ${r.l}`;
+      l.textContent = `Nv ${r.l}`;
       n.appendChild(l);
       el.appendChild(n);
       this.addHpBar(c);
@@ -539,7 +539,7 @@ export class Game {
   private onDmg(m: Extract<S2C, { t: 'dmg' }>) {
     const t = this.ents.get(m.tg);
     if (!t) return;
-    if (m.miss) return this.floatText(t, 'Miss', 'f-miss');
+    if (m.miss) return this.floatText(t, 'Falló', 'f-miss');
     if (m.heal) return this.floatText(t, `+${m.v}`, 'f-heal');
     const mine = m.tg === this.me.id;
     const src = this.ents.get(m.s);
@@ -554,7 +554,7 @@ export class Game {
       else if (m.crit && m.s === this.me.id) this.cam.shake(0.12);
     }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
-    if (m.crit && m.s === this.me.id) this.sys(`Critical hit! ${m.v} damage.`);
+    if (m.crit && m.s === this.me.id) this.sys(`¡Crítico! ${m.v} de daño.`);
     if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
   }
 
@@ -671,7 +671,7 @@ export class Game {
   }
 
   useSkill(id: string) {
-    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No enemy nearby.');
+    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys('No hay enemigos cerca.');
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
   }
 
