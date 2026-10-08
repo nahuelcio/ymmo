@@ -13,6 +13,17 @@ function tipBox() {
 }
 
 /** Attach a hover tooltip. `html` is trusted markup built from static game data. */
+// Taps fire emulated mouse events: no hover tooltips for a moment after a finger touched the screen,
+// otherwise they pop up on every tap and stay there (there is no "mouse leave" on a phone).
+let lastTouch = 0;
+addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch') {
+    lastTouch = performance.now();
+    hideTip();
+  }
+}, true);
+const touching = () => performance.now() - lastTouch < 1500;
+
 export function setTip(target: HTMLElement, html: () => string) {
   const move = (e: MouseEvent) => {
     const t = tipBox();
@@ -22,6 +33,7 @@ export function setTip(target: HTMLElement, html: () => string) {
     t.style.top = `${y}px`;
   };
   target.addEventListener('mouseenter', (e) => {
+    if (touching()) return;
     const h = html();
     if (!h) return;
     const t = tipBox();
@@ -47,7 +59,7 @@ addEventListener('mouseover', (e) => {
     titled.ariaLabel ??= titled.title;
     titled.removeAttribute('title');
   }
-  const owner = (e.target as Element).closest?.<HTMLElement>('[data-tip]') ?? null;
+  const owner = touching() ? null : (e.target as Element).closest?.<HTMLElement>('[data-tip]') ?? null;
   if (owner === tipOwner) return;
   if (tipOwner) hideTip();
   tipOwner = owner;
