@@ -362,6 +362,12 @@ function buildTerrain(): THREE.Group {
 interface Inst { m: THREE.Matrix4; c: THREE.Color; x: number; z: number }
 
 /** One InstancedMesh per world chunk, each with its own bounds so it can be culled. */
+/** A surface-textured material for instanced meshes (propTex.ts precompiles the instanced variant). */
+function instancedSurface(m: THREE.MeshLambertMaterial, surface: Surface): THREE.MeshLambertMaterial {
+  m.userData.instanced = true;
+  return addSurface(m, surface);
+}
+
 function chunkedInstances(geo: THREE.BufferGeometry, material: THREE.Material, items: Inst[]): THREE.Group {
   const g = new THREE.Group();
   const byChunk = new Map<string, Inst[]>();
@@ -464,9 +470,10 @@ function buildTrees(): THREE.Group {
     else leaves.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1) });
   }
   const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
+  const bark = () => instancedSurface(mat(), 'bark'), canopy = (amp: number) => instancedSurface(sway(mat(), amp), 'leaves');
   const g = new THREE.Group();
-  g.add(chunkedInstances(trunkGeo, mat(), trunks), chunkedInstances(pineGeo, sway(mat(), 0.007), pines), chunkedInstances(leafGeo, sway(mat(), 0.009), leaves));
-  if (deads.length) g.add(chunkedInstances(deadGeo, mat(), deads));
+  g.add(chunkedInstances(trunkGeo, bark(), trunks), chunkedInstances(pineGeo, canopy(0.007), pines), chunkedInstances(leafGeo, canopy(0.009), leaves));
+  if (deads.length) g.add(chunkedInstances(deadGeo, bark(), deads));
   return g;
 }
 
@@ -479,7 +486,7 @@ function buildRocks(): THREE.Group {
     s.set(...r.s);
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
-  return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), items);
+  return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'rock'), items);
 }
 
 const CLOUD_MAT = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, fog: false, emissive: 0x606060 });
@@ -536,7 +543,7 @@ function buildBushes(): THREE.Group {
     items.push({ m: new THREE.Matrix4().compose(p.set(x, h - 0.1, z), q.setFromAxisAngle(up, rng() * 6.3), sv.set(sc, sc * (0.8 + rng() * 0.4), sc)),
       x, z, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.45, 0.24 + rng() * 0.1) });
   }
-  return chunkedInstances(geo, new THREE.MeshLambertMaterial({ flatShading: true }), items);
+  return chunkedInstances(geo, instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'leaves'), items);
 }
 
 const DETAIL_CHUNK = 40;

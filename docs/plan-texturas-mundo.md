@@ -147,6 +147,45 @@ Hoy el mundo no usa ninguna textura. Todo se pinta con colores planos.
 - **Agua:** sumar al `waterMaterial` un mapa de ondas animado y generado igual que el resto.
 - **Pasto y flores:** sin cambios. Ya funcionan como detalle.
 
+**Estado: hecha.** Lo que quedó, y en qué cambió respecto de lo planeado:
+
+- **Capas nuevas** en [texgen.ts](../client/src/render/texgen.ts):
+  - `bark`: surcos con placas.
+  - `leaves`: matas de hojas sobre ruido celular.
+  - `ripple`: un campo de alturas suave para el agua.
+
+  `PROP_LAYERS` pasa a 7 capas y `TEX_VERSION` a 3, así se descarta el caché viejo.
+- **Superficies** en [propTex.ts](../client/src/render/propTex.ts). La tabla `SURFACES` reúne, para cada superficie, de qué array sale la capa, el tamaño de repetición, el contraste y sus opciones.
+  - La roca reusa la capa del array del terreno (no se genera dos veces), con su propio sampler en el shader.
+  - Para las piedras la roca usa una repetición de 1,8 u con contraste 1,5. Con los 9 u de los acantilados, en una piedra de 2 m solo entraba una porción lisa del patrón y no se veía nada.
+  - Corteza: repetición de 1,6 u, surcos verticales (`PROP_VERTICAL_GRAIN`).
+  - Follaje: contraste 0,8 y solo en high (`hqOnly`).
+- **Instancias.**
+  - El shader aplica `instanceMatrix` para obtener la posición de mundo.
+  - Se inyecta antes de `project_vertex`, así toma también el balanceo del viento y la textura no se desliza sobre las copas.
+  - `addSurface` encadena el `onBeforeCompile` previo (`sway`) y conserva su clave de programa. Así los materiales con y sin viento no comparten programa.
+  - `instancedSurface` marca el material; el precompilado usa un `InstancedMesh` con color de instancia, porque la instanciación cambia el programa.
+- **Asignaciones.** Troncos y árboles secos llevan corteza; las copas de pinos y frondosos, follaje; los arbustos, follaje (no estaba en el plan); las piedras, roca.
+- **Agua** ([atmos.ts](../client/src/render/atmos.ts)).
+  - A las ondas analíticas se suma la pendiente de dos campos `ripple` que se desplazan en direcciones distintas.
+  - Rompe las bandas regulares del reflejo.
+  - Se activa por uniform (`uRippleOn`) junto con las texturas, sin recompilar.
+- **Memoria de GPU:** 10,8 MB en high y 2,7 MB en low. Dentro del presupuesto de 16 MB.
+- **Verificado en el juego:**
+  - Piedras con grietas y vetas; troncos con surcos verticales; copas con manchas de hojas.
+  - Laguna con reflejos irregulares, comparada contra las ondas sin textura.
+  - Sin errores de shader. El build de producción sale bien.
+- **Rendimiento** (vista con árboles, arbustos, rocas y agua; tiempo de render directo):
+
+  | Texturas | Tiempo de frame |
+  |---|---|
+  | off | ~22,8 ms |
+  | low | ~20,2 ms |
+  | high | ~22,3 ms |
+
+  Las diferencias quedan dentro del ruido de la medición. El primer frame después de cada cambio de calidad tarda 6–15 ms.
+- **Nota para pruebas.** Después de una recarga en caliente de Vite, `import('/src/settings.ts')` desde la consola devuelve otra instancia del módulo que la del juego. Hay que importar la URL exacta con `?t=`, sacada de `performance.getEntriesByType('resource')`.
+
 ### Fase 5 — Opción gráfica, rendimiento y pulido
 - Sumar `textures` a `Settings`, `PRESETS` y la UI de opciones. Cambiarla en caliente regenera los materiales con `needsUpdate`.
 - Filtrado anisotrópico según `renderer.capabilities.getMaxAnisotropy()`, con tope de 4 en high.

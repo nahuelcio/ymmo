@@ -7,7 +7,7 @@
 // built once per layer (lattice tables resolved up front), which keeps the per-texel cost low.
 
 export const TERRAIN_LAYERS = ['grass', 'dirt', 'rock', 'sand', 'snow', 'cobble'] as const;
-export const PROP_LAYERS = ['wood', 'stone', 'roof', 'plaster'] as const;
+export const PROP_LAYERS = ['wood', 'stone', 'roof', 'plaster', 'bark', 'leaves', 'ripple'] as const;
 export type TerrainLayer = (typeof TERRAIN_LAYERS)[number];
 export type PropLayer = (typeof PROP_LAYERS)[number];
 export type LayerName = TerrainLayer | PropLayer;
@@ -222,6 +222,38 @@ const PAINTERS: Record<LayerName, () => Painter> = {
       o[0] = (0.7 + fv * 0.35 + id * 0.18 + (grit(u, v) - 0.5) * 0.15) * (1 - lip * 0.35) * (1 - side * 0.3);
       o[1] = clamp01(fv * (1 - side));
       o[2] = (id - 0.5) * 0.8;
+    };
+  },
+  bark() {
+    // furrows run along u (the shader turns them upright on trunks): ridges across v, broken up lengthwise
+    const warp = makeNoise(4, 24, 111), plates = makeNoise(6, 40, 112), fine = makeNoise(32, 160, 113);
+    return (u, v, o) => {
+      const ridge = Math.abs(Math.sin((v * 14 + warp(u, v) * 1.6) * Math.PI));
+      const plate = plates(u, v);
+      const furrow = 1 - sstep(0.08, 0.3, ridge);
+      o[0] = (0.8 + plate * 0.25 + (fine(u, v) - 0.5) * 0.15) * (1 - furrow * 0.45);
+      o[1] = clamp01(ridge * 0.7 + plate * 0.3);
+      o[2] = (plate - 0.5) * 0.6;
+    };
+  },
+  leaves() {
+    // soft clumps of leaves: each cell a lighter blob with darker gaps between them
+    const clumps = makeWorley(14, 121), tone = makeFbm(4, 3, 122);
+    return (u, v, o) => {
+      const c = clumps(u, v);
+      const blob = 1 - sstep(0.2, 0.75, c.f1);
+      o[0] = 0.78 + blob * 0.28 + (c.id - 0.5) * 0.12 + (tone(u, v) - 0.5) * 0.15;
+      o[1] = clamp01(blob);
+      o[2] = (c.id - 0.5) * 1.4;
+    };
+  },
+  ripple() {
+    // a smooth height field for water: only G (height) is used, to bend the reflections
+    const swell = makeFbm(4, 4, 131);
+    return (u, v, o) => {
+      o[0] = 1;
+      o[1] = swell(u, v);
+      o[2] = 0;
     };
   },
   plaster() {

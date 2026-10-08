@@ -55,7 +55,7 @@ function getWorker(): Worker | null {
 // Painting takes ~0.3-1 s, so the result is kept per browser. Bump TEX_VERSION whenever texgen.ts
 // changes its output. Every access is guarded: private windows or blocked storage just repaint.
 
-const TEX_VERSION = 2;
+const TEX_VERSION = 3;
 const DB_NAME = 'claudi-textures', STORE = 'layers';
 
 function openDb(): Promise<IDBDatabase | null> {

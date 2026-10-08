@@ -1,26 +1,64 @@
-// Building & prop textures (phase 3 of docs/plan-texturas-mundo.md).
-// Static props are merged into world-space geometry without UVs (mergeStatic in scene.ts), so the
-// texture is projected from world position: triplanar in high quality, the dominant axis only in low.
-// Like the terrain, the texture only modulates brightness: every material keeps its colour.
+// Surface textures for everything that isn't terrain: buildings and props (phase 3 of
+// docs/plan-texturas-mundo.md), rocks, trees and the ripples on the water (phase 4).
+// Static props are merged into world-space geometry without UVs (mergeStatic in scene.ts) and the
+// vegetation is instanced, so the texture is projected from world position: triplanar in high quality,
+// the dominant axis only in low. Like the terrain, the texture only modulates brightness: every
+// material keeps its colour (or its per-instance colour).
 // Every surfaced material carries the shader from the start, compiled out (no PROP_TEX define) until
-// a texture set is ready; switching quality only flips defines.
+// a texture set is ready; switching quality only flips defines, after compiling the new variants.
 import * as THREE from 'three';
-import { getTextureSet, PROP_LAYERS, type PropLayer, type TextureQuality } from './textures';
+import { getTextureSet, PROP_LAYERS, TERRAIN_LAYERS, type TextureQuality } from './textures';
 
-export type Surface = PropLayer;
+export type Surface = 'wood' | 'stone' | 'roof' | 'plaster' | 'bark' | 'leaves' | 'rock';
 export type PropTexQuality = 'off' | TextureQuality;
 
-/** World units covered by one repeat of each surface. */
-const TILE: Record<Surface, number> = { wood: 2.4, stone: 3, roof: 3, plaster: 4 };
+interface SurfaceDef {
+  /** which texture array the layer lives in (rock reuses the terrain's) */
+  array: 'props' | 'terrain';
+  layer: number;
+  /** world units per repeat */
+  tile: number;
+  /** strength of the brightness pattern (1 = as painted) */
+  contrast: number;
+  /** wood grain / bark furrows run up the side faces */
+  vertical?: boolean;
+  /** roof tiles: project from the sides only so the rows stay horizontal on the slopes */
+  sides?: boolean;
+  /** only in high quality */
+  hqOnly?: boolean;
+}
+
+const P = (l: (typeof PROP_LAYERS)[number]) => PROP_LAYERS.indexOf(l);
+const SURFACES: Record<Surface, SurfaceDef> = {
+  wood: { array: 'props', layer: P('wood'), tile: 2.4, contrast: 1.2, vertical: true },
+  stone: { array: 'props', layer: P('stone'), tile: 3, contrast: 1.2 },
+  roof: { array: 'props', layer: P('roof'), tile: 3, contrast: 1.2, sides: true },
+  plaster: { array: 'props', layer: P('plaster'), tile: 4, contrast: 1.2 },
+  bark: { array: 'props', layer: P('bark'), tile: 1.6, contrast: 1.2, vertical: true },
+  leaves: { array: 'props', layer: P('leaves'), tile: 2.2, contrast: 0.8, hqOnly: true },
+  // boulders are small: a tighter repeat than the cliffs (9 u) so strata and cracks fit on them
+  rock: { array: 'terrain', layer: TERRAIN_LAYERS.indexOf('rock'), tile: 1.8, contrast: 1.5 },
+};
 
 const shared = {
   uPropTex: { value: null as THREE.DataArrayTexture | null },
+  uPropTerrainTex: { value: null as THREE.DataArrayTexture | null },
   uPropStrength: { value: 0 },
   uPropMean: { value: PROP_LAYERS.map(() => 0.45) },
+  uPropTerrainMean: { value: TERRAIN_LAYERS.map(() => 0.45) },
 };
 
-// propRot = (cos, sin) of the piece's yaw, baked by mergeStatic; position and normal are turned back
-// into the piece's own frame so the pattern follows its walls. Unmerged meshes read (0, 0): no turn.
+/** Water ripples (atmos.ts waterMaterial): the props array's 'ripple' layer, on once textures are. */
+export const waterRipple = {
+  uRippleTex: { value: null as THREE.DataArrayTexture | null },
+  uRippleLayer: { value: P('ripple') },
+  uRippleOn: { value: 0 },
+};
+
+// World position and normal, after instancing and any vertex animation (wind sway), so the pattern
+// stays glued to the surface. propRot = (cos, sin) of a merged piece's yaw (mergeStatic): position and
+// normal are turned back into the piece's own frame so the pattern follows its walls. Instanced and
+// unmerged meshes read (0, 0): no turn.
 const VERT_DECL = /* glsl */ `
 #ifdef PROP_TEX
 attribute vec2 propRot;
@@ -31,8 +69,14 @@ varying vec3 vPropNormal;
 const VERT_MAIN = /* glsl */ `
 #ifdef PROP_TEX
 {
-  vec3 wp = (modelMatrix * vec4(transformed, 1.0)).xyz;
-  vec3 wn = normalize(mat3(modelMatrix) * objectNormal);
+  vec4 lp = vec4(transformed, 1.0);
+  vec3 ln = objectNormal;
+#ifdef USE_INSTANCING
+  lp = instanceMatrix * lp;
+  ln = mat3(instanceMatrix) * ln;
+#endif
+  vec3 wp = (modelMatrix * lp).xyz;
+  vec3 wn = normalize(mat3(modelMatrix) * ln);
   vec2 cs = dot(propRot, propRot) > 0.5 ? propRot : vec2(1.0, 0.0);
   mat2 back = mat2(cs.x, cs.y, -cs.y, cs.x); // inverse yaw
   vPropWorld = vec3(back * wp.xz, wp.y).xzy;
@@ -43,18 +87,27 @@ const VERT_MAIN = /* glsl */ `
 
 const FRAG_DECL = /* glsl */ `
 #ifdef PROP_TEX
+#ifdef PROP_ARRAY_TERRAIN
+uniform highp sampler2DArray uPropTerrainTex;
+uniform float uPropTerrainMean[${TERRAIN_LAYERS.length}];
+#define PROP_SAMPLER uPropTerrainTex
+#define PROP_MEAN uPropTerrainMean
+#else
 uniform highp sampler2DArray uPropTex;
+uniform float uPropMean[${PROP_LAYERS.length}];
+#define PROP_SAMPLER uPropTex
+#define PROP_MEAN uPropMean
+#endif
 uniform float uPropStrength;
-uniform float uPropMean[4];
 varying vec3 vPropWorld;
 varying vec3 vPropNormal;
 
-vec4 propPlane(vec2 uv) { return texture(uPropTex, vec3(uv * PROP_SCALE, PROP_LAYER)); }
+vec4 propPlane(vec2 uv) { return texture(PROP_SAMPLER, vec3(uv * PROP_SCALE, PROP_LAYER)); }
 #endif
 `;
 
-// Planes: X-facing walls use (z, y), Z-facing walls (x, y), floors and tops (x, z).
-// PROP_VERTICAL_GRAIN swaps the side planes so wood grain runs up posts, doors and barrel staves.
+// Planes: X-facing sides use (z, y), Z-facing sides (x, y), floors and tops (x, z).
+// PROP_VERTICAL_GRAIN swaps the side planes so wood grain runs up posts, doors, staves and trunks.
 // PROP_SIDES_ONLY (roof tiles) ignores the top plane so the tile rows stay horizontal on the slopes.
 const FRAG_MAIN = /* glsl */ `
 #ifdef PROP_TEX
@@ -76,7 +129,7 @@ const FRAG_MAIN = /* glsl */ `
 #else
   vec4 t = a.x >= a.y && a.x >= a.z ? propPlane(ux) : a.z >= a.y ? propPlane(uz) : propPlane(uy);
 #endif
-  float lum = 1.0 + (t.r / uPropMean[int(PROP_LAYER)] - 1.0) * 1.2;
+  float lum = 1.0 + (t.r / PROP_MEAN[int(PROP_LAYER)] - 1.0) * PROP_CONTRAST;
   vec3 detail = lum * (vec3(1.0) + (t.b - 0.5) * vec3(0.08, 0.05, -0.05));
   float k = uPropStrength * (1.0 - smoothstep(70.0, 180.0, length(vViewPosition)));
   diffuseColor.rgb *= mix(vec3(1.0), detail, k);
@@ -88,37 +141,44 @@ const surfaced = new Set<THREE.MeshLambertMaterial>();
 let quality: PropTexQuality = 'off';
 let wanted: PropTexQuality = 'off';
 
-/** Give a Lambert material a surface texture (applied once textures are on). */
+/**
+ * Give a Lambert material a surface texture (applied once textures are on). Chains onto any
+ * onBeforeCompile the material already has (e.g. the wind sway on tree canopies).
+ */
 export function addSurface(m: THREE.MeshLambertMaterial, surface: Surface): THREE.MeshLambertMaterial {
-  const layer = PROP_LAYERS.indexOf(surface);
-  m.onBeforeCompile = (sh) => {
+  const prev = m.onBeforeCompile;
+  // the injected code must not collapse two different materials (with / without sway) into one program
+  const prevKey = m.customProgramCacheKey();
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
     Object.assign(sh.uniforms, shared);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>\n${VERT_DECL}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERT_MAIN}`);
+      .replace('#include <project_vertex>', `${VERT_MAIN}\n#include <project_vertex>`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAG_DECL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`);
   };
-  m.userData.surface = { layer, scale: (1 / TILE[surface]).toFixed(4), vertical: surface === 'wood', sides: surface === 'roof' };
-  // the defines tell the variants apart; this only marks the program as carrying the injected code
-  m.customProgramCacheKey = () => 'prop-tex';
+  // the defines tell the quality variants apart; this marks the injected code (plus whatever came before)
+  m.customProgramCacheKey = () => `${prevKey}|prop-tex`;
+  m.userData.surface = surface;
   m.defines = definesFor(m, quality);
   surfaced.add(m);
   return m;
 }
 
 function definesFor(m: THREE.Material, q: PropTexQuality): Record<string, string> {
-  const s = m.userData.surface as { layer: number; scale: string; vertical: boolean; sides: boolean };
+  const s = SURFACES[m.userData.surface as Surface];
   const d: Record<string, string> = {};
-  if (q !== 'off') {
-    d.PROP_TEX = '';
-    d.PROP_LAYER = `${s.layer}.0`;
-    d.PROP_SCALE = s.scale;
-    if (s.vertical) d.PROP_VERTICAL_GRAIN = '';
-    if (s.sides) d.PROP_SIDES_ONLY = '';
-    if (q === 'high') d.PROP_TEX_HQ = '';
-  }
+  if (q === 'off' || (s.hqOnly && q !== 'high')) return d;
+  d.PROP_TEX = '';
+  d.PROP_LAYER = `${s.layer}.0`;
+  d.PROP_SCALE = (1 / s.tile).toFixed(4);
+  d.PROP_CONTRAST = s.contrast.toFixed(2);
+  if (s.array === 'terrain') d.PROP_ARRAY_TERRAIN = '';
+  if (s.vertical) d.PROP_VERTICAL_GRAIN = '';
+  if (s.sides) d.PROP_SIDES_ONLY = '';
+  if (q === 'high') d.PROP_TEX_HQ = '';
   return d;
 }
 
@@ -128,20 +188,23 @@ export type Precompile = (o: THREE.Object3D) => Promise<unknown>;
 /**
  * Warm the program cache for quality `q`: one stand-in mesh per distinct shader variant (colour is a
  * uniform, so a handful of variants covers every surfaced material). Swapping defines afterwards
- * then finds the programs ready instead of stalling the frame on a compile.
+ * then finds the programs ready instead of stalling the frame on a compile. Instanced materials get
+ * an instanced stand-in, since instancing is part of the program.
  */
 async function warm(q: PropTexQuality, precompile?: Precompile): Promise<() => void> {
   if (!precompile) return () => {};
   const g = new THREE.Group(), seen = new Set<string>(), geo = new THREE.BoxGeometry();
   for (const m of surfaced) {
-    const defines = definesFor(m, q), key = JSON.stringify(defines);
+    const defines = definesFor(m, q), instanced = !!m.userData.instanced;
+    const key = `${m.customProgramCacheKey()}|${instanced}|${JSON.stringify(defines)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const c = m.clone();
     c.onBeforeCompile = m.onBeforeCompile;
     c.customProgramCacheKey = m.customProgramCacheKey;
     c.defines = defines;
-    const mesh = new THREE.Mesh(geo, c);
+    const mesh = instanced ? new THREE.InstancedMesh(geo, c, 1) : new THREE.Mesh(geo, c);
+    if (instanced) (mesh as THREE.InstancedMesh).setColorAt(0, new THREE.Color());
     mesh.castShadow = mesh.receiveShadow = true;
     g.add(mesh);
   }
@@ -157,7 +220,7 @@ async function warm(q: PropTexQuality, precompile?: Precompile): Promise<() => v
   };
 }
 
-/** Run `fn` once the next couple of frames have rendered (the swapped materials hold their programs by then). */
+/** Run `fn` once the next few frames have rendered (the swapped materials hold their programs by then). */
 const afterFrames = (fn: () => void) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(fn)));
 
 /** Switch every surfaced material to a quality; textures load (or come from cache) and compile first. */
@@ -170,6 +233,7 @@ export function setPropTextures(q: PropTexQuality, maxAnisotropy: number, precom
       m.defines = definesFor(m, q);
       m.needsUpdate = true;
     }
+    waterRipple.uRippleOn.value = q === 'off' ? 0 : 1;
   };
   if (q === 'off') {
     void warm(q, precompile).then((release) => {
@@ -184,7 +248,10 @@ export function setPropTextures(q: PropTexQuality, maxAnisotropy: number, precom
     if (wanted === q) {
       const fresh = shared.uPropTex.value !== set.props;
       shared.uPropTex.value = set.props;
+      shared.uPropTerrainTex.value = set.terrain;
       shared.uPropMean.value = set.propMeans.map((v) => Math.max(0.05, v));
+      shared.uPropTerrainMean.value = set.terrainMeans.map((v) => Math.max(0.05, v));
+      waterRipple.uRippleTex.value = set.props;
       if (fresh) shared.uPropStrength.value = 0;
       apply();
     }

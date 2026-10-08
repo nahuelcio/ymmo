@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { settings } from '../settings';
 import { heightAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { waterRipple } from './propTex';
 
 /** Length of a full day. It runs off the wall clock, so every player sees the same hour without the server. */
 export const DAY_MS = 20 * 60 * 1000;
@@ -95,6 +96,8 @@ export function waterMaterial(): THREE.ShaderMaterial {
       time: { value: 0 }, depthTex: { value: depth }, worldHalf: { value: WORLD_HALF }, day: { value: 1 },
       sunDir: { value: ATMOS.lightDir }, sunColor: { value: ATMOS.lightColor }, top: { value: ATMOS.top }, horizon: { value: ATMOS.horizon },
       fogColor: { value: new THREE.Color() }, fogNear: { value: 90 }, fogFar: { value: 420 },
+      // textured ripples on top of the analytic ones (propTex.ts turns them on with the textures)
+      ...waterRipple,
     },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
@@ -106,14 +109,28 @@ export function waterMaterial(): THREE.ShaderMaterial {
     fragmentShader: /* glsl */ `
       uniform float time, worldHalf, day, fogNear, fogFar;
       uniform sampler2D depthTex;
+      uniform highp sampler2DArray uRippleTex;
+      uniform float uRippleLayer, uRippleOn;
       uniform vec3 sunDir, sunColor, top, horizon, fogColor;
       varying vec3 vWorld;
+      // height of two ripple fields drifting in different directions (G channel of the ripple layer)
+      float rippleH(vec2 p) {
+        vec2 a = p * 0.09 + vec2(time * 0.021, time * 0.013);
+        vec2 b = mat2(0.8, -0.6, 0.6, 0.8) * p * 0.14 - vec2(time * 0.017, -time * 0.024);
+        return texture(uRippleTex, vec3(a, uRippleLayer)).g + texture(uRippleTex, vec3(b, uRippleLayer)).g * 0.6;
+      }
       void main() {
         vec2 p = vWorld.xz;
         // two sets of travelling ripples, as slopes
         vec2 g = 0.35 * vec2(cos(p.x * 0.9 + time * 1.3), cos(p.y * 1.1 - time * 1.1))
                + 0.22 * vec2(cos((p.x + p.y) * 1.7 - time * 1.9), cos((p.x - p.y) * 1.5 + time * 1.6))
                + 0.10 * vec2(cos(p.x * 3.7 + time * 2.7), cos(p.y * 4.1 + time * 2.3));
+        if (uRippleOn > 0.5) {
+          // irregular swell from the texture breaks up the regular sine pattern
+          const float e = 0.35;
+          float h0 = rippleH(p);
+          g += vec2(rippleH(p + vec2(e, 0.0)) - h0, rippleH(p + vec2(0.0, e)) - h0) / e * 1.6;
+        }
         vec3 n = normalize(vec3(-g.x * 0.22, 1.0, -g.y * 0.22));
         vec3 v = normalize(cameraPosition - vWorld);
         vec3 r = reflect(-v, n);
