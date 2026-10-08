@@ -526,14 +526,34 @@ function buildTown(): THREE.Group {
   const water = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 0.1, 16), new THREE.MeshLambertMaterial({ color: 0x4a90c8, transparent: true, opacity: 0.85 }));
   water.position.set(TOWN.x, y + 0.93, TOWN.z);
   const ped = box(1.6, 2.2, 1.6, 0xcac4b6, TOWN.x, y + 1.6, TOWN.z);
+  // the founder: a bronze man with a proud moustache, one hand on his hip and a sword raised
+  const BRONZE = 0xd8c48a, PATINA = 0x6e5f34;
   const statue = new THREE.Group();
-  statue.add(box(0.8, 1.6, 0.5, 0xd8c48a, 0, 0.8, 0));
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), mat(0xd8c48a));
-  head.position.y = 1.9;
+  const tilted = (m: THREE.Mesh, rz: number) => ((m.rotation.z = rz), m);
+  for (const sx of [-1, 1]) {
+    statue.add(box(0.3, 1, 0.32, BRONZE, sx * 0.2, 0.5, 0)); // legs
+    statue.add(box(0.34, 0.16, 0.44, PATINA, sx * 0.2, 0.08, 0.05)); // boots
+  }
+  statue.add(box(0.8, 0.95, 0.45, BRONZE, 0, 1.47, 0)); // torso
+  statue.add(box(0.84, 0.12, 0.49, PATINA, 0, 1.02, 0)); // belt
+  statue.add(tilted(box(0.22, 0.8, 0.24, BRONZE, -0.56, 1.45, 0), -0.3)); // hand on the hip
+  statue.add(tilted(box(0.22, 0.85, 0.24, BRONZE, 0.62, 2.15, 0), -0.5)); // sword arm
+  statue.add(tilted(box(0.1, 1.9, 0.05, 0xe8e0c0, 1.0, 3.3, 0), -0.2));
+  statue.add(tilted(box(0.42, 0.07, 0.1, PATINA, 0.82, 2.5, 0), -0.2)); // crossguard
+  statue.add(box(0.24, 0.16, 0.24, BRONZE, 0, 2.0, 0)); // neck
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), mat(BRONZE));
+  head.position.y = 2.36;
+  head.castShadow = true;
   statue.add(head);
-  const sword = box(0.12, 2.2, 0.05, 0xe8e0c0, 0.55, 1.6, 0.2);
-  sword.rotation.z = -0.2;
-  statue.add(sword);
+  statue.add(box(0.5, 0.14, 0.5, PATINA, 0, 2.6, -0.03)); // hair
+  statue.add(box(0.08, 0.13, 0.1, BRONZE, 0, 2.34, 0.3)); // nose
+  for (const sx of [-1, 1]) {
+    statue.add(box(0.07, 0.05, 0.04, PATINA, sx * 0.11, 2.43, 0.27)); // eyes
+    statue.add(tilted(box(0.26, 0.09, 0.09, PATINA, sx * 0.13, 2.23, 0.3), -sx * 0.3)); // moustache
+    statue.add(box(0.08, 0.14, 0.08, PATINA, sx * 0.27, 2.14, 0.29)); // ...with drooping tips
+  }
+  statue.scale.setScalar(1.5);
+  statue.rotation.y = Math.PI; // facing the way the camera looks when you arrive
   statue.position.set(TOWN.x, y + 2.7, TOWN.z);
   g.add(basin, water, ped, statue);
 
@@ -641,7 +661,119 @@ function buildTown(): THREE.Group {
     banner.rotation.y = gp.rot;
     g.add(banner);
   }
+  dressTown(g, L, y);
   return g;
+}
+
+/**
+ * Village dressing: paving, gate arches, benches, bunting, yards and hedges. None of it has collision,
+ * so everything is either flat, overhead, or tucked against a house, the wall or the plaza rim.
+ */
+function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) {
+  const STONE = 0x8f897d, TIMBER = 0x5a3a20, FLAGS = [0xc0392b, 0xe8c040, 0x3a7ac8, 0x4a9a4a];
+  const rng = mulberry32(21);
+  const flat = (m: THREE.Mesh) => ((m.castShadow = false), m);
+  const turned = <T extends THREE.Object3D>(o: T, ry: number) => ((o.rotation.y = ry), o);
+  const disc = (r: number, h: number, color: number, py: number) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 32), mat(color));
+    m.position.set(TOWN.x, py, TOWN.z);
+    m.receiveShadow = true;
+    return m;
+  };
+  // plaza: a darker kerb around it and a paved ring around the fountain
+  g.add(disc(17.2, 0.16, 0x7a746a, y + 0.02));
+  g.add(disc(7.5, 0.04, 0x837d72, y + 0.13));
+  g.add(disc(6.6, 0.04, 0x9a9488, y + 0.135));
+
+  // every gate: a timber arch with the village colours, and a paved lane down to the plaza
+  const roads: number[] = [];
+  for (let i = 0; i + 1 < L.gates.length; i += 2) {
+    const a = L.gates[i], b = L.gates[i + 1];
+    const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, ang = Math.atan2(mz - TOWN.z, mx - TOWN.x);
+    roads.push(ang);
+    const gy = heightAt(mx, mz), span = Math.hypot(a.x - b.x, a.z - b.z);
+    g.add(turned(box(span + 1.8, 0.5, 0.8, TIMBER, mx, gy + 5.2, mz), -ang + Math.PI / 2));
+    g.add(turned(box(span + 2.6, 0.2, 1.3, 0x8a3a2a, mx, gy + 5.55, mz), -ang + Math.PI / 2));
+    g.add(turned(box(2.6, 1.1, 0.1, 0x8a1a2a, mx, gy + 4.35, mz), -ang + Math.PI / 2));
+    g.add(turned(box(1.2, 0.5, 0.14, 0xe8c060, mx, gy + 4.4, mz), -ang + Math.PI / 2));
+    const len = 27;
+    g.add(flat(turned(box(len, 0.1, 4.6, STONE, TOWN.x + Math.cos(ang) * (17 + len / 2), y + 0.03, TOWN.z + Math.sin(ang) * (17 + len / 2)), -ang)));
+    g.add(flat(turned(box(len, 0.11, 3.4, 0x9a9488, TOWN.x + Math.cos(ang) * (17 + len / 2), y + 0.03, TOWN.z + Math.sin(ang) * (17 + len / 2)), -ang)));
+  }
+
+  // benches around the plaza, backs to the outside
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.5 + Math.PI / 6;
+    const bench = new THREE.Group();
+    bench.add(box(2.2, 0.12, 0.6, 0x7a5a3a, 0, 0.5, 0));
+    bench.add(box(2.2, 0.45, 0.1, 0x7a5a3a, 0, 0.9, -0.28));
+    for (const sx of [-0.95, 0.95]) bench.add(box(0.12, 0.5, 0.55, TIMBER, sx, 0.25, 0));
+    bench.position.set(TOWN.x + Math.cos(a) * 14, y + 0.12, TOWN.z + Math.sin(a) * 14);
+    g.add(turned(bench, Math.atan2(-Math.cos(a), -Math.sin(a))));
+  }
+
+  // bunting strung from lamp post to lamp post
+  for (let i = 0; i < 8; i++) {
+    const a0 = (i / 8) * Math.PI * 2 + 0.2, a1 = ((i + 1) / 8) * Math.PI * 2 + 0.2;
+    const x0 = TOWN.x + Math.cos(a0) * 17, z0 = TOWN.z + Math.sin(a0) * 17, x1 = TOWN.x + Math.cos(a1) * 17, z1 = TOWN.z + Math.sin(a1) * 17;
+    const ry = -Math.atan2(z1 - z0, x1 - x0);
+    for (let k = 1; k < 10; k++) {
+      const t = k / 10, sag = Math.sin(Math.PI * t) * 0.45;
+      const fx = x0 + (x1 - x0) * t, fz = z0 + (z1 - z0) * t;
+      g.add(flat(turned(box(Math.hypot(x1 - x0, z1 - z0) / 10 + 0.05, 0.03, 0.03, 0x2a2a2a, fx, y + 3.0 - sag, fz), ry)));
+      g.add(flat(turned(box(0.34, 0.4, 0.03, FLAGS[(i + k) % FLAGS.length], fx, y + 2.78 - sag, fz), ry)));
+    }
+  }
+
+  // each house: a stone path from the door, a fenced vegetable bed, a woodpile and a barrel or hay bale
+  for (const h of L.houses) {
+    const yard = new THREE.Group();
+    const f = h.d / 2;
+    yard.add(flat(box(1.5, 0.08, 4, STONE, 0, 0.05, f + 2.3)));
+    const bx = h.w / 2 + 1.7;
+    yard.add(flat(box(2.4, 0.22, 3, 0x4e3a24, bx, 0.11, 0)));
+    for (let k = 0; k < 6; k++) {
+      const crop = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 0), mat(k % 3 ? 0x4f8a3a : 0xc86a3a));
+      crop.position.set(bx - 0.6 + (k % 2) * 1.2, 0.36, -1 + (k >> 1));
+      yard.add(crop);
+    }
+    for (const sz of [-1.6, 1.6]) yard.add(box(2.7, 0.08, 0.08, TIMBER, bx, 0.55, sz));
+    for (const sx of [-1.3, 1.3]) {
+      yard.add(box(0.08, 0.08, 3.2, TIMBER, bx + sx, 0.55, 0));
+      for (const sz of [-1.6, 0, 1.6]) yard.add(box(0.12, 0.75, 0.12, TIMBER, bx + sx, 0.37, sz));
+    }
+    // woodpile against the side wall: three logs with two on top
+    [[0, 0.19], [0.36, 0.19], [0.72, 0.19], [0.18, 0.5], [0.54, 0.5]].forEach(([dx, ly], k) => {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.3, 6).rotateX(Math.PI / 2), mat(k % 2 ? 0x7a5a3a : 0x6a4a2a));
+      log.position.set(-h.w / 2 - 0.4 - dx, ly, -h.d / 4);
+      log.castShadow = true;
+      yard.add(log);
+    });
+    if (rng() < 0.5) {
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.85, 8), mat(0x7a5030));
+      barrel.position.set(h.w / 2 - 0.5, 0.42, f + 0.5);
+      barrel.castShadow = true;
+      yard.add(barrel);
+    } else {
+      yard.add(box(1.3, 0.8, 0.8, 0xc8a84a, -h.w / 2 + 0.7, 0.4, f + 0.6));
+      yard.add(box(1.34, 0.06, 0.84, 0x8a6a2a, -h.w / 2 + 0.7, 0.55, f + 0.6));
+    }
+    yard.position.set(h.x, y, h.z);
+    g.add(turned(yard, h.rot));
+  }
+
+  // a hedge of bushes along the inside of the palisade, open at the gates
+  for (let i = 0; i < 70; i++) {
+    const a = (i / 70) * Math.PI * 2 + rng() * 0.05;
+    if (roads.some((r) => Math.abs(Math.atan2(Math.sin(a - r), Math.cos(a - r))) < 0.16)) continue;
+    const r = TOWN.r + 0.4 - rng() * 0.6, sc = 0.8 + rng() * 0.6;
+    const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(sc, 0), mat(rng() < 0.5 ? 0x4a7a3a : 0x3d6a34));
+    bush.position.set(TOWN.x + Math.cos(a) * r, heightAt(TOWN.x + Math.cos(a) * r, TOWN.z + Math.sin(a) * r) + sc * 0.45, TOWN.z + Math.sin(a) * r);
+    bush.scale.y = 0.7;
+    bush.rotation.y = rng() * 3;
+    bush.castShadow = true;
+    g.add(bush);
+  }
 }
 
 const FLAME_OUT = new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0xff5a00, emissiveIntensity: 1, flatShading: true });
