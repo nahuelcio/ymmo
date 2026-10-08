@@ -43,7 +43,7 @@ impl World {
         if !p.pvp_on { return Some(tr(l, "Tenés el PvP desactivado. Activalo (botón PvP o /pvp) para pelear con jugadores.", "Your PvP mode is off. Turn it on (PvP button or /pvp) to fight players.").into()); }
         if !t.pvp_on && t.karma == 0 { return Some(if l.en() { format!("{} has PvP mode off.", t.name) } else { format!("{} tiene el PvP desactivado.", t.name) }); }
         if t.karma > 0 || t.pvp_until > now || force { return None; }
-        Some(tr(l, "Mantené Ctrl y hacé click para forzar el ataque a otro jugador.", "Hold Ctrl and click to force attack another player.").into())
+        Some(tr(l, "Mantené Ctrl y usá el autoataque para forzar el ataque a otro jugador.", "Hold Ctrl and use auto-attack to force an attack on another player.").into())
     }
 
     fn def_stats(&self, id: u32) -> (f64, f64, f64) {

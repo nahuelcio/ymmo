@@ -890,17 +890,14 @@ export class Game {
     this.ui.onTargetChanged();
   }
 
-  interact(c: CEnt, ctrl: boolean) {
+  interact(c: CEnt) {
     const r = c.rec;
     if (r.k === 'i') return this.serverAction({ t: 'pickup', id: r.id });
     if (r.k === 'n') {
       this.setTarget(r.id);
       return this.serverAction({ t: 'talk', id: r.id });
     }
-    if (r.id === this.me.id) return this.setTarget(r.id);
     this.setTarget(r.id);
-    // one click attacks anything hostile (mobs, flagged/PK players); ctrl forces PvP
-    if (this.isHostile(c) || (r.k === 'p' && ctrl)) this.serverAction({ t: 'attack', id: r.id, force: ctrl });
   }
 
   isHostile(c: CEnt): boolean {
@@ -1144,14 +1141,14 @@ export class Game {
       if (!c) return CURSORS.move;
       if (c.rec.k === 'n') return CURSORS.talk;
       if (c.rec.k === 'i') return CURSORS.pickup;
-      return this.isHostile(c) || (c.rec.k === 'p' && this.ctrl) ? CURSORS.attack : CURSORS.select;
+      return CURSORS.select;
     };
     // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || e.pointerType === 'touch') return; // touch acts on tap (pointerup)
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
-      if (r.ent) this.interact(r.ent, e.ctrlKey);
+      if (r.ent) this.interact(r.ent);
       else if (r.point) {
         this.moveTo(r.point, true);
         this.holdMove = true;
@@ -1161,11 +1158,11 @@ export class Game {
     });
     el.addEventListener('pointerup', (e) => {
       if (e.button === 0) this.holdMove = false;
-      // mobile: a tap (not a camera drag) selects / attacks / walks
+      // mobile: a tap (not a camera drag) selects / talks / walks
       if (e.pointerType === 'touch' && !this.cam.touchDragged) {
         (document.activeElement as HTMLElement | null)?.blur();
         const r = pick(e);
-        if (r.ent) this.interact(r.ent, false);
+        if (r.ent) this.interact(r.ent);
         else if (r.point) this.moveTo(r.point, true);
       }
     });

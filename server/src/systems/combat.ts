@@ -41,7 +41,7 @@ export function canAttack(_w: World, p: Player, t: Entity, force: boolean, now: 
   if (!t.pvpOn && t.karma === 0) return tr(l, `${t.name} tiene el PvP desactivado.`, `${t.name} has PvP mode off.`);
   if (t.karma > 0 || t.pvpUntil > now) return null;
   if (force) return null;
-  return tr(l, 'Mantené Ctrl y hacé click para forzar el ataque a otro jugador.', 'Hold Ctrl and click to force attack another player.');
+  return tr(l, 'Mantené Ctrl y usá el autoataque para forzar el ataque a otro jugador.', 'Hold Ctrl and use auto-attack to force an attack on another player.');
 }
 
 function defStats(t: Fighter): { pDef: number; mDef: number; evasion: number } {
