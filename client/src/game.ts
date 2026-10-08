@@ -1244,9 +1244,12 @@ export class Game {
         c.ry = c.roll.ry;
         return false;
       }
-      // hold at the end until a server snapshot shows the roll (stale ones would pull us back)
-      const srv0 = c.snaps[c.snaps.length - 1];
-      const synced = srv0 && Math.hypot(srv0.x - c.roll.tx, srv0.z - c.roll.tz) < 1.5;
+      // Hold at the end until a server snapshot comes from after the roll (stale ones would pull us back).
+      // Such a snapshot is nearer to where the roll ends than to where it began. Requiring it to sit ON the
+      // end froze the character for a second whenever a move was clicked mid-roll: the server had already
+      // walked on from there.
+      const srv0 = c.snaps[c.snaps.length - 1], r = c.roll;
+      const synced = srv0 && (Math.hypot(r.tx - r.fx, r.tz - r.fz) < 1 || Math.hypot(srv0.x - r.tx, srv0.z - r.tz) < Math.hypot(srv0.x - r.fx, srv0.z - r.fz));
       if (!synced && now - c.roll.at < ROLL_MS + 800) {
         c.pos.set(c.roll.tx, heightAt(c.roll.tx, c.roll.tz), c.roll.tz);
         return false;
