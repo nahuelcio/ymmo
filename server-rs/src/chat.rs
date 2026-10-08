@@ -43,13 +43,17 @@ impl World {
                     self.sys(pid, "En 10 segundos volvés a la aldea...", "You will be returned to the village in 10 seconds...");
                 }
                 "raid" => self.raid_command(pid, &arg.to_lowercase()),
+                "dance" => {
+                    let c = &self.ents[&pid].c;
+                    if !c.dead { self.send_near(c.x, c.z, serde_json::json!({ "t": "fx", "s": pid, "tg": pid, "skill": "dance" })); }
+                }
                 "pvp" => {
                     let on = if arg.is_empty() { !self.pl(pid).unwrap().pvp_on } else { arg.to_lowercase() == "on" };
                     self.set_pvp_mode(pid, on);
                 }
                 "help" => self.sys(pid,
-                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /raid [nest] (entrar o salir de una raid con tu party: la de Kaim, o /raid nest para el Nido del Dragón)",
-                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /raid [nest] (enter or leave a raid with your party: Kaim's, or /raid nest for the Dragon's Nest)"),
+                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest] (entrar o salir de una raid con tu party: la de Kaim, o /raid nest para el Nido del Dragón)",
+                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest] (enter or leave a raid with your party: Kaim's, or /raid nest for the Dragon's Nest)"),
                 _ => self.sys(pid, &format!("No existe el comando /{cmd}. Escribí /help."), &format!("Unknown command /{cmd}. Type /help.")),
             }
             return;

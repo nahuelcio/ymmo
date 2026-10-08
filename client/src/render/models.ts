@@ -36,6 +36,8 @@ export interface AnimState {
   casting: boolean;
   deadAge: number; // ms since death (-1 alive)
   t: number; // seconds
+  /** /dance emote */
+  dancing?: boolean;
 }
 
 /**
@@ -981,7 +983,18 @@ export function bake(rig: Rig): Rig {
 }
 
 export function animate(rig: Rig, s: AnimState) {
-  if (rig.q) return animateQ(rig.q, s);
+  const dance = !!s.dancing && s.deadAge < 0;
+  if (rig.q) {
+    animateQ(rig.q, s);
+    // ponytail: the clip library has no dance, so the whole body bounces and twists over the idle; swap in a clip if one is added
+    if (dance || rig.body.userData.danced) {
+      rig.body.position.y = dance ? Math.abs(Math.sin(s.t * 8)) * 0.14 : 0;
+      rig.body.rotation.y = dance ? Math.sin(s.t * 4) * 0.7 : 0;
+      rig.body.rotation.z = dance ? Math.sin(s.t * 8) * 0.1 : 0;
+      rig.body.userData.danced = dance;
+    }
+    return;
+  }
   const { body, legs, armL, armR, torso } = rig;
   if (s.deadAge >= 0) {
     const k = Math.min(1, s.deadAge / 450);
@@ -1011,6 +1024,15 @@ export function animate(rig: Rig, s: AnimState) {
     if (rig.pose === 'zombie' && !s.casting) {
       ar = -1.35 + walk * 0.1 + (s.atkAge < 450 ? Math.sin((s.atkAge / 450) * Math.PI) * -0.5 : 0);
       al = -1.4 - walk * 0.1;
+    }
+    if (dance) {
+      // hands in the air, hips twisting, a hop on every beat
+      ar = -2.7 + Math.sin(s.t * 8) * 0.5;
+      al = -2.7 - Math.sin(s.t * 8) * 0.5;
+      body.rotation.y = Math.sin(s.t * 4) * 0.7;
+      body.position.y = Math.abs(Math.sin(s.t * 8)) * 0.14;
+      legs[0].rotation.x = Math.sin(s.t * 8) * 0.35;
+      legs[1].rotation.x = -Math.sin(s.t * 8) * 0.35;
     }
     if (rig.pose === 'hunch' && torso) torso.rotation.x = 0.22;
     if (rig.pose === 'float') legs.forEach((l) => (l.rotation.x = 0.15));
