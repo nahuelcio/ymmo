@@ -210,3 +210,11 @@ class Store {
 }
 
 export const settings = new Store();
+
+/**
+ * Ground texture quality for the current settings (docs/plan-texturas-mundo.md). Derived from the
+ * preset for now: low machines keep the plain colours, medium gets the light version.
+ */
+export function textureQuality(s: Settings): 'off' | 'low' | 'high' {
+  return s.preset === 'low' ? 'off' : s.preset === 'medium' ? 'low' : 'high';
+}

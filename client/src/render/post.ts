@@ -142,4 +142,16 @@ export class PostFX {
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }
+
+  /**
+   * Compile `o`'s shaders in the background for the pass that will really draw it: with effects on,
+   * the scene renders into the composer's buffer (linear output, its own program variants).
+   */
+  compileAsync(o: THREE.Object3D): Promise<unknown> {
+    const r = this.renderer, prev = r.getRenderTarget();
+    if (this.composer) r.setRenderTarget(this.composer.readBuffer);
+    const p = r.compileAsync(o, this.camera, this.scene);
+    r.setRenderTarget(prev);
+    return p;
+  }
 }
