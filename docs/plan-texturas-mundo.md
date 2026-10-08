@@ -77,6 +77,30 @@ Hoy el mundo no usa ninguna textura. Todo se pinta con colores planos.
 - `flatShading` se mantiene, por el look facetado. La textura aporta el detalle dentro de cada faceta.
 - Cuidado: `computeVertexNormals` se calcula por chunk, y la mezcla tiene que ser continua entre chunks. Los pesos dependen solo de `(x, z, h)`, así que coinciden en los bordes.
 
+**Estado: hecha.** Lo que quedó, y en qué cambió respecto de lo planeado:
+
+- **Pesos.** En [scene.ts](../client/src/render/scene.ts), `groundFactors` reúne los factores (roca por altura, nieve, camino, pueblo, arena, fondo). De ahí salen dos cosas:
+  - `groundColor`: el color, idéntico al de antes, así que el minimapa no cambia.
+  - `groundLayers`: los 6 pesos, aplicados en el mismo orden de mezcla.
+
+  El pueblo usa empedrado, los caminos tierra y el fondo de las lagunas arena.
+- **Pendiente.** Sale de `slopeAt`, que deriva `heightAt` directamente; no usa las normales de cada chunk, así que no hay saltos en los bordes. Los umbrales son los del oscurecido de antes (normal.y entre 0,72 y 0,93). Ese oscurecido por color se mantiene.
+- **Atributos por vértice.** `splatA` lleva pasto, tierra, roca y arena; `splatB` lleva nieve y empedrado.
+- **Shader** ([terrainTex.ts](../client/src/render/terrainTex.ts)).
+  - Se agrega con `onBeforeCompile` sobre el mismo Lambert con vertex colors.
+  - Mezcla las capas por altura, con una profundidad de 0,3.
+  - Cada capa se divide por su brillo medio, así el color promedio no cambia; encima se aplica un contraste global de 1,5.
+  - La textura se va atenuando entre 140 y 340 u de distancia a la cámara.
+  - En high se suman una segunda muestra rotada y más grande (contra la repetición) y la roca triplanar.
+  - Tamaño de cada repetición: pasto 7 u, tierra 6, roca 9, arena 6, nieve 10, empedrado 4.
+- **Control** (`TerrainTextures`). Cambia entre el material plano y uno texturizado por calidad. El plano se sigue viendo mientras se generan las texturas, que después aparecen gradualmente en unos 0,7 s.
+- **Calidad provisoria.** `textureQuality(settings)` la deriva del preset: low → off, medium → low, high/ultra/custom → high. En la Fase 5 pasa a ser una opción propia.
+- **Verificado en el juego:**
+  - Pueblo empedrado; pasto con manchas y briznas; camino con piedritas; orilla de arena con ondas; laderas de roca con grietas y una transición pasto–roca irregular.
+  - Sin errores de consola.
+  - El build de producción empaqueta `texgen.worker` como archivo aparte.
+- **Rendimiento** (misma vista, panel de prueba): off 32 FPS, low 31 FPS (−3 %), high 30 FPS (−6 %). Dentro del presupuesto de −10 %.
+
 ### Fase 3 — Pueblo y props
 - Agregar `texMat(color, kind)` junto a `mat(color)`. `kind` puede ser `'wood' | 'stone' | 'roof' | 'plaster' | 'none'`, y el cache pasa a usar `color|kind` como clave.
 - Asignar el tipo de material en los constructores de edificios: `house`, `gable`, `tavern`, `townHall`, `smithy`, la empalizada, las torres, los puestos y la fuente.

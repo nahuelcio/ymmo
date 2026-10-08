@@ -12,6 +12,9 @@ export type TextureQuality = 'low' | 'high';
 export interface TextureSet {
   terrain: THREE.DataArrayTexture;
   props: THREE.DataArrayTexture;
+  /** mean R (0..1) per layer: dividing a sample by it keeps the average brightness unchanged */
+  terrainMeans: number[];
+  propMeans: number[];
   /** wall-clock time to get the textures in ms (painted in a worker, or read back from IndexedDB) */
   ms: number;
 }
@@ -147,6 +150,17 @@ function toArrayTexture(data: Uint8Array<ArrayBuffer>, size: number, depth: numb
   return tex;
 }
 
+/** Average R (luminance, 0..1) of each layer, so shaders can keep the mean brightness at 1. */
+function layerMeans(data: Uint8Array, size: number, depth: number): number[] {
+  const n = size * size, out: number[] = [];
+  for (let l = 0; l < depth; l++) {
+    let sum = 0;
+    for (let i = l * n * 4, end = (l + 1) * n * 4; i < end; i += 4) sum += data[i];
+    out.push(sum / n / 255);
+  }
+  return out;
+}
+
 const cache = new Map<TextureQuality, Promise<TextureSet>>();
 
 /** Build (or return the cached) texture set for a quality level. */
@@ -159,6 +173,8 @@ export function getTextureSet(quality: TextureQuality, maxAnisotropy = 1): Promi
     p = Promise.all([paint(TERRAIN_LAYERS, s.terrain), paint(PROP_LAYERS, s.props)]).then(([t, pr]) => ({
       terrain: toArrayTexture(t, s.terrain, TERRAIN_LAYERS.length, aniso),
       props: toArrayTexture(pr, s.props, PROP_LAYERS.length, aniso),
+      terrainMeans: layerMeans(t, s.terrain, TERRAIN_LAYERS.length),
+      propMeans: layerMeans(pr, s.props, PROP_LAYERS.length),
       ms: performance.now() - t0,
     }));
     cache.set(quality, p);

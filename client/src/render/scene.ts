@@ -5,6 +5,7 @@ import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, zoneOf } from '../../../shared/src/layout';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
+import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 
 const SKY = 0xa9c6e0;
 
@@ -50,9 +51,29 @@ const SkyShader = {
 
 export { ROADS, roadDist } from '../../../shared/src/layout';
 
+/**
+ * How much of each surface covers the ground at (x, z, h). Both the colour (groundColor) and the
+ * texture-layer weights (groundLayers) are derived from these, applied in the same order, so the
+ * textures always sit on the matching colour.
+ */
+function groundFactors(x: number, z: number, h: number) {
+  const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
+  const town = 1 - smoothstep(TOWN.r - 2, TOWN.r + 6, Math.hypot(x - TOWN.x, z - TOWN.z));
+  const dirt = Math.max(road * 0.85, town);
+  return {
+    n: fbm(x / 40 + 50, z / 40 - 20, 3),
+    rock: smoothstep(14, 26, h),
+    snow: smoothstep(45, 60, h),
+    road, town, dirt,
+    // pond shores: sand at the waterline, darker silt underwater
+    sand: (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt),
+    deep: 1 - smoothstep(WATER_LEVEL - 2.5, WATER_LEVEL - 0.2, h),
+  };
+}
+
 /** Ground colour (sRGB 0..1) used by both terrain mesh and minimap. */
 export function groundColor(x: number, z: number, h: number): [number, number, number] {
-  const n = fbm(x / 40 + 50, z / 40 - 20, 3);
+  const f = groundFactors(x, z, h), n = f.n;
   let r = 0.3 + n * 0.12, g = 0.5 + n * 0.14, b = 0.2 + n * 0.06;
   for (const zn of ZONES) {
     const w = (1 - smoothstep(zn.r * 0.5, zn.r * 1.15, Math.hypot(x - zn.x, z - zn.z))) * 0.75;
@@ -60,20 +81,43 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
     g += (zn.tint[1] * (0.85 + n * 0.3) - g) * w;
     b += (zn.tint[2] * (0.85 + n * 0.3) - b) * w;
   }
-  const rock = smoothstep(14, 26, h);
-  r += (0.47 + n * 0.08 - r) * rock; g += (0.45 + n * 0.08 - g) * rock; b += (0.42 + n * 0.08 - b) * rock;
-  const snow = smoothstep(45, 60, h);
-  r += (0.92 - r) * snow; g += (0.93 - g) * snow; b += (0.96 - b) * snow;
-  const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
-  const town = 1 - smoothstep(TOWN.r - 2, TOWN.r + 6, Math.hypot(x - TOWN.x, z - TOWN.z));
-  const dirt = Math.max(road * 0.85, town);
-  r += (0.6 + n * 0.08 - r) * dirt; g += (0.52 + n * 0.06 - g) * dirt; b += (0.38 + n * 0.05 - b) * dirt;
-  // pond shores: sand at the waterline, darker silt underwater
-  const sand = (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt);
-  r += (0.74 - r) * sand; g += (0.68 - g) * sand; b += (0.5 - b) * sand;
-  const deep = 1 - smoothstep(WATER_LEVEL - 2.5, WATER_LEVEL - 0.2, h);
-  r += (0.22 - r) * deep; g += (0.32 - g) * deep; b += (0.34 - b) * deep;
+  r += (0.47 + n * 0.08 - r) * f.rock; g += (0.45 + n * 0.08 - g) * f.rock; b += (0.42 + n * 0.08 - b) * f.rock;
+  r += (0.92 - r) * f.snow; g += (0.93 - g) * f.snow; b += (0.96 - b) * f.snow;
+  r += (0.6 + n * 0.08 - r) * f.dirt; g += (0.52 + n * 0.06 - g) * f.dirt; b += (0.38 + n * 0.05 - b) * f.dirt;
+  r += (0.74 - r) * f.sand; g += (0.68 - g) * f.sand; b += (0.5 - b) * f.sand;
+  r += (0.22 - r) * f.deep; g += (0.32 - g) * f.deep; b += (0.34 - b) * f.deep;
   return [r, g, b];
+}
+
+/** Steepness 0 (flat) .. 1 (cliff) from the analytic height field: continuous across terrain chunks. */
+export function slopeAt(x: number, z: number): number {
+  const e = 1;
+  const gx = (heightAt(x + e, z) - heightAt(x - e, z)) / (2 * e);
+  const gz = (heightAt(x, z + e) - heightAt(x, z - e)) / (2 * e);
+  return 1 - 1 / Math.sqrt(1 + gx * gx + gz * gz); // 1 - normal.y
+}
+
+/**
+ * Texture-layer weights at a ground point, in TERRAIN_LAYERS order
+ * (grass, dirt, rock, sand, snow, cobble), written into out[o..o+5]. They sum to 1.
+ */
+export function groundLayers(x: number, z: number, h: number, out: Float32Array, o: number) {
+  const f = groundFactors(x, z, h);
+  out.fill(0, o, o + 6);
+  out[o] = 1;
+  const apply = (layer: number, k: number) => {
+    if (k <= 0) return;
+    for (let i = 0; i < 6; i++) out[o + i] *= 1 - k;
+    out[o + layer] += k;
+  };
+  apply(2, f.rock);
+  apply(4, f.snow);
+  apply(1, f.road * 0.85); // roads: packed dirt
+  apply(5, f.town); // the village is paved
+  apply(3, f.sand);
+  apply(3, f.deep); // silt under the ponds reads as sand
+  // steep slopes turn to bare rock (snow stays on top of the peaks)
+  apply(2, smoothstep(0.07, 0.28, slopeAt(x, z)) * 0.85 * (1 - f.snow) * (1 - f.town));
 }
 
 const matCache = new Map<number, THREE.MeshLambertMaterial>();
@@ -93,9 +137,11 @@ export interface WorldScene {
   /** per-frame: keep the sky around the camera and blend its palette by region */
   updateSky(camera: THREE.Camera, far: number, dt: number): void;
   follow(p: THREE.Vector3): void;
+  /** ground textures: off, low or high (render/terrainTex.ts) */
+  setTextureQuality(q: TerrainTexQuality): void;
 }
 
-export function createWorldScene(): WorldScene {
+export function createWorldScene(opts: { maxAnisotropy?: number } = {}): WorldScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, 90, 420);
@@ -138,6 +184,7 @@ export function createWorldScene(): WorldScene {
   scene.add(sun, sun.target);
 
   const terrain = buildTerrain();
+  const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1);
   scene.add(terrain);
   scene.add(buildTrees());
   scene.add(buildRocks());
@@ -156,7 +203,9 @@ export function createWorldScene(): WorldScene {
     scene, terrain, sun,
     detail,
     sky,
+    setTextureQuality: (q) => terrainTex.set(q),
     updateSky(camera: THREE.Camera, far: number, dt: number) {
+      terrainTex.update(dt);
       sky.position.copy(camera.position);
       sky.scale.setScalar(far * 0.92);
       clouds.position.set(camera.position.x, 0, camera.position.z);
@@ -248,6 +297,9 @@ function buildTerrain(): THREE.Group {
       geo.translate(-WORLD_HALF + (cx + 0.5) * CHUNK, 0, -WORLD_HALF + (cz + 0.5) * CHUNK);
       const pos = geo.attributes.position as THREE.BufferAttribute;
       const colors = new Float32Array(pos.count * 3);
+      // texture-layer weights (render/terrainTex.ts): splatA = grass, dirt, rock, sand; splatB = snow, cobble
+      const layers = new Float32Array(6);
+      const splatA = new Float32Array(pos.count * 4), splatB = new Float32Array(pos.count * 2);
       for (let i = 0; i < pos.count; i++) {
         const x = pos.getX(i), z = pos.getZ(i);
         const h = heightAt(x, z);
@@ -255,7 +307,12 @@ function buildTerrain(): THREE.Group {
         const [r, gg, b] = groundColor(x, z, h);
         c.setRGB(r, gg, b, THREE.SRGBColorSpace);
         colors.set([c.r, c.g, c.b], i * 3);
+        groundLayers(x, z, h, layers, 0);
+        splatA.set(layers.subarray(0, 4), i * 4);
+        splatB.set(layers.subarray(4, 6), i * 2);
       }
+      geo.setAttribute('splatA', new THREE.BufferAttribute(splatA, 4));
+      geo.setAttribute('splatB', new THREE.BufferAttribute(splatB, 2));
       geo.computeVertexNormals();
       // steep slopes turn to bare rock and darken a little: hills read as hills
       const nrm = geo.attributes.normal as THREE.BufferAttribute;

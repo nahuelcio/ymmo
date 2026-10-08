@@ -20,7 +20,7 @@ import { glyph } from './ui/common';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
 import { lightSources } from './render/scene';
 import { PostFX } from './render/post';
-import { settings, type Action, type Settings } from './settings';
+import { settings, textureQuality, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
 import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
@@ -184,7 +184,7 @@ export class Game {
     host.appendChild(this.labels.domElement);
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.3, 700);
-    this.world = createWorldScene();
+    this.world = createWorldScene({ maxAnisotropy: this.renderer.capabilities.getMaxAnisotropy() });
     this.cam = new CameraController(this.camera, this.renderer.domElement);
     this.fx = new FxManager(this.world.scene);
     this.post = new PostFX(this.renderer, this.world.scene, this.camera);
@@ -238,6 +238,7 @@ export class Game {
 
   private applySettings(s: Settings, changed: (keyof Settings)[]) {
     const has = (...k: (keyof Settings)[]) => k.some((x) => changed.includes(x));
+    if (has('preset')) this.world.setTextureQuality(textureQuality(s));
     if (has('renderScale')) {
       this.renderer.setPixelRatio(Math.max(0.4, Math.min(3, Math.min(devicePixelRatio, 1.5) * s.renderScale)));
       this.resize();
