@@ -598,7 +598,7 @@ export class Game {
     else if (d < this.clockOff) this.clockOff = d;
     else this.clockOff += (d - this.clockOff) * 0.002; // follow slow clock drift
     this.jitter = this.jitter * 0.97 + (d - this.clockOff) * 0.03;
-    const want = Math.min(220, INTERP_BASE + this.jitter * 2);
+    const want = Math.min(150, INTERP_BASE + this.jitter * 2);
     this.interpDelay += (want - this.interpDelay) * 0.05;
     return st + this.clockOff;
   }
