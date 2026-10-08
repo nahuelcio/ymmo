@@ -194,6 +194,12 @@ export class World {
         e.nav = { gx: tx, gz: tz, at: this.now, path: findPath(e.x, e.z, tx, tz) };
       const path = e.nav!.path;
       while (path.length > 1 && Math.hypot(path[0].x - e.x, path[0].z - e.z) < 0.15) path.shift();
+      // The path ends short of the target (it sits where the grid is blocked) and we are standing on
+      // its last node: this is as close as it gets. Stop instead of walking in place forever.
+      if (path.length === 1 && Math.hypot(path[0].x - e.x, path[0].z - e.z) < 0.15 && Math.hypot(path[0].x - tx, path[0].z - tz) > 0.01) {
+        e.moving = false;
+        return false;
+      }
       if (path.length > 1 || Math.hypot(path[0].x - tx, path[0].z - tz) > 0.01) {
         wx = path[0].x;
         wz = path[0].z;

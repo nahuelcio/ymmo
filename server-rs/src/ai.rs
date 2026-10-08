@@ -132,7 +132,8 @@ impl World {
 
         let dest = self.ents[&mid].mob().unwrap().dest;
         if let Some(dp) = dest {
-            if self.step_toward(mid, dp.x, dp.z, tpl.speed * 0.45, dt, 0.2) { self.ents.get_mut(&mid).unwrap().mob_mut().unwrap().dest = None; }
+            // arrived, or it turned out there is no way to get any closer
+            if self.step_toward(mid, dp.x, dp.z, tpl.speed * 0.45, dt, 0.2) || !self.ents[&mid].c.moving { self.ents.get_mut(&mid).unwrap().mob_mut().unwrap().dest = None; }
         } else {
             let e = self.ents.get_mut(&mid).unwrap();
             e.c.moving = false;

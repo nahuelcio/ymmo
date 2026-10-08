@@ -111,7 +111,8 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
   }
 
   if (m.dest) {
-    if (w.stepToward(m, m.dest.x, m.dest.z, m.tpl.speed * 0.45, dt, 0.2)) m.dest = null;
+    // arrived, or it turned out there is no way to get any closer
+    if (w.stepToward(m, m.dest.x, m.dest.z, m.tpl.speed * 0.45, dt, 0.2) || !m.moving) m.dest = null;
   } else {
     m.moving = false;
     if (now >= m.wanderAt) {

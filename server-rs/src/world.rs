@@ -227,6 +227,12 @@ impl World {
             let (ex, ez) = (e.c.x, e.c.z);
             let path = &mut e.c.nav.as_mut().unwrap().path;
             while path.len() > 1 && (path[0].x - ex).hypot(path[0].z - ez) < 0.15 { path.remove(0); }
+            // The path ends short of the target (it sits where the grid is blocked) and we are standing on
+            // its last node: this is as close as it gets. Stop instead of walking in place forever.
+            if path.len() == 1 && (path[0].x - ex).hypot(path[0].z - ez) < 0.15 && (path[0].x - tx).hypot(path[0].z - tz) > 0.01 {
+                e.c.moving = false;
+                return false;
+            }
             if path.len() > 1 || (path[0].x - tx).hypot(path[0].z - tz) > 0.01 {
                 wx = path[0].x;
                 wz = path[0].z;
