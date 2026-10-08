@@ -163,8 +163,15 @@ export class Hud {
       if (!q) continue;
       shown++;
       const ready = row.progress >= q.objective.count;
-      const line = el('div', `qt-row${ready ? ' ready' : ''}`, this.questList);
-      el('div', 'qt-name', line, questField(q, 'name', lang));
+      const off = this.g.untracked.has(row.id);
+      const line = el('div', `qt-row${ready ? ' ready' : ''}${off ? ' untracked' : ''}`, this.questList);
+      const name = el('div', 'qt-name', line, questField(q, 'name', lang));
+      // the star switches this quest's hints (star over its monsters, hunting area on the maps) on and off
+      const track = el('button', 'qt-track', name);
+      glyph('ui', 'quest', '', track);
+      track.title = off ? tx('Seguir esta misión: marca sus monstruos y su zona en el mapa', 'Track this quest: marks its monsters and its area on the map')
+        : tx('Dejar de seguir esta misión', 'Stop tracking this quest');
+      track.onclick = () => this.g.toggleTracked(row.id);
       const prog = el('div', 'tt-dim', line);
       prog.innerHTML = ready
         ? `<b class="qt-ready"><i data-gi="ui/check"></i> ${tx('Volvé con', 'Return to')} ${esc(NPCS.find((n) => n.id === q.npc)?.name ?? '')}</b>`

@@ -17,6 +17,8 @@ import { animate, itemModel, mobModel, npcModel, playerModel, type Rig } from '.
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
+import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
+import { lightSources } from './render/scene';
 import { PostFX } from './render/post';
 import { settings, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
@@ -150,6 +152,9 @@ export class Game {
   private plates: { c: CEnt; d: number }[] = [];
   private plateV = new THREE.Vector3();
   private hoverId: number | null = null;
+  private motes = new Motes();
+  private lights!: LocalLights;
+  private sunScreen = new THREE.Vector3();
   /** Destinations picked on the world map, walked in order; route[0] is where we are heading now. */
   route: { x: number; z: number }[] = [];
   private routeMovedAt = 0;
@@ -179,6 +184,13 @@ export class Game {
     this.cam = new CameraController(this.camera, this.renderer.domElement);
     this.fx = new FxManager(this.world.scene);
     this.post = new PostFX(this.renderer, this.world.scene, this.camera);
+    this.world.scene.add(this.motes.points);
+    try {
+      this.untracked = new Set(JSON.parse(localStorage.getItem(`untracked:${this.me.name}`) ?? '[]') as string[]);
+    } catch {
+      /* ignore */
+    }
+    this.lights = new LocalLights(this.world.scene, lightSources());
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';
     host.appendChild(this.fpsEl);
@@ -226,7 +238,7 @@ export class Game {
       this.renderer.setPixelRatio(Math.max(0.4, Math.min(3, Math.min(devicePixelRatio, 1.5) * s.renderScale)));
       this.resize();
     }
-    if (has('shadows')) {
+    if (has('shadows', 'softShadows', 'shadowRange')) {
       const sun = this.world.sun;
       const on = s.shadows !== 'off';
       if (this.renderer.shadowMap.enabled !== on) {
@@ -237,7 +249,14 @@ export class Game {
           if (m) for (const mm of Array.isArray(m) ? m : [m]) mm.needsUpdate = true;
         });
       }
-      this.renderer.shadowMap.type = s.shadows === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      // soft: plain PCF with a wide kernel (PCFSoft ignores the radius); otherwise as before
+      this.renderer.shadowMap.type = s.softShadows || s.shadows !== 'high' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+      sun.shadow.radius = s.softShadows ? 3 : 1;
+      const sc = sun.shadow.camera, r = s.shadowRange;
+      sc.left = sc.bottom = -r;
+      sc.right = sc.top = r;
+      sc.far = 360;
+      sc.updateProjectionMatrix();
       const size = s.shadows === 'low' ? 1024 : s.shadows === 'medium' ? 2048 : 4096;
       sun.shadow.mapSize.set(size, size);
       sun.shadow.map?.dispose();
@@ -481,12 +500,26 @@ export class Game {
     }
   }
 
+  /** Quests whose hints (star on mobs, areas on the maps) the player switched off, kept per character. */
+  untracked = new Set<string>();
+
+  toggleTracked(id: string) {
+    if (!this.untracked.delete(id)) this.untracked.add(id);
+    try {
+      localStorage.setItem(`untracked:${this.me.name}`, JSON.stringify([...this.untracked]));
+    } catch {
+      /* storage unavailable: lasts for this session */
+    }
+    this.refreshQuestMarkers();
+    this.ui.hud.setQuests(this.quests);
+  }
+
   /** Active, unfinished quests → the mob templates that advance them (for map hints). */
   questTargets(): { quest: string; mobs: Set<string> }[] {
     const out: { quest: string; mobs: Set<string> }[] = [];
     for (const a of this.quests) {
       const q = QUESTS[a.id];
-      if (q && a.progress < q.objective.count) out.push({ quest: q.name, mobs: new Set(questMobs(q)) });
+      if (q && a.progress < q.objective.count && !this.untracked.has(a.id)) out.push({ quest: q.name, mobs: new Set(questMobs(q)) });
     }
     return out;
   }
@@ -1470,8 +1503,16 @@ export class Game {
     }
     if (self) {
       this.cam.update(dt, self.pos);
-      this.world.follow(self.pos);
       this.world.updateSky(this.camera, this.camera.far, dt);
+      this.world.follow(self.pos);
+      tickWind(dt);
+      this.motes.update(self.pos, dt, tSec);
+      this.lights.update(self.pos, tSec);
+      // light shafts: where the sun sits on screen, fading out as it leaves the view or sets
+      const sv = this.sunScreen.copy(this.camera.position).addScaledVector(ATMOS.sunDir, 500).project(this.camera);
+      const off = Math.max(Math.abs(sv.x), Math.abs(sv.y));
+      const shafts = sv.z < 1 ? (1 - Math.min(1, Math.max(0, (off - 1) / 1.4))) * Math.min(1, Math.max(0, ATMOS.sunDir.y * 6)) : 0;
+      this.post.setSun(sv.x * 0.5 + 0.5, sv.y * 0.5 + 0.5, shafts * 0.9);
     }
     const t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
     if (t) {

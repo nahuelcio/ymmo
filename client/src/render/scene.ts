@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, zoneOf } from '../../../shared/src/layout';
+import { settings } from '../settings';
+import { ATMOS, DAY_MS, sway, waterMaterial, type LightSource } from './atmos';
 
 const SKY = 0xa9c6e0;
 
@@ -19,19 +21,28 @@ const SKIES: Record<string, SkyPal> = {
 const SkyShader = {
   uniforms: {
     top: { value: new THREE.Color() }, horizon: { value: new THREE.Color() }, ground: { value: new THREE.Color() },
-    sunDir: { value: new THREE.Vector3(0.45, 0.8, 0.3).normalize() }, sunColor: { value: new THREE.Color() },
+    sunDir: { value: new THREE.Vector3(0.45, 0.8, 0.3).normalize() }, sunColor: { value: new THREE.Color() }, night: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec3 vDir;
     void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform vec3 top, horizon, ground, sunColor, sunDir;
+    uniform float night;
     varying vec3 vDir;
+    float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
     void main() {
-      float h = vDir.y;
+      vec3 d = normalize(vDir);
+      float h = d.y;
       vec3 c = h > 0.0 ? mix(horizon, top, pow(smoothstep(0.0, 0.55, h), 0.8)) : mix(horizon, ground, smoothstep(0.0, 0.25, -h));
-      float s = max(dot(normalize(vDir), sunDir), 0.0);
-      c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.18); // sun disc + glow
+      float s = max(dot(d, sunDir), 0.0);
+      c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.18) * smoothstep(-0.1, 0.02, sunDir.y); // sun disc + glow
+      if (night > 0.01 && h > 0.0) {
+        vec3 q = d * 330.0; // stars: one cell in a few hundred holds a small round dot
+        c += vec3(0.85, 0.92, 1.0) * step(0.9955, hash(floor(q))) * smoothstep(0.3, 0.05, length(fract(q) - 0.5)) * night * smoothstep(0.03, 0.3, h);
+        float m = max(dot(d, -sunDir), 0.0); // the moon rides opposite the sun
+        c += vec3(0.78, 0.85, 1.0) * (smoothstep(0.9993, 0.9996, m) + pow(m, 60.0) * 0.1) * night;
+      }
       gl_FragColor = vec4(c, 1.0);
     }`,
 };
@@ -130,7 +141,9 @@ export function createWorldScene(): WorldScene {
   scene.add(buildTrees());
   scene.add(buildRocks());
   scene.add(buildBushes());
-  scene.add(buildWater());
+  const water = buildWater();
+  const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
+  scene.add(water);
   const detail = buildDetail();
   scene.add(detail);
   scene.add(mergeStatic(buildTown()));
@@ -158,22 +171,55 @@ export function createWorldScene(): WorldScene {
       cur.top.lerp(tgt.top, k); cur.horizon.lerp(tgt.horizon, k); cur.ground.lerp(tgt.ground, k);
       cur.sun.lerp(tgt.sun, k); cur.cloud.lerp(tgt.cloud, k);
       cur.sunI += (tgt.sunI - cur.sunI) * k; cur.hemi += (tgt.hemi - cur.hemi) * k;
+      // Hour of the day on top of the region's palette. `el` is the sun's elevation (-1 midnight .. 1 noon);
+      // with the cycle off it stays where the fixed sun always was.
+      const A = ATMOS;
+      if (settings.s.dayNight) {
+        const th = (((Date.now() % DAY_MS) / DAY_MS + 0.32) % 1) * Math.PI * 2;
+        A.sunDir.set(Math.sin(th) * 0.85, -Math.cos(th), 0.4).normalize();
+      } else A.sunDir.set(0.45, 0.8, 0.3).normalize();
+      const el = A.sunDir.y;
+      const day = (A.day = smoothstep(-0.14, 0.28, el));
+      const dusk = (1 - smoothstep(0, 0.42, Math.abs(el))) * smoothstep(-0.3, 0, el); // low sun: warm light
+      A.top.copy(tmp.set(0x0a1230)).lerp(cur.top, day);
+      A.horizon.copy(tmp.set(0x223258)).lerp(cur.horizon, day).lerp(tmp.set(0xff9450), dusk * 0.55);
       const u = skyMat.uniforms;
-      u.top.value.copy(cur.top); u.horizon.value.copy(cur.horizon); u.ground.value.copy(cur.ground); u.sunColor.value.copy(cur.sun);
-      (scene.fog as THREE.Fog).color.copy(cur.horizon);
-      (scene.background as THREE.Color).copy(cur.horizon);
-      sun.color.copy(cur.sun);
-      sun.intensity = cur.sunI;
-      hemi.intensity = cur.hemi;
-      hemi.color.copy(cur.horizon).lerp(tmp.set(0xffffff), 0.4);
+      u.top.value.copy(A.top); u.horizon.value.copy(A.horizon);
+      u.ground.value.copy(cur.ground).multiplyScalar(0.2 + 0.8 * day);
+      u.sunColor.value.copy(cur.sun).lerp(tmp.set(0xff7a30), dusk * 0.8);
+      u.sunDir.value.copy(A.sunDir);
+      u.night.value = 1 - day;
+      (scene.fog as THREE.Fog).color.copy(A.horizon);
+      (scene.background as THREE.Color).copy(A.horizon);
+      // the sun lights the world while it is up, the moon (opposite) once it is down
+      const up = el > -0.06;
+      A.lightDir.copy(A.sunDir).multiplyScalar(up ? 1 : -1);
+      if (A.lightDir.y < 0.12) A.lightDir.setY(0.12).normalize(); // never rake the ground from below the horizon
+      A.lightColor.copy(up ? u.sunColor.value : tmp.set(0x8fa6e8));
+      sun.color.copy(A.lightColor);
+      // nights stay playable: moonlight and a floor of sky light keep the ground readable
+      const nb = settings.s.nightBrightness;
+      sun.intensity = up ? cur.sunI * smoothstep(-0.06, 0.24, el) : 1.9 * nb * smoothstep(0.08, 0.3, -el);
+      hemi.intensity = cur.hemi * (nb + (1 - nb) * day);
+      hemi.color.copy(A.horizon).lerp(tmp.set(0xffffff), 0.4 * day);
+      // water follows the setting and the light
+      const fancy = settings.s.fancyWater;
+      if ((water.material === waterFancy) !== fancy) water.material = fancy ? waterFancy : waterPlain;
+      const wu = waterFancy.uniforms, fog = scene.fog as THREE.Fog;
+      wu.time.value = performance.now() / 1000;
+      wu.day.value = day;
+      wu.fogColor.value.copy(fog.color);
+      wu.fogNear.value = fog.near;
+      wu.fogFar.value = fog.far;
+      waterPlain.color.set(0x3a7ab0).multiplyScalar(0.25 + 0.75 * day);
       // campfires flicker
       const ft = performance.now() / 1000;
       flames.children.forEach((f, i) => f.scale.set(1, 0.8 + Math.sin(ft * 13 + i * 1.7) * 0.15 + Math.sin(ft * 7.3 + i) * 0.1, 1));
-      CLOUD_MAT.color.copy(cur.cloud);
-      CLOUD_MAT.emissive.copy(cur.cloud).multiplyScalar(0.45);
+      CLOUD_MAT.color.copy(cur.cloud).lerp(tmp.set(0xff9a60), dusk * 0.5);
+      CLOUD_MAT.emissive.copy(CLOUD_MAT.color).multiplyScalar(0.45 * (0.12 + 0.88 * day));
     },
     follow(p) {
-      sun.position.set(p.x + 60, p.y + 120, p.z + 40);
+      sun.position.copy(p).addScaledVector(ATMOS.lightDir, 150);
       sun.target.position.copy(p);
       // grass and flowers only around the player
       if (detail.visible)
@@ -326,7 +372,7 @@ function buildTrees(): THREE.Group {
   }
   const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
   const g = new THREE.Group();
-  g.add(chunkedInstances(trunkGeo, mat(), trunks), chunkedInstances(pineGeo, mat(), pines), chunkedInstances(leafGeo, mat(), leaves));
+  g.add(chunkedInstances(trunkGeo, mat(), trunks), chunkedInstances(pineGeo, sway(mat(), 0.007), pines), chunkedInstances(leafGeo, sway(mat(), 0.009), leaves));
   if (deads.length) g.add(chunkedInstances(deadGeo, mat(), deads));
   return g;
 }
@@ -411,8 +457,8 @@ function buildDetail(): THREE.Group {
     new THREE.CylinderGeometry(0.015, 0.015, 0.4, 3).translate(0, 0.2, 0).toNonIndexed(),
     new THREE.IcosahedronGeometry(0.08, 0).translate(0, 0.42, 0),
   ])!;
-  const grassMat = new THREE.MeshLambertMaterial({ flatShading: true });
-  const flowerMat = new THREE.MeshLambertMaterial({ flatShading: true });
+  const grassMat = sway(new THREE.MeshLambertMaterial({ flatShading: true }), 0.45);
+  const flowerMat = sway(new THREE.MeshLambertMaterial({ flatShading: true }), 0.5);
   const FLOWERS = [0xf0e04a, 0xffffff, 0xe85a8a, 0x8a7aff, 0xff8a3a];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
   const n = Math.ceil((WORLD_HALF * 2 * 0.86) / DETAIL_CHUNK);
@@ -968,6 +1014,24 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
     bush.castShadow = true;
     g.add(bush);
   }
+}
+
+/** Everything that glows in the world: lamp posts, campfires, the forge and the tavern door. */
+export function lightSources(): LightSource[] {
+  const out: LightSource[] = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + 0.2;
+    out.push({ x: TOWN.x + Math.cos(a) * 17.4, y: TOWN_HEIGHT + 2.8, z: TOWN.z + Math.sin(a) * 17.4, fire: false });
+  }
+  for (const c of layoutCamps()) out.push({ x: c.fire.x, y: heightAt(c.fire.x, c.fire.z) + 1, z: c.fire.z, fire: true });
+  for (const h of layoutTown().houses) {
+    // a point in the building's own frame (front = +z), turned into the world like its mesh
+    const local = h.kind === 'smithy' ? [-h.w / 4, 1.8, -h.d / 2 + 2.2] : h.kind === 'tavern' ? [0, 2.6, h.d / 2 + 3] : null;
+    if (!local) continue;
+    const c = Math.cos(h.rot), sn = Math.sin(h.rot);
+    out.push({ x: h.x + local[0] * c + local[2] * sn, y: TOWN_HEIGHT + local[1], z: h.z - local[0] * sn + local[2] * c, fire: h.kind === 'smithy' });
+  }
+  return out;
 }
 
 const FLAME_OUT = new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0xff5a00, emissiveIntensity: 1, flatShading: true });

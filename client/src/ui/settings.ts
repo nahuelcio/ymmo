@@ -26,7 +26,7 @@ export class SettingsPanel {
   private render() {
     const s = settings.s;
     this.tabs.innerHTML = '';
-    for (const [id, label] of [['graphics', tx('Gráficos', 'Graphics')], ['shaders', 'Shaders'], ['hud', tx('Juego e interfaz', 'Game & UI')], ['camera', tx('Cámara', 'Camera')], ['keys', tx('Controles', 'Controls')]]) {
+    for (const [id, label] of [['graphics', tx('Gráficos', 'Graphics')], ['atmos', tx('Ambiente', 'Atmosphere')], ['shaders', 'Shaders'], ['hud', tx('Juego e interfaz', 'Game & UI')], ['camera', tx('Cámara', 'Camera')], ['keys', tx('Controles', 'Controls')]]) {
       const b = el('button', `chat-tab${id === this.tab ? ' active' : ''}`, this.tabs, label);
       b.onclick = () => {
         this.tab = id;
@@ -44,6 +44,19 @@ export class SettingsPanel {
       this.check(tx('Pasto y flores', 'Grass and flowers'), 'foliage');
       this.select<number>(tx('Límite de FPS', 'FPS cap'), 'fpsCap', [[0, tx('Sin límite', 'Unlimited')], [30, '30'], [60, '60'], [120, '120'], [144, '144']]);
       this.check(tx('Mostrar FPS', 'Show FPS'), 'showFps');
+    } else if (this.tab === 'atmos') {
+      this.check(tx('Ciclo de día y noche (20 min, igual para todos)', 'Day and night cycle (20 min, the same for everyone)'), 'dayNight');
+      this.range(tx('Brillo de la noche', 'Night brightness'), 'nightBrightness', 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`);
+      this.check(tx('Agua con olas y reflejos', 'Water with ripples and reflections'), 'fancyWater');
+      this.check(tx('Viento en el pasto y los árboles', 'Wind in the grass and trees'), 'wind');
+      this.check(tx('Rayos de luz del sol', 'Sun light shafts'), 'godRays');
+      this.check(tx('Luz de faroles, fogatas y la fragua', 'Light from lamps, campfires and the forge'), 'localLights');
+      this.check(tx('Polvo en el aire y luciérnagas', 'Dust in the air and fireflies'), 'particles');
+      this.check(tx('Sombras de borde suave', 'Soft-edged shadows'), 'softShadows');
+      this.select<number>(tx('Alcance de las sombras', 'Shadow range'), 'shadowRange', [[60, tx('Corto', 'Short')], [90, tx('Medio', 'Medium')], [140, tx('Largo', 'Long')]]);
+      this.check(tx('Desenfoque de maqueta (arriba y abajo)', 'Miniature blur (top and bottom)'), 'tiltShift');
+      el('div', 'hint set-hint', b, tx('Los más pesados son el agua, los rayos de luz y las luces. Las sombras se activan en Gráficos.',
+        'The heavy ones are water, light shafts and lights. Shadows are turned on under Graphics.'));
     } else if (this.tab === 'shaders') {
       this.lookCards();
       this.check(tx('Tone mapping cinematográfico (ACES)', 'Cinematic tone mapping (ACES)'), 'toneMapping');

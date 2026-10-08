@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { GodRaysShader, TiltShader } from './atmos';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -44,7 +45,7 @@ const GradeShader = {
     }`,
 };
 
-const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colorGrade'];
+const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colorGrade', 'godRays', 'tiltShift'];
 
 /**
  * Optional post-processing. When every effect (and MSAA) is off the scene renders
@@ -55,6 +56,8 @@ export class PostFX {
   private bloom: UnrealBloomPass | null = null;
   private grade: ShaderPass | null = null;
   private fxaa: ShaderPass | null = null;
+  private rays: ShaderPass | null = null;
+  private tilt: ShaderPass | null = null;
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.Camera) {}
 
@@ -65,8 +68,8 @@ export class PostFX {
   rebuild(s: Settings) {
     this.composer?.dispose();
     this.composer = null;
-    this.bloom = this.grade = this.fxaa = null;
-    if (!s.antialias && !s.bloom && !s.ao && !s.fxaa && !s.colorGrade) return;
+    this.bloom = this.grade = this.fxaa = this.rays = this.tilt = null;
+    if (!s.antialias && !s.bloom && !s.ao && !s.fxaa && !s.colorGrade && !s.godRays && !s.tiltShift) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: s.antialias ? 4 : 0 });
     const c = new EffectComposer(this.renderer, target);
@@ -80,10 +83,19 @@ export class PostFX {
       this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), s.bloomStrength, 0.4, 0.82);
       c.addPass(this.bloom);
     }
+    if (s.godRays) {
+      // on the HDR image, before tone mapping, so only what is truly bright streaks
+      this.rays = new ShaderPass(GodRaysShader);
+      c.addPass(this.rays);
+    }
     c.addPass(new OutputPass());
     if (s.colorGrade) {
       this.grade = new ShaderPass(GradeShader);
       c.addPass(this.grade);
+    }
+    if (s.tiltShift) {
+      this.tilt = new ShaderPass(TiltShader);
+      c.addPass(this.tilt);
     }
     if (s.fxaa) {
       this.fxaa = new ShaderPass(FXAAShader);
@@ -113,9 +125,17 @@ export class PostFX {
     this.composer.setSize(size.x, size.y);
     const pr = this.renderer.getPixelRatio();
     this.grade?.uniforms.texel.value.set(1 / (size.x * pr), 1 / (size.y * pr));
+    this.tilt?.uniforms.texel.value.set(1 / (size.x * pr), 1 / (size.y * pr));
     if (this.fxaa) {
       this.fxaa.uniforms.resolution.value.set(1 / (size.x * pr), 1 / (size.y * pr));
     }
+  }
+
+  /** Where the sun is on screen (uv, may be off screen) and how strong its shafts are this frame. */
+  setSun(u: number, v: number, strength: number) {
+    if (!this.rays) return;
+    this.rays.uniforms.sunPos.value.set(u, v);
+    this.rays.uniforms.strength.value = strength;
   }
 
   render() {

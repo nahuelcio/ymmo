@@ -52,6 +52,17 @@ export interface Settings {
   bloomStrength: number;
   ao: boolean; // ambient occlusion (GTAO)
   fxaa: boolean;
+  // atmosphere (render/atmos.ts): each one can be switched off on its own
+  dayNight: boolean;
+  nightBrightness: number; // 0.3 dark .. 1 as bright as day
+  fancyWater: boolean;
+  wind: boolean;
+  godRays: boolean; // light shafts (post-processing)
+  localLights: boolean; // lamps, campfires and the forge light their surroundings
+  particles: boolean; // dust by day, fireflies by night
+  softShadows: boolean;
+  shadowRange: number; // metres around the player covered by shadows
+  tiltShift: boolean; // blur the top and bottom of the screen
   colorGrade: boolean;
   saturation: number;
   contrast: number;
@@ -108,6 +119,16 @@ export const DEFAULTS: Settings = {
   showFps: false,
   look: 'natural',
   ...LOOKS.natural.v,
+  dayNight: true,
+  nightBrightness: 0.8,
+  fancyWater: true,
+  wind: true,
+  godRays: true,
+  localLights: true,
+  particles: true,
+  softShadows: true,
+  shadowRange: 90,
+  tiltShift: false,
   uiScale: 1,
   nameplates: true,
   hpBars: true,
@@ -138,7 +159,9 @@ function load(): Settings {
   }
   // first run: weaker devices start on medium
   const weak = (navigator.hardwareConcurrency ?? 8) <= 4 || /Mobi|Android/i.test(navigator.userAgent);
-  return weak ? { ...DEFAULTS, preset: 'medium', ...PRESETS.medium, look: 'off', ...LOOKS.off.v } : { ...DEFAULTS };
+  // ...and without the costlier atmosphere effects (day/night and wind are nearly free)
+  const light = { fancyWater: false, godRays: false, localLights: false, particles: false, softShadows: false, shadowRange: 60 };
+  return weak ? { ...DEFAULTS, preset: 'medium', ...PRESETS.medium, look: 'off', ...LOOKS.off.v, ...light } : { ...DEFAULTS };
 }
 
 type Listener = (s: Settings, changed: (keyof Settings)[]) => void;

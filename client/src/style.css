@@ -118,7 +118,11 @@ input { font: inherit; user-select: text; }
 .qt-row.ready .qt-bar > div { background: #8fdc8f; }
 .quest-head { color: var(--gold); margin-bottom: 4px; font-family: Georgia, serif; }
 .qt-row { padding: 3px 0; border-top: 1px solid #2a2a2a; }
-.qt-name { color: var(--gold); }
+.qt-name { color: var(--gold); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.qt-track { background: none; border: none; padding: 0; cursor: pointer; font-size: 14px; line-height: 1; color: #ffd200; }
+.qt-track:hover { filter: brightness(1.3); }
+.qt-row.untracked .qt-track { color: #4a4636; }
+.qt-row.untracked { opacity: 0.6; }
 .qt-ready { color: #8fdc8f; }
 .party-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); margin-bottom: 4px; }
 .party-member { padding: 4px 0; border-top: 1px solid #2a2a2a; cursor: pointer; }
