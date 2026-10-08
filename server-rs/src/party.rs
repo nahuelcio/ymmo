@@ -82,7 +82,7 @@ impl World {
         let Some(pt) = self.parties.iter().find(|p| p.id == ptid) else { return };
         let members: Vec<Value> = pt.members.iter().enumerate().filter_map(|(i, id)| {
             let m = self.pl(*id)?;
-            Some(json!({ "id": id, "name": m.name, "lvl": m.level, "cls": m.cls, "leader": i == 0,
+            Some(json!({ "id": id, "name": m.name, "lvl": m.level, "cls": m.cls, "spec": m.spec, "leader": i == 0,
                 "hp": m.hp.ceil(), "maxHp": m.stats.max_hp, "mp": m.mp.floor(), "maxMp": m.stats.max_mp, "cp": m.cp.floor(), "maxCp": m.stats.max_cp }))
         }).collect();
         let msg = json!({ "t": "party", "members": members }).to_string();

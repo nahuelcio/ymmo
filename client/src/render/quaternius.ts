@@ -107,7 +107,8 @@ export function loadQ(): Promise<void> {
       const o = (props[name] = rigid[i].scene);
       o.children.forEach((c) => c.position.set(0, 0, 0));
       if (WEAPONS.includes(name)) {
-        if (/staff|wand/.test(name)) {
+        // a wand is too short for that: it would lie along the forearm, so it points forward out of the fist like a blade
+        if (/staff/.test(name)) {
           // along the arm (the bind pose has the arms out sideways), so it stands upright by the leg when the arm hangs
           o.rotation.z = -Math.PI / 2;
           o.position.z = 0.05;
@@ -322,6 +323,7 @@ export function animateQ(q: QAnim, s: AnimState) {
     cur = atk;
     q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
+  else if (s.dancing) cur = 'Dance_Loop';
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) q.acts[n].setEffectiveWeight((q.w[n] += ((n === cur ? 1 : 0) - q.w[n]) * k));
   q.mixer.update(dt);
@@ -365,6 +367,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
     D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    'Místico NG': ['apprentice_wand', 'apprentice_tunic', null, null, 'apprentice_stockings', null],
     'Místico D': ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
     Hacha: ['battle_axe', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     Lanza: ['partisan', 'brigandine_tunic', null, 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],

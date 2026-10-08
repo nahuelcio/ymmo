@@ -32,13 +32,13 @@
 - tavern · function · L599-L650 — function tavern(w: number, d: number): THREE.Group
 - townHall · function · L653-L701 — function townHall(w: number, d: number): THREE.Group
 - smithy · function · L704-L747 — function smithy(w: number, d: number): THREE.Group
-- buildTown · function · L749-L901 — function buildTown(): THREE.Group
+- buildTown · function · L749-L911 — function buildTown(): THREE.Group
 - tilted · function · L767-L767 — tilted = (m: THREE.Mesh, rz: number)
-- dressTown · function · L907-L1018 — function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number)
-- flat · function · L910-L910 — flat = (m: THREE.Mesh)
-- turned · function · L911-L911 — turned = <T extends THREE.Object3D>(o: T, ry: number)
-- disc · function · L912-L917 — disc = (r: number, h: number, color: number, py: number)
-- lightSources · function · L1021-L1036 — function lightSources(): LightSource[]
-- buildCamps · function · L1042-L1097 — function buildCamps(): { props: THREE.Group; flames: THREE.Group }
-- y0 · function · L1045-L1045 — y0 = (x: number, z: number)
-- buildZoneProps · function · L1099-L1131 — function buildZoneProps(): THREE.Group
+- dressTown · function · L917-L1028 — function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number)
+- flat · function · L920-L920 — flat = (m: THREE.Mesh)
+- turned · function · L921-L921 — turned = <T extends THREE.Object3D>(o: T, ry: number)
+- disc · function · L922-L927 — disc = (r: number, h: number, color: number, py: number)
+- lightSources · function · L1031-L1046 — function lightSources(): LightSource[]
+- buildCamps · function · L1052-L1107 — function buildCamps(): { props: THREE.Group; flames: THREE.Group }
+- y0 · function · L1055-L1055 — y0 = (x: number, z: number)
+- buildZoneProps · function · L1109-L1141 — function buildZoneProps(): THREE.Group

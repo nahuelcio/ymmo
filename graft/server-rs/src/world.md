@@ -31,22 +31,22 @@
 - send_near_r · function · L174-L177 — pub fn send_near_r(&self, x: f64, z: f64, v: Value, r: f64)
 - broadcast · function · L179-L182 — pub fn broadcast(&self, v: Value)
 - find_player · function · L184-L187 — pub fn find_player(&self, name: &str) -> Option<u32>
-- town_point · function · L189-L193 — pub fn town_point(&self) -> P
-- teleport · function · L195-L206 — pub fn teleport(&mut self, pid: u32, x: f64, z: f64)
-- later · function · L208-L208 — pub fn later(&mut self, at: f64, f: impl FnOnce(&mut World, f64) + Send + 'static) { self.deferred.push((at, Box::new(f))); }
-- step_toward · function · L214-L252 — pub fn step_toward(&mut self, id: u32, tx: f64, tz: f64, speed: f64, dt: f64, stop: f64) -> bool
-- face · function · L254-L259 — pub fn face(&mut self, a: u32, b: u32)
-- spawn_mobs · function · L263-L306 — fn spawn_mobs(&mut self)
-- spawn_mob · function · L309-L320 — pub fn spawn_mob(&mut self, tpl_id: &str, x: f64, z: f64) -> u32
-- can_respawn · function · L323-L328 — pub fn can_respawn(&self, mob: &Mob, now: f64) -> bool
-- update_camps · function · L330-L357 — fn update_camps(&mut self, now: f64)
-- mob_killed · function · L360-L393 — pub fn mob_killed(&mut self, mid: u32, now: f64)
-- dash · function · L397-L434 — pub fn dash(&mut self, pid: u32, x: f64, z: f64, dx: f64, dz: f64, now: f64)
-- ent_record · function · L438-L453 — pub fn ent_record(&self, id: u32, now: f64) -> Value
-- send_snapshot · function · L455-L501 — fn send_snapshot(&mut self, pid: u32, now: f64)
-- self_state · function · L503-L519 — pub fn self_state(&self, pid: u32) -> Value
-- send_self · function · L521-L529 — fn send_self(&mut self, pid: u32)
-- tick · function · L533-L572 — pub fn tick(&mut self)
-- npc_chatter · function · L575-L582 — fn npc_chatter(&mut self, now: f64)
-- npc_say · function · L585-L595 — pub fn npc_say(&self, nid: u32, r: f64)
-- round2 · function · L599-L599 — pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }
+- town_point · function · L190-L196 — pub fn town_point(&self, near: Option<u32>) -> P
+- teleport · function · L198-L209 — pub fn teleport(&mut self, pid: u32, x: f64, z: f64)
+- later · function · L211-L211 — pub fn later(&mut self, at: f64, f: impl FnOnce(&mut World, f64) + Send + 'static) { self.deferred.push((at, Box::new(f))); }
+- step_toward · function · L217-L255 — pub fn step_toward(&mut self, id: u32, tx: f64, tz: f64, speed: f64, dt: f64, stop: f64) -> bool
+- face · function · L257-L262 — pub fn face(&mut self, a: u32, b: u32)
+- spawn_mobs · function · L266-L309 — fn spawn_mobs(&mut self)
+- spawn_mob · function · L312-L323 — pub fn spawn_mob(&mut self, tpl_id: &str, x: f64, z: f64) -> u32
+- can_respawn · function · L326-L331 — pub fn can_respawn(&self, mob: &Mob, now: f64) -> bool
+- update_camps · function · L333-L360 — fn update_camps(&mut self, now: f64)
+- mob_killed · function · L363-L396 — pub fn mob_killed(&mut self, mid: u32, now: f64)
+- dash · function · L400-L437 — pub fn dash(&mut self, pid: u32, x: f64, z: f64, dx: f64, dz: f64, now: f64)
+- ent_record · function · L441-L456 — pub fn ent_record(&self, id: u32, now: f64) -> Value
+- send_snapshot · function · L458-L504 — fn send_snapshot(&mut self, pid: u32, now: f64)
+- self_state · function · L506-L522 — pub fn self_state(&self, pid: u32) -> Value
+- send_self · function · L524-L532 — fn send_self(&mut self, pid: u32)
+- tick · function · L536-L575 — pub fn tick(&mut self)
+- npc_chatter · function · L578-L585 — fn npc_chatter(&mut self, now: f64)
+- npc_say · function · L588-L598 — pub fn npc_say(&self, nid: u32, r: f64)
+- round2 · function · L602-L602 — pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }

@@ -7,6 +7,7 @@ import { SettingsPanel } from './settings';
 import { isTouchDevice, TouchControls } from './touch';
 import { CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
 import { runBenchmark } from '../bench';
+import { SPEC_LEVEL } from '../../../shared/src/data/classes';
 
 export class UI {
   root: HTMLElement;
@@ -60,11 +61,19 @@ export class UI {
     if (!seen) this.help.show();
   }
 
+  private specPrompted = false;
+
   partyIds(): number[] {
     return this.party.members?.map((m) => m.id) ?? [];
   }
 
   onMe() {
+    // time to pick a specialization: bring the character sheet up, once per session
+    const m = this.g.me;
+    if (m.lvl >= SPEC_LEVEL && !m.spec && !this.specPrompted) {
+      this.specPrompted = true;
+      this.character.win.show();
+    }
     this.hud.onMe();
     this.character.refresh();
     this.inventory.refreshStats();

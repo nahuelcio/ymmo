@@ -33,7 +33,7 @@ pub fn npc_lines(id: &str, l: Lang) -> &'static [String] {
 pub fn zone_name(es: &str, l: Lang) -> String {
     if !l.en() { return es.to_string(); }
     let data = d();
-    if es == data.town.name { return data.town.name_en.clone(); }
+    if let Some(t) = data.towns.iter().find(|t| t.name == es) { return t.name_en.clone(); }
     if es == data.wild.name { return data.wild.name_en.clone(); }
     if let Some(z) = data.zones.iter().find(|z| z.name == es) { return z.name_en.clone(); }
     if let Some(r) = data.raids.values().find(|r| r.name == es) { return r.name_en.clone(); }

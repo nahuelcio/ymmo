@@ -2,6 +2,10 @@
 
 export const WORLD_HALF = 500;
 export const TOWN = { x: 0, z: 0, r: 50, name: 'Aldea del Alba' };
+/** Second town, down a road of its own between the Goblin Hills and the Sunken Ruins: the gear for levels 20-40 is sold here. */
+export const DUSK = { x: 170, z: -170, r: 30, name: 'Bastión del Ocaso' };
+/** Peace zones on flattened ground. TOWN is the starting village. */
+export const TOWNS = [TOWN, DUSK];
 const SEED = 1337;
 
 function hash2(ix: number, iz: number): number {
@@ -41,13 +45,13 @@ export function heightAt(x: number, z: number): number {
   let h = (fbm(x / 140, z / 140, 4) - 0.5) * 32 + (valueNoise(x / 25 + 100, z / 25) - 0.5) * 3;
   const e = Math.max(Math.abs(x), Math.abs(z)) / WORLD_HALF;
   if (e > 0.82) h += Math.pow((e - 0.82) / 0.18, 2) * 70;
-  const d = Math.hypot(x - TOWN.x, z - TOWN.z);
-  const t = smoothstep(TOWN.r + 5, TOWN.r + 45, d);
+  let t = 1;
+  for (const tw of TOWNS) t = Math.min(t, smoothstep(tw.r + 5, tw.r + 45, Math.hypot(x - tw.x, z - tw.z)));
   return TOWN_HEIGHT + (h - TOWN_HEIGHT) * t;
 }
 
 export function inTown(x: number, z: number): boolean {
-  return Math.hypot(x - TOWN.x, z - TOWN.z) < TOWN.r + 5;
+  return TOWNS.some((tw) => Math.hypot(x - tw.x, z - tw.z) < tw.r + 5);
 }
 
 /** Small deterministic PRNG for decoration placement and spawns. */

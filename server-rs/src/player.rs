@@ -22,7 +22,7 @@ impl World {
 
         if p.escape_at > 0.0 && now >= p.escape_at {
             p.escape_at = 0.0;
-            let pt = self.town_point();
+            let pt = self.town_point(Some(pid));
             self.teleport(pid, pt.x, pt.z);
             return;
         }

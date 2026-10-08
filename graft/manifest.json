@@ -1,7 +1,7 @@
 {
   "version": 1,
   "model": "openai:glm-5.3-flash",
-  "repoDigest": "e31cc99d1c4044cbabc28fb4d9a99384d685d70639211f2ada4ebd7e61b76709",
+  "repoDigest": "6de0c7799b3dbb90aca2d76c0337ad350ff11d55bf2e75d03bb4b5f9cc6642fc",
   "files": [
     {
       "path": "art/blender/characters.py",
@@ -17,7 +17,7 @@
     },
     {
       "path": "client/src/game.ts",
-      "hash": "fbdb4c6e6f1138584beffbd03753e54ff4fc2dcd9921e75eb1d1d8ef7bb08984"
+      "hash": "aed3a0e900c2a18abf7482af26b5340d65566241d1de705c8196d65f1973e356"
     },
     {
       "path": "client/src/lang.ts",
@@ -25,7 +25,7 @@
     },
     {
       "path": "client/src/main.ts",
-      "hash": "9bd7a9f0b145d150f119c9c6899d771c761619e9086fe643229dc75355766ec6"
+      "hash": "7201407b03ad5955385c16e20b1b0ac2beeb267b2008738e89864bc7984aa87b"
     },
     {
       "path": "client/src/net.ts",
@@ -45,7 +45,7 @@
     },
     {
       "path": "client/src/render/models.ts",
-      "hash": "003f3d6c44840c866bd2e4149916e0fd3577dd235edefe68ffd149168c73e6f1"
+      "hash": "4a0bc881d38605d41b67fa2ca8f833a384e3314f2b138919247f71467ede358c"
     },
     {
       "path": "client/src/render/post.ts",
@@ -53,11 +53,11 @@
     },
     {
       "path": "client/src/render/quaternius.ts",
-      "hash": "c0e1830c5a24676c4ecfcce2209a5f70a7ab79c35dad6fcd3f202b4a0897b6d1"
+      "hash": "8d401304a2298aa943b7ee03b8a0da7457567e0e78b0c66d3397c4a101cf6acd"
     },
     {
       "path": "client/src/render/scene.ts",
-      "hash": "b10f298ae40fc04c5a4431bc76e6e3165a474b291cd08514ab20676ff5aaeec3"
+      "hash": "81e452d61f11a716e77575ee5cece37885bc2d4107b1caf25a400d2f26780e50"
     },
     {
       "path": "client/src/settings.ts",
@@ -69,7 +69,7 @@
     },
     {
       "path": "client/src/ui/common.ts",
-      "hash": "62e8d095fa396885ea33704f592a51aa00264e43976f4c459d4ea90b93b51e1a"
+      "hash": "f8a8db48868999724bc371c07f792b9269d80fdb14aacee66b402c2bcb15b290"
     },
     {
       "path": "client/src/ui/dom.ts",
@@ -77,19 +77,19 @@
     },
     {
       "path": "client/src/ui/hud.ts",
-      "hash": "0eb67f4ad91d0f7645d752af2a98e94b69ed59da303a1412fefb46b6492f356e"
+      "hash": "6616fc6839da8be7ed4ea5bbcc5d0da4633eae8083b4565ab40a65102f9f7eb9"
     },
     {
       "path": "client/src/ui/index.ts",
-      "hash": "14609a22bab1a91a9919df9bf33f7dfed877b50e555dc1b647baded902643296"
+      "hash": "1275f9d4a0b4b7cc54825dff35cf5c13894761e7969f520fc66ed2d3141f974f"
     },
     {
       "path": "client/src/ui/minimap.ts",
-      "hash": "4df27d3789af675b06f75e1a154689c1506746642b75cbbe8bafe9405fc26d2f"
+      "hash": "e5c75780c9d552f0ecc9ce00d496358a0001abd1192a1215af12f784d17c68cc"
     },
     {
       "path": "client/src/ui/panels.ts",
-      "hash": "4f93343109a9628ec0817a86f700c58f85ad111fc764924fb0ed7b59f749ffac"
+      "hash": "c31045cbf78f847eda8f9ab7fee2b85593a0cf32c2111dc3f3929e0921bdfbe4"
     },
     {
       "path": "client/src/ui/settings.ts",
@@ -97,7 +97,7 @@
     },
     {
       "path": "client/src/ui/touch.ts",
-      "hash": "763e22d5d214d58607e218b0da6b93aac00fdffe4e50a7d404f62cc6d0d32d4f"
+      "hash": "f11c8fa0aac379973815d160b47f8e25d3f00018cd212370b890c01182c799d7"
     },
     {
       "path": "client/vite.config.ts",
@@ -109,19 +109,15 @@
     },
     {
       "path": "deploy/install.sh",
-      "hash": "77293b013078119eca37a46645bec43d4cdc96067033766eab24a4de0d815b6d"
+      "hash": "e461428246569e75d44f23365657cf5d2692725b613cdd1900706beace483e4a"
     },
     {
       "path": "deploy/update.sh",
-      "hash": "38eaf1a0aa4aedafde345a297fb60419504af246b9e86ca089f73f285b925b63"
-    },
-    {
-      "path": "scripts/check-wander.ts",
-      "hash": "1784d3eaae894a265a6b00fbb2d937f2aec7aea043f58851f1698b7100b66811"
+      "hash": "590e113ea3beb49612aeb9258ebec13f4615742de0ed8db13d7f986337d689ae"
     },
     {
       "path": "scripts/export-data.ts",
-      "hash": "6275a42df1d96c29a4298bf0b3b9aa847eb59de0138500488ddf7259fd3e0e33"
+      "hash": "63f9c4547302b8c642b244d7038342067598a0ff6d21494ac05fb7934ec7dc46"
     },
     {
       "path": "scripts/loadtest.ts",
@@ -141,7 +137,7 @@
     },
     {
       "path": "server-rs/src/chat.rs",
-      "hash": "c230583ce9645fb2eb953acf8e6a8fd33d8aa85529449b308f5fcdd2aee7e50c"
+      "hash": "81e31df84f1748b7b2660a5057baf5f49812c9815aacfa04486a56d6685fb767"
     },
     {
       "path": "server-rs/src/collision.rs",
@@ -149,47 +145,47 @@
     },
     {
       "path": "server-rs/src/combat.rs",
-      "hash": "6e1eca7178b1325d1da04d0de06255d538ad3f1e703fdae425be2f99af16b41a"
+      "hash": "b1652e296c2732a1410d73f9010d260ec89b93940fee2479d0db40ef01c149fd"
     },
     {
       "path": "server-rs/src/data.rs",
-      "hash": "8522275b9e17f8ad7cfc4098af5bbf106eee35eaca93c6ed7e58f24572d8df46"
+      "hash": "909928fd73e7f114850eb93f36364bb8310418d73a6589fefe8475e02d1bee62"
     },
     {
       "path": "server-rs/src/db.rs",
-      "hash": "b2fc079f6c14e1194384a872bcfc5b53a5cbd3f4bbd1e0105a5899d1dc9c9bb2"
+      "hash": "b98b90b37e5f3d1ec7e272a5621b7b588cd1eb3fd97324eff8d09b1b19a56eee"
     },
     {
       "path": "server-rs/src/ent.rs",
-      "hash": "ef3d5a42c10d5c508f70781c04ae98441c8e07f49d7003829d0d277de65743db"
+      "hash": "c175427c0774e83aae0be2ebcaeffc4037b9a97b05661320b91069caf0711715"
     },
     {
       "path": "server-rs/src/formulas.rs",
-      "hash": "a6f3bd1e4265bf6ff4b8de85387eb40a6ec471da38336f69edda79b3dc756936"
+      "hash": "e551e037b2f47df558034ab1752854954810868cd2967394da7a30a5ec3702e7"
     },
     {
       "path": "server-rs/src/i18n.rs",
-      "hash": "7ad24f2aa82f03f40c716f7dcdfffabf7383aaf68efd89619378f3041c90b441"
+      "hash": "630ed288701604b2a3f9876587c7a76f895c71d975f0796584b3ed99662c1065"
     },
     {
       "path": "server-rs/src/inventory.rs",
-      "hash": "bfc514a3f6c03f239da2283ec1811ef11abc1a787f20a7210625923b68a603d1"
+      "hash": "05845ce0e4c9eca2d08fdde1e263fa169223431b7faf411a87699aaf601af87f"
     },
     {
       "path": "server-rs/src/main.rs",
-      "hash": "8512b0dd30223760f9725cf6716b49eb145cf8d036daec2805ae403502b2d450"
+      "hash": "17aa89a765788ae9672a82533fbe4ebf78953dbcca13f582eb19b6a72a0c992f"
     },
     {
       "path": "server-rs/src/msgs.rs",
-      "hash": "7a468c5c2c540bb9f7d806a243152d5852c3852cb9dc08ba2c0c625086c46d1f"
+      "hash": "ca925f3b9e9d4296245e6a136ac50d2ae9954b88ea70164cf5d6769516920450"
     },
     {
       "path": "server-rs/src/party.rs",
-      "hash": "55b0288d39333364b4ebe5a117bea8babe19de4c6c354b76743681183ceb6803"
+      "hash": "b2d92f325d6bb64eb27685df0832acdf02c5c905fcac3c93ed61dbbb82f3d035"
     },
     {
       "path": "server-rs/src/player.rs",
-      "hash": "aad821c5659b7270c8318f71d72f1070855ccb46b1cda5dc3a42c8d6678aa8e9"
+      "hash": "237903bed959db51919993cdcb2661c07a40104f92dab900f68e4521c0a71c7e"
     },
     {
       "path": "server-rs/src/quests.rs",
@@ -201,27 +197,15 @@
     },
     {
       "path": "server-rs/src/realm.rs",
-      "hash": "ba74216b751559656adcc435181e7d3a617dd38832d73ae3f69bdffe35ecdaeb"
+      "hash": "0bf9cd029d0195cb78350cd83adbfe90d97387b34edac116685d4e671e6e0884"
     },
     {
       "path": "server-rs/src/terrain.rs",
-      "hash": "bd0589b6ea51dd0c31c275bffd3a10f7190bf10b39d76ead67325677c20a42b3"
+      "hash": "6328d6bc656f9835bb30b7e99dd93bbf6dd0fe02b5bc9fc34203a21a3668c7fd"
     },
     {
       "path": "server-rs/src/world.rs",
-      "hash": "f79b10a47446272207b449d57373a86a00415bf45b78ecb75209e616b0d0b915"
-    },
-    {
-      "path": "server/src/db.ts",
-      "hash": "64d5dabe0bbd755c25f3b2442b047f8257c57bb60dc809037b0e2d2fc2010fe3"
-    },
-    {
-      "path": "server/src/index.ts",
-      "hash": "06cbb8d9876788383b4a9d672ce700c9e86b5e11d974a321b2464bc75153214f"
-    },
-    {
-      "path": "server/src/raid/boot.mjs",
-      "hash": "a45a2ae38fd64c71727b7e0c4a9c73d023d09984ae2a7493d485926dc4a7114b"
+      "hash": "142f494eb38e2d2194aa4a0477646ecbba892180842b83a3ccda5962dd2a0c8f"
     },
     {
       "path": "shared/src/binary.ts",
@@ -229,7 +213,7 @@
     },
     {
       "path": "shared/src/collision.ts",
-      "hash": "d988f87c6c8ef0184db7214e6350dc2f3149294bb21a71261771b547376e1c0f"
+      "hash": "81f869bc35b452c88c6a1e95b58599af61f013b9a71d157264e40b7fabced89c"
     },
     {
       "path": "shared/src/data/camps.ts",
@@ -237,51 +221,51 @@
     },
     {
       "path": "shared/src/data/classes.ts",
-      "hash": "52f986750c3bcee11333af48682dedf09b27dab4a675d3b849ae7d802ee630bc"
+      "hash": "cbd03ae2b2ead6d85cb5ce757b57a6af7ee61b52545f8a969e9cf5b72051dc39"
     },
     {
       "path": "shared/src/data/items.ts",
-      "hash": "595a4a5ca6a02171f4d04497651b3de46457e54a9dcf58cc85e93f2fcf5a7c0e"
+      "hash": "f54a56350e9d61552d5c7ef5ecd3dea7e0d11059a07ac07aebc00cdfe93ad00f"
     },
     {
       "path": "shared/src/data/mobs.ts",
-      "hash": "8b2f69ab4350416c14fc7e70affc9946895fef6f8e594f6beccb010bd8d47503"
+      "hash": "d65fcef5da8d3ae1c83e7f2838d4d4be88149cdaaccc3c25e197ab4c79eda277"
     },
     {
       "path": "shared/src/data/quests.ts",
-      "hash": "285f09fdb5685ff4fb496d67954df7c58c1519cbf4d7f8269f1c808a83a99a7c"
+      "hash": "f91c4d4a5c07583c71b2ca0d2a22ebafebb39485b409cee60a7d40cf4c052cbd"
     },
     {
       "path": "shared/src/data/raids.ts",
-      "hash": "43b7a252e494cadb3d53e28cc711c8dc7367dc4d631b108ed4a248462c039cf8"
+      "hash": "87e7caee2eeca1a2fc2f411fcc4e32bdf73c47c4783ed67310f79d30266d72ac"
     },
     {
       "path": "shared/src/data/skills.ts",
-      "hash": "a473734acf43e1c9c326ca4aa797272f966665734812b36acaab2ac16ff38e44"
+      "hash": "4a81fd0cc1b4fa63599b1ec8f9c81581c7bbd5ed8f29efef0493fe570146731e"
     },
     {
       "path": "shared/src/data/world.ts",
-      "hash": "f65369695ec16541fba971179907c1e406b423ff7ad7efd4cfe0fb4cde6156bf"
+      "hash": "75a8187022f3860df5e0c02645cbacf495b89fb36ee3799b2dd68e7a5cf4596d"
     },
     {
       "path": "shared/src/formulas.ts",
-      "hash": "f3c5045df7aafc6e6176e52b57c7101ff9d9db67e9fc47ff022e97f3487c58ad"
+      "hash": "0aa6334012d3d16f34da75b087110cae200f10b41fb18df196fd3d99357c549d"
     },
     {
       "path": "shared/src/i18n/en.ts",
-      "hash": "f73282a1cd2459054cd7cb8c1e6d89220b76d256d2bc2e542632a15dd015bf3d"
+      "hash": "cb1d9b4300633348765c379988c9c816d74b1cdf479a55745ad40cedac047295"
     },
     {
       "path": "shared/src/i18n/index.ts",
-      "hash": "898ae51577c14fdf699ca94dbec5a2bb5731f82fb0fa6dbed2519b70fe31c676"
+      "hash": "70c876bce3d7cb9f259da8d305b55720598a4fedd01c51ae675f9c95a49154f0"
     },
     {
       "path": "shared/src/layout.ts",
-      "hash": "c3c393b2f7395af1658fdfa9282590d869668c7dd61717fe69d41f2aac9fa5c0"
+      "hash": "2bd00e158f320b7e9cc3093191add1d5702c58aa437913f934d7b8a24d1beed0"
     },
     {
       "path": "shared/src/protocol.ts",
-      "hash": "4348ca088f73a0e920ce11b8cfabaa69c7a7b3e48955d26dc78bcec8497dca43"
+      "hash": "a59e87c3769d7e4f37bd6bea142038981a34b60326474975fe27de82bd660153"
     },
     {
       "path": "shared/src/status.ts",
@@ -289,66 +273,8 @@
     },
     {
       "path": "shared/src/terrain.ts",
-      "hash": "985dc1f3492f5d1556d7201f87d5582f9ba9aba9cde8caff06636675fcf1e757"
+      "hash": "079cb62f4cf85927a10934e0f69b5bbe8bd6e5765a54376df6c4e33f5c6aa339"
     }
   ],
-  "nodes": [
-    {
-      "slug": "delta-snapshot-bandwidth-model",
-      "name": "Delta snapshot bandwidth model",
-      "type": "concept",
-      "sources": [
-        "shared/src/protocol.ts"
-      ],
-      "sourcesDigest": "2ac9ffa6749b12a1019bf3873472b774ea958fe417286452e8467ee4c6619c2e"
-    },
-    {
-      "slug": "deterministic-procedural-terrain",
-      "name": "Deterministic procedural terrain",
-      "type": "file",
-      "sources": [
-        "shared/src/terrain.ts"
-      ],
-      "sourcesDigest": "e42cecf698341c0adaa8ea64f9bf911db0b7e3f9bf0210c950acdddaf1c3a31a"
-    },
-    {
-      "slug": "entity-flag-bitmask",
-      "name": "Entity flag bitmask",
-      "type": "concept",
-      "sources": [
-        "shared/src/protocol.ts",
-        "shared/src/status.ts"
-      ],
-      "sourcesDigest": "372d2fe3dbbcb4fcc18e50d6f87dca17bd089daf119d104add7bf37ac6a666b4"
-    },
-    {
-      "slug": "shared-cross-process-contract",
-      "name": "Shared cross-process contract",
-      "type": "system",
-      "sources": [
-        "shared/src/protocol.ts",
-        "shared/src/status.ts",
-        "shared/src/terrain.ts"
-      ],
-      "sourcesDigest": "485a4f77fb6c7d487fe7fb0cd1a447f8c0a1bb6f8a2c120efd06d4d11f5134a0"
-    },
-    {
-      "slug": "status-effect-registry",
-      "name": "Status effect registry",
-      "type": "file",
-      "sources": [
-        "shared/src/status.ts"
-      ],
-      "sourcesDigest": "382ed3f938dfd6597bbe0976928983b0a9d2632b55d35d19a0d7a02e63c15322"
-    },
-    {
-      "slug": "wire-protocol-entity-schema",
-      "name": "Wire protocol & entity schema",
-      "type": "file",
-      "sources": [
-        "shared/src/protocol.ts"
-      ],
-      "sourcesDigest": "2ac9ffa6749b12a1019bf3873472b774ea958fe417286452e8467ee4c6619c2e"
-    }
-  ]
+  "nodes": []
 }

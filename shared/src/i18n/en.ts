@@ -105,6 +105,20 @@ export const EN = {
   "demons_tunic": {
    "name": "Demon's Tunic"
   },
+  "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
+  "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
+  "ring_of_vigor": { "name": "Ring of Vigor" },
+  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"]].flatMap(([p, n]) =>
+   ["Blade", "Staff", "Helm", "Plate", "Robe", "Greaves", "Gauntlets", "Boots", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
+  "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
+  "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
+  "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },
+  "citadel_sigil": { "name": "Citadel Sigil" }, "drake_scale": { "name": "Drake Scale" }, "dragon_fang": { "name": "Dragon Fang" },
+  "earring_of_focus": { "name": "Earring of Focus" },
+  "necklace_of_valor": { "name": "Necklace of Valor" },
+  "ring_of_the_wastes": { "name": "Ring of the Wastes" },
+  "earring_of_binding": { "name": "Earring of Binding" },
+  "necklace_of_the_ascended": { "name": "Necklace of the Ascended" },
   "lesser_healing_potion": {
    "name": "Lesser Healing Potion",
    "desc": "Restores 60 HP."
@@ -171,7 +185,15 @@ export const EN = {
   "gremlin_chief": "Gremlin Chief",
   "goblin_chieftain": "Goblin Chieftain",
   "orc_warlord": "Orc Warlord",
-  "crypt_knight": "Crypt Knight"
+  "crypt_knight": "Crypt Knight",
+  "coast_queen": "Queen of the Coast", "tide_spawn": "Tide Spawn", "gruhash": "Warlord Gruhash", "gruhash_guard": "Gruhash's Guard",
+  "kaim_reborn": "Kaim Vanul Reborn", "reborn_servant": "Reborn Servant", "vharion": "Vharion, the Ancient Dragon", "nest_hatchling": "Nest Hatchling",
+  "drowned_sailor": "Drowned Sailor", "tide_crab": "Tide Crab", "sea_serpent": "Sea Serpent", "drowned_corsair": "Drowned Corsair", "reef_golem": "Reef Golem",
+  "ruin_wraith": "Ruin Wraith", "deep_lurker": "Deep Lurker", "ruin_sentinel": "Ruin Sentinel", "abyssal_cultist": "Abyssal Cultist", "aberration": "Aberration",
+  "ash_hound": "Ash Hound", "steppe_raider": "Steppe Raider", "ember_spider": "Ember Spider", "steppe_shaman": "Steppe Shaman", "magma_golem": "Magma Golem",
+  "citadel_guard": "Citadel Guard", "citadel_archer": "Citadel Crossbowman", "war_wolf": "War Wolf", "citadel_warlock": "Citadel Warlock", "citadel_champion": "Citadel Champion",
+  "drake_whelp": "Drake Whelp", "valley_basilisk": "Valley Basilisk", "obsidian_golem": "Obsidian Golem", "wyvern": "Wyvern", "elder_drake": "Elder Drake",
+  "nest_guardian": "Nest Guardian", "dragon_cultist": "Dragon Cultist", "brood_spider": "Brood Spider", "dragonkin": "Dragonkin", "ancient_drake": "Ancient Drake"
  },
  "skills": {
   "provoke": {
@@ -257,7 +279,35 @@ export const EN = {
   "grace": {
    "name": "Grace",
    "desc": "Female. Atk.Spd +12%, Speed +8% for 15s."
-  }
+  },
+  "shield_bash": { "name": "Shield Bash", "desc": "220% damage and stuns for 2.5s." },
+  "challenge": { "name": "Challenge", "desc": "Wide area taunt: everything around the target comes for you." },
+  "fortress": { "name": "Fortress", "desc": "P.Def +50%, M.Def +30% for 30s." },
+  "holy_strike": { "name": "Holy Strike", "desc": "320% damage and slows for 4s." },
+  "guardian_aura": { "name": "Guardian Aura", "desc": "P.Def and M.Def +25% on you or an ally for 2 min." },
+  "earthquake": { "name": "Earthquake", "desc": "240% damage to everything around you and stuns for 1.5s." },
+  "last_stand": { "name": "Last Stand", "desc": "Instantly restores 600 HP." },
+  "double_slash": { "name": "Double Slash", "desc": "Two quick cuts. 300% damage." },
+  "hamstring": { "name": "Hamstring", "desc": "200% damage and slows for 5s." },
+  "bloodlust": { "name": "Bloodlust", "desc": "P.Atk +30%, Atk.Spd +25% for 45s." },
+  "rend": { "name": "Rend", "desc": "300% damage and a heavy bleed for 8s." },
+  "blade_storm": { "name": "Blade Storm", "desc": "260% damage to every enemy around you." },
+  "war_cry": { "name": "War Cry", "desc": "P.Atk +15%, Speed +20% for 30s." },
+  "execute": { "name": "Execute", "desc": "A blow to end the fight. 550% damage." },
+  "fireball": { "name": "Fireball", "desc": "A ball of fire. 280% damage." },
+  "frost_nova": { "name": "Frost Nova", "desc": "Freezes everything around you: 180% damage and slows for 4s." },
+  "arcane_power": { "name": "Arcane Power", "desc": "M.Atk +30% for 60s." },
+  "lightning": { "name": "Lightning", "desc": "320% damage and stuns for 1.5s." },
+  "meteor": { "name": "Meteor", "desc": "Falls on the target and everything near it. 300% damage." },
+  "soul_drain": { "name": "Soul Drain", "desc": "260% damage and heals you for half of it." },
+  "inferno": { "name": "Inferno", "desc": "420% damage over a huge area, and it keeps burning for 6s." },
+  "divine_heal": { "name": "Divine Heal", "desc": "Restores 400 HP." },
+  "holy_shield": { "name": "Holy Shield", "desc": "P.Def and M.Def +30% for 3 min." },
+  "smite": { "name": "Smite", "desc": "260% damage and stuns for 1s." },
+  "might": { "name": "Might", "desc": "P.Atk and M.Atk +20%, Atk.Spd +10% for 3 min." },
+  "restoration": { "name": "Restoration", "desc": "Restores 700 HP." },
+  "haste": { "name": "Haste", "desc": "Speed and Atk.Spd +20% for 2 min." },
+  "miracle": { "name": "Miracle", "desc": "Restores 1500 HP." }
  },
  "quests": {
   "pest_control": {
@@ -347,7 +397,25 @@ export const EN = {
    "busy": "The Vanul still stands. Do not face him alone unless you must.",
    "ready": "The seal holds. Take this, and leave the wastes while you can.",
    "doneText": "He will claw his way back. Not today."
-  }
+  },
+  "drowned_crew": { "name": "The Drowned Crew", "story": "The lighthouse on the Forsaken Coast still burns, but the ships it guided have long since sunk. Their sailors come back with every tide.",
+   "offer": "The drowned sailors keep me from the lighthouse. Send 12 back to the bottom.", "busy": "They keep coming out of the water. Twelve sailors.",
+   "ready": "Tonight the light will shine on an empty beach. Thank you.", "doneText": "The tide is calm. It will not last." },
+  "sunken_relics": { "name": "Sunken Relics", "story": "A whole city sleeps under the Sunken Ruins. What lives there now guards its relics without knowing what they are.",
+   "offer": "Everything living in the ruins carries relics. Bring me 10.", "busy": "Ten relics. Mind what lurks under the water.",
+   "ready": "Intact. This rewrites half the history of the frontier.", "doneText": "I have years of study ahead. I owe you one." },
+  "steppe_raiders": { "name": "Raiders of the Steppes", "story": "The Burning Steppes give nothing, so their clans live off what they take. Every caravan that crosses pays in blood.",
+   "offer": "The raiders cut every road. Take down 12.", "busy": "Twelve raiders. They attack in packs, stay sharp.",
+   "ready": "The roads can breathe. Take your share.", "doneText": "The caravans will get through for a while." },
+  "citadel_champions": { "name": "Champions of the Citadel", "story": "The Orc Citadel has outlasted three sieges. Not because of its walls: because of the champions who ride out to break every line that comes near.",
+   "offer": "No siege will work while its champions stand. Bring down 4.", "busy": "Four champions. Each is worth ten guards.",
+   "ready": "Without them the wall is only stone. Well fought.", "doneText": "The siege moves forward. We owe you." },
+  "drake_scales": { "name": "Drake Scales", "story": "In Dragon Valley the whelps learn to hunt before they learn to fly. Their scales are the only thing that stops their elders' fire.",
+   "offer": "I need 12 drake scales to forge something that can take the fire.", "busy": "Twelve scales. Whelps, wyverns, elder drakes: any will do.",
+   "ready": "Still warm. This is enough.", "doneText": "What comes after this valley is worse. Go prepared." },
+  "ancient_drakes": { "name": "Ancient Drakes", "story": "The ancient drakes have guarded the Nest since before the frontier had a name. While they live, what sleeps inside is in no hurry.",
+   "offer": "The ancient drakes are the nest's last guard. Kill 8.", "busy": "Eight ancients. These are no whelps: do not go alone.",
+   "ready": "The nest stands unguarded. Now it will hear you.", "doneText": "What sleeps in there already knows your name." }
  },
  "npcs": {
   "grocer": {
@@ -435,13 +503,30 @@ export const EN = {
   "mael": {
    "title": "Sister",
    "greeting": "Kaim Vanul must not be allowed to rise."
-  }
+  },
+  "dusk_weapons": { "title": "Master Weaponsmith", "greeting": "Good steel is not bought ready-made. Bring me something to forge it from." },
+  "dusk_armor": { "title": "Master Armorer", "greeting": "The village gear is for hunting wolves. Here we dress the ones headed for the Nest." },
+  "dusk_grocer": { "title": "Alchemist", "greeting": "The strong potions. The others they sell you in the village." },
+  "dusk_gate": { "title": "Gatekeeper", "greeting": "From here the rough zones are a step away. And a few coins." },
+  "tobias": { "title": "Lighthouse Keeper", "greeting": "The tide gives back the ones it took." },
+  "ysolde": { "title": "Archaeologist", "greeting": "These ruins were a city before the water rose." },
+  "korgan": { "title": "Steppe Scout", "greeting": "Out here even the wind burns." },
+  "brenna": { "title": "Siege Captain", "greeting": "The citadel will not fall while its champions stand." },
+  "aldric": { "title": "Dragon Hunter", "greeting": "Everything that walks this valley has scales." },
+  "sibila": { "title": "Seer", "greeting": "The nest is awake. I feel it in my bones." }
  },
  "zones": {
   "meadows": "Windy Meadows",
   "hills": "Goblin Hills",
   "barracks": "Orc Barracks",
   "wastes": "Cursed Wastes",
+  "dusk": "Dusk Bastion",
+  "coast": "Forsaken Coast",
+  "ruins": "Sunken Ruins",
+  "steppes": "Burning Steppes",
+  "citadel": "Orc Citadel",
+  "valley": "Dragon Valley",
+  "nest": "Dragon's Nest",
   "town": "Village of Dawn",
   "wild": "Wilderness"
  },
@@ -449,7 +534,15 @@ export const EN = {
   "meadows": "Windy Meadows (Lv 1-5)",
   "hills": "Goblin Hills (Lv 5-10)",
   "barracks": "Orc Barracks (Lv 10-15)",
-  "wastes": "Cursed Wastes (Lv 15-20)"
+  "wastes": "Cursed Wastes (Lv 15-20)",
+  "town": "Village of Dawn",
+  "dusk": "Dusk Bastion",
+  "coast": "Forsaken Coast (Lv 20-25)",
+  "ruins": "Sunken Ruins (Lv 25-30)",
+  "steppes": "Burning Steppes (Lv 30-35)",
+  "citadel": "Orc Citadel (Lv 35-40)",
+  "valley": "Dragon Valley (Lv 40-45)",
+  "nest": "Dragon's Nest (Lv 45-50)"
  },
  "races": {
   "human": {
@@ -476,6 +569,12 @@ export const EN = {
  "classes": {
   "fighter": "Fighter",
   "mystic": "Mystic"
+ },
+ "specs": {
+  "knight": { "name": "Knight", "desc": "Tank. Soaks damage, stuns and keeps enemies on himself." },
+  "gladiator": { "name": "Gladiator", "desc": "Melee damage. Brutal hits, bleeds and fury." },
+  "sorcerer": { "name": "Sorcerer", "desc": "Magic damage. Fire, ice and lightning over whole groups." },
+  "cleric": { "name": "Cleric", "desc": "Healer. Big heals and blessings for the party." }
  },
  "genders": {
   "m": {

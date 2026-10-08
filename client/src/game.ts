@@ -55,6 +55,8 @@ export interface CEnt {
   hitDz: number;
   /** dodge roll animation: start time and (own character only) the predicted path */
   rollAt?: number;
+  /** /dance emote running until this time */
+  danceUntil?: number;
   roll?: { fx: number; fz: number; tx: number; tz: number; ry: number; at: number };
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
@@ -866,6 +868,7 @@ export class Game {
       return;
     }
     if (skill === 'escape') return this.fx.pillar(s.pos.clone(), 0x66aaff, 3000, 4);
+    if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
     if (!def || !t) return;
     switch (def.kind) {
@@ -1527,8 +1530,10 @@ export class Game {
       const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
       c.root.visible = onScreen;
       // far rigs are tiny on screen: skip their (per-bone) animation
+      if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
       if (c.rig && onScreen && dSelf < 60) {
         animate(c.rig, {
+          dancing: !!c.danceUntil,
           moving,
           atkAge: now - c.atkAt,
           casting: (c.flags & F_CASTING) !== 0,

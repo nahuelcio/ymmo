@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, zoneOf } from '../../../shared/src/layout';
 import { settings } from '../settings';
@@ -59,7 +59,7 @@ export { ROADS, roadDist } from '../../../shared/src/layout';
  */
 function groundFactors(x: number, z: number, h: number) {
   const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
-  const town = 1 - smoothstep(TOWN.r - 2, TOWN.r + 6, Math.hypot(x - TOWN.x, z - TOWN.z));
+  const town = Math.max(...TOWNS.map((t) => 1 - smoothstep(t.r - 2, t.r + 6, Math.hypot(x - t.x, z - t.z))));
   const dirt = Math.max(road * 0.85, town);
   return {
     n: fbm(x / 40 + 50, z / 40 - 20, 3),
@@ -114,7 +114,7 @@ export function groundLayers(x: number, z: number, h: number, out: Float32Array,
   apply(2, f.rock);
   apply(4, f.snow);
   apply(1, f.road * 0.85); // roads: packed dirt
-  apply(5, f.town); // the village is paved
+  apply(5, f.town); // towns are paved
   apply(3, f.sand);
   apply(3, f.deep); // silt under the ponds reads as sand
   // steep slopes turn to bare rock (snow stays on top of the peaks)
@@ -995,7 +995,17 @@ function buildTown(): THREE.Group {
     banner.rotation.y = gp.rot;
     g.add(banner);
   }
-  dressTown(g, L, y);
+  // the village's own dressing (lanes, arches, yards) only knows the village
+  dressTown(g, { ...L, houses: L.houses.filter((h) => !h.out), walls: L.walls.filter((w) => !w.out), gates: L.gates.filter((p) => !p.out) }, y);
+  // Bastión del Ocaso: a dark stone plaza around a watch fire
+  const dusk = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 0.2, 24), mat(0x6e695f));
+  dusk.position.set(DUSK.x, y + 0.02, DUSK.z);
+  dusk.receiveShadow = true;
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.6, 10), mat(0x4a4640));
+  ring.position.set(DUSK.x, y + 0.3, DUSK.z);
+  const fire = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 6), new THREE.MeshLambertMaterial({ color: 0xff8a2a, emissive: 0xff5a10, emissiveIntensity: 1, flatShading: true }));
+  fire.position.set(DUSK.x, y + 1.3, DUSK.z);
+  g.add(dusk, ring, fire);
   return g;
 }
 

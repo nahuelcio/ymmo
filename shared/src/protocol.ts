@@ -1,15 +1,15 @@
-import type { ClassType, Look, Race } from './data/classes';
+import type { ClassType, Look, Race, Spec } from './data/classes';
 import type { Slot } from './data/items';
 import type { QuestStatus } from './data/quests';
 
 /** Name colour: 0 normal, 1 PvP flagged (purple), 2 karma (red). */
 export type NameColor = 0 | 1 | 2;
 
-export interface CharSummary { id: number; name: string; race: Race; cls: ClassType; level: number; look: Look }
+export interface CharSummary { id: number; name: string; race: Race; cls: ClassType; spec?: Spec | null; level: number; look: Look }
 
 export interface EntPlayer {
   id: number; k: 'p'; x: number; z: number; ry: number; n: string; l: number; hp: number;
-  race: Race; cls: ClassType; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
+  race: Race; cls: ClassType; spec?: Spec | null; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
   /** other visible gear: [head, gloves, legs, feet] item ids */
   eq: (string | null)[];
 }
@@ -28,10 +28,11 @@ export const F_COMBAT = 8;
 /** Player has PvP mode enabled (can attack / be attacked by other PvP players). */
 export const F_PVP = 64;
 
-export interface InvItem { u: number; i: string; c: number; s: Slot | null }
+/** e: enchant level (+N) of a piece of gear */
+export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number }
 
 export interface SelfState {
-  id: number; name: string; race: Race; cls: ClassType; look: Look;
+  id: number; name: string; race: Race; cls: ClassType; spec?: Spec | null; look: Look;
   lvl: number; xp: number; xpNeed: number;
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
@@ -42,7 +43,7 @@ export interface SelfState {
   zone: string;
 }
 
-export interface PartyMember { id: number; name: string; lvl: number; cls: ClassType; hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number; leader: boolean }
+export interface PartyMember { id: number; name: string; lvl: number; cls: ClassType; spec?: Spec | null; hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number; leader: boolean }
 
 // Messages are plain JSON objects with a `t` discriminator.
 export type C2S =
@@ -63,8 +64,12 @@ export type C2S =
   | { t: 'unequip'; slot: Slot }
   | { t: 'use'; u: number }
   | { t: 'destroy'; u: number }
+  /** spend a matching enchant scroll from the bag on this piece */
+  | { t: 'enchant'; u: number }
   | { t: 'buy'; npc: number; item: string; qty: number }
   | { t: 'sell'; npc: number; u: number; qty: number }
+  /** have a merchant make an item from its recipe (ItemDef.craft) */
+  | { t: 'craft'; npc: number; item: string }
   | { t: 'teleport'; npc: number; dest: string }
   | { t: 'questAccept'; npc: number }
   | { t: 'questTurnIn'; npc: number }
@@ -72,6 +77,8 @@ export type C2S =
   | { t: 'partyInvite'; name: string }
   | { t: 'partyRespond'; accept: boolean }
   | { t: 'partyLeave' }
+  /** one-time pick at SPEC_LEVEL */
+  | { t: 'chooseSpec'; spec: Spec }
   | { t: 'respawn' }
   | { t: 'pvpMode'; on: boolean }
   | { t: 'autoLoot'; on: boolean }
@@ -101,7 +108,7 @@ export type S2C =
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'party'; members: PartyMember[] | null }

@@ -24,13 +24,13 @@ impl World {
             cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, auto_loot: false, dodge_until: 0.0, rtt: 80.0,
             saved_at: crate::world::now_ms() - rnd() * 60000.0, look: row.look, last_combat: 0.0, escape_at: 0.0, party: None, pending_invite: None,
             talking_to: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(),
-            inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls,
+            inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
         };
-        for (i, c, s) in items {
+        for (i, c, s, e) in items {
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i, c, s });
+            p.inv.push(InvItem { u, i, c, s, e });
         }
         prime_quest_notices(&mut p);
         p.recalc();
@@ -60,7 +60,7 @@ impl World {
     pub fn take_out(&mut self, pid: u32, at: Option<P>) -> Option<Member> {
         if !self.ents.contains_key(&pid) { return None; }
         if self.ents[&pid].c.dead {
-            let pt = if self.raid.is_some() { at.unwrap_or_else(|| self.town_point()) } else { self.town_point() };
+            let pt = if self.raid.is_some() { at.unwrap_or_else(|| self.town_point(None)) } else { self.town_point(Some(pid)) };
             self.ents.get_mut(&pid).unwrap().c.dead = false;
             let p = self.pl_mut(pid).unwrap();
             p.hp = p.stats.max_hp * 0.7;
@@ -75,7 +75,7 @@ impl World {
     }
 
     /** Where a character leaving a raid is saved: the village, never the arena's coordinates. */
-    fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point()) } else { None } }
+    fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point(None)) } else { None } }
 
     pub fn quit(&mut self, sid: u64) {
         let Some(&pid) = self.sessions.get(&sid) else { return };
@@ -91,10 +91,19 @@ impl World {
     }
 
     /** /raid: in a raid it leaves; in the overworld it takes the caller (and the whole party) into a new instance. */
-    pub fn raid_command(&mut self, pid: u32) {
+    /// `/raid` leaves the instance you are in, or enters one: Kaim's by default, `/raid <id>` for another.
+    pub fn raid_command(&mut self, pid: u32, which: &str) {
         if self.raid.is_some() { return self.exit_to_town(pid); }
-        let raid = &d().raids["kaim"];
+        let Some(raid) = d().raids.get(if which.is_empty() { "kaim" } else { which }) else {
+            let ids = d().raids.keys().cloned().collect::<Vec<_>>().join(", ");
+            return self.sys(pid, &format!("No existe esa raid. Raids: {ids}."), &format!("No such raid. Raids: {ids}."));
+        };
         if self.ents[&pid].c.dead { return; }
+        if let Some(q) = raid.quest.as_deref().and_then(|q| d().quest(q)) {
+            if !self.pl(pid).unwrap().quest(&q.id).map_or(false, |st| st.2) {
+                return self.sys(pid, &format!("Primero tenés que completar la misión «{}».", q.name), &format!("You must first complete the quest \"{}\".", q.name_en));
+            }
+        }
         let party = self.pl(pid).unwrap().party;
         let group: Vec<u32> = match party {
             Some(ptid) => {
@@ -123,7 +132,7 @@ impl World {
             if id != pid { self.sys(id, &format!("{leader} los lleva a {}...", raid.name), &format!("{leader} is taking the party to {}...", raid.name_en)); }
             if let Some(m) = self.take_out(id, None) { members.push(m); }
         }
-        self.events.push(HubEvent::EnterRaid { members });
+        self.events.push(HubEvent::EnterRaid { raid, members });
     }
 
     /** Staggered autosave: a few players per call instead of everyone at once every minute. */

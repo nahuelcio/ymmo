@@ -9,10 +9,10 @@ pub struct Db { pub c: Connection }
 
 pub struct CharRow {
     pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub xp: i64,
-    pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64, pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub look: Look,
+    pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64, pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub look: Look, pub spec: Option<String>,
 }
 
-pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub look: Look }
+pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub spec: Option<String>, pub level: i64, pub look: Look }
 
 const TOKEN_TTL: f64 = 30.0 * 24.0 * 3600.0 * 1000.0;
 
@@ -69,9 +69,10 @@ impl Db {
              CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
              CREATE TABLE IF NOT EXISTS quests (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id));",
         ).expect("schema");
-        for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0"] {
+        for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0", "spec TEXT"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
         }
+        let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
         let _ = c.execute("DELETE FROM sessions WHERE expires < ?", [now_ms() as i64]);
         Db { c }
     }
@@ -109,8 +110,8 @@ impl Db {
     pub fn delete_session(&self, token: &str) { let _ = self.c.execute("DELETE FROM sessions WHERE hash = ?", [sha(token)]); }
 
     pub fn list_chars(&self, account_id: i64) -> Vec<CharSummary> {
-        let mut st = self.c.prepare_cached("SELECT id, name, race, cls, level, gender, hair_style, hair_color FROM characters WHERE account_id = ? ORDER BY id").unwrap();
-        st.query_map([account_id], |r| Ok(CharSummary { id: r.get(0)?, name: r.get(1)?, race: r.get(2)?, cls: r.get(3)?, level: r.get(4)?, look: look_of(r.get(5)?, r.get(6)?, r.get(7)?) }))
+        let mut st = self.c.prepare_cached("SELECT id, name, race, cls, level, gender, hair_style, hair_color, spec FROM characters WHERE account_id = ? ORDER BY id").unwrap();
+        st.query_map([account_id], |r| Ok(CharSummary { id: r.get(0)?, name: r.get(1)?, race: r.get(2)?, cls: r.get(3)?, level: r.get(4)?, look: look_of(r.get(5)?, r.get(6)?, r.get(7)?), spec: r.get(8)? }))
             .map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
     }
 
@@ -143,19 +144,20 @@ impl Db {
         }
     }
 
-    pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>)>, Vec<(String, i64, bool)>)> {
+    /** items come back as (item id, count, slot, enchant) */
+    pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64)>, Vec<(String, i64, bool)>)> {
         let row = self.c.query_row(
-            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color FROM characters WHERE id = ? AND account_id = ?",
+            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec FROM characters WHERE id = ? AND account_id = ?",
             params![id, account_id],
             |r| Ok(CharRow {
                 id: r.get(0)?, name: r.get(1)?, race: r.get(2)?, cls: r.get(3)?, level: r.get(4)?, xp: r.get(5)?, x: r.get(6)?, z: r.get(7)?,
                 hp: r.get(8)?, mp: r.get(9)?, cp: r.get(10)?, adena: r.get(11)?, karma: r.get(12)?, pk: r.get(13)?, pvp: r.get(14)?,
-                look: look_of(r.get(15)?, r.get(16)?, r.get(17)?),
+                look: look_of(r.get(15)?, r.get(16)?, r.get(17)?), spec: r.get(18)?,
             }),
         ).optional().ok().flatten()?;
         let data = d();
-        let mut st = self.c.prepare_cached("SELECT item_id, count, slot FROM items WHERE char_id = ? ORDER BY id").unwrap();
-        let items = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<String>>(2)?)))
+        let mut st = self.c.prepare_cached("SELECT item_id, count, slot, enchant FROM items WHERE char_id = ? ORDER BY id").unwrap();
+        let items = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, i64>(3)?)))
             .map(|it| it.filter_map(Result::ok).filter(|r| data.item(&r.0).is_some()).collect()).unwrap_or_default();
         let mut st = self.c.prepare_cached("SELECT quest_id, progress, done FROM quests WHERE char_id = ?").unwrap();
         let quests = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)? != 0)))
@@ -163,12 +165,15 @@ impl Db {
         Some((row, items, quests))
     }
 
+    /** the specialization is picked once and for good: written right away, not with the periodic save */
+    pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
+
     #[allow(clippy::too_many_arguments)]
     pub fn save_char(&mut self, id: i64, level: i64, xp: i64, x: f64, z: f64, hp: f64, mp: f64, cp: f64, adena: i64, karma: i64, pk: i64, pvp: i64, inv: &[InvItem], quests: &[(String, i64, bool)]) -> rusqlite::Result<()> {
         let tx = self.c.transaction()?;
         tx.execute("UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?", params![level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, id])?;
         tx.execute("DELETE FROM items WHERE char_id = ?", [id])?;
-        for it in inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot) VALUES (?, ?, ?, ?)", params![id, it.i, it.c, it.s])?; }
+        for it in inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant) VALUES (?, ?, ?, ?, ?)", params![id, it.i, it.c, it.s, it.e])?; }
         tx.execute("DELETE FROM quests WHERE char_id = ?", [id])?;
         for q in quests {
             if d().quest(&q.0).is_some() { tx.execute("INSERT INTO quests (char_id, quest_id, progress, done) VALUES (?, ?, ?, ?)", params![id, q.0, q.1, q.2 as i64])?; }

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
-import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
+import { GRADE_COLOR, ITEMS, type ItemDef } from '../../../shared/src/data/items';
+
+/** C grade and up share the top-tier look (trim, glow) */
+const topTier = (g?: string) => !!g && g !== 'NG' && g !== 'D';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -36,6 +39,8 @@ export interface AnimState {
   casting: boolean;
   deadAge: number; // ms since death (-1 alive)
   t: number; // seconds
+  /** /dance emote */
+  dancing?: boolean;
 }
 
 /**
@@ -172,7 +177,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
     head.add(part(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 8), darker(c, 0.7), 0, 0.03, -0.01));
     return false; // long hair still shows below a cap
   }
-  if (def.grade === 'C') {
+  if (topTier(def.grade)) {
     // closed great helm with visor slit and plume
     head.add(part(B(0.42, 0.44, 0.44), c, 0, 0.03, 0));
     head.add(part(B(0.3, 0.04, 0.02), 0x111111, 0, 0.04, 0.225));
@@ -191,7 +196,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
 
 function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean) {
   const c = def.color, d = 0.3 * Math.sqrt(k);
-  if (def.grade === 'C' && def.id !== 'demons_tunic') {
+  if (topTier(def.grade) && def.id !== 'demons_tunic') {
     // full plate: breastplate, gorget, big rounded pauldrons
     torso.add(part(B(0.54 * k, 0.4, d + 0.06), c, 0, 0.42, 0.01));
     torso.add(part(B(0.3 * k, 0.12, d + 0.04), darker(c, 0.85), 0, 0.66, 0));
@@ -213,7 +218,7 @@ function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean
     // caster robes: collar, sash; demon's tunic gets glowing runes
     torso.add(part(B(0.36 * k, 0.08, d + 0.02), darker(c, 0.7), 0, 0.64, 0));
     torso.add(part(B(0.08, 0.6, 0.02), darker(c, 1.4), 0, 0.32, d / 2 + 0.01));
-    if (def.grade === 'C') for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
+    if (topTier(def.grade)) for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
     return;
   }
   // cloth tunic: a simple collar
@@ -235,7 +240,7 @@ function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin
 /** The weapon as held: C-grade blades glow. */
 function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
   const w = weaponMesh(kind, color);
-  if (w && grade === 'C') w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
+  if (w && topTier(grade)) w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
   return w;
 }
 
@@ -253,7 +258,7 @@ export function humanoid(o: HumanoidOpts): Rig {
     leg.position.set(sx * 0.12 * k, 0.9, 0);
     leg.add(part(B(0.17 * k, 0.5, 0.2), legC, 0, -0.25, 0)); // thigh
     leg.add(part(B(0.15 * k, 0.42, 0.18), darker(legC, 0.92), 0, -0.64, 0)); // shin
-    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), g.legs.grade === 'C' ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
+    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), topTier(g.legs.grade) ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
     const sandals = g.feet?.id === 'leather_sandals';
     const tall = g.feet && g.feet.grade !== 'NG';
     if (tall) leg.add(part(B(0.18 * k, 0.26, 0.21), bootC, 0, -0.74, 0.01));
@@ -406,6 +411,50 @@ function beast(color: number, scale: number, o: BeastOpts): Rig {
   }
   root.scale.setScalar(scale);
   return { root, body, kind: 'beast', legs, torso: head, head, tail, height: (o.low ? 0.95 : 1.3) * scale, radius: 0.6 * scale };
+}
+
+/** Drake or dragon: a beast with a long neck, swept horns, a bladed tail and wings that beat. age: 0 whelp, 1 grown, 2 ancient. */
+function dragon(color: number, scale: number, age: 0 | 1 | 2): Rig {
+  const rig = beast(color, scale, { tail: 'lizard', spines: true, fangs: true, claws: true, belly: 0xd8c070, eyes: age ? 0xff5a1a : 0xffe040 });
+  const { body } = rig, head = rig.head!, tail = rig.tail!;
+  const dark = darker(color, 0.6), membrane = darker(color, 1.35), BONE = 0xe8e0c0;
+  // long neck: the head sits higher and further out, on a slanted neck
+  const neck = part(B(0.3, 0.62, 0.3), color, 0, 1.12, 0.62);
+  neck.rotation.x = 0.55;
+  body.add(neck, part(B(0.2, 0.5, 0.1), 0xd8c070, 0, 1.06, 0.76));
+  head.position.y += 0.34;
+  head.position.z += 0.16;
+  head.userData.baseZ = head.position.z;
+  for (const sx of [-1, 1]) {
+    const horn = part(new THREE.ConeGeometry(0.06, 0.4 + age * 0.14, 5), BONE, sx * 0.16, 0.3, -0.1);
+    horn.rotation.x = -1.05;
+    horn.rotation.z = -sx * 0.25;
+    head.add(horn);
+    if (age) head.add(part(new THREE.ConeGeometry(0.035, 0.16, 4), BONE, sx * 0.2, 0.0, 0.2)); // cheek spikes
+  }
+  if (age === 2) for (let i = 0; i < 3; i++) head.add(part(new THREE.ConeGeometry(0.04, 0.2, 4), BONE, 0, 0.3, 0.2 - i * 0.14)); // crest
+  // two more tail segments and a blade at the tip
+  tail.add(part(B(0.08, 0.06, 0.4), color, 0, -0.24, -1.64));
+  tail.add(part(new THREE.ConeGeometry(0.15, 0.42, 4).rotateX(-Math.PI / 2), BONE, 0, -0.24, -2.0));
+  // wings: an arm bone, three membrane panels sweeping back and a claw at the wrist, hinged at the shoulder
+  const span = 0.75 + age * 0.45;
+  const wing = (sx: number) => {
+    const w = new THREE.Group();
+    w.position.set(sx * 0.3, 1.05, 0.22);
+    w.add(part(B(span, 0.08, 0.1), dark, (sx * span) / 2, 0, 0.04));
+    for (let i = 0; i < 3; i++) {
+      const l = span * (1 - i * 0.2);
+      w.add(part(B(l, 0.03, 0.36), i % 2 ? darker(membrane, 0.85) : membrane, (sx * l) / 2, -0.03, -0.16 - i * 0.33));
+    }
+    w.add(part(new THREE.ConeGeometry(0.04, 0.2, 4).rotateX(Math.PI / 2), BONE, sx * span, 0, 0.16));
+    w.rotation.z = sx * 0.45;
+    body.add(w);
+    return w;
+  };
+  rig.armL = wing(-1);
+  rig.armR = wing(1);
+  rig.height = 1.95 * scale;
+  return rig;
 }
 
 function spider(color: number, scale: number): Rig {
@@ -581,7 +630,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const cap = head?.id === 'leather_cap'; // worn as a hood
     const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
-    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
+    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: topTier(d?.grade) });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
@@ -618,7 +667,21 @@ export function mobModel(tplId: string): Rig {
     case 'werewolf':
       rig = beast(c, t.scale, { ears: 'wolf', tail: 'bushy', mane: true, fangs: true, claws: true, eyes: 0xffaa22 });
       break;
+    case 'drake_whelp':
+    case 'nest_hatchling':
+      rig = dragon(c, t.scale, 0);
+      break;
+    case 'wyvern':
+    case 'elder_drake':
+      rig = dragon(c, t.scale, 1);
+      break;
+    case 'ancient_drake':
+    case 'vharion':
+      rig = dragon(c, t.scale, 2);
+      break;
     case 'hill_lizard':
+    case 'sea_serpent':
+    case 'valley_basilisk':
       rig = beast(c, t.scale, { tail: 'lizard', spines: true, horns: true, low: true, belly: 0xc8c890, eyes: 0xffe040 });
       break;
     default:
@@ -865,10 +928,10 @@ export function itemModel(itemId: string): THREE.Group {
     };
     g.add((shape[itemId] ?? (() => part(new THREE.IcosahedronGeometry(0.15, 0), c, 0, 0.15, 0)))());
   }
-  if (def?.grade === 'D' || def?.grade === 'C') {
+  if (def?.grade && def.grade !== 'NG') {
     // loot beam so good drops stand out
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2.2, 8, 1, true),
-      new THREE.MeshBasicMaterial({ color: def.grade === 'C' ? 0xffd24d : 0x6fb2ff, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+      new THREE.MeshBasicMaterial({ color: GRADE_COLOR[def.grade], transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
     beam.position.y = 1.1;
     g.add(beam);
   }
@@ -923,7 +986,11 @@ export function bake(rig: Rig): Rig {
 }
 
 export function animate(rig: Rig, s: AnimState) {
-  if (rig.q) return animateQ(rig.q, s);
+  if (rig.q) {
+    animateQ(rig.q, s);
+    return;
+  }
+  const dance = !!s.dancing && s.deadAge < 0;
   const { body, legs, armL, armR, torso } = rig;
   if (s.deadAge >= 0) {
     const k = Math.min(1, s.deadAge / 450);
@@ -954,6 +1021,15 @@ export function animate(rig: Rig, s: AnimState) {
       ar = -1.35 + walk * 0.1 + (s.atkAge < 450 ? Math.sin((s.atkAge / 450) * Math.PI) * -0.5 : 0);
       al = -1.4 - walk * 0.1;
     }
+    if (dance) {
+      // hands in the air, hips twisting, a hop on every beat
+      ar = -2.7 + Math.sin(s.t * 8) * 0.5;
+      al = -2.7 - Math.sin(s.t * 8) * 0.5;
+      body.rotation.y = Math.sin(s.t * 4) * 0.7;
+      body.position.y = Math.abs(Math.sin(s.t * 8)) * 0.14;
+      legs[0].rotation.x = Math.sin(s.t * 8) * 0.35;
+      legs[1].rotation.x = -Math.sin(s.t * 8) * 0.35;
+    }
     if (rig.pose === 'hunch' && torso) torso.rotation.x = 0.22;
     if (rig.pose === 'float') legs.forEach((l) => (l.rotation.x = 0.15));
     if (armR) { armR.rotation.x = ar; armR.rotation.z = zr; }
@@ -967,6 +1043,13 @@ export function animate(rig: Rig, s: AnimState) {
       torso.position.z = (torso.userData.baseZ ?? 0.65) + k * 0.2;
     }
     body.position.y = s.moving ? Math.abs(Math.sin(s.t * 11)) * 0.06 : 0;
+    if (armL && armR) {
+      // wings: a slow breath at rest, a full beat on the move or mid-attack
+      const busy = s.moving || s.atkAge < 400;
+      const f = Math.sin(s.t * (busy ? 9 : 2.2)) * (busy ? 0.45 : 0.12);
+      armR.rotation.z = 0.45 + f;
+      armL.rotation.z = -0.45 - f;
+    }
   } else {
     legs.forEach((l, i) => (l.rotation.x = s.moving ? Math.sin(s.t * 16 + i) * 0.35 : 0));
     const k = s.atkAge < 400 ? Math.sin((s.atkAge / 400) * Math.PI) : 0;

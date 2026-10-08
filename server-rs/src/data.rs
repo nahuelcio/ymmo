@@ -14,6 +14,8 @@ pub struct Constants {
     pub start_adena: i64,
     #[serde(rename = "MAX_LEVEL")]
     pub max_level: i64,
+    #[serde(rename = "SPEC_LEVEL")]
+    pub spec_level: i64,
     #[serde(rename = "HAIR_STYLES")]
     pub hair_styles: i64,
     #[serde(rename = "HAIR_COLORS")]
@@ -45,12 +47,22 @@ pub struct ItemDef {
     pub m_atk: Option<f64>,
     pub p_def: Option<f64>,
     pub m_def: Option<f64>,
+    pub hp: Option<f64>,
     pub mp: Option<f64>,
     pub price: i64,
     pub stack: Option<bool>,
     #[serde(rename = "use")]
     pub use_: Option<ItemUse>,
+    pub enchant: Option<String>,
+    pub craft: Option<Recipe>,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
+
+#[derive(Deserialize, Clone, Copy, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub step: f64, pub max: i64, pub fail_destroys: bool }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -116,6 +128,7 @@ pub struct SkillDef {
     pub name: String,
     pub name_en: String,
     pub cls: Option<String>,
+    pub spec: Option<String>,
     pub race: Option<String>,
     pub gender: Option<String>,
     pub level: i64,
@@ -156,6 +169,7 @@ pub struct NpcDef {
     pub z: f64,
     pub ry: f64,
     pub shop: Option<Vec<String>>,
+    pub craft: Option<Vec<String>>,
     pub title: String,
     pub title_en: String,
     pub greeting: String,
@@ -200,6 +214,10 @@ pub struct StartItem { pub item: String, pub count: i64, pub equip: bool }
 pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub base_mp: f64, pub mp_lvl: f64, pub cp_ratio: f64, pub atk_interval: f64, pub start_items: Vec<StartItem> }
 
 #[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecDef { pub id: String, pub base: String, pub name: String, pub name_en: String }
+
+#[derive(Deserialize, Clone, Debug)]
 pub struct StatusDef { pub id: String, pub flag: u16 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -207,7 +225,7 @@ pub struct Pos { pub x: f64, pub z: f64 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub close_after_kill: f64 }
+pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "k")]
@@ -222,7 +240,9 @@ pub enum ObstacleDef {
 struct Raw {
     constants: Constants,
     town: Town,
+    towns: Vec<Town>,
     wild: Named,
+    enchant: EnchantCfg,
     items: Vec<ItemDef>,
     mobs: Vec<MobDef>,
     skills: Vec<SkillDef>,
@@ -234,6 +254,7 @@ struct Raw {
     races: Vec<RaceDef>,
     genders: Vec<GenderDef>,
     classes: Vec<ClassDef>,
+    specs: Vec<SpecDef>,
     statuses: Vec<StatusDef>,
     raids: Vec<RaidDef>,
     obstacles: Vec<ObstacleDef>,
@@ -241,8 +262,12 @@ struct Raw {
 
 pub struct Data {
     pub c: Constants,
+    /** the starting village */
     pub town: Town,
+    /** every peace zone, the village included */
+    pub towns: Vec<Town>,
     pub wild: Named,
+    pub enchant: EnchantCfg,
     pub items: HashMap<String, ItemDef>,
     pub mobs: HashMap<String, MobDef>,
     /** in data order (skill lists keep it) */
@@ -256,6 +281,7 @@ pub struct Data {
     pub races: HashMap<String, RaceDef>,
     pub genders: HashMap<String, GenderDef>,
     pub classes: HashMap<String, ClassDef>,
+    pub specs: Vec<SpecDef>,
     pub statuses: Vec<StatusDef>,
     pub raids: HashMap<String, RaidDef>,
     pub obstacles: Vec<ObstacleDef>,
@@ -270,13 +296,15 @@ impl Data {
     pub fn npc(&self, id: &str) -> Option<&NpcDef> { self.npcs.iter().find(|n| n.id == id) }
     pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
 
-    pub fn skill_available(&self, s: &SkillDef, cls: &str, race: &str, gender: &str) -> bool {
-        s.cls.as_deref().map_or(true, |c| c == cls) && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
+    pub fn spec(&self, id: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.id == id) }
+
+    pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool {
+        s.cls.as_deref().map_or(true, |c| c == cls) && s.spec.as_deref().map_or(true, |x| Some(x) == spec) && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
     }
 
     /** skillsFor(): learned skills, sorted by level (stable, data order otherwise) */
-    pub fn skills_for(&self, cls: &str, level: i64, race: &str, gender: &str) -> Vec<&SkillDef> {
-        let mut v: Vec<&SkillDef> = self.skills.iter().filter(|s| self.skill_available(s, cls, race, gender) && s.level <= level).collect();
+    pub fn skills_for(&self, cls: &str, spec: Option<&str>, level: i64, race: &str, gender: &str) -> Vec<&SkillDef> {
+        let mut v: Vec<&SkillDef> = self.skills.iter().filter(|s| self.skill_available(s, cls, spec, race, gender) && s.level <= level).collect();
         v.sort_by_key(|s| s.level);
         v
     }
@@ -291,7 +319,9 @@ pub fn d() -> &'static Data {
         Data {
             c: raw.constants,
             town: raw.town,
+            towns: raw.towns,
             wild: raw.wild,
+            enchant: raw.enchant,
             items: raw.items.into_iter().map(|i| (i.id.clone(), i)).collect(),
             mobs: raw.mobs.into_iter().map(|m| (m.id.clone(), m)).collect(),
             skills: raw.skills,
@@ -304,6 +334,7 @@ pub fn d() -> &'static Data {
             races: raw.races.into_iter().map(|r| (r.id.clone(), r)).collect(),
             genders: raw.genders.into_iter().map(|g| (g.id.clone(), g)).collect(),
             classes: raw.classes.into_iter().map(|c| (c.id.clone(), c)).collect(),
+            specs: raw.specs,
             statuses: raw.statuses,
             raids: raw.raids.into_iter().map(|r| (r.id.clone(), r)).collect(),
             obstacles: raw.obstacles,

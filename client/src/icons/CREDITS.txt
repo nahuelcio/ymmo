@@ -1,3 +1,16 @@
 Icons from https://game-icons.net, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/).
 Authors: Lorc, Delapouite, Skoll, sbed, Lucas, Zeromancer. Each file had its black background removed.
 The file list and the original name of each icon are in the commit that added them.
+
+Added for the level 20-50 content (same source and licence), file <- original:
+item: ring <- delapouite/diamond-ring, earring <- delapouite/earrings, necklace <- lorc/gem-pendant, scroll_enchant_weapon <- lorc/scroll-unfurled,
+  scroll_enchant_armor <- lorc/tied-scroll, greater_healing_potion <- lorc/round-bottom-flask, greater_mana_potion <- lorc/standing-potion,
+  sea_pearl <- delapouite/oyster-pearl, ruin_relic <- delapouite/amphora, ember_shard <- lorc/burning-embers, citadel_sigil <- lorc/wax-seal,
+  drake_scale <- lorc/scale-mail, dragon_fang <- lorc/saber-tooth
+skill: shield_bash <- lorc/shield-bounces, challenge <- lorc/screaming, fortress <- lorc/stone-tower, holy_strike <- lorc/winged-sword,
+  guardian_aura <- lorc/aura, earthquake <- lorc/earth-crack, last_stand <- zeromancer/heart-plus, double_slash <- lorc/crossed-slashes,
+  hamstring <- lorc/broken-bone, bloodlust <- lorc/dripping-blade, rend <- lorc/ragged-wound, blade_storm <- lorc/spinning-blades,
+  war_cry <- lorc/sonic-shout, execute <- lorc/decapitation, fireball <- lorc/fireball, frost_nova <- lorc/frozen-orb,
+  arcane_power <- lorc/magic-swirl, lightning <- lorc/focused-lightning, meteor <- lorc/meteor-impact, soul_drain <- lorc/spectre,
+  inferno <- lorc/fire-ring, divine_heal <- sbed/health-increase, holy_shield <- lorc/bordered-shield, smite <- lorc/sunbeams,
+  might <- delapouite/biceps, restoration <- lorc/heart-bottle, haste <- lorc/wingfoot, miracle <- lorc/angel-wings

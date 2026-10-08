@@ -74,8 +74,9 @@ impl Common {
     }
 }
 
+/** e: enchant level (+N) */
 #[derive(Clone, Debug, serde::Serialize)]
-pub struct InvItem { pub u: u32, pub i: String, pub c: i64, pub s: Option<String> }
+pub struct InvItem { pub u: u32, pub i: String, pub c: i64, pub s: Option<String>, pub e: i64 }
 
 #[derive(Clone, Debug)]
 pub enum Intent {
@@ -136,6 +137,7 @@ pub struct Player {
     pub name: String,
     pub race: String,
     pub cls: String,
+    pub spec: Option<String>,
     pub level: i64,
     pub xp: i64,
     pub hp: f64,
@@ -153,7 +155,7 @@ impl Player {
     pub fn equipped_in(&self, slot: &str) -> Option<&InvItem> { self.inv.iter().find(|i| i.s.as_deref() == Some(slot)) }
     pub fn recalc(&mut self) {
         let data = d();
-        let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| data.item(&i.i)).collect();
+        let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
         self.hp = self.hp.min(self.stats.max_hp);
@@ -219,6 +221,7 @@ pub struct Npc { pub def: &'static crate::data::NpcDef, pub next_chatter: f64 }
 pub struct GroundItem {
     pub item: String,
     pub count: i64,
+    pub enchant: i64,
     pub owners: Option<HashSet<u32>>,
     pub owner_until: f64,
     pub expire_at: f64,

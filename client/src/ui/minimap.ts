@@ -2,7 +2,7 @@ import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
-import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { heightAt, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees } from '../../../shared/src/layout';
 import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
@@ -137,10 +137,12 @@ export class Minimap {
       this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, toMap(z.x) * S, toMap(z.z) * S);
     }
     ctx.fillStyle = '#ffd966';
-    ctx.beginPath();
-    ctx.arc(toMap(TOWN.x) * S, toMap(TOWN.z) * S, 6, 0, Math.PI * 2);
-    ctx.fill();
-    this.label(ctx, zoneName(TOWN.name, lang), toMap(TOWN.x) * S, toMap(TOWN.z) * S - 12);
+    for (const t of TOWNS) {
+      ctx.beginPath();
+      ctx.arc(toMap(t.x) * S, toMap(t.z) * S, 6, 0, Math.PI * 2);
+      ctx.fill();
+      this.label(ctx, zoneName(t.name, lang), toMap(t.x) * S, toMap(t.z) * S - 12);
+    }
     // hostile camps
     for (const c of CAMPS) {
       const x = toMap(c.x) * S, y = toMap(c.z) * S;

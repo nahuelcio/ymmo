@@ -8,5 +8,5 @@ World membership lifecycle: loading characters into a world and saving them out,
 - exit_point · function · L78-L78 — Enforces where a leaving character is saved: the village coordinates when departing a raid instance, or nowhere (keep current position) in the overworld.
 - quit · function · L80-L84 — Handles a socket disconnect by saving and removing that session's character and notifying the hub the connection closed.
 - exit_to_town · function · L87-L91 — Pulls a player out of a raid instance back to the overworld, saving them at the village and telling the hub to rejoin them in the main world.
-- raid_command · function · L94-L127 — Implements the /raid command: it leaves to town if already in a raid, otherwise gates entry (alive, party-leader-only, max players, minimum level), dissolves the party, extracts every member, and asks the hub to start a raid instance with them.
-- autosave · function · L130-L141 — Spreads DB write load by saving only players whose last save is 60+ seconds old, capped at 3 players per call, instead of persisting everyone at once.
+- raid_command · function · L95-L136 — Implements the /raid command: it leaves to town if already in a raid, otherwise gates entry (alive, party-leader-only, max players, minimum level), dissolves the party, extracts every member, and asks the hub to start a raid instance with them.
+- autosave · function · L139-L150 — Spreads DB write load by saving only players whose last save is 60+ seconds old, capped at 3 players per call, instead of persisting everyone at once.

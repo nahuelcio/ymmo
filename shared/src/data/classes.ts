@@ -62,6 +62,18 @@ export const CLASSES: Record<ClassType, ClassDef> = {
   },
 };
 
+/** Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. */
+export type Spec = 'knight' | 'gladiator' | 'sorcerer' | 'cleric';
+export interface SpecDef { name: string; base: ClassType; desc: string }
+export const SPEC_LEVEL = 20;
+
+export const SPECS: Record<Spec, SpecDef> = {
+  knight: { name: 'Caballero', base: 'fighter', desc: 'Tanque. Aguanta, aturde y mantiene a los enemigos encima suyo.' },
+  gladiator: { name: 'Gladiador', base: 'fighter', desc: 'Daño cuerpo a cuerpo. Golpes brutales, sangrados y furia.' },
+  sorcerer: { name: 'Hechicero', base: 'mystic', desc: 'Daño mágico. Fuego, hielo y rayos sobre grupos enteros.' },
+  cleric: { name: 'Clérigo', base: 'mystic', desc: 'Sanador. Curaciones grandes y bendiciones para el grupo.' },
+};
+
 export interface GenderDef { name: string; mods: StatMods; desc: string }
 
 export const GENDERS: Record<Gender, GenderDef> = {
@@ -80,4 +92,4 @@ export function statMods(race: Race, g: Gender): StatMods {
 }
 
 export const START_ADENA = 500;
-export const MAX_LEVEL = 20;
+export const MAX_LEVEL = 50;

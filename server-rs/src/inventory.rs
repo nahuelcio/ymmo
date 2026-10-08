@@ -28,14 +28,14 @@ pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
             if p.inv.len() >= INV_MAX { return false; }
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: count, s: None });
+            p.inv.push(InvItem { u, i: item.into(), c: count, s: None, e: 0 });
         }
     } else {
         if p.inv.len() + count as usize > INV_MAX { return false; }
         for _ in 0..count {
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None });
+            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None, e: 0 });
         }
     }
     p.inv_dirty = true;
@@ -140,6 +140,39 @@ impl World {
         self.sys(pid, &format!("Destruiste {}.", def.name), &format!("{} has been destroyed.", def.name_en));
     }
 
+    /// Spend a matching scroll from the bag on a piece of gear: +1, or the piece is lost (see ENCHANT in the data).
+    pub fn enchant(&mut self, pid: u32, uid: u32) {
+        if self.ents[&pid].c.dead { return; }
+        let data = d();
+        let cfg = &data.enchant;
+        let p = self.pl_mut(pid).unwrap();
+        let Some(it) = p.inv.iter().find(|i| i.u == uid) else { return };
+        let (def, e) = (data.item(&it.i).unwrap(), it.e);
+        if def.slot.is_none() { return; }
+        let kind = if def.kind == "weapon" { "weapon" } else { "armor" };
+        if e >= cfg.max { return self.sys(pid, "Ese objeto ya no se puede encantar más.", "That item cannot be enchanted any further."); }
+        let Some(scroll) = data.items.values().find(|s| s.enchant.as_deref() == Some(kind) && count_item(p, &s.id) > 0) else {
+            return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that.");
+        };
+        take_items(p, &scroll.id, 1);
+        let ok = rnd() < crate::formulas::enchant_chance(e);
+        // the scroll's row may be gone: look the piece up again
+        let idx = p.inv.iter().position(|i| i.u == uid).unwrap();
+        let worn = p.inv[idx].s.is_some();
+        if ok { p.inv[idx].e += 1; } else if cfg.fail_destroys { p.inv.remove(idx); } else { p.inv[idx].e = 0; }
+        p.recalc();
+        p.inv_dirty = true;
+        if worn && !ok && cfg.fail_destroys { self.ents.get_mut(&pid).unwrap().c.av += 1; }
+        let n = e + 1;
+        if ok {
+            self.sys(pid, &format!("¡Éxito! {} ahora es +{n}.", def.name), &format!("Success! {} is now +{n}.", def.name_en));
+        } else if cfg.fail_destroys {
+            self.sys(pid, &format!("El encantamiento falló: {} +{e} se hizo polvo.", def.name), &format!("The enchantment failed: {} +{e} crumbled to dust.", def.name_en));
+        } else {
+            self.sys(pid, &format!("El encantamiento falló: {} volvió a +0.", def.name), &format!("The enchantment failed: {} is back to +0.", def.name_en));
+        }
+    }
+
     fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef> {
         let pc = &self.ents[&pid].c;
         match self.ents.get(&nid) {
@@ -163,6 +196,7 @@ impl World {
         } else { npc_greeting(&def.id, l) };
         let mut msg = json!({ "t": "npc", "npc": nid, "kind": def.kind, "name": def.name, "title": npc_title(&def.id, l), "greeting": greeting });
         if let Some(shop) = &def.shop { msg["shop"] = json!(shop); }
+        if let Some(craft) = &def.craft { msg["craft"] = json!(craft); }
         if def.kind == "gatekeeper" {
             let dests: Vec<Value> = d().teleports.iter().map(|t| json!({ "id": t.id, "name": teleport_name(&t.id, l), "cost": t.cost })).collect();
             msg["dests"] = json!(dests);
@@ -184,6 +218,22 @@ impl World {
         p.adena -= cost;
         p.inv_dirty = true;
         self.sys(pid, &format!("Compraste {}{} por {cost} de adena.", qty_prefix(qty), def.name), &format!("You bought {}{} for {cost} adena.", qty_prefix(qty), def.name_en));
+    }
+
+    /// A merchant makes one of the items it lists in `craft`: the recipe's materials and adena for the piece.
+    pub fn craft(&mut self, pid: u32, nid: u32, item: &str) {
+        let Some(n) = self.npc_in_range(pid, nid) else { return };
+        if !n.craft.as_ref().map_or(false, |c| c.iter().any(|x| x == item)) { return; }
+        let Some((def, rec)) = d().item(item).and_then(|i| Some((i, i.craft.as_ref()?))) else { return };
+        let p = self.pl_mut(pid).unwrap();
+        if p.adena < rec.adena { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
+        if rec.mats.iter().any(|(m, c)| count_item(p, m) < *c) { return self.sys(pid, "Te faltan materiales.", "You are missing materials."); }
+        // the piece goes in first: a full bag must not eat the materials
+        if !add_item(p, item, 1) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
+        for (m, c) in &rec.mats { take_items(p, m, *c); }
+        p.adena -= rec.adena;
+        p.inv_dirty = true;
+        self.sys(pid, &format!("Te fabricaron {}.", def.name), &format!("{} was made for you.", def.name_en));
     }
 
     pub fn sell(&mut self, pid: u32, nid: u32, uid: u32, qty: f64) {
@@ -217,7 +267,7 @@ impl World {
         let id = self.new_id();
         let mut c = Common::new(id, x + a.cos() * r, z + a.sin() * r);
         c.ry = rnd() * std::f64::consts::TAU;
-        self.add(Ent { c, k: Kind::Item(GroundItem { item: item.into(), count, owners, owner_until: now + 15000.0, expire_at: now + 60000.0, camp_id: None }) });
+        self.add(Ent { c, k: Kind::Item(GroundItem { item: item.into(), count, enchant: 0, owners, owner_until: now + 15000.0, expire_at: now + 60000.0, camp_id: None }) });
         id
     }
 
@@ -282,7 +332,8 @@ impl World {
         p.inv_dirty = true;
         if it.s.is_some() { self.ents.get_mut(&pid).unwrap().c.av += 1; }
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
-        self.spawn_ground(x, z, &it.i, it.c, None, now);
+        let gid = self.spawn_ground(x, z, &it.i, it.c, None, now);
+        if let Some(Ent { k: Kind::Item(g), .. }) = self.ents.get_mut(&gid) { g.enchant = it.e; }
         let def = d().item(&it.i).unwrap();
         self.sys(pid, &format!("¡Al morir se te cayó {}!", def.name), &format!("You dropped {} upon death!", def.name_en));
     }
@@ -293,8 +344,11 @@ impl World {
             if now < g.owner_until && !o.contains(&pid) { return self.sys(pid, "Ese objeto es de otra persona.", "That item belongs to someone else."); }
         }
         if g.item == "camp_chest" { return self.open_chest(pid, gid, now); }
-        let (item, count) = (g.item.clone(), g.count);
-        if !add_item(self.pl_mut(pid).unwrap(), &item, count) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
+        let (item, count, enchant) = (g.item.clone(), g.count, g.enchant);
+        let p = self.pl_mut(pid).unwrap();
+        if !add_item(p, &item, count) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
+        // an enchanted piece never stacks, so it is the row add_item just pushed
+        if enchant > 0 { p.inv.last_mut().unwrap().e = enchant; }
         self.remove(gid);
         let def = d().item(&item).unwrap();
         if item == "adena" {
