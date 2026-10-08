@@ -983,18 +983,11 @@ export function bake(rig: Rig): Rig {
 }
 
 export function animate(rig: Rig, s: AnimState) {
-  const dance = !!s.dancing && s.deadAge < 0;
   if (rig.q) {
     animateQ(rig.q, s);
-    // ponytail: the clip library has no dance, so the whole body bounces and twists over the idle; swap in a clip if one is added
-    if (dance || rig.body.userData.danced) {
-      rig.body.position.y = dance ? Math.abs(Math.sin(s.t * 8)) * 0.14 : 0;
-      rig.body.rotation.y = dance ? Math.sin(s.t * 4) * 0.7 : 0;
-      rig.body.rotation.z = dance ? Math.sin(s.t * 8) * 0.1 : 0;
-      rig.body.userData.danced = dance;
-    }
     return;
   }
+  const dance = !!s.dancing && s.deadAge < 0;
   const { body, legs, armL, armR, torso } = rig;
   if (s.deadAge >= 0) {
     const k = Math.min(1, s.deadAge / 450);

@@ -323,6 +323,7 @@ export function animateQ(q: QAnim, s: AnimState) {
     cur = atk;
     q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
+  else if (s.dancing) cur = 'Dance_Loop';
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) q.acts[n].setEffectiveWeight((q.w[n] += ((n === cur ? 1 : 0) - q.w[n]) * k));
   q.mixer.update(dt);
