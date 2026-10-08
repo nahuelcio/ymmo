@@ -599,6 +599,9 @@ export class Game {
     if (!c) return;
     this.world.scene.remove(c.root);
     c.label.element.remove();
+    // the label layer never drops elements on its own: without this an NPC that leaves view left its quest mark stuck on screen
+    c.marker?.el.remove();
+    c.bubble?.remove();
     // part geometries are shared (see models.ts); baked limb meshes and the hitbox are per-entity
     c.hit.geometry.dispose();
     c.root.traverse((o) => {
