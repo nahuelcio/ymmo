@@ -127,6 +127,9 @@ input { font: inherit; user-select: text; }
 .party-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); margin-bottom: 4px; }
 .party-member { padding: 4px 0; border-top: 1px solid #2a2a2a; cursor: pointer; }
 .pm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dmg-meter:empty { display: none; }
+.dm-head { color: var(--gold); font-size: 11px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #2a2a2a; }
+.dm-row { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; padding: 1px 3px; margin-top: 2px; background: linear-gradient(90deg, rgba(200, 150, 50, 0.4) var(--w), transparent var(--w)); }
 
 .target { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: 280px; padding: 6px 8px 8px; display: none; }
 .target-top { display: flex; justify-content: space-between; align-items: center; }

@@ -803,6 +803,7 @@ export class Game {
       play('heal', vol * 0.8);
       return this.floatText(t, `+${m.v}`, 'f-heal');
     }
+    this.ui.party.hit(m.s, m.v);
     if (m.dot) {
       play('dot', vol * 0.6);
       return this.floatText(t, String(m.v), 'f-dot');
@@ -1095,7 +1096,17 @@ export class Game {
     setTimeout(() => {
       if (this.cooldowns.get(id)?.predicted) this.cooldowns.delete(id);
     }, 400 + Math.min(this.rtt, 600) + (def?.range && def.range > 3 ? 1500 : 0));
+    // heals cast without an ally selected go to the most hurt party member in range, not always to yourself:
+    // the server heals whoever is targeted when the skill arrives, so target them just for that message
+    const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+    const hurt = def?.target === 'friend' && this.self && !(cur?.rec.k === 'p' && !(cur.flags & F_DEAD))
+      ? (this.ui.party.members ?? [])
+        .filter((m) => m.hp > 0 && m.hp < m.maxHp && (this.ents.get(m.id)?.pos.distanceTo(this.self!.pos) ?? Infinity) <= def.range)
+        .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]
+      : undefined;
+    if (hurt) this.net.send({ t: 'target', id: hurt.id });
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
+    if (hurt) this.net.send({ t: 'target', id: this.targetId });
   }
 
   useItemById(itemId: string) {

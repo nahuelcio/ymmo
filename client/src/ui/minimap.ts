@@ -77,7 +77,7 @@ export class Minimap {
     this.coordsEl = el('div', 'mm-coords', box);
     this.clockEl = el('div', 'mm-clock', box);
     this.clockEl.title = tx('Hora del juego. La noche pasa rápido.', 'Game time. Nights pass quickly.');
-    el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')}`;
+    el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')} <i style="background:#66ff88"></i> party`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
     zin.onclick = () => (this.viewR = Math.max(40, this.viewR * 0.75));
@@ -150,6 +150,20 @@ export class Minimap {
       quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
     }
     this.drawRoute(ctx, (x, z) => [toMap(x) * S, toMap(z) * S]);
+    // other players, as far as the server tells us about them (those in view): the party in green, with names
+    const partyIds = new Set(this.g.ui.partyIds());
+    ctx.font = 'bold 11px Tahoma, sans-serif';
+    ctx.strokeStyle = '#000';
+    for (const c of this.g.ents.values()) {
+      if (c.rec.k !== 'p' || c.id === this.g.me.id) continue;
+      const x = toMap(c.pos.x) * S, y = toMap(c.pos.z) * S, mate = partyIds.has(c.id);
+      ctx.fillStyle = mate ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
+      ctx.beginPath();
+      ctx.arc(x, y, mate ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (mate) this.label(ctx, c.rec.n, x, y - 8);
+    }
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
   }
