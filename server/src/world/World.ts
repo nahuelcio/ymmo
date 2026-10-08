@@ -268,6 +268,12 @@ export class World {
     setTimeout(loop, TICK_MS);
   }
 
+  /** Work scheduled for a later tick (lag-compensated hit checks). */
+  deferred: { at: number; fn: (now: number) => void }[] = [];
+  later(at: number, fn: (now: number) => void) {
+    this.deferred.push({ at, fn });
+  }
+
   /** Smoothed tick duration in ms (logged by the server). */
   tickCost = 0;
 
@@ -289,6 +295,14 @@ export class World {
     if (this.tickN % 2 === 0) for (const p of this.players.values()) this.sendSelf(p);
     if (this.tickN % 10 === 0) party.sendPartyUpdates(this);
     if (this.tickN % 20 === 0) this.npcChatter(now);
+    if (this.tickN % 40 === 0) for (const p of this.players.values()) p.send({ t: 'ping', s: now, rtt: Math.round(p.rtt) });
+    if (this.deferred.length) {
+      const due = this.deferred.filter((d) => d.at <= now);
+      if (due.length) {
+        this.deferred = this.deferred.filter((d) => d.at > now);
+        for (const d of due) d.fn(now);
+      }
+    }
     if (this.tickN % 5 === 0) this.updateCamps(now);
     for (const p of this.players.values()) {
       if (p.invDirty) {
@@ -439,6 +453,11 @@ export class World {
         p.casting = null;
         p.talkingTo = null;
         p.intent = { type: 'move', x: m.x, z: m.z };
+        return;
+      }
+      case 'pong': {
+        const rtt = Date.now() - Number(m.s);
+        if (rtt >= 0 && rtt < 5000) p.rtt = p.rtt * 0.7 + rtt * 0.3;
         return;
       }
       case 'stop':

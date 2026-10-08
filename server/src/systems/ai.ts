@@ -120,11 +120,16 @@ function resolveSpecial(w: World, m: Mob, now: number) {
   m.winding = null;
   m.specialAt = now + sp.every;
   m.nextAttack = now + m.tpl.atkInterval * 0.5;
-  for (const p of w.nearPlayers(at.x, at.z, sp.r + 0.5)) {
-    if (p.dead || p.dodgeUntil > now) continue;
-    const dmg = physDamage(m.stats.pAtk, p.stats.pDef, sp.mult, false);
-    applyDamage(w, m, p, dmg, now);
-    if (sp.stun) applyStatus(w, m, p, { id: 'stun', ms: sp.stun }, dmg, now);
+  // Lag compensation: each player saw the circle start (and fill) one-way-latency later than us,
+  // so judge them at that moment on their own timeline: where they are and whether they rolled.
+  for (const p of w.nearPlayers(at.x, at.z, sp.r + 12)) {
+    w.later(now + p.oneWay + 40, (t) => {
+      if (p.dead || m.dead || !w.players.has(p.id) || p.dodgeUntil > t) return;
+      if (Math.hypot(p.x - at.x, p.z - at.z) > sp.r + 0.5) return;
+      const dmg = physDamage(m.stats.pAtk, p.stats.pDef, sp.mult, false);
+      applyDamage(w, m, p, dmg, t);
+      if (sp.stun) applyStatus(w, m, p, { id: 'stun', ms: sp.stun }, dmg, t);
+    });
   }
 }
 

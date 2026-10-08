@@ -83,6 +83,12 @@ export class Player extends Entity {
   autoLoot = false;
   /** dodge-roll invulnerability window */
   dodgeUntil = 0;
+  /** smoothed round-trip time to this client (ms) */
+  rtt = 80;
+  /** one-way latency used to judge dodges the way the player saw them (capped so lag can't be abused) */
+  get oneWay() {
+    return Math.min(150, this.rtt / 2);
+  }
   look: Look = DEFAULT_LOOK;
   lastCombat = 0;
   escapeAt = 0;

@@ -8,6 +8,7 @@ import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
+import { MELEE_RANGE } from '../../shared/src/formulas';
 import { dashEnd, findPath, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
@@ -114,7 +115,11 @@ export class Game {
   quests: { id: string; progress: number }[] = [];
   questsDone = new Set<string>();
   targetId: number | null = null;
-  cooldowns = new Map<string, { end: number; dur: number }>();
+  cooldowns = new Map<string, { end: number; dur: number; predicted?: boolean }>();
+  /** round-trip time to the server (ms), measured by the server's pings */
+  rtt = 0;
+  /** time of a swing we started locally before the server confirmed it */
+  private predictedSwing = 0;
   castBar: { end: number; dur: number; name: string } | null = null;
   ctrl = false;
   private raycaster = new THREE.Raycaster();
@@ -280,7 +285,15 @@ export class Game {
       this.adena = m.adena;
       this.ui.onInv();
     });
-    n.on('dmg', (m) => this.onDmg(m));
+    // Other entities are drawn INTERP_DELAY in the past: play their combat events on that same
+    // timeline so a swing, its damage number and the hit reaction line up. Our own are instant.
+    const onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void) =>
+      n.on(t, (m) => (src(m) === this.me.id ? h(m) : setTimeout(() => h(m), INTERP_DELAY)));
+    onSync('dmg', (m) => m.s, (m) => this.onDmg(m));
+    n.on('ping', (m) => {
+      this.net.send({ t: 'pong', s: m.s });
+      this.rtt = m.rtt;
+    });
     n.on('tele', (m) => {
       const c = this.ents.get(m.id);
       this.fx.telegraph(m.x, m.z, m.r, m.ms);
@@ -297,26 +310,28 @@ export class Game {
       const c = this.ents.get(m.id);
       if (c) this.speech(c, m.text);
     });
-    n.on('atk', (m) => {
+    onSync('atk', (m) => m.s, (m) => {
       const s = this.ents.get(m.s), t = this.ents.get(m.tg);
       if (!s) return;
-      s.atkAt = performance.now();
+      // our first swing was already played on the click (prediction)
+      if (m.s === this.me.id && performance.now() - this.predictedSwing < 350) this.predictedSwing = 0;
+      else s.atkAt = performance.now();
       const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
       if (ranged) play('miss', this.near(s) * 0.5);
       if (t && ranged) {
         this.fx.projectile(s.pos.clone().setY(s.pos.y + s.height * 0.6), () => t.pos.clone().setY(t.pos.y + t.height * 0.5), 0xd8b070, 260, 0.1);
       }
     });
-    n.on('cast', (m) => {
+    onSync('cast', (m) => m.s, (m) => {
       const s = this.ents.get(m.s);
       const def = SKILLS[m.skill];
       if (s && def) this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur));
       if (s && def && m.dur > 250) play('cast', this.near(s));
       if (m.s === this.me.id && def && m.dur > 0) this.castBar = { end: performance.now() + m.dur, dur: m.dur, name: def.name };
     });
-    n.on('fx', (m) => this.onFx(m.s, m.tg, m.skill));
+    onSync('fx', (m) => m.s, (m) => this.onFx(m.s, m.tg, m.skill));
     n.on('cd', (m) => this.cooldowns.set(m.key, { end: performance.now() + m.ms, dur: m.ms }));
-    n.on('died', (m) => {
+    onSync('died', (m) => m.id, (m) => {
       const e = this.ents.get(m.id);
       if (e) e.deadAt = performance.now();
       if (e) play('death', this.near(e) * (m.id === this.me.id ? 1.3 : 0.6));
@@ -835,6 +850,15 @@ export class Game {
     const c = this.ents.get(this.targetId);
     if (!c || c.rec.k === 'i') return;
     if (c.rec.k === 'n') return this.serverAction({ t: 'talk', id: c.id });
+    // prediction: already in reach and the swing timer is ready -> start the swing on the click
+    const self = this.self, now = performance.now();
+    const interval = 60000 / Math.max(1, this.me.atkSpd);
+    if (self && !(self.flags & (F_DEAD | F_CASTING)) && now - self.atkAt > interval && self.pos.distanceTo(c.pos) <= MELEE_RANGE + c.radius - 0.2 && (this.isHostile(c) || this.ctrl)) {
+      self.atkAt = now;
+      this.predictedSwing = now;
+      const dx = c.pos.x - self.pos.x, dz = c.pos.z - self.pos.z;
+      self.ry = Math.atan2(dx, dz);
+    }
     this.serverAction({ t: 'attack', id: c.id, force: this.ctrl });
   }
 
@@ -909,6 +933,14 @@ export class Game {
 
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
+    // prediction: start the cooldown sweep right away when the skill is obviously usable
+    const def = SKILLS[id], now = performance.now();
+    if (def && (this.cooldowns.get(id)?.end ?? 0) <= now && this.me.mp >= def.mp && !this.castBar && this.self && !(this.self.flags & F_DEAD))
+      this.cooldowns.set(id, { end: now + def.cooldown + (def.cast ?? 0), dur: def.cooldown + (def.cast ?? 0), predicted: true });
+    // the server didn't take it (out of range, no target...): drop the guess
+    setTimeout(() => {
+      if (this.cooldowns.get(id)?.predicted) this.cooldowns.delete(id);
+    }, 400 + Math.min(this.rtt, 600) + (def?.range && def.range > 3 ? 1500 : 0));
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
   }
 
@@ -1153,7 +1185,7 @@ export class Game {
     this.lastRender = now;
     this.fpsFrames++;
     if (now - this.fpsAt >= 500) {
-      if (settings.s.showFps) this.fpsEl.textContent = `${Math.round((this.fpsFrames * 1000) / (now - this.fpsAt))} FPS`;
+      if (settings.s.showFps) this.fpsEl.textContent = `${Math.round((this.fpsFrames * 1000) / (now - this.fpsAt))} FPS${this.rtt ? ` · ${this.rtt} ms` : ''}`;
       this.fpsFrames = 0;
       this.fpsAt = now;
     }

@@ -77,7 +77,9 @@ export type C2S =
   | { t: 'autoLoot'; on: boolean }
   /** dodge roll toward a point */
   | { t: 'dash'; x: number; z: number; dx: number; dz: number }
-  | { t: 'stop' };
+  | { t: 'stop' }
+  /** answer to the server's ping (it measures the round trip) */
+  | { t: 'pong'; s: number };
 
 export type S2C =
   | { t: 'error'; msg: string }
@@ -104,4 +106,6 @@ export type S2C =
   /** an NPC says something out loud (speech bubble + local chat) */
   | { t: 'say'; id: number; name: string; text: string }
   /** telegraphed area attack: a red circle filling up for ms before it hits */
-  | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number };
+  | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number }
+  /** latency probe: echo s back as a pong; rtt is the server's current estimate */
+  | { t: 'ping'; s: number; rtt: number };
