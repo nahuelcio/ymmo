@@ -71,7 +71,10 @@ export class Hud {
     this.xp = bar(sc, 'bar-xp');
     for (let i = 0; i < 10; i++) {
       const s = el('div', 'slot', sc);
-      el('span', 'slot-key', s, i === 9 ? '0' : String(i + 1));
+      const keyEl = el('span', 'slot-key', s);
+      const syncKey = () => (keyEl.textContent = keyLabel(settings.s.keys[`slot${i + 1}` as Action]));
+      syncKey();
+      settings.on((_, changed) => changed.includes('keys') && syncKey());
       s.onclick = () => this.activateSlot(i);
       // rearrange: drag a slot onto another (they swap), drop a skill or potion from its window, right click empties
       s.ondragstart = () => (hideTip(), (this.drag = { from: i }));

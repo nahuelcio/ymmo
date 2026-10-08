@@ -5,7 +5,9 @@ export type Preset = 'low' | 'medium' | 'high' | 'ultra' | 'custom';
 export type ShadowQ = 'off' | 'low' | 'medium' | 'high';
 export type LookPreset = 'off' | 'natural' | 'vivid' | 'aden' | 'cinematic' | 'noir' | 'custom';
 
-/** Things a key can be bound to. Slots (1-0, F1-F10), Enter, Esc and the arrow keys are fixed. */
+const SLOT_N = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+type SlotAction = `slot${(typeof SLOT_N)[number]}`;
+/** Things a key can be bound to. F1-F10 (skill bar too), Enter, Esc and the arrow keys are fixed. */
 export const ACTIONS = {
   attack: tx('Atacar al objetivo', 'Attack target'),
   stop: tx('Frenar: dejar de moverse y de atacar', 'Stop: quit moving and attacking'),
@@ -20,11 +22,13 @@ export const ACTIONS = {
   settings: tx('Opciones', 'Options'),
   camLeft: tx('Girar cámara a la izquierda', 'Rotate camera left'),
   camRight: tx('Girar cámara a la derecha', 'Rotate camera right'),
+  ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, tx(`Barra de habilidades: casillero ${n}`, `Skill bar: slot ${n}`)])) as Record<SlotAction, string>),
 };
 export type Action = keyof typeof ACTIONS;
 /** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
 export const DEFAULT_KEYS: Record<Action, string> = {
   attack: ' ', stop: 's', nextTarget: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
+  ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, String(n % 10)])) as Record<SlotAction, string>),
 };
 export const keyLabel = (k: string) => (k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
 

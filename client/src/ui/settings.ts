@@ -113,7 +113,7 @@ export class SettingsPanel {
           e.stopImmediatePropagation();
           removeEventListener('keydown', grab, true);
           const k = e.key.toLowerCase();
-          const fixed = k === 'escape' || k === 'enter' || /^(f\d+|\d|arrow.*|control|alt|meta)$/.test(k);
+          const fixed = k === 'escape' || k === 'enter' || /^(f\d+|arrow.*|control|alt|meta)$/.test(k);
           if (fixed) return this.render();
           const keys = { ...settings.s.keys };
           const other = (Object.keys(keys) as Action[]).find((x) => keys[x] === k);
@@ -125,8 +125,8 @@ export class SettingsPanel {
         addEventListener('keydown', grab, true);
       };
     }
-    el('div', 'hint set-hint', this.body, tx('Fijas: 1-0 y F1-F10 usan la barra de habilidades, Enter abre el chat, Esc cierra y las flechas mueven la cámara. Se guarda en este navegador.',
-      'Fixed: 1-0 and F1-F10 use the skill bar, Enter opens chat, Esc closes and the arrows move the camera. Saved in this browser.'));
+    el('div', 'hint set-hint', this.body, tx('Fijas: F1-F10 también usan la barra de habilidades, Enter abre el chat, Esc cierra y las flechas mueven la cámara. Se guarda en este navegador.',
+      'Fixed: F1-F10 also use the skill bar, Enter opens chat, Esc closes and the arrows move the camera. Saved in this browser.'));
   }
 
   private row(label: string) {

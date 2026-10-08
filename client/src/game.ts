@@ -1172,17 +1172,17 @@ export class Game {
       }
       if (typing()) return;
       const fk = /^F(\d+)$/.exec(e.key);
-      const num = '1234567890'.indexOf(e.key);
       if (fk && +fk[1] >= 1 && +fk[1] <= 10) {
         e.preventDefault();
         this.ui.hud.activateSlot(+fk[1] - 1);
         return;
       }
-      if (num >= 0 && !e.ctrlKey && !e.altKey) {
-        this.ui.hud.activateSlot(num);
+      const action = bound(e);
+      const slot = action && /^slot(\d+)$/.exec(action);
+      if (slot && !e.ctrlKey && !e.altKey) {
+        this.ui.hud.activateSlot(+slot[1] - 1);
         return;
       }
-      const action = bound(e);
       if (action && (e.key === ' ' || e.key === 'Tab')) e.preventDefault();
       switch (action ?? e.key.toLowerCase()) {
         case 'inventory': this.ui.inventory.win.toggle(); break;
