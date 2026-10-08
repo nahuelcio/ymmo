@@ -8,21 +8,21 @@
 - lum · function · L74-L74 — lum = (i: number)
 - headOnly · function · L83-L96 — function headOnly(geo: THREE.BufferGeometry)
 - keep · function · L85-L89 — keep = (v: number)
-- loadQ · function · L98-L165 — function loadQ(): Promise<void>
-- collect · function · L126-L143 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
-- get · function · L158-L158 — get = (n: string)
-- material · function · L174-L197 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
-- QZone · interface · L200-L200 — interface QZone
-- QOpts · interface · L201-L221 — interface QOpts
-- QAnim · interface · L223-L223 — interface QAnim
-- attach · function · L226-L234 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
-- qPlayer · function · L236-L309 — function qPlayer(o: QOpts): Rig
-- add · function · L245-L256 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
-- zone · function · L258-L259 — zone = (z: QZone, hands?: number)
-- kit · function · L260-L260 — kit = (z: QZone)
-- hair · function · L267-L267 — hair = (p: Prim): [number, number, boolean]
-- animateQ · function · L312-L328 — function animateQ(q: QAnim, s: AnimState)
-- mountQuaterniusPreview · function · L331-L422 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L349-L357 — resize = ()
-- build · function · L379-L391 — build = ()
-- btn · function · L392-L398 — btn = (label: string, fn: () => void)
+- loadQ · function · L98-L166 — function loadQ(): Promise<void>
+- collect · function · L127-L144 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
+- get · function · L159-L159 — get = (n: string)
+- material · function · L175-L198 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
+- QZone · interface · L201-L201 — interface QZone
+- QOpts · interface · L202-L222 — interface QOpts
+- QAnim · interface · L224-L224 — interface QAnim
+- attach · function · L227-L235 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
+- qPlayer · function · L237-L310 — function qPlayer(o: QOpts): Rig
+- add · function · L246-L257 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
+- zone · function · L259-L260 — zone = (z: QZone, hands?: number)
+- kit · function · L261-L261 — kit = (z: QZone)
+- hair · function · L268-L268 — hair = (p: Prim): [number, number, boolean]
+- animateQ · function · L313-L329 — function animateQ(q: QAnim, s: AnimState)
+- mountQuaterniusPreview · function · L332-L424 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L350-L358 — resize = ()
+- build · function · L381-L393 — build = ()
+- btn · function · L394-L400 — btn = (label: string, fn: () => void)
