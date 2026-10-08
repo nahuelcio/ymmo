@@ -47,8 +47,11 @@ else
   as_app "git clone --branch $BRANCH $REPO $APP_DIR"
 fi
 
-echo "==> Dependencias y build del cliente"
-as_app "cd $APP_DIR && npm ci --no-audit --no-fund && npm run build"
+mkdir -p "$APP_DIR/server/data" && chown -R "$APP_USER:$APP_USER" "$APP_DIR/server"
+
+echo "==> Dependencias, Rust y build (cliente + server)"
+curl -fsSL https://sh.rustup.rs | as_app "bash -s -- -y --profile minimal" || true
+as_app "source \$HOME/.cargo/env && cd $APP_DIR && npm ci --no-audit --no-fund && npm run build:rs"
 
 echo "==> Servicio systemd"
 cat > /etc/systemd/system/claudi-mmo.service <<UNIT
@@ -61,8 +64,9 @@ User=$APP_USER
 WorkingDirectory=$APP_DIR
 Environment=GAME_PORT=$PORT
 Environment=NODE_ENV=production
+Environment=CLIENT_DIST=$APP_DIR/client/dist
 Environment=PATH=$NODE_DIR/bin:/usr/bin:/bin
-ExecStart=$NODE_DIR/bin/node $APP_DIR/node_modules/tsx/dist/cli.mjs server/src/index.ts
+ExecStart=$APP_DIR/server-rs/target/release/claudi-server
 Restart=always
 RestartSec=3
 

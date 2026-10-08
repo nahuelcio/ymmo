@@ -127,6 +127,14 @@ input { font: inherit; user-select: text; }
 .party-head { display: flex; justify-content: space-between; align-items: center; color: var(--gold); margin-bottom: 4px; }
 .party-member { padding: 4px 0; border-top: 1px solid #2a2a2a; cursor: pointer; }
 .pm-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who { display: none; position: absolute; left: 50%; top: 14%; transform: translateX(-50%); z-index: 50; min-width: 240px; max-width: min(560px, 90vw); max-height: 70vh; overflow: hidden; padding: 10px 14px; }
+.who-head { color: var(--gold); font: 400 15px Georgia, serif; margin-bottom: 6px; }
+.who-list { columns: 2; column-gap: 24px; font-size: 12px; line-height: 1.6; }
+.who-me { color: var(--gold); }
+.who-mate { color: #66ff88; }
+.dmg-meter:empty { display: none; }
+.dm-head { color: var(--gold); font-size: 11px; margin-top: 4px; padding-top: 4px; border-top: 1px solid #2a2a2a; }
+.dm-row { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; padding: 1px 3px; margin-top: 2px; background: linear-gradient(90deg, rgba(200, 150, 50, 0.4) var(--w), transparent var(--w)); }
 
 .target { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); width: 280px; padding: 6px 8px 8px; display: none; }
 .target-top { display: flex; justify-content: space-between; align-items: center; }
@@ -175,12 +183,22 @@ input { font: inherit; user-select: text; }
 .np-hp > div { height: 100%; transition: width 0.15s; }
 .np-hp .hp-foe { background: #d83a2a; }
 .np-hp .hp-friend { background: #3ac85a; }
-.floater.f-crit { animation: floatCrit 1.1s ease-out forwards; }
+.floater.f-crit { animation: floatCrit 1.2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
 @keyframes floatCrit {
-  0% { transform: translateY(0) scale(0.6); opacity: 1; }
-  15% { transform: translateY(-10px) scale(1.6); }
-  30% { transform: translateY(-16px) scale(1.2); }
-  100% { transform: translateY(-56px) scale(1.1); opacity: 0; }
+  0% { transform: translate(0, 4px) scale(0.4); opacity: 0; }
+  10% { transform: translate(0, -10px) scale(1.9) rotate(-5deg); opacity: 1; }
+  20% { transform: translate(0, -14px) scale(1.35) rotate(4deg); }
+  30% { transform: translate(0, -16px) scale(1.5) rotate(0); }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--dx), -66px) scale(1.2); opacity: 0; }
+}
+/* damage you take drops instead of rising, so it never reads as something you dealt */
+.floater.f-hurt { animation-name: floatDown; }
+@keyframes floatDown {
+  0% { transform: translate(0, -6px) scale(0.5); opacity: 0; }
+  14% { transform: translate(0, -12px) scale(1.3); opacity: 1; }
+  28% { transform: translate(calc(var(--dx) * 0.3), -8px) scale(1); }
+  100% { transform: translate(var(--dx), 34px) scale(0.9); opacity: 0; }
 }
 .np-pvp { color: #ff6a5a; font-size: 10px; margin-right: 3px; }
 
@@ -226,6 +244,7 @@ input { font: inherit; user-select: text; }
 .mm-coords { width: fit-content; margin: -9px auto 0; padding: 0 8px; position: relative; font-size: 10px; color: #cfd6e6; background: #1a160e; border: 1px solid var(--border); border-radius: 8px; }
 .mm-zoom { position: absolute; right: 2px; top: 24px; display: flex; flex-direction: column; gap: 2px; }
 .mm-clock { position: absolute; left: 2px; top: 24px; padding: 0 7px; font: bold 11px Tahoma, sans-serif; color: #ffe9a8; background: #1a160e; border: 1px solid var(--border-hi); border-radius: 8px; }
+.mm-raid { position: absolute; left: 0; top: 178px; color: #ff9a8a; }
 .mm-clock.night { color: #b8c8ff; border-color: #5a6a9a; }
 .mm-legend { padding-top: 3px; text-align: center; font-size: 9px; color: #c8ccd6; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .mm-legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 1px #000; }
@@ -319,18 +338,22 @@ input { font: inherit; user-select: text; }
 .np-mob { font-size: 11px; }
 .np-lvl { font-size: 9px; font-weight: normal; color: #c8c8c8; opacity: 0.85; }
 .np-item { color: #e8e2c8; font-size: 10px; }
-.floater { font: bold 15px Tahoma, sans-serif; text-shadow: 0 0 3px #000, 1px 1px 0 #000; animation: floatUp 1.1s ease-out forwards; pointer-events: none; }
-.f-dmg { color: #fff; }
+/* --fs: size by how big the number is; --dx: sideways drift so a burst of numbers fans out instead of stacking */
+.floater { font: 800 var(--fs, 16px) / 1 'Trebuchet MS', Tahoma, sans-serif; letter-spacing: 0.5px; white-space: nowrap; -webkit-text-stroke: 3px #14100a; paint-order: stroke fill;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55); animation: floatUp 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; pointer-events: none; will-change: transform, opacity; }
+.f-dmg { color: #fff6e0; }
 .f-hurt { color: #ff5a4a; }
-.f-crit { font-size: 20px; color: #ffcc33; }
-.f-heal { color: #6aff8a; }
-.f-miss { color: #aaa; font-size: 12px; }
-.f-gold { color: #ffd966; font-size: 13px; }
-.f-xp { color: #c8a8ff; font-size: 13px; }
+.f-crit { font-size: calc(var(--fs, 16px) * 1.45); color: #ffcf3a; text-shadow: 0 0 10px rgba(255, 170, 30, 0.9), 0 2px 0 rgba(0, 0, 0, 0.55); }
+.f-heal { color: #7dff9a; text-shadow: 0 0 8px rgba(60, 255, 120, 0.7), 0 2px 0 rgba(0, 0, 0, 0.55); }
+.f-miss { color: #b8b8b8; font-size: 12px; font-style: italic; -webkit-text-stroke-width: 2px; }
+.f-gold { color: #ffd966; font-size: 14px; -webkit-text-stroke-width: 2.5px; }
+.f-xp { color: #cdb0ff; font-size: 14px; -webkit-text-stroke-width: 2.5px; }
 @keyframes floatUp {
-  0% { transform: translateY(0) scale(0.8); opacity: 1; }
-  20% { transform: translateY(-14px) scale(1.15); }
-  100% { transform: translateY(-48px) scale(1); opacity: 0; }
+  0% { transform: translate(0, 6px) scale(0.5); opacity: 0; }
+  12% { transform: translate(calc(var(--dx) * 0.2), -10px) scale(1.3); opacity: 1; }
+  26% { transform: translate(calc(var(--dx) * 0.35), -16px) scale(1); }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--dx), -58px) scale(0.92); opacity: 0; }
 }
 
 /* The HUD is absolutely positioned around a centred shortcut bar (~510px wide): keep the corner
@@ -435,7 +458,7 @@ input { font: inherit; user-select: text; }
 .np-status { font-size: 12px; line-height: 1; margin-top: 1px; letter-spacing: 1px; }
 .status-row { position: absolute; left: 270px; top: 44px; display: flex; gap: 3px; }
 .buff.status { display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffb0a0; background: #3a1010; border: 1px solid #a03030; border-radius: 3px; }
-.f-dot { color: #c88aff; font-size: 12px; }
+.f-dot { color: #d09aff; font-size: 13px; -webkit-text-stroke-width: 2px; }
 @media (max-width: 760px) { .status-row { left: 10px; top: 150px; } }
 .np-elite { font-size: 12px; font-weight: bold; }
 .np-elite > div:first-child { text-shadow: 0 0 6px rgba(255, 200, 60, 0.8), 0 0 3px #000; }

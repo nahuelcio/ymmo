@@ -5,7 +5,7 @@ export type Gender = 'm' | 'f';
 /** Character appearance chosen at creation. */
 export interface Look { g: Gender; hs: number; hc: number }
 
-export const HAIR_STYLES = ['Corto', 'Largo', 'Rodete'];
+export const HAIR_STYLES = ['Corto', 'Largo', 'Rodete', 'Pelado', 'Rapado', 'Cresta'];
 /** index 0 = the race's natural colour */
 export const HAIR_COLORS = [-1, 0x1e1a18, 0x6a3a1a, 0xe8d27a, 0xb03020, 0xe6e6f0, 0x3a5a9a];
 

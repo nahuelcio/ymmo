@@ -68,6 +68,8 @@ const INTERP_BASE = 70;
 // a structured message would be sturdier but needs a protocol change.
 const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You have earned) (\d+) (?:de )?experienc/;
 const NOT_READY = /todavía no está lista\.$|is not ready yet\.$/;
+/** the server's answer to /who, which the player list (hold Tab) asks for and shows instead of the chat */
+const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
@@ -385,10 +387,13 @@ export class Game {
       if (e) {
         this.fx.pillar(e.pos.clone(), 0xffd966);
         this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
+        this.fx.sparkles(e.pos.clone(), 0xfff0b0, 1400);
       }
       if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
     n.on('chat', (m) => {
+      const who = this.whoPending && m.ch === 'sys' ? WHO.exec(m.text) : null;
+      if (who) return this.fillWho(who[2].split(', '));
       // gains pop up over the character and, like "not ready", stay out of the main chat tab
       const gain = m.ch === 'sys' && settings.s.damageNumbers ? GAIN.exec(m.text) : null;
       if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
@@ -753,16 +758,20 @@ export class Game {
 
   private floatText(c: CEnt, text: string, cls: string) {
     if (!settings.s.damageNumbers) return;
-    const el = document.createElement('div');
-    el.className = `floater ${cls}`;
-    el.textContent = text;
+    // the label layer positions `el` with its own transform, so the animation lives on a child
+    const el = document.createElement('div'), num = el.appendChild(document.createElement('div'));
+    num.className = `floater ${cls}`;
+    num.textContent = text;
+    // bigger numbers are bigger: 15px for one digit up to 24px for four or more
+    num.style.setProperty('--fs', `${12 + 3 * Math.min(4, (/\d+/.exec(text)?.[0].length ?? 1))}px`);
+    num.style.setProperty('--dx', `${Math.round((Math.random() - 0.5) * 70)}px`);
     const obj = new CSS2DObject(el);
     obj.position.set((Math.random() - 0.5) * 0.6, c.height + 0.2, 0);
     c.root.add(obj);
     setTimeout(() => {
       c.root.remove(obj);
       el.remove();
-    }, 1100);
+    }, 1250);
   }
 
   /** 0..1 loudness for something happening at c (fades out by ~45 m). */
@@ -803,6 +812,7 @@ export class Game {
       play('heal', vol * 0.8);
       return this.floatText(t, `+${m.v}`, 'f-heal');
     }
+    this.ui.party.hit(m.s, m.v);
     if (m.dot) {
       play('dot', vol * 0.6);
       return this.floatText(t, String(m.v), 'f-dot');
@@ -826,7 +836,9 @@ export class Game {
     }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
     if (m.crit && m.s === this.me.id) this.sys(tx(`¡Crítico! ${m.v} de daño.`, `Critical hit! ${m.v} damage.`));
-    if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
+    const hitAt = t.pos.clone().setY(t.pos.y + t.height * 0.55);
+    if (!mine) this.fx.burst(hitAt, m.crit ? 0xffcc33 : 0xffffff, m.crit ? 0.6 : 0.35, m.crit ? 320 : 220);
+    if (m.crit && src && src !== t) this.fx.slash(hitAt, src.pos.clone().setY(src.pos.y + src.height * 0.6), 0xffcc33, 1.3);
   }
 
   private onFx(sId: number, tId: number, skill: string) {
@@ -854,7 +866,10 @@ export class Game {
     switch (def.kind) {
       case 'magic':
         this.fx.projectile(chest(s), () => chest(t), def.color, 280, 0.3);
-        setTimeout(() => this.fx.burst(chest(t), def.color, def.aoe ? def.aoe * 0.6 : 0.9, 450), 280);
+        setTimeout(() => {
+          this.fx.burst(chest(t), def.color, def.aoe ? def.aoe * 0.6 : 0.9, 450);
+          if (def.aoe) this.fx.ring(t.pos.clone(), def.color, def.aoe, 500);
+        }, 280);
         break;
       case 'drain':
         this.fx.projectile(chest(t), () => chest(s), def.color, 400, 0.25);
@@ -864,7 +879,8 @@ export class Game {
         play('warn', this.near(s) * 0.6);
         break;
       case 'phys':
-        this.fx.burst(chest(t), def.color, 1.1, 350);
+        this.fx.slash(chest(t), chest(s), def.color, 1.4);
+        this.fx.burst(chest(t), def.color, 0.9, 350);
         if (def.aoe) this.fx.ring(s.pos.clone(), def.color, def.aoe, 500);
         break;
       case 'heal':
@@ -1082,6 +1098,40 @@ export class Game {
     this.moveTo(new THREE.Vector3(x, heightAt(x, z), z), false);
   }
 
+  // ponytail: the list comes from the /who chat command, so it only has names (level and class are filled in
+  // for players in view) and only this world's players; a real roster needs its own server message
+  private whoEl: HTMLDivElement | null = null;
+  private whoPending = false;
+
+  private showWho(on: boolean) {
+    if (!this.whoEl) {
+      this.whoEl = document.createElement('div');
+      this.whoEl.className = 'panel who';
+      this.ui.root.appendChild(this.whoEl);
+    }
+    this.whoEl.style.display = on ? 'block' : 'none';
+    if (!on) return;
+    this.whoPending = true;
+    this.net.send({ t: 'chat', text: '/who' });
+  }
+
+  private fillWho(names: string[]) {
+    this.whoPending = false;
+    const box = this.whoEl!, party = new Set(this.ui.party.members?.map((m) => m.name));
+    const seen = new Map([...this.ents.values()].flatMap((c) => (c.rec.k === 'p' ? [[c.rec.n, c.rec] as const] : [])));
+    box.textContent = '';
+    const head = box.appendChild(document.createElement('div'));
+    head.className = 'who-head';
+    head.textContent = tx(`Jugadores conectados (${names.length})`, `Players online (${names.length})`);
+    const list = box.appendChild(document.createElement('div'));
+    list.className = 'who-list';
+    for (const name of names.sort((a, b) => a.localeCompare(b))) {
+      const row = list.appendChild(document.createElement('div')), r = seen.get(name);
+      row.className = name === this.me.name ? 'who-me' : party.has(name) ? 'who-mate' : '';
+      row.textContent = r ? `${name} · ${tx('Nv', 'Lv')} ${r.l}` : name;
+    }
+  }
+
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
     // prediction: start the cooldown sweep right away when the skill is obviously usable
@@ -1092,7 +1142,17 @@ export class Game {
     setTimeout(() => {
       if (this.cooldowns.get(id)?.predicted) this.cooldowns.delete(id);
     }, 400 + Math.min(this.rtt, 600) + (def?.range && def.range > 3 ? 1500 : 0));
+    // heals cast without an ally selected go to the most hurt party member in range, not always to yourself:
+    // the server heals whoever is targeted when the skill arrives, so target them just for that message
+    const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+    const hurt = def?.target === 'friend' && this.self && !(cur?.rec.k === 'p' && !(cur.flags & F_DEAD))
+      ? (this.ui.party.members ?? [])
+        .filter((m) => m.hp > 0 && m.hp < m.maxHp && (this.ents.get(m.id)?.pos.distanceTo(this.self!.pos) ?? Infinity) <= def.range)
+        .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]
+      : undefined;
+    if (hurt) this.net.send({ t: 'target', id: hurt.id });
     this.serverAction({ t: 'skill', skill: id, force: this.ctrl });
+    if (hurt) this.net.send({ t: 'target', id: this.targetId });
   }
 
   useItemById(itemId: string) {
@@ -1232,6 +1292,7 @@ export class Game {
         case 'stop': this.stop(); break;
         case 'dash': this.dash(); break;
         case 'nextTarget': this.nextTarget(); break;
+        case 'players': if (!e.repeat) this.showWho(true); break;
         case 'camLeft': this.cam.keys.left = true; break;
         case 'camRight': this.cam.keys.right = true; break;
         case 'arrowleft': this.cam.keys.left = true; break;
@@ -1240,9 +1301,12 @@ export class Game {
         case 'arrowdown': this.cam.keys.down = true; break;
       }
     });
+    // Alt+Tab away: the key-up never arrives
+    addEventListener('blur', () => this.showWho(false));
     addEventListener('keyup', (e) => {
       this.ctrl = e.ctrlKey;
       switch (bound(e) ?? e.key.toLowerCase()) {
+        case 'players': this.showWho(false); break;
         case 'camLeft': case 'arrowleft': this.cam.keys.left = false; break;
         case 'camRight': case 'arrowright': this.cam.keys.right = false; break;
         case 'arrowup': this.cam.keys.up = false; break;

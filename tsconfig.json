@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["shared/src", "server/src", "scripts", "client/src", "client/vite.config.ts"]
+  "include": ["shared/src", "scripts", "client/src", "client/vite.config.ts"]
 }

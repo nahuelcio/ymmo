@@ -3,24 +3,30 @@
 MMORPG 3D low-poly estilo Lineage 2, jugable desde el navegador.
 
 - **Cliente**: Three.js + TypeScript (Vite). Cámara en 3ra persona, click-to-move, UI estilo L2.
-- **Servidor**: Node 22 autoritativo (WebSocket, tick 20 Hz), persistencia en SQLite (`node:sqlite`).
+- **Servidor**: Rust autoritativo (axum + tokio, WS, tick 20 Hz), persistencia en SQLite (`rusqlite`).
 - **Shared**: datos del juego (razas, clases, skills, items, mobs, zonas), fórmulas y terreno determinístico.
 
 ## Cómo correrlo
 
 ```bash
 npm install
-npm run dev        # server :3001 + Vite :5173 → abrir http://localhost:5173
+npm run dev        # Vite :5173 → abrir http://localhost:5173 (proxyea /ws al server)
+```
+
+En otra terminal, el servidor (Rust). La primera vez lo compilás:
+
+```bash
+npm run dev:rs     # export-data + cargo run --release → server :3001
 ```
 
 Producción (un solo puerto):
 
 ```bash
-npm run build
+npm run build:rs   # cliente + export-data + binario Rust
 npm start          # http://localhost:3001  (puerto configurable con GAME_PORT)
 ```
 
-La base de datos queda en `server/data/game.db`.
+La base de datos queda en `server/data/game.db` (la crea el server si no existe).
 
 ## Contenido
 
@@ -40,7 +46,7 @@ Click izquierdo: mover / seleccionar / atacar (2° click) · Click derecho + arr
 
 ```
 shared/src   protocol.ts, formulas.ts, terrain.ts, data/*
-server/src   index.ts (http+ws), db.ts, world/World.ts, world/entities.ts, systems/{player,combat,ai,inventory,party,chat}.ts
+server-rs/src  main.rs (http+ws), db.rs, world.rs, ent.rs, {combat,ai,inventory,party,chat,quests,raid,realm}.rs
 client/src   main.ts (login), game.ts (núcleo), render/{scene,models,camera,fx}.ts, ui/*
 ```
 

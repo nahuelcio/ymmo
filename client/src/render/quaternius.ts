@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { animate, playerModel, type AnimState, type Rig } from './models';
-import { RACES, type Gender, type Race } from '../../../shared/src/data/classes';
+import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 
 /**
  * Player characters built from the Quaternius modular kits (CC0): an outfit piece per
@@ -20,7 +20,9 @@ const FILES = [
   'Male_Ranger_Feet_Boots', 'Female_Ranger_Feet', 'Male_Ranger_Acc_Pauldron', 'Female_Ranger_Acc_Pauldrons',
   'Hair_Buzzed', 'Hair_SimpleParted', 'Hair_Long', 'Hair_Buns', 'Hair_Beard',
 ];
-const HAIR = ['Hair_SimpleParted', 'Hair_Long', 'Hair_Buns'];
+/** By HAIR_STYLES index: null is a shaved head; the mohawk is a buzz cut plus a rigid crest (the `mohawk` prop). */
+const HAIR = ['Hair_SimpleParted', 'Hair_Long', 'Hair_Buns', null, 'Hair_Buzzed', 'Hair_Buzzed'];
+const MOHAWK = 5;
 
 interface Prim { geo: THREE.BufferGeometry; tex: THREE.Texture | null; kind: 'skin' | 'hair' | 'eyes' | 'cloth'; fam: number; bind: THREE.Matrix4; morphs?: Record<string, number> }
 const prims = new Map<string, Prim[]>();
@@ -33,18 +35,31 @@ const armature: Partial<Record<Gender, THREE.Object3D>> = {};
 const tusks: Partial<Record<Gender, THREE.Mesh>> = {};
 const clips: Record<string, THREE.AnimationClip> = {};
 /**
- * Helmets modelled in Fiend around a head at the origin: [height above the head bone, forward, scale].
- * Fitted to the real head, which spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
+ * Helmets modelled in Fiend directly in the head bone's space, at real size ([up, forward, scale] stay
+ * for nudging): the head spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
  */
-const HELMS = { HelmC: [0.086, 0.02, 0.48], HelmD: [0.14, 0.02, 0.48] } as const;
+const HELMS = { HelmC: [0, 0, 1], HelmD: [0, 0, 1], karmian_hat: [0, 0, 1], demons_circlet: [0, 0, 1] } as const;
 export type Helm = keyof typeof HELMS;
-const PROPS = Object.keys(HELMS) as Helm[];
+/** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
+export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
+  brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
+  karmian_hat: { model: 'karmian_hat' }, demons_circlet: { model: 'demons_circlet', hair: true },
+};
+/**
+ * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
+ * turned to stand upright in a hanging hand; everything else is laid along +Z like weaponMesh(), hammers and axes with the head turned to strike downwards.
+ */
+const WEAPONS = ['short_sword', 'broadsword', 'sword_of_revolution', 'samurai_longsword', 'apprentice_wand', 'willow_staff', 'staff_of_life', 'sages_staff', 'iron_hammer', 'war_hammer',
+  'dagger', 'assassin_dagger', 'hand_axe', 'battle_axe', 'spear', 'partisan'];
+const PROPS = [...Object.keys(HELMS), ...WEAPONS, 'mohawk'];
 const props: Record<string, THREE.Object3D> = {};
 let joints: string[] = [];
 let ready = false;
 let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
+/** The item's own weapon model, if it has one (geometry and materials are shared between instances). */
+export const qWeapon = (item: string | null): THREE.Object3D | null => (item && WEAPONS.includes(item) ? props[item].clone() : null);
 
 /**
  * Typical colour of a texture, to recolour it relative to its own tone. Only the brighter
@@ -91,6 +106,13 @@ export function loadQ(): Promise<void> {
     PROPS.forEach((name, i) => {
       const o = (props[name] = rigid[i].scene);
       o.children.forEach((c) => c.position.set(0, 0, 0));
+      if (WEAPONS.includes(name)) {
+        if (/staff|wand/.test(name)) {
+          // along the arm (the bind pose has the arms out sideways), so it stands upright by the leg when the arm hangs
+          o.rotation.z = -Math.PI / 2;
+          o.position.z = 0.05;
+        } else o.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, /hammer|axe/.test(name) ? -Math.PI / 2 : 0, 'ZYX'));
+      }
       o.traverse((m) => {
         if (!(m instanceof THREE.Mesh)) return;
         const { color, emissive, emissiveIntensity } = m.material as THREE.MeshStandardMaterial;
@@ -143,6 +165,7 @@ export function loadQ(): Promise<void> {
 }
 
 const LUM = new THREE.Vector3(0.3, 0.59, 0.11);
+const crestMats = new Map<number, THREE.MeshLambertMaterial>();
 const matCache = new Map<string, THREE.MeshLambertMaterial>();
 /**
  * skin: multiplied so the texture's average tone lands on the race colour (keeps lips, cheeks, shading).
@@ -176,7 +199,9 @@ function material(p: Prim, color: number | undefined, k: number, glow: boolean):
 /** One outfit zone: which kit it comes from, the dye of the item worn there and whether it glows (C grade). */
 export interface QZone { ranger: boolean; dye?: number; glow?: boolean }
 export interface QOpts {
-  g: Gender; skin: number; hair: number; hairStyle: number; bald?: boolean; beard?: boolean;
+  g: Gender; skin: number; hair: number; hairStyle: number; beard?: boolean;
+  /** buzz cut instead of the chosen style */
+  bald?: boolean;
   chest: QZone; legs: QZone; feet: QZone;
   /** glove colour: dyes the hands */
   gloves?: number;
@@ -241,7 +266,7 @@ export function qPlayer(o: QOpts): Rig {
   if (o.pauldron) add(o.g === 'm' ? 'Male_Ranger_Acc_Pauldron' : 'Female_Ranger_Acc_Pauldrons', zone(o.chest));
   const hair = (p: Prim): [number, number, boolean] => [o.hair, 0.9, false];
   if (o.hood !== undefined) add(`${S}_Ranger_Head_Hood`, zone({ ranger: true, dye: o.hood }));
-  else if (!o.hideHair) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle] ?? HAIR[0], hair);
+  else if (!o.hideHair && (o.bald || HAIR[o.hairStyle])) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle]!, hair);
   if (o.beard) add('Hair_Beard', hair);
 
   if (o.tusks) {
@@ -253,6 +278,13 @@ export function qPlayer(o: QOpts): Rig {
   if (o.head) byName.Head.scale.multiplyScalar(o.head);
   body.updateMatrixWorld(true);
   const top = byName.Head.getWorldPosition(new THREE.Vector3()).y + 0.17; // crown of the unscaled model
+  if (o.hairStyle === MOHAWK && !o.bald && !o.hideHair && o.hood === undefined) {
+    const crest = props.mohawk.clone();
+    let m = crestMats.get(o.hair);
+    if (!m) crestMats.set(o.hair, (m = new THREE.MeshLambertMaterial({ color: o.hair, side: THREE.DoubleSide })));
+    crest.traverse((x) => x instanceof THREE.Mesh && (x.material = m!));
+    attach(byName.Head, crest, 0, 0, 0, 1);
+  }
   if (o.helm) {
     const [y, z, s] = HELMS[o.helm];
     attach(byName.Head, props[o.helm].clone(), 0, y, z, s); // geometry and materials are shared
@@ -331,10 +363,14 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   const TIERS: Record<string, (string | null)[]> = {
     'Sin equipo': [null, null, null, null, null, null],
     NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
-    D: ['broadsword', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
-    C: ['broadsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
-    'Místico D': ['willow_staff', 'karmian_tunic', null, null, 'karmian_stockings', null],
-    'Místico C': ['willow_staff', 'demons_tunic', null, null, 'karmian_stockings', 'reinforced_boots'],
+    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    'Místico D': ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
+    Hacha: ['battle_axe', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    Lanza: ['partisan', 'brigandine_tunic', null, 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    Daga: ['assassin_dagger', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
+    Martillo: ['war_hammer', 'brigandine_tunic', null, 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    'Místico C': ['sages_staff', 'demons_tunic', 'demons_circlet', null, 'karmian_stockings', 'reinforced_boots'],
   };
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
@@ -347,7 +383,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     }
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
     rigs = (Object.keys(RACES) as Race[]).flatMap((race, i) => (['m', 'f'] as const).map((g, j) => {
-      const rig = playerModel(race, tier.startsWith('M') ? 'mystic' : 'fighter', w, chest, { g, hs: (i + j) % 3, hc: 0 }, eq);
+      const rig = playerModel(race, tier.startsWith('Místico') ? 'mystic' : 'fighter', w, chest, { g, hs: (i + j) % HAIR_STYLES.length, hc: 0 }, eq);
       rig.root.position.set((i * 2 + j - 4.5) * 1.25, 0, 0);
       scene.add(rig.root);
       return rig;

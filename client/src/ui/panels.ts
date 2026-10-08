@@ -355,6 +355,11 @@ export class PartyPanel {
   private root: HTMLDivElement;
   private list: HTMLDivElement;
   members: PartyMember[] | null = null;
+  /** damage dealt by each member in the current fight (a fight ends after 10 s without a hit) */
+  private meter: HTMLDivElement;
+  private dmg = new Map<number, number>();
+  private fightStart = 0;
+  private fightLast = 0;
 
   constructor(private g: Game, parent: HTMLElement) {
     this.root = el('div', 'panel party', parent);
@@ -362,7 +367,24 @@ export class PartyPanel {
     const leave = el('button', 'btn small', head, tx('Salir', 'Leave'));
     leave.onclick = () => g.net.send({ t: 'partyLeave' });
     this.list = el('div', '', this.root);
+    this.meter = el('div', 'dmg-meter', this.root);
     this.root.style.display = 'none';
+  }
+
+  /** A hit landed by `src`: only what this client sees (members out of view aren't counted). */
+  hit(src: number, v: number) {
+    const members = this.members;
+    if (!members?.some((m) => m.id === src)) return;
+    const now = performance.now();
+    if (now - this.fightLast > 10000) {
+      this.dmg.clear();
+      this.fightStart = now;
+    }
+    this.fightLast = now;
+    this.dmg.set(src, (this.dmg.get(src) ?? 0) + v);
+    const rows = [...this.dmg].sort((a, b) => b[1] - a[1]), secs = Math.max(1, (now - this.fightStart) / 1000);
+    this.meter.innerHTML = `<div class="dm-head">${tx('Daño', 'Damage')}</div>` + rows.map(([id, total]) =>
+      `<div class="dm-row" style="--w:${Math.round((total / rows[0][1]) * 100)}%"><span>${esc(members.find((m) => m.id === id)?.name ?? '?')}</span><span>${total} · ${Math.round(total / secs)}/s</span></div>`).join('');
   }
 
   toggle() {

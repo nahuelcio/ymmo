@@ -1,5 +1,6 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { CAMPS } from '../../../shared/src/data/camps';
+import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees } from '../../../shared/src/layout';
@@ -67,6 +68,7 @@ export class Minimap {
   private lastDraw = 0;
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
+  private raidBtn: HTMLButtonElement;
 
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
@@ -77,13 +79,22 @@ export class Minimap {
     this.coordsEl = el('div', 'mm-coords', box);
     this.clockEl = el('div', 'mm-clock', box);
     this.clockEl.title = tx('Hora del juego. La noche pasa rápido.', 'Game time. Nights pass quickly.');
-    el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')}`;
+    el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')} <i style="background:#66ff88"></i> party`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
     zin.onclick = () => (this.viewR = Math.max(40, this.viewR * 0.75));
     const zout = el('button', 'btn small', zoom, '−');
     zout.onclick = () => (this.viewR = Math.min(300, this.viewR / 0.75));
     this.canvas.onclick = () => this.toggleMap();
+    // leaving a raid is the /raid chat command; a second click confirms, so a stray one mid-fight doesn't throw you out
+    const leave = tx('Salir', 'Leave'), sure = tx('¿Seguro?', 'Sure?');
+    this.raidBtn = el('button', 'btn small mm-raid', box, leave);
+    this.raidBtn.title = tx('Salir de la raid y volver a la aldea', 'Leave the raid and return to the village');
+    this.raidBtn.onclick = () => {
+      if (this.raidBtn.textContent === sure) g.net.send({ t: 'chat', text: '/raid' });
+      else setTimeout(() => (this.raidBtn.textContent = leave), 3000);
+      this.raidBtn.textContent = this.raidBtn.textContent === sure ? leave : sure;
+    };
 
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
@@ -150,6 +161,20 @@ export class Minimap {
       quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
     }
     this.drawRoute(ctx, (x, z) => [toMap(x) * S, toMap(z) * S]);
+    // other players, as far as the server tells us about them (those in view): the party in green, with names
+    const partyIds = new Set(this.g.ui.partyIds());
+    ctx.font = 'bold 11px Tahoma, sans-serif';
+    ctx.strokeStyle = '#000';
+    for (const c of this.g.ents.values()) {
+      if (c.rec.k !== 'p' || c.id === this.g.me.id) continue;
+      const x = toMap(c.pos.x) * S, y = toMap(c.pos.z) * S, mate = partyIds.has(c.id);
+      ctx.fillStyle = mate ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
+      ctx.beginPath();
+      ctx.arc(x, y, mate ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (mate) this.label(ctx, c.rec.n, x, y - 8);
+    }
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
   }
@@ -239,6 +264,7 @@ export class Minimap {
     this.lastDraw = now;
     const self = this.g.self;
     this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
+    this.raidBtn.style.display = Object.values(RAIDS).some((r) => r.name === this.g.me.zone) ? '' : 'none'; // inside one, the zone is the raid's name
     const clock = settings.s.dayNight ? gameClock() : '';
     if (this.clockEl.textContent !== clock) {
       this.clockEl.textContent = clock;

@@ -1,0 +1,22 @@
+# server-rs/src/formulas.rs
+
+- Stats · struct · L6-L12 — pub struct Stats
+- BASE_SPEED · constant · L14-L14 — pub const BASE_SPEED: f64 = 6.0;
+- MELEE_RANGE · constant · L15-L15 — pub const MELEE_RANGE: f64 = 2.2;
+- PARTY_BONUS · constant · L16-L16 — pub const PARTY_BONUS: [f64; 10] = [1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
+- MAX_PARTY · constant · L17-L17 — pub const MAX_PARTY: usize = 9;
+- PVP_FLAG_MS · constant · L18-L18 — pub const PVP_FLAG_MS: f64 = 30000.0;
+- KARMA_PER_PK · constant · L19-L19 — pub const KARMA_PER_PK: i64 = 360;
+- jround · function · L22-L22 — pub fn jround(v: f64) -> f64 { (v + 0.5).floor() }
+- level_mod · function · L24-L24 — pub fn level_mod(level: i64) -> f64 { 1.0 + (level - 1) as f64 * 0.1 }
+- stat_mods · function · L26-L35 — pub fn stat_mods(race: &str, g: &str) -> StatMods
+- compute_stats · function · L37-L82 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[&ItemDef], buffs: &[&BuffMods], gender: &str) -> Stats
+- mob_stats · function · L84-L97 — pub fn mob_stats(m: &MobDef) -> Stats
+- rnd · function · L99-L99 — pub fn rnd() -> f64 { rand::thread_rng().gen::<f64>() }
+- rand_range · function · L100-L100 — fn rand_range(a: f64, b: f64) -> f64 { a + rnd() * (b - a) }
+- hit_chance · function · L102-L102 — pub fn hit_chance(accuracy: f64, evasion: f64) -> f64 { (0.9 + (accuracy - evasion - 50.0) * 0.01).clamp(0.6, 0.98) }
+- phys_damage · function · L104-L106 — pub fn phys_damage(p_atk: f64, p_def: f64, mult: f64, crit: bool) -> f64
+- magic_damage · function · L108-L110 — pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64
+- xp_to_next · function · L112-L115 — pub fn xp_to_next(level: i64) -> i64
+- mob_xp · function · L117-L117 — pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * m.hp_mult.unwrap_or(1.0).powf(0.85)) }
+- level_penalty · function · L119-L122 — pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64

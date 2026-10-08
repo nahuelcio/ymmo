@@ -21,6 +21,24 @@ export const EN = {
   "iron_hammer": {
    "name": "Iron Hammer"
   },
+  "dagger": {
+   "name": "Dagger"
+  },
+  "hand_axe": {
+   "name": "Hand Axe"
+  },
+  "spear": {
+   "name": "Spear"
+  },
+  "assassin_dagger": {
+   "name": "Assassin's Dagger"
+  },
+  "battle_axe": {
+   "name": "Battle Axe"
+  },
+  "partisan": {
+   "name": "Partisan"
+  },
   "sword_of_revolution": {
    "name": "Sword of Revolution"
   },
@@ -74,6 +92,12 @@ export const EN = {
   },
   "full_plate_helmet": {
    "name": "Full Plate Helmet"
+  },
+  "karmian_hat": {
+   "name": "Karmian Hat"
+  },
+  "demons_circlet": {
+   "name": "Demon's Circlet"
   },
   "full_plate_armor": {
    "name": "Full Plate Armor"
@@ -466,7 +490,10 @@ export const EN = {
  "hairStyles": [
   "Short",
   "Long",
-  "Topknot"
+  "Topknot",
+  "Bald",
+  "Buzzed",
+  "Mohawk"
  ],
  "camps": {
   "gremlin_den": "Gremlin Den",

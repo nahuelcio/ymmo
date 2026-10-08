@@ -119,5 +119,8 @@ if (fs.existsSync(path.join(OUT, 'heads.glb'))) {
   compress('heads.glb');
 }
 
+// --- hand-made props
+for (const f of fs.readdirSync(OUT)) if (f.endsWith('.glb') && f !== 'heads.glb') compress(f);
+
 const size = fs.readdirSync(OUT).reduce((n, f) => n + fs.statSync(path.join(OUT, f)).size, 0);
 console.log(`${fs.readdirSync(OUT).length} files, ${(size / 1e6).toFixed(1)} MB -> ${OUT}`);

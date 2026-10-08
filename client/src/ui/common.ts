@@ -4,7 +4,7 @@ import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
 import { itemDesc, itemName, skillDesc, skillName } from '../../../shared/src/i18n';
 export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), chest: tx('Torso', 'Chest'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet') };
-export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt') };
+export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt'), axe: tx('Hacha', 'Axe'), spear: tx('Lanza', 'Spear'), dagger: tx('Daga', 'Dagger') };
 
 const ICONS = import.meta.glob('../icons/**/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 // the coin next to every adena amount (.adena::before)

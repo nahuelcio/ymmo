@@ -1,0 +1,28 @@
+# client/src/render/quaternius.ts
+
+- Prim · interface · L27-L27 — interface Prim
+- Helm · type · L42-L42 — type Helm = keyof typeof HELMS;
+- qReady · function · L60-L60 — qReady = ()
+- qWeapon · function · L62-L62 — qWeapon = (item: string | null): THREE.Object3D | null
+- avgColor · function · L68-L80 — function avgColor(tex: THREE.Texture): THREE.Color
+- lum · function · L74-L74 — lum = (i: number)
+- headOnly · function · L83-L96 — function headOnly(geo: THREE.BufferGeometry)
+- keep · function · L85-L89 — keep = (v: number)
+- loadQ · function · L98-L165 — function loadQ(): Promise<void>
+- collect · function · L126-L143 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
+- get · function · L158-L158 — get = (n: string)
+- material · function · L174-L197 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
+- QZone · interface · L200-L200 — interface QZone
+- QOpts · interface · L201-L221 — interface QOpts
+- QAnim · interface · L223-L223 — interface QAnim
+- attach · function · L226-L234 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
+- qPlayer · function · L236-L309 — function qPlayer(o: QOpts): Rig
+- add · function · L245-L256 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
+- zone · function · L258-L259 — zone = (z: QZone, hands?: number)
+- kit · function · L260-L260 — kit = (z: QZone)
+- hair · function · L267-L267 — hair = (p: Prim): [number, number, boolean]
+- animateQ · function · L312-L328 — function animateQ(q: QAnim, s: AnimState)
+- mountQuaterniusPreview · function · L331-L422 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L349-L357 — resize = ()
+- build · function · L379-L391 — build = ()
+- btn · function · L392-L398 — btn = (label: string, fn: () => void)

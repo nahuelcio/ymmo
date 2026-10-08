@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { DEFAULT_LOOK, HAIR_COLORS, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
+import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
 import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat } from './scene';
-import { animateQ, qPlayer, qReady, type QAnim, type QZone } from './quaternius';
+import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type QAnim, type QZone } from './quaternius';
 
 export interface Rig {
   root: THREE.Group;
@@ -275,7 +275,7 @@ export function humanoid(o: HumanoidOpts): Rig {
   const head = new THREE.Group();
   head.position.y = 1.72;
   head.add(part(new THREE.IcosahedronGeometry(0.19, 1), o.skin));
-  const closedHelm = g.head?.grade === 'C';
+  const closedHelm = g.head?.id === 'full_plate_helmet';
   if (!closedHelm) {
     const eye = o.skull ? B(0.06, 0.04, 0.02) : B(0.04, 0.04, 0.02);
     for (const sx of [-1, 1]) head.add(part(eye, o.skull ? 0x111111 : 0x222222, sx * 0.07, 0.02, 0.17));
@@ -561,7 +561,7 @@ function apron(torso: THREE.Object3D, color: number) {
 function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind {
   if (!itemId) return null;
   const wt = ITEMS[itemId]?.weaponType;
-  return wt ?? (cls === 'mystic' ? 'staff' : 'sword');
+  return wt === 'dagger' ? 'sword' : wt ?? (cls === 'mystic' ? 'staff' : 'sword'); // no procedural dagger: a sword stands in
 }
 
 export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig {
@@ -572,19 +572,20 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const chestDef = it(chest);
   const [head, gloves, legs, feet] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
-  const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, bald = race === 'orc' && !female && look.hs === 0;
+  const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, buzz = race === 'orc' && !female && look.hs === 0, bald = buzz || HAIR_STYLES[look.hs] === 'Pelado';
   if (qReady()) {
     const skin = race === 'orc' ? 0x5a7340 : r.skin; // the flat-shaded green reads as neon on a textured face
     const cap = head?.id === 'leather_cap'; // worn as a hood
-    const hideHair = !!head && !cap;
+    const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
+    const hideHair = !!gear && !gear.hair;
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
     return qPlayer({
-      g: look.g, skin, hair, hairStyle: look.hs, bald, beard, hideHair,
+      g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
       pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
-      scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: hideHair ? (head.grade === 'C' ? 'HelmC' : 'HelmD') : undefined,
-      head: race === 'dwarf' ? 1.12 : undefined, ...(head?.grade !== 'C' && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
-      inHand: heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
+      scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
+      head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
+      inHand: qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
     });
   }
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
@@ -829,7 +830,7 @@ export function itemModel(itemId: string): THREE.Group {
     for (let i = 0; i < 5; i++) g.add(part(new THREE.CylinderGeometry(0.11, 0.11, 0.035, 10), 0xffcc33, (i % 2) * 0.12 - 0.06, 0.02 + i * 0.035, ((i >> 1) % 2) * 0.08));
     g.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 10), 0xffdd55, 0.15, 0.02, -0.1));
   } else if (def?.type === 'weapon') {
-    const w = weaponMesh(def.weaponType ?? 'sword', def.color)!;
+    const w = weaponMesh(weaponKindOf(itemId, 'fighter'), def.color)!;
     // lying on the ground: staves are built upright (Y), everything else along Z
     if (def.weaponType === 'staff') w.rotation.set(0, 0.6, Math.PI / 2);
     else w.rotation.set(0, 0.6, 0);
