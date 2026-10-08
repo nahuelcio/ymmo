@@ -1,3 +1,4 @@
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -38,6 +39,7 @@ class Session implements ISession {
   lang: Lang = 'es';
   player: Player | null = null;
   msgCount = 0;
+  loggingIn = false;
   constructor(public ws: WebSocket) {}
   send(msg: S2C) {
     this.sendRaw(JSON.stringify(msg));
@@ -117,10 +119,19 @@ function handle(s: Session, m: C2S) {
       const user = String(m.user ?? '').trim(), pass = String(m.pass ?? '');
       if (!/^[A-Za-z0-9_]{3,16}$/.test(user)) return s.send({ t: 'error', msg: tr(s.lang, 'Cuenta: de 3 a 16 letras, números o _.', 'Account: 3-16 letters, numbers or _.') });
       if (pass.length < 4 || pass.length > 64) return s.send({ t: 'error', msg: tr(s.lang, 'Contraseña: de 4 a 64 caracteres.', 'Password: 4-64 characters.') });
-      const r = db.login(user, pass, !!m.register);
-      if (typeof r === 'string') return s.send({ t: 'error', msg: dbMsg(s, r) });
-      s.accountId = r;
-      return s.send({ t: 'chars', list: db.listChars(r), token: m.remember ? db.createSession(r) : undefined });
+      if (s.loggingIn) return;
+      s.loggingIn = true;
+      void db.login(user, pass, !!m.register).then((r) => {
+        s.loggingIn = false;
+        if (s.ws.readyState !== s.ws.OPEN) return;
+        if (typeof r === 'string') return s.send({ t: 'error', msg: dbMsg(s, r) });
+        s.accountId = r;
+        s.send({ t: 'chars', list: db.listChars(r), token: m.remember ? db.createSession(r) : undefined });
+      }, (e) => {
+        s.loggingIn = false;
+        console.error('login failed', e);
+      });
+      return;
     }
     case 'resume': {
       const id = db.resumeSession(m.token);
@@ -205,6 +216,15 @@ setInterval(() => {
 setInterval(() => {
   for (const s of sessions) if (s.player) savePlayer(s.player);
 }, 60000);
+
+// health line: smoothed tick time and event-loop lag (so a slow server shows up in journalctl)
+const loopLag = monitorEventLoopDelay({ resolution: 10 });
+loopLag.enable();
+setInterval(() => {
+  const p99 = loopLag.percentile(99) / 1e6;
+  if (process.env.PERF_LOG || world.tickCost > 10 || p99 > 60) console.warn(`[perf] tick ${world.tickCost.toFixed(1)} ms · loop lag p99 ${p99.toFixed(0)} ms · ${sessions.size} conns`);
+  loopLag.reset();
+}, process.env.PERF_LOG ? 5000 : 30000);
 
 function shutdown() {
   for (const s of sessions) leaveWorld(s);

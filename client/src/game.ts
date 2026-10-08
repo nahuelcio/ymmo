@@ -56,7 +56,7 @@ export interface CEnt {
   marker?: { obj: CSS2DObject; el: HTMLDivElement };
 }
 
-const INTERP_DELAY = 110;
+const INTERP_DELAY = 80;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;

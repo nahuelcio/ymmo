@@ -177,6 +177,16 @@ function nearestFree(cx: number, cz: number): [number, number] | null {
 
 const MAX_NODES = 40000;
 
+/** Reused A* buffers (one search at a time: JS is single-threaded). */
+let scr: { stamp: number; gScore: Float32Array; came: Int32Array; seen: Int32Array; closed: Int32Array; heapF: Float32Array; heapN: Int32Array } | null = null;
+function scratch() {
+  if (!scr) {
+    const NN = N * N;
+    scr = { stamp: 0, gScore: new Float32Array(NN), came: new Int32Array(NN), seen: new Int32Array(NN), closed: new Int32Array(NN), heapF: new Float32Array(4096), heapN: new Int32Array(4096) };
+  }
+  return scr;
+}
+
 /**
  * Waypoints from (sx,sz) to (tx,tz) around static obstacles (start excluded).
  * Straight line when clear; A* on the nav grid + string pulling otherwise.
@@ -192,65 +202,86 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
   if (lineClear(sx, sz, end.x, end.z)) return [end];
 
   const start = s[1] * N + s[0], goal = g[1] * N + g[0];
-  const gScore = new Map<number, number>([[start, 0]]);
-  const came = new Map<number, number>();
-  const closed = new Set<number>();
-  // binary heap of [f, node]
-  const heap: [number, number][] = [];
+  const nav = navGrid();
+  const sc = scratch();
+  // a new stamp invalidates the previous search's g-scores / closed flags without clearing the arrays
+  const stamp = ++sc.stamp;
+  if (stamp === 0x7fffffff) {
+    sc.seen.fill(0);
+    sc.closed.fill(0);
+    sc.stamp = 1;
+  }
+  const { gScore, came, seen, closed } = sc;
+  let heapF = sc.heapF, heapN = sc.heapN, size = 0;
   const push = (f: number, n: number) => {
-    heap.push([f, n]);
-    let i = heap.length - 1;
+    if (size === heapF.length) {
+      const nf = new Float32Array(size * 2), nn = new Int32Array(size * 2);
+      nf.set(heapF);
+      nn.set(heapN);
+      heapF = sc.heapF = nf;
+      heapN = sc.heapN = nn;
+    }
+    let i = size++;
     while (i > 0) {
       const p = (i - 1) >> 1;
-      if (heap[p][0] <= heap[i][0]) break;
-      [heap[p], heap[i]] = [heap[i], heap[p]];
+      if (heapF[p] <= f) break;
+      heapF[i] = heapF[p];
+      heapN[i] = heapN[p];
       i = p;
     }
+    heapF[i] = f;
+    heapN[i] = n;
   };
-  const pop = () => {
-    const top = heap[0], last = heap.pop()!;
-    if (heap.length) {
-      heap[0] = last;
-      let i = 0;
-      for (;;) {
-        const l = i * 2 + 1, r = l + 1;
-        let m = i;
-        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-        if (m === i) break;
-        [heap[m], heap[i]] = [heap[i], heap[m]];
-        i = m;
-      }
+  const pop = (): number => {
+    const top = heapN[0];
+    const lf = heapF[--size], ln = heapN[size];
+    let i = 0;
+    for (;;) {
+      const l = i * 2 + 1, r = l + 1;
+      if (l >= size) break;
+      const c = r < size && heapF[r] < heapF[l] ? r : l;
+      if (heapF[c] >= lf) break;
+      heapF[i] = heapF[c];
+      heapN[i] = heapN[c];
+      i = c;
     }
+    heapF[i] = lf;
+    heapN[i] = ln;
     return top;
   };
+  const gx = g[0], gz = g[1];
   const h = (n: number) => {
-    const dx = Math.abs((n % N) - g[0]), dz = Math.abs(Math.floor(n / N) - g[1]);
-    return Math.max(dx, dz) + 0.4142 * Math.min(dx, dz);
+    const dx = Math.abs((n % N) - gx), dz = Math.abs(((n / N) | 0) - gz);
+    return dx > dz ? dx + 0.4142 * dz : dz + 0.4142 * dx;
   };
+  const free = (cx: number, cz: number) => cx >= 0 && cz >= 0 && cx < N && cz < N && nav[cz * N + cx] === 0;
+  seen[start] = stamp;
+  gScore[start] = 0;
   push(h(start), start);
-  let found = false, best = start, bestH = h(start);
-  while (heap.length && closed.size < MAX_NODES) {
-    const [, cur] = pop();
-    if (closed.has(cur)) continue;
+  let found = false, best = start, bestH = h(start), expanded = 0;
+  while (size && expanded < MAX_NODES) {
+    const cur = pop();
+    if (closed[cur] === stamp) continue;
     if (cur === goal) { found = true; break; }
-    closed.add(cur);
+    closed[cur] = stamp;
+    expanded++;
     const hc = h(cur);
     if (hc < bestH) { bestH = hc; best = cur; }
-    const cx = cur % N, cz = Math.floor(cur / N);
+    const cx = cur % N, cz = (cur / N) | 0, gc = gScore[cur];
     for (let dx = -1; dx <= 1; dx++)
       for (let dz = -1; dz <= 1; dz++) {
         if (!dx && !dz) continue;
         const nx = cx + dx, nz = cz + dz;
-        if (blockedCell(nx, nz)) continue;
+        if (!free(nx, nz)) continue;
         // no corner cutting
-        if (dx && dz && (blockedCell(cx + dx, cz) || blockedCell(cx, cz + dz))) continue;
+        if (dx && dz && (!free(cx + dx, cz) || !free(cx, cz + dz))) continue;
         const n = nz * N + nx;
-        if (closed.has(n)) continue;
-        const ng = gScore.get(cur)! + (dx && dz ? 1.4142 : 1);
-        if (ng < (gScore.get(n) ?? Infinity)) {
-          gScore.set(n, ng);
-          came.set(n, cur);
+        if (closed[n] === stamp) continue;
+        const ng = gc + (dx && dz ? 1.4142 : 1);
+        if (seen[n] !== stamp || ng < gScore[n]) {
+          seen[n] = stamp;
+          gScore[n] = ng;
+          came[n] = cur;
           push(ng + h(n), n);
         }
       }
@@ -260,9 +291,8 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
   const cells: { x: number; z: number }[] = [];
   while (n !== start) {
     cells.push({ x: toWorld(n % N), z: toWorld(Math.floor(n / N)) });
-    const p = came.get(n);
-    if (p === undefined) break;
-    n = p;
+    if (sc.seen[n] !== stamp) break;
+    n = came[n];
   }
   cells.reverse();
   if (found) cells[cells.length - 1] = end;
@@ -271,12 +301,17 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
   const out: { x: number; z: number }[] = [];
   let ax = sx, az = sz, i = 0;
   while (i < cells.length) {
-    let j = cells.length - 1;
-    while (j > i && !lineClear(ax, az, cells[j].x, cells[j].z)) j--;
+    let j = i;
+    while (j + 1 < cells.length && lineClear(ax, az, cells[j + 1].x, cells[j + 1].z)) j++;
     out.push(cells[j]);
     ax = cells[j].x;
     az = cells[j].z;
     i = j + 1;
+  }
+  // second pass: drop waypoints we can see past from the previous one
+  for (let k = out.length - 2, guard = 0; k >= 0 && guard < 64; k--, guard++) {
+    const px = k ? out[k - 1].x : sx, pz = k ? out[k - 1].z : sz;
+    if (lineClear(px, pz, out[k + 1].x, out[k + 1].z)) out.splice(k, 1);
   }
   return out;
 }

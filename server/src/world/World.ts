@@ -253,9 +253,23 @@ export class World {
     p.send({ t: 'teleported' });
   }
 
+  /** Fixed-rate loop that catches up on drift (setInterval slips under load). */
   start() {
-    setInterval(() => this.tick(), TICK_MS);
+    let next = Date.now() + TICK_MS;
+    const loop = () => {
+      const t0 = performance.now();
+      this.tick();
+      this.tickCost = this.tickCost * 0.95 + (performance.now() - t0) * 0.05;
+      next += TICK_MS;
+      const now = Date.now();
+      if (next < now - TICK_MS * 5) next = now + TICK_MS; // badly behind: don't burst
+      setTimeout(loop, Math.max(0, next - now));
+    };
+    setTimeout(loop, TICK_MS);
   }
+
+  /** Smoothed tick duration in ms (logged by the server). */
+  tickCost = 0;
 
   private tick() {
     const now = Date.now();
@@ -271,8 +285,8 @@ export class World {
       updateMob(this, m, dt, now);
     }
     for (const e of this.ents.values()) if (e instanceof GroundItem && now >= e.expireAt) this.remove(e);
-    if (this.tickN % 2 === 0) for (const p of this.players.values()) this.sendSnapshot(p, now);
-    if (this.tickN % 4 === 0) for (const p of this.players.values()) this.sendSelf(p);
+    for (const p of this.players.values()) this.sendSnapshot(p, now);
+    if (this.tickN % 2 === 0) for (const p of this.players.values()) this.sendSelf(p);
     if (this.tickN % 10 === 0) party.sendPartyUpdates(this);
     if (this.tickN % 20 === 0) this.npcChatter(now);
     if (this.tickN % 5 === 0) this.updateCamps(now);
@@ -411,7 +425,14 @@ export class World {
   }
 
   handle(p: Player, m: C2S) {
-    const now = this.now;
+    const now = Date.now();
+    this.handleMsg(p, m, now);
+    // act on interactions right away instead of waiting for the next tick: a swing in range,
+    // an NPC next to you or an item at your feet answer within the same round-trip
+    if ((m.t === 'attack' || m.t === 'pickup' || m.t === 'talk' || m.t === 'skill') && p.intent) updatePlayer(this, p, 0, now);
+  }
+
+  private handleMsg(p: Player, m: C2S, now: number) {
     switch (m.t) {
       case 'move': {
         if (p.dead || !Number.isFinite(m.x) || !Number.isFinite(m.z)) return;

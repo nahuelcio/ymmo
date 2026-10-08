@@ -1,7 +1,11 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+
+// async scrypt runs on libuv's thread pool: a login no longer freezes the game loop (~60-170 ms each)
+const scryptAsync = promisify(scrypt) as (pass: string, salt: Buffer, len: number) => Promise<Buffer>;
 import { CLASSES, sanitizeLook, START_ADENA, type ClassType, type Look, type Race } from '../../shared/src/data/classes';
 import { TOWN } from '../../shared/src/terrain';
 import type { CharSummary, InvItem } from '../../shared/src/protocol';
@@ -44,15 +48,15 @@ for (const col of ["gender TEXT NOT NULL DEFAULT 'm'", 'hair_style INTEGER NOT N
 type LookCols = { gender: string; hair_style: number; hair_color: number };
 const lookOf = (r: LookCols): Look => sanitizeLook({ g: r.gender as Look['g'], hs: r.hair_style, hc: r.hair_color });
 
-function hashPass(pass: string): string {
+async function hashPass(pass: string): Promise<string> {
   const salt = randomBytes(16);
-  return `${salt.toString('hex')}:${scryptSync(pass, salt, 32).toString('hex')}`;
+  return `${salt.toString('hex')}:${(await scryptAsync(pass, salt, 32)).toString('hex')}`;
 }
 
-function checkPass(pass: string, stored: string): boolean {
+async function checkPass(pass: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(':');
   const expected = Buffer.from(hashHex, 'hex');
-  const got = scryptSync(pass, Buffer.from(saltHex, 'hex'), expected.length);
+  const got = await scryptAsync(pass, Buffer.from(saltHex, 'hex'), expected.length);
   return timingSafeEqual(expected, got);
 }
 
@@ -60,14 +64,16 @@ const qAccount = db.prepare('SELECT id, hash FROM accounts WHERE user = ?');
 const qInsAccount = db.prepare('INSERT INTO accounts (user, hash, created) VALUES (?, ?, ?)');
 
 /** Returns account id, or an error string. */
-export function login(user: string, pass: string, register: boolean): number | string {
-  const row = qAccount.get(user) as { id: number; hash: string } | undefined;
+export async function login(user: string, pass: string, register: boolean): Promise<number | string> {
   if (register) {
-    if (row) return 'Ese nombre de cuenta ya está en uso.';
-    const r = qInsAccount.run(user, hashPass(pass), Date.now());
+    if (qAccount.get(user)) return 'Ese nombre de cuenta ya está en uso.';
+    const hash = await hashPass(pass);
+    if (qAccount.get(user)) return 'Ese nombre de cuenta ya está en uso.'; // raced another register
+    const r = qInsAccount.run(user, hash, Date.now());
     return Number(r.lastInsertRowid);
   }
-  if (!row || !checkPass(pass, row.hash)) return 'Cuenta o contraseña incorrecta.';
+  const row = qAccount.get(user) as { id: number; hash: string } | undefined;
+  if (!row || !(await checkPass(pass, row.hash))) return 'Cuenta o contraseña incorrecta.';
   return row.id;
 }
 
