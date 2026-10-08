@@ -142,12 +142,18 @@ export const EN = {
   "stone_golem": "Stone Golem",
   "cave_spider": "Cave Spider",
   "kaim_vanul": "Kaim Vanul",
+  "kaim_ascended": "Kaim Vanul, the Ascended",
+  "bone_servant": "Bone Servant",
   "gremlin_chief": "Gremlin Chief",
   "goblin_chieftain": "Goblin Chieftain",
   "orc_warlord": "Orc Warlord",
   "crypt_knight": "Crypt Knight"
  },
  "skills": {
+  "provoke": {
+   "name": "Provoke",
+   "desc": "You roar at everything near the target: they switch to you for 4 s and hate you a lot more."
+  },
   "power_strike": {
    "name": "Power Strike",
    "desc": "A powerful blow. 180% damage."

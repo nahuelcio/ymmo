@@ -7,7 +7,7 @@ import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/pr
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
 import { dashEnd, findPath, lineClear, pushOut } from '../../../shared/src/collision';
 import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
-import { campName, npcLines, type Lang } from '../../../shared/src/i18n';
+import { campName, mobName, npcLines, type Lang } from '../../../shared/src/i18n';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
 import { updateMob } from '../systems/ai';
@@ -16,6 +16,22 @@ import * as inv from '../systems/inventory';
 import { acceptQuest, onInventoryChanged, turnInQuest } from '../systems/quests';
 import * as party from '../systems/party';
 import { handleChat } from '../systems/chat';
+import { raidHpScale, type RaidDef } from '../../../shared/src/data/raids';
+
+/** What a world asks of the process hosting it (main thread or a raid worker). */
+export interface WorldHost {
+  /** /raid typed in this world */
+  raidCommand(p: Player): void;
+  /** leave this world for the overworld town (raid exit, death in a raid) */
+  exitToTown(p: Player): void;
+}
+
+export interface WorldOptions {
+  /** run as a raid instance: just the arena and its boss */
+  raid?: RaidDef;
+  /** players expected in the raid (boss HP scales with it) */
+  raidSize?: number;
+}
 
 export const AOI = 90;
 const TICK_MS = 50;
@@ -83,9 +99,58 @@ export class World {
   private nextId = 1;
   private tickN = 0;
 
-  constructor() {
+  host: WorldHost = { raidCommand: () => {}, exitToTown: () => {} };
+  readonly raid: RaidDef | null;
+  raidBoss: Mob | null = null;
+  raidClearedAt = 0;
+
+  constructor(opts: WorldOptions = {}) {
+    this.raid = opts.raid ?? null;
+    if (this.raid) {
+      const boss = this.spawnMob(this.raid.boss, this.raid.x, this.raid.z, Date.now());
+      boss.summoned = false;
+      boss.stats = { ...boss.stats, maxHp: Math.round(boss.stats.maxHp * raidHpScale(opts.raidSize ?? 1)) };
+      boss.hp = boss.stats.maxHp;
+      boss.ry = Math.PI;
+      this.raidBoss = boss;
+      return;
+    }
     for (const def of NPCS) this.add(new Npc(this.newId(), def));
     this.spawnMobs();
+  }
+
+  /** Spawn a single mob now (boss adds, raid bosses). */
+  spawnMob(tplId: string, x: number, z: number, _now: number): Mob {
+    const p = pushOut(x, z, 1);
+    const m = new Mob(this.newId(), p.x, p.z, MOBS[tplId], p.x, p.z, 30);
+    m.summoned = true;
+    this.mobs.push(m);
+    this.add(m);
+    return m;
+  }
+
+  /** Hook from killMob. */
+  mobKilled(m: Mob, now: number) {
+    if (m.summoned) {
+      // adds don't come back: drop them a bit after the death animation
+      this.later(now + 6000, () => {
+        this.remove(m);
+        this.mobs = this.mobs.filter((x) => x !== m);
+      });
+    }
+    if (this.raid && m === this.raidBoss) {
+      this.raidClearedAt = now;
+      for (const e of this.mobs) if (!e.dead && e !== m) {
+        e.dead = true;
+        this.sendNear(e.x, e.z, { t: 'died', id: e.id, byPlayer: false });
+      }
+      this.announce((l) => (l === 'en'
+        ? `${mobName(m.tpl.id, 'en')} has fallen! The raid is cleared. Type /raid to leave (the lair closes in ${Math.round(this.raid!.closeAfterKill / 1000)} s).`
+        : `¡${m.tpl.name} cayó! Raid completada. Escribí /raid para salir (la guarida se cierra en ${Math.round(this.raid!.closeAfterKill / 1000)} s).`));
+      this.later(now + this.raid.closeAfterKill, () => {
+        for (const p of [...this.players.values()]) this.host.exitToTown(p);
+      });
+    }
   }
 
   newId() {
@@ -378,8 +443,14 @@ export class World {
     const add: EntAdd[] = [];
     const upd: EntUpd[] = [];
     const seen = new Set<number>();
+    // interest management: things far away (>50 m) only get every other update (10 Hz instead of 20)
+    const odd = (this.tickN & 1) === 1;
     for (const e of this.near(p.x, p.z, AOI)) {
       seen.add(e.id);
+      if (odd && e !== p && p.known.has(e.id)) {
+        const dx = e.x - p.x, dz = e.z - p.z;
+        if (dx * dx + dz * dz > 2500) continue;
+      }
       const u: EntUpd = [e.id, qPos(e.x), qPos(e.z), qRot(e.ry), e.hpPct(), e.flags(now)];
       const prev = p.known.get(e.id);
       if (!prev || p.knownAv.get(e.id) !== e.av) {
@@ -416,7 +487,7 @@ export class World {
       adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, flagged: p.pvpUntil > this.now, pvpOn: p.pvpOn,
       skills: skillsFor(p.cls, p.level, p.race, p.look.g).map((sk) => sk.id),
       buffs: p.buffs.map((b) => ({ id: b.id, rem: Math.max(0, Math.round((b.until - this.now) / 1000)) })),
-      zone: zoneAt(p.x, p.z),
+      zone: this.raid ? this.raid.name : zoneAt(p.x, p.z),
     };
   }
 
@@ -524,6 +595,8 @@ export class World {
       case 'partyLeave':
         return party.leave(this, p, false);
       case 'respawn':
+        // dying in a raid sends you back to the village
+        if (this.raid) return this.host.exitToTown(p);
         return respawnPlayer(this, p);
       case 'pvpMode':
         return setPvpMode(this, p, !!m.on);

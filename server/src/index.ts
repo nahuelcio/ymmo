@@ -19,8 +19,10 @@ const DB_EN: Record<string, string> = {
 };
 const dbMsg = (s: { lang: Lang }, msg: string) => (s.lang === 'en' ? DB_EN[msg] ?? msg : msg);
 import { Player, type Session as ISession } from './world/entities';
-import { primeQuestNotices, savedQuests, sendQuests } from './systems/quests';
 import { World } from './world/World';
+import { autosave, loadPlayer, savePlayer } from './realm';
+import { RAIDS } from '../../shared/src/data/raids';
+import { instances, RaidInstance, type RaidClient } from './raid/manager';
 
 const PORT = Number(process.env.GAME_PORT ?? 3001);
 const DIST = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -34,7 +36,13 @@ world.start();
 
 const sessions = new Set<Session>();
 
-class Session implements ISession {
+let nextSid = 1;
+
+class Session implements ISession, RaidClient {
+  readonly sid = nextSid++;
+  /** raid instance this socket is playing in (its traffic goes to that worker) */
+  instance: RaidInstance | null = null;
+  instanceChar = 0;
   accountId = 0;
   lang: Lang = 'es';
   player: Player | null = null;
@@ -55,15 +63,6 @@ class Session implements ISession {
   }
 }
 
-function savePlayer(p: Player) {
-  db.saveChar(
-    { id: p.charId, level: p.level, xp: p.xp, x: p.x, z: p.z, hp: Math.max(1, p.hp), mp: p.mp, cp: p.cp,
-      adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp },
-    p.inv,
-    savedQuests(p),
-  );
-}
-
 function leaveWorld(s: Session) {
   const p = s.player;
   if (!p) return;
@@ -82,37 +81,60 @@ function leaveWorld(s: Session) {
   s.player = null;
 }
 
-function enterWorld(s: Session, charId: number) {
+function enterWorld(s: Session, charId: number, kind: 'enter' | 'world' = 'enter') {
   for (const o of sessions) {
-    if (o !== s && o.player?.charId === charId) {
+    if (o === s) continue;
+    if (o.player?.charId === charId) {
       leaveWorld(o);
       o.ws.close();
+    } else if (o.instance && o.instanceChar === charId) {
+      // still inside a raid on another connection: kick it, its save lands in a moment
+      o.ws.close();
+      return s.send({ t: 'error', msg: tr(s.lang, 'Tu personaje está saliendo de una raid, probá de nuevo en unos segundos.', 'Your character is leaving a raid, try again in a few seconds.') });
     }
   }
-  const data = db.loadChar(s.accountId, charId);
-  if (!data) return s.send({ t: 'error', msg: tr(s.lang, 'No se encontró el personaje.', 'Character not found.') });
-  const r = data.row;
-  const p = new Player(world.newId(), r.x, r.z, s, r.id, r.name, r.race, r.cls, Math.min(r.level, MAX_LEVEL), r.xp, r.hp, r.mp, r.cp, r.adena, r.karma, r.pk, r.pvp);
-  p.look = r.look;
-  p.inv = data.items.map((i) => ({ ...i, u: p.nextUid++ }));
-  for (const q of data.quests) p.quests.set(q.id, { progress: q.progress, done: q.done });
-  primeQuestNotices(p);
-  p.recalc();
-  s.player = p;
-  world.addPlayer(p);
-  s.send({ t: 'enter', self: world.selfState(p), inv: p.inv });
-  sendQuests(p);
-  world.sys(p, `¡${p.look.g === 'f' ? 'Bienvenida' : 'Bienvenido'} a Claudi MMO, ${p.name}! Escribí /help para ver los comandos del chat.`, `Welcome to Claudi MMO, ${p.name}! Type /help for chat commands.`);
-  console.log(`[world] ${p.name} entered (${world.players.size} online)`);
+  const p = loadPlayer(world, s, charId, kind);
+  if (!p) return s.send({ t: 'error', msg: tr(s.lang, 'No se encontró el personaje.', 'Character not found.') });
+  if (kind === 'enter') {
+    world.sys(p, `¡${p.look.g === 'f' ? 'Bienvenida' : 'Bienvenido'} a Claudi MMO, ${p.name}! Escribí /help para ver los comandos del chat.`, `Welcome to Claudi MMO, ${p.name}! Type /help for chat commands.`);
+    console.log(`[world] ${p.name} entered (${world.players.size} online)`);
+  }
 }
+
+/** /raid in the overworld: take the caller (and their whole party) into a fresh raid instance. */
+function enterRaid(p: Player) {
+  const raid = RAIDS.kaim;
+  if (p.dead) return;
+  const party = p.party;
+  if (party && party.members[0] !== p) return world.sys(p, 'Solo el líder de la party puede entrar a la raid.', 'Only the party leader can start the raid.');
+  const group = party ? [...party.members] : [p];
+  if (group.length > raid.maxPlayers) return world.sys(p, `La raid admite hasta ${raid.maxPlayers} jugadores.`, `The raid allows up to ${raid.maxPlayers} players.`);
+  const low = group.filter((m) => m.level < raid.minLevel);
+  if (low.length) return world.sys(p, `Nivel mínimo ${raid.minLevel}: ${low.map((m) => m.name).join(', ')}.`, `Minimum level ${raid.minLevel}: ${low.map((m) => m.name).join(', ')}.`);
+  const inst = new RaidInstance(raid, group.length, { back: (c, charId) => enterWorld(c as Session, charId, 'world') });
+  if (party) {
+    // the party moves as a whole: it is re-formed inside the instance
+    world.parties.delete(party);
+    for (const m of group) m.party = null;
+  }
+  for (const m of group) {
+    const s = m.session as Session;
+    if (m !== p) world.sys(m, `${p.name} los lleva a ${raid.name}...`, `${p.name} is taking the party to ${raid.nameEn}...`);
+    leaveWorld(s);
+    inst.join(s, m.charId);
+  }
+}
+world.host = { raidCommand: enterRaid, exitToTown: () => {} };
 
 const NAME_RE = /^[A-Za-z][A-Za-z0-9]{2,15}$/;
 
 function handle(s: Session, m: C2S) {
   if (m.t === 'lang') {
     if (isLang(m.lang)) s.lang = m.lang;
+    s.instance?.lang(s);
     return;
   }
+  if (s.instance) return s.instance.msg(s, m);
   if (s.player) return world.handle(s.player, m);
   switch (m.t) {
     case 'login': {
@@ -204,6 +226,7 @@ wss.on('connection', (ws) => {
     }
   });
   ws.on('close', () => {
+    s.instance?.quit(s);
     leaveWorld(s);
     sessions.delete(s);
   });
@@ -213,22 +236,26 @@ setInterval(() => {
   for (const s of sessions) s.msgCount = 0;
 }, 1000);
 
-setInterval(() => {
-  for (const s of sessions) if (s.player) savePlayer(s.player);
-}, 60000);
+// staggered autosave: a few players per second, each one about once a minute
+setInterval(() => autosave(world, Date.now()), 1000);
 
 // health line: smoothed tick time and event-loop lag (so a slow server shows up in journalctl)
 const loopLag = monitorEventLoopDelay({ resolution: 10 });
 loopLag.enable();
 setInterval(() => {
   const p99 = loopLag.percentile(99) / 1e6;
-  if (process.env.PERF_LOG || world.tickCost > 10 || p99 > 60) console.warn(`[perf] tick ${world.tickCost.toFixed(1)} ms · loop lag p99 ${p99.toFixed(0)} ms · ${sessions.size} conns`);
+  if (process.env.PERF_LOG || world.tickCost > 10 || p99 > 60)
+    console.warn(`[perf] tick ${world.tickCost.toFixed(1)} ms · loop lag p99 ${p99.toFixed(0)} ms · ${sessions.size} conns · ${instances.size} raids${[...instances].map((i) => ` [${i.clients.size}p ${i.tickCost.toFixed(1)}ms]`).join('')}`);
   loopLag.reset();
 }, process.env.PERF_LOG ? 5000 : 30000);
 
 function shutdown() {
-  for (const s of sessions) leaveWorld(s);
-  process.exit(0);
+  for (const s of sessions) {
+    s.instance?.quit(s);
+    leaveWorld(s);
+  }
+  // give raid workers a moment to save their players
+  setTimeout(() => process.exit(0), instances.size ? 800 : 0);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

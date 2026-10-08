@@ -19,6 +19,7 @@ export const db = new DatabaseSync(dataDir + 'game.db');
 
 db.exec(`
 PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 3000;
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY, user TEXT UNIQUE COLLATE NOCASE NOT NULL, hash TEXT NOT NULL, created INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS characters (

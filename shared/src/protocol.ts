@@ -86,6 +86,8 @@ export type S2C =
   | { t: 'chars'; list: CharSummary[]; token?: string }
   | { t: 'resumeFail' }
   | { t: 'enter'; self: SelfState; inv: InvItem[] }
+  /** moved to another world (raid instance or back): forget every entity and start over */
+  | { t: 'world'; self: SelfState; inv: InvItem[] }
   | { t: 'snap'; add: EntAdd[]; upd: EntUpd[]; gone: number[] }
   | { t: 'me'; s: SelfState }
   | { t: 'inv'; items: InvItem[]; adena: number }

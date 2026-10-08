@@ -36,10 +36,12 @@ export function handleChat(w: World, p: Player, raw: string) {
         if (p.dead) return;
         p.escapeAt = w.now + 10000;
         return w.sys(p, 'En 10 segundos volvés a la aldea...', 'You will be returned to the village in 10 seconds...');
+      case 'raid':
+        return w.host.raidCommand(p);
       case 'pvp':
         return setPvpMode(w, p, arg ? arg.toLowerCase() === 'on' : !p.pvpOn);
       case 'help':
-        return w.sys(p, 'Chat: !grito  #party  "nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off]', 'Chat: !shout  #party  "name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off]');
+        return w.sys(p, 'Chat: !grito  #party  "nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /raid (entrar o salir de la raid con tu party)', 'Chat: !shout  #party  "name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /raid (enter or leave the raid with your party)');
       default:
         return w.sys(p, `No existe el comando /${cmd}. Escribí /help.`, `Unknown command /${cmd}. Type /help.`);
     }

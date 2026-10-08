@@ -27,10 +27,12 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
     const t = w.players.get(m.target);
     if (!t || t.dead || inTown(t.x, t.z) || dist(home, t) > LEASH || dist(home, m) > LEASH) {
       m.hate.delete(m.target);
+      m.threat.delete(m.target);
       m.target = null;
-      // pick next valid hater
+      m.tauntUntil = 0;
+      // pick next valid enemy, highest threat first
       let best = -1;
-      for (const [id, h] of m.hate) {
+      for (const [id, h] of m.threat) {
         const p = w.players.get(id);
         if (p && !p.dead && !inTown(p.x, p.z) && dist(home, p) <= LEASH && h > best) {
           best = h;
@@ -39,6 +41,10 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       }
       if (m.target === null) {
         m.hate.clear();
+        m.threat.clear();
+        m.phase = 0;
+        m.haste = 1;
+        m.special = m.tpl.special;
         m.returning = true;
         m.specialAt = 0;
         m.winding = null;
@@ -55,13 +61,15 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
   }
 
   if (m.target !== null) {
+    retarget(w, m, now);
+    if (m.tpl.phases) checkPhases(w, m, now);
     const t = w.players.get(m.target)!;
     if (m.winding) {
       m.moving = false;
       if (now >= m.winding.end) resolveSpecial(w, m, now);
       return;
     }
-    const sp = m.tpl.special;
+    const sp = m.special;
     if (sp) {
       if (!m.specialAt) m.specialAt = now + 3000; // grace period after engaging
       else if (now >= m.specialAt && dist(m, t) <= sp.r + 3) {
@@ -80,7 +88,7 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       m.moving = false;
       face(m, t);
       if (now >= m.nextAttack) {
-        m.nextAttack = now + m.tpl.atkInterval;
+        m.nextAttack = now + m.tpl.atkInterval / m.haste;
         mobAttack(w, m, t, now);
       }
     }
@@ -94,6 +102,7 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       if (!p.dead && !inTown(p.x, p.z) && p.level < m.tpl.level + 8) {
         m.target = p.id;
         m.hate.set(p.id, 1);
+        m.threat.set(p.id, 1);
         m.dest = null;
         return;
       }
@@ -116,7 +125,7 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
 
 /** The wind-up is over: hit everyone still inside the circle (rolling out or i-frames saves you). */
 function resolveSpecial(w: World, m: Mob, now: number) {
-  const sp = m.tpl.special!, at = m.winding!;
+  const sp = m.special!, at = m.winding!;
   m.winding = null;
   m.specialAt = now + sp.every;
   m.nextAttack = now + m.tpl.atkInterval * 0.5;
@@ -140,8 +149,64 @@ function respawn(w: World, m: Mob) {
   m.target = null;
   m.returning = false;
   m.hate.clear();
+  m.threat.clear();
+  m.phase = 0;
+  m.haste = 1;
+  m.special = m.tpl.special;
   m.dest = null;
   m.av++;
   w.setPos(m, m.homeX, m.homeZ);
   if (m.tpl.boss) w.announce((l) => tr(l, `¡El jefe ${m.tpl.name} despertó en los Páramos Malditos!`, `The raid boss ${mobName(m.tpl.id, 'en')} has awakened in the Cursed Wastes!`));
+}
+
+/**
+ * Threat: twice a second, switch to whoever has clearly out-threatened the current target
+ * (110%, so the boss doesn't ping-pong between two close dps). A taunt locks the target for a while.
+ */
+function retarget(w: World, m: Mob, now: number) {
+  if (now < m.nextTargetCheck || now < m.tauntUntil) return;
+  m.nextTargetCheck = now + 500;
+  const home = { x: m.homeX, z: m.homeZ };
+  const cur = m.threat.get(m.target!) ?? 0;
+  let bestId = -1, best = cur * 1.1;
+  for (const [id, v] of m.threat) {
+    if (id === m.target || v <= best) continue;
+    const p = w.players.get(id);
+    if (!p || p.dead || inTown(p.x, p.z) || dist(home, p) > LEASH) continue;
+    best = v;
+    bestId = id;
+  }
+  if (bestId >= 0) m.target = bestId;
+}
+
+/** Raid boss phases: crossing an HP threshold summons adds, speeds it up and/or swaps its special. */
+function checkPhases(w: World, m: Mob, now: number) {
+  const phases = m.tpl.phases!;
+  const pct = (m.hp / m.stats.maxHp) * 100;
+  while (m.phase < phases.length && pct <= phases[m.phase].at) {
+    const ph = phases[m.phase++];
+    if (ph.haste) m.haste = ph.haste;
+    if (ph.special) {
+      m.special = ph.special;
+      m.specialAt = now + 2500;
+    }
+    for (const p of w.nearPlayers(m.x, m.z, 80)) {
+      p.send({ t: 'chat', ch: 'announce', from: '', text: `${mobName(m.tpl.id, p.lang)}: ${p.lang === 'en' ? ph.say[1] : ph.say[0]}` });
+    }
+    if (ph.adds) {
+      for (let i = 0; i < ph.adds.count; i++) {
+        const a = (i / ph.adds.count) * Math.PI * 2;
+        const add = w.spawnMob(ph.adds.mob, m.x + Math.cos(a) * 9, m.z + Math.sin(a) * 9, now);
+        // they go for the healers and casters first: whoever is furthest from the boss
+        const victims = [...m.threat.keys()].map((id) => w.players.get(id)).filter((p): p is NonNullable<typeof p> => !!p && !p.dead);
+        victims.sort((p1, p2) => dist(p2, m) - dist(p1, m));
+        const v = victims[i % Math.max(1, victims.length)];
+        if (v) {
+          add.target = v.id;
+          add.hate.set(v.id, 1);
+          add.threat.set(v.id, 50);
+        }
+      }
+    }
+  }
 }

@@ -26,8 +26,20 @@ export interface MobDef {
   onHit?: StatusApply;
   /** telegraphed area attack: wind-up shown on the ground, dodgeable */
   special?: { r: number; windup: number; mult: number; every: number; at: 'self' | 'target'; stun?: number };
+  /** raid boss phases: crossing each HP threshold (in %) summons adds, hastes it and/or swaps its special */
+  phases?: MobPhase[];
   adena: [number, number];
   drops: Drop[];
+}
+
+export interface MobPhase {
+  at: number;
+  adds?: { mob: string; count: number };
+  /** attack speed multiplier from this phase on */
+  haste?: number;
+  special?: MobDef['special'];
+  /** boss yell, [es, en] */
+  say: [string, string];
 }
 
 const list: MobDef[] = [
@@ -71,6 +83,17 @@ const list: MobDef[] = [
     drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'demons_tunic', chance: 0.006 }, { item: 'sages_staff', chance: 0.005 }] },
   { id: 'kaim_vanul', name: 'Kaim Vanul', level: 22, shape: 'undead', color: 0x6a2a8a, scale: 2.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 3.5, hpMult: 14, atkMult: 1.4, defMult: 1.2, respawn: 300000, boss: true, onHit: { id: 'slow', ms: 3000, chance: 0.25 }, special: { r: 6, windup: 1500, mult: 2.6, every: 7000, at: 'target' }, adena: [3000, 6000],
     drops: [{ item: 'samurai_longsword', chance: 0.25 }, { item: 'sages_staff', chance: 0.25 }, { item: 'full_plate_armor', chance: 0.2 }, { item: 'demons_tunic', chance: 0.2 }, { item: 'cursed_bone', chance: 1, min: 5, max: 10 }] },
+  // Raid (instanced, see data/raids.ts): HP scales with the raid size when it spawns
+  { id: 'kaim_ascended', name: 'Kaim Vanul, el Ascendido', level: 20, shape: 'undead', color: 0x8a2aaa, scale: 2.8, aggressive: true, speed: 4.5, atkInterval: 1800, range: 4, hpMult: 18, atkMult: 1.25, defMult: 1.1, respawn: 1e12, boss: true,
+    onHit: { id: 'slow', ms: 3000, chance: 0.2 }, special: { r: 7, windup: 1800, mult: 2.4, every: 9000, at: 'target' },
+    phases: [
+      { at: 70, adds: { mob: 'bone_servant', count: 4 }, say: ['¡Levántense, huesos! ¡Sirvan a su amo!', 'Rise, bones! Serve your master!'] },
+      { at: 40, haste: 1.3, special: { r: 9, windup: 1600, mult: 2.6, every: 7000, at: 'self', stun: 1500 }, say: ['¡El páramo entero va a temblar!', 'The whole wasteland will shake!'] },
+      { at: 15, adds: { mob: 'bone_servant', count: 6 }, haste: 1.6, say: ['¡NO! ¡No me van a sellar otra vez!', 'NO! You will not seal me again!'] },
+    ],
+    adena: [8000, 14000],
+    drops: [{ item: 'samurai_longsword', chance: 0.6 }, { item: 'sages_staff', chance: 0.6 }, { item: 'full_plate_armor', chance: 0.5 }, { item: 'demons_tunic', chance: 0.5 }, { item: 'cursed_bone', chance: 1, min: 10, max: 20 }] },
+  { id: 'bone_servant', name: 'Siervo de Hueso', level: 17, shape: 'undead', color: 0xb8b0a0, scale: 0.95, aggressive: true, speed: 5, atkInterval: 1500, range: 1.8, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Camp leaders (elite)
   { id: 'gremlin_chief', name: 'Jefe Gremlin', level: 4, shape: 'goblin', color: 0x5f8e2a, scale: 0.85, aggressive: true, speed: 4.5, atkInterval: 1300, range: 1.8, hpMult: 3, atkMult: 1.3, elite: true,
     special: { r: 3, windup: 1100, mult: 1.6, every: 9000, at: 'self' }, adena: [60, 120], drops: [{ item: 'lesser_healing_potion', chance: 0.5 }] },

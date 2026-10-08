@@ -85,6 +85,8 @@ export class Player extends Entity {
   dodgeUntil = 0;
   /** smoothed round-trip time to this client (ms) */
   rtt = 80;
+  /** last autosave (jittered so saves spread out) */
+  savedAt = Date.now() - Math.random() * 60000;
   /** one-way latency used to judge dodges the way the player saw them (capped so lag can't be abused) */
   get oneWay() {
     return Math.min(150, this.rtt / 2);
@@ -179,6 +181,17 @@ export class Mob extends Entity {
   hp: number;
   target: number | null = null;
   hate = new Map<number, number>();
+  /** who it wants to hit: damage (x1.3 from fighters), healing done to its enemies, taunts */
+  threat = new Map<number, number>();
+  /** forced target after a taunt */
+  tauntUntil = 0;
+  nextTargetCheck = 0;
+  /** raid boss: phases already triggered, attack speed multiplier, current special */
+  phase = 0;
+  haste = 1;
+  special: MobDef['special'] = undefined;
+  /** spawned by a boss phase: removed for good when it dies */
+  summoned = false;
   nextAttack = 0;
   respawnAt = 0;
   hideAt = 0;
@@ -195,6 +208,7 @@ export class Mob extends Entity {
     this.stats = mobStats(tpl);
     this.hp = this.stats.maxHp;
     this.radius = 0.5 * tpl.scale + 0.3;
+    this.special = tpl.special;
   }
 
   hpPct(): number {

@@ -361,6 +361,22 @@ export class Game {
     });
     n.on('partyInvite', (m) => this.ui.dialogs.invite(m.from));
     n.on('party', (m) => this.ui.party.set(m.members));
+    // moved to another world (raid instance or back): every entity we knew is gone, our id changed
+    n.on('world', (m) => {
+      for (const id of [...this.ents.keys()]) this.removeEnt(id);
+      this.setTarget(null);
+      this.predict = null;
+      this.castBar = null;
+      this.teleportPending = true;
+      this.me = m.self;
+      this.inv = m.inv;
+      this.adena = m.self.adena;
+      this.ui.dialogs.close();
+      this.ui.npc.win.hide();
+      this.ui.onMe();
+      this.ui.onInv();
+      this.ui.hud.banner(zoneName(m.self.zone, lang));
+    });
     n.on('teleported', () => {
       this.teleportPending = true;
       this.ui.dialogs.close();
@@ -756,6 +772,10 @@ export class Game {
         break;
       case 'drain':
         this.fx.projectile(chest(t), () => chest(s), def.color, 400, 0.25);
+        break;
+      case 'taunt':
+        this.fx.ring(t.pos.clone(), def.color, def.aoe ?? 6, 500);
+        play('warn', this.near(s) * 0.6);
         break;
       case 'phys':
         this.fx.burst(chest(t), def.color, 1.1, 350);

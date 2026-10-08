@@ -59,7 +59,7 @@ export function leave(w: World, p: Player, disconnect: boolean) {
   } else sendParty(party);
 }
 
-function sendParty(party: Party) {
+export function sendParty(party: Party) {
   const members: PartyMember[] = party.members.map((m, i) => ({
     id: m.id, name: m.name, lvl: m.level, cls: m.cls, leader: i === 0,
     hp: Math.ceil(m.hp), maxHp: m.stats.maxHp, mp: Math.floor(m.mp), maxMp: m.stats.maxMp, cp: Math.floor(m.cp), maxCp: m.stats.maxCp,
@@ -69,4 +69,17 @@ function sendParty(party: Party) {
 
 export function sendPartyUpdates(w: World) {
   for (const party of w.parties) sendParty(party);
+}
+
+/** Put p in the group's party (raid instances re-form the party of whoever came in together). */
+export function joinGroup(w: World, p: Player) {
+  let party = [...w.parties][0];
+  if (!party) {
+    party = { id: nextPartyId++, members: [] };
+    w.parties.add(party);
+  }
+  if (party.members.length >= MAX_PARTY) return;
+  party.members.push(p);
+  p.party = party;
+  sendParty(party);
 }

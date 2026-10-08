@@ -11,7 +11,7 @@ export interface SkillDef {
   race?: Race;
   gender?: Gender;
   level: number;
-  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain';
+  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain' | 'taunt';
   target: 'enemy' | 'self' | 'friend';
   /** damage multiplier for phys/magic/drain, flat heal amount for heal */
   power: number;
@@ -32,6 +32,7 @@ export interface SkillDef {
 const list: SkillDef[] = [
   // Fighter
   { id: 'power_strike', name: 'Golpe Potente', cls: 'fighter', level: 1, kind: 'phys', target: 'enemy', power: 1.8, mp: 8, cooldown: 5000, cast: 300, range: 2.6, icon: '💥', color: 0xffaa33, desc: 'Un golpe con todo. 180% de daño.' },
+  { id: 'provoke', name: 'Provocar', cls: 'fighter', level: 4, kind: 'taunt', target: 'enemy', power: 0, mp: 10, cooldown: 15000, cast: 200, range: 12, aoe: 8, icon: '📣', color: 0xff8844, desc: 'Le gritás a todo lo que está cerca del objetivo: te pasan a pegar a vos durante 4 s y te tienen mucha más bronca.' },
   { id: 'mortal_blow', name: 'Golpe Mortal', cls: 'fighter', level: 5, kind: 'phys', target: 'enemy', power: 2.6, mp: 12, cooldown: 8000, cast: 400, range: 2.6, status: { id: 'bleed', ms: 6000, dot: 0.15 }, icon: '🩸', color: 0xff3344, desc: 'Un tajo despiadado. 260% de daño y sangrado durante 6 s.' },
   { id: 'rage', name: 'Furia', cls: 'fighter', level: 8, kind: 'buff', target: 'self', power: 0, mp: 15, cooldown: 120000, cast: 500, range: 0, buff: { dur: 60000, mods: { pAtk: 1.2, atkSpd: 1.15 } }, icon: '😡', color: 0xff5522, desc: 'Atq.F +20% y Vel.Atq +15% durante 60 s.' },
   { id: 'whirlwind', name: 'Torbellino', cls: 'fighter', level: 11, kind: 'phys', target: 'enemy', power: 1.5, mp: 20, cooldown: 12000, cast: 500, range: 2.6, aoe: 5, aoeOnSelf: true, status: { id: 'slow', ms: 2500 }, icon: '🌀', color: 0xdddddd, desc: 'Golpea a todos los enemigos a tu alrededor. 150% de daño y los ralentiza.' },

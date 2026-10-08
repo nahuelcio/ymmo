@@ -1,3 +1,4 @@
+import { RAIDS } from '../data/raids';
 // Language support: Argentine Spanish (the data's native language) and English.
 import { ITEMS } from '../data/items';
 import { MOBS } from '../data/mobs';
@@ -57,6 +58,8 @@ export function npcLines(id: string, l: Lang): string[] {
 export function zoneName(es: string, l: Lang): string {
   if (l === 'es') return es;
   if (es === TOWN.name) return en.zones.town;
+  const raid = Object.values(RAIDS).find((r) => r.name === es);
+  if (raid) return raid.nameEn;
   const z = ZONES.find((zz) => zz.name === es);
   return z ? en.zones[z.id] ?? es : es === 'Tierras Salvajes' ? en.zones.wild : es;
 }

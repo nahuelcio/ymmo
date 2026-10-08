@@ -114,6 +114,7 @@ export function applyDamage(w: World, src: Fighter, t: Fighter, dmg: number, now
   if (t instanceof Mob) {
     if (src instanceof Player) {
       t.hate.set(src.id, (t.hate.get(src.id) ?? 0) + dmg);
+      addThreat(t, src.id, dmg * (src.cls === 'fighter' ? 1.3 : 1));
       if (t.target === null || t.returning) {
         t.returning = false;
         t.target = src.id;
@@ -175,6 +176,8 @@ export function killMob(w: World, m: Mob, now: number) {
   m.hideAt = now + 6000;
   m.respawnAt = now + (m.tpl.respawn ?? 15000 + Math.random() * 15000);
   w.sendNear(m.x, m.z, { t: 'died', id: m.id, byPlayer: false });
+  m.threat.clear();
+  w.mobKilled(m, now);
 
   if (m.campId) {
     const camp = w.camps.get(m.campId);
@@ -366,6 +369,24 @@ export function finishCast(w: World, p: Player, now: number) {
       const msg = { t: 'dmg' as const, s: p.id, tg: t.id, v: Math.round(t.hp - before), heal: true };
       p.send(msg);
       if (t instanceof Player && t !== p) t.send(msg);
+      // healers draw aggro from everything fighting the one they healed
+      if (t instanceof Player) {
+        const healed = t.hp - before;
+        for (const e of w.near(t.x, t.z, 40)) if (e instanceof Mob && !e.dead && e.threat.has(t.id)) addThreat(e, p.id, healed * 0.5);
+      }
+      break;
+    }
+    case 'taunt': {
+      // everything around the target turns on you, and keeps a grudge
+      for (const e of w.near(t.x, t.z, def.aoe ?? 6)) {
+        if (!(e instanceof Mob) || e.dead || e.returning) continue;
+        let top = 0;
+        for (const v of e.threat.values()) top = Math.max(top, v);
+        e.threat.set(p.id, top * 1.2 + 100);
+        if (!e.hate.has(p.id)) e.hate.set(p.id, 0);
+        e.target = p.id;
+        e.tauntUntil = now + 4000;
+      }
       break;
     }
     case 'buff': {
@@ -377,4 +398,8 @@ export function finishCast(w: World, p: Player, now: number) {
       break;
     }
   }
+}
+
+export function addThreat(m: Mob, id: number, v: number) {
+  m.threat.set(id, (m.threat.get(id) ?? 0) + v);
 }
