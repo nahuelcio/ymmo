@@ -7,13 +7,13 @@ import { F_DEAD } from '../../../shared/src/protocol';
 import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
-import { el, esc, setTip } from './dom';
+import { el, esc, hideTip, setTip } from './dom';
 import { lang, t as tx, fmt } from '../lang';
 import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
-type Slot = { type: 'skill' | 'item'; id: string } | null;
+export type Slot = { type: 'skill' | 'item'; id: string } | null;
 
 export class Hud {
   private statusEl!: HTMLDivElement;
@@ -29,6 +29,10 @@ export class Hud {
   private tHp; private tActions: HTMLDivElement;
   private slotEls: HTMLDivElement[] = [];
   private slots: Slot[] = [];
+  /** ids that were already placed on the bar once, so emptying a slot by hand sticks */
+  private known: string[] = [];
+  /** what is being dragged onto the bar: one of its own slots, or a skill / consumable from a window */
+  drag: { from?: number; slot?: Slot } | null = null;
   private cast: HTMLDivElement;
   private castFill: HTMLDivElement;
   private castName: HTMLSpanElement;
@@ -69,6 +73,29 @@ export class Hud {
       const s = el('div', 'slot', sc);
       el('span', 'slot-key', s, i === 9 ? '0' : String(i + 1));
       s.onclick = () => this.activateSlot(i);
+      // rearrange: drag a slot onto another (they swap), drop a skill or potion from its window, right click empties
+      s.ondragstart = () => (hideTip(), (this.drag = { from: i }));
+      s.ondragend = () => (this.drag = null);
+      s.ondragover = (e) => e.preventDefault();
+      s.ondrop = (e) => {
+        e.preventDefault();
+        const d = this.drag;
+        if (!d) return;
+        const here = this.slots[i];
+        if (d.from !== undefined) [this.slots[d.from], this.slots[i]] = [here, this.slots[d.from]];
+        else if (d.slot) {
+          // already on the bar somewhere else: that slot takes what was here
+          const at = this.slots.findIndex((x) => x?.id === d.slot!.id);
+          if (at >= 0) this.slots[at] = here;
+          this.slots[i] = d.slot;
+        }
+        this.saveBar();
+      };
+      s.oncontextmenu = (e) => {
+        e.preventDefault();
+        this.slots[i] = null;
+        this.saveBar();
+      };
       setTip(s, () => {
         const sl = this.slots[i];
         if (!sl) return '';
@@ -179,21 +206,55 @@ export class Hud {
     this.refreshSlots();
   }
 
+  /** The bar layout is the player's own, kept per character in this browser. */
+  private get barKey() {
+    return `hotbar:${this.g.me.name}`;
+  }
+
+  private saveBar() {
+    try {
+      localStorage.setItem(this.barKey, JSON.stringify({ slots: this.slots, known: this.known }));
+    } catch {
+      /* storage unavailable: the layout lasts for this session */
+    }
+    this.refreshSlots();
+  }
+
   refreshSlots() {
     const m = this.g.me;
     this.adenaEl.textContent = this.g.adena.toLocaleString();
-    const slots: Slot[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
-    for (const id of CONSUMABLES) if (this.itemCount(id) > 0) slots.push({ type: 'item', id });
-    while (slots.length < 10) slots.push(null);
-    const key = JSON.stringify(slots) + slots.map((s) => (s?.type === 'item' ? this.itemCount(s.id) : '')).join();
+    if (!this.slots.length) {
+      this.slots = Array<Slot>(10).fill(null);
+      try {
+        const saved = JSON.parse(localStorage.getItem(this.barKey) ?? 'null') as { slots: Slot[]; known: string[] } | null;
+        if (saved?.slots?.length === 10) ({ slots: this.slots, known: this.known } = saved);
+      } catch {
+        /* corrupt or unavailable: start from the automatic layout */
+      }
+    }
+    // anything new (a skill just learned, a first potion) lands on the first free slot, once
+    const have: NonNullable<Slot>[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
+    for (const id of CONSUMABLES) if (this.itemCount(id) > 0) have.push({ type: 'item', id });
+    let added = false;
+    for (const h of have) {
+      if (this.known.includes(h.id)) continue;
+      this.known.push(h.id);
+      const free = this.slots.indexOf(null);
+      if (free >= 0 && !this.slots.some((x) => x?.id === h.id)) this.slots[free] = h;
+      added = true;
+    }
+    if (added) return this.saveBar();
+    const key = JSON.stringify(this.slots) + this.slots.map((s) => (s?.type === 'item' ? this.itemCount(s.id) : '')).join();
     if (key === this.slotsKey) return;
     this.slotsKey = key;
-    this.slots = slots.slice(0, 10);
     this.slotEls.forEach((s, i) => {
       s.querySelector('.icon')?.remove();
       s.querySelector('.cd')?.remove();
       s.querySelector('.cd-num')?.remove();
       const sl = this.slots[i];
+      s.draggable = !!sl;
+      // a consumable that ran out keeps its place, greyed out
+      s.classList.toggle('spent', sl?.type === 'item' && this.itemCount(sl.id) === 0);
       if (!sl) return;
       const ic = sl.type === 'skill' ? skillIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
       s.prepend(ic);

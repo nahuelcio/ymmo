@@ -122,6 +122,12 @@ export class InventoryPanel {
     for (const it of bag) {
       const cell = el('div', 'inv-cell', this.grid);
       itemIcon(it.i, cell, it.c);
+      if (ITEMS[it.i].use) {
+        // potions and scrolls can be dragged onto the skill bar
+        cell.draggable = true;
+        cell.ondragstart = () => (hideTip(), (g.ui.hud.drag = { slot: { type: 'item', id: it.i } }));
+        cell.ondragend = () => (g.ui.hud.drag = null);
+      }
       const slot = ITEMS[it.i].slot;
       if (slot) {
         const worn = g.inv.find((i) => i.s === slot);
@@ -196,7 +202,14 @@ export class CharacterPanel {
       skillIcon(s.id, row);
       el('div', '', row).innerHTML = `<b>${esc(skillName(s.id, lang))}</b> <span class="tt-dim">${s.level > m.lvl ? tx(`se aprende en Nv ${s.level}`, `learned at Lv ${s.level}`) : `MP ${s.mp}`}</span><br><span class="tt-dim">${esc(skillDesc(s.id, lang))}</span>`;
       setTip(row, () => skillTip(s.id));
+      if (m.skills.includes(s.id)) {
+        row.draggable = true;
+        row.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
+        row.ondragend = () => (this.g.ui.hud.drag = null);
+      }
     }
+    el('div', 'hint', b, tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
+      'Drag a skill onto the bar to place it. On the bar: drag a slot onto another to swap them, right click to empty it.'));
   }
 }
 
