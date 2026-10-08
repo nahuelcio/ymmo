@@ -285,6 +285,15 @@ input { font: inherit; user-select: text; }
   100% { transform: translateY(-48px) scale(1); opacity: 0; }
 }
 
+/* The HUD is absolutely positioned around a centred shortcut bar (~510px wide): keep the corner
+   panels out of its way as the window narrows.
+   ponytail: breakpoints assume UI scale 1; a flex/grid bottom row would hold at any scale. */
+.chat { width: clamp(260px, calc(50vw - 275px), 420px); }
+.buffs { width: clamp(110px, calc(50vw - 420px), 260px); }
+/* no room for the full menu beside the bar: icons only (labels and keys stay in the tooltips) */
+@media (max-width: 1640px) { .menu .mb-label, .menu .mb-key { display: none; } .menu .mb-icon { display: inline; font-size: 15px; } }
+/* no room beside the bar at all: chat and menu sit above it */
+@media (max-width: 1140px) { .chat { width: min(420px, calc(100vw - 20px)); bottom: 84px; height: 170px; } .menu { bottom: 84px; } .castbar { bottom: 262px; } }
 @media (max-width: 760px) {
   .buffs { left: 10px; top: 112px; }
   .target { top: auto; bottom: 120px; }
