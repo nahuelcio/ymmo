@@ -18,6 +18,61 @@ const screens = document.getElementById('screens')!;
 const net = new Net();
 let inGame = false;
 
+// Per-tab memory of who is playing, so a dropped connection can walk straight back into the world.
+const tab = {
+  get(k: string): string | null {
+    try {
+      return sessionStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k: string, v: string | null) {
+    try {
+      if (v === null) sessionStorage.removeItem(k);
+      else sessionStorage.setItem(k, v);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+function enterWorld(id: number) {
+  tab.set('char', String(id));
+  net.send({ t: 'enter', id });
+}
+
+/**
+ * The connection dropped: keep knocking until the server answers, then reload. With a saved session
+ * the reload resumes it and, if we were in the world, re-enters with the same character.
+ * ponytail: reloads the page instead of rebuilding the game in place; fine while loading takes a second.
+ */
+function reconnect() {
+  const d = el('div', 'disconnected', document.body);
+  const box = el('div', 'panel', d);
+  const msg = el('b', '', box, t('Se perdió la conexión. Reconectando…', 'Connection lost. Reconnecting…'));
+  el('br', '', box);
+  el('br', '', box);
+  // re-enter the world after the reload, unless we already did so moments ago (two tabs fighting
+  // over one account would otherwise kick each other forever)
+  const again = Date.now() - Number(tab.get('rejoinAt') ?? 0) < 20000;
+  if (inGame && !again) tab.set('rejoin', tab.get('char'));
+  let tries = 0, timer = 0;
+  const knock = () => {
+    clearTimeout(timer);
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const probe = new WebSocket(`${proto}://${location.host}/ws`);
+    probe.onopen = () => location.reload();
+    probe.onerror = () => {
+      tries++;
+      msg.textContent = t(`Se perdió la conexión. Reintentando… (${tries})`, `Connection lost. Retrying… (${tries})`);
+      timer = window.setTimeout(knock, Math.min(5000, 1000 * tries));
+    };
+  };
+  el('button', 'btn primary', box, t('Reintentar ahora', 'Retry now')).onclick = knock;
+  timer = window.setTimeout(knock, 800);
+}
+
 /** Disposer for whatever the current screen owns (e.g. the 3D preview). */
 let cleanup: (() => void) | null = null;
 
@@ -128,12 +183,12 @@ function charScreen(list: CharSummary[]) {
         selected = c.id;
         renderList();
       };
-      card.ondblclick = () => net.send({ t: 'enter', id: c.id });
+      card.ondblclick = () => enterWorld(c.id);
     }
     const row = el('div', 'row', left);
     const enter = el('button', 'btn primary', row, t('Entrar al mundo', 'Enter world'));
     enter.disabled = selected === null;
-    enter.onclick = () => selected !== null && net.send({ t: 'enter', id: selected });
+    enter.onclick = () => selected !== null && enterWorld(selected);
     const del = el('button', 'btn danger', row, t('Borrar', 'Delete'));
     del.disabled = selected === null;
     del.onclick = () => {
@@ -306,17 +361,19 @@ async function boot() {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
-  net.onClose = () => {
-    const d = el('div', 'disconnected', document.body);
-    d.innerHTML = `<div class="panel"><b>${t('Se perdió la conexión con el servidor.', 'Disconnected from the server.')}</b><br><br></div>`;
-    const b = el('button', 'btn primary', d.firstElementChild as HTMLElement, t('Reconectar', 'Reconnect'));
-    b.onclick = () => location.reload();
-  };
+  net.onClose = reconnect;
   net.on('error', (m) => {
     if (!inGame) showError(m.msg);
   });
   net.on('chars', (m) => {
     if (m.token) store.set('session', m.token);
+    // back from a dropped connection: straight into the world with the character we were playing
+    const rejoin = Number(tab.get('rejoin'));
+    tab.set('rejoin', null);
+    if (rejoin && m.list.some((c) => c.id === rejoin)) {
+      tab.set('rejoinAt', String(Date.now()));
+      return enterWorld(rejoin);
+    }
     charScreen(m.list);
   });
   net.on('resumeFail', () => {
