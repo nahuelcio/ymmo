@@ -40,19 +40,19 @@ covers:
     at: 'shared/src/protocol.ts:L22-L22'
   - symbol: InvItem
     kind: interface
-    at: 'shared/src/protocol.ts:L31-L31'
+    at: 'shared/src/protocol.ts:L32-L32'
   - symbol: SelfState
     kind: interface
-    at: 'shared/src/protocol.ts:L33-L43'
+    at: 'shared/src/protocol.ts:L34-L44'
   - symbol: PartyMember
     kind: interface
-    at: 'shared/src/protocol.ts:L45-L45'
+    at: 'shared/src/protocol.ts:L46-L46'
   - symbol: C2S
     kind: type
-    at: 'shared/src/protocol.ts:L48-L82'
+    at: 'shared/src/protocol.ts:L49-L89'
   - symbol: S2C
     kind: type
-    at: 'shared/src/protocol.ts:L84-L114'
+    at: 'shared/src/protocol.ts:L91-L121'
   - symbol: StatusId
     kind: type
     at: 'shared/src/status.ts:L4-L4'
@@ -67,25 +67,25 @@ covers:
     at: 'shared/src/status.ts:L29-L31'
   - symbol: hash2
     kind: function
-    at: 'shared/src/terrain.ts:L7-L12'
+    at: 'shared/src/terrain.ts:L11-L16'
   - symbol: smoothstep
     kind: function
-    at: 'shared/src/terrain.ts:L14-L17'
+    at: 'shared/src/terrain.ts:L18-L21'
   - symbol: valueNoise
     kind: function
-    at: 'shared/src/terrain.ts:L19-L25'
+    at: 'shared/src/terrain.ts:L23-L29'
   - symbol: fbm
     kind: function
-    at: 'shared/src/terrain.ts:L27-L36'
+    at: 'shared/src/terrain.ts:L31-L40'
   - symbol: heightAt
     kind: function
-    at: 'shared/src/terrain.ts:L40-L47'
+    at: 'shared/src/terrain.ts:L44-L51'
   - symbol: inTown
     kind: function
-    at: 'shared/src/terrain.ts:L49-L51'
+    at: 'shared/src/terrain.ts:L53-L55'
   - symbol: mulberry32
     kind: function
-    at: 'shared/src/terrain.ts:L54-L63'
+    at: 'shared/src/terrain.ts:L58-L67'
 ---
 <!-- context:generated:start -->
 ## Summary

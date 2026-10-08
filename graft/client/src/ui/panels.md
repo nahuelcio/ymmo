@@ -1,35 +1,40 @@
 # client/src/ui/panels.ts
 
-- InventoryPanel · class · L19-L172 — class InventoryPanel
+- InventoryPanel · class · L19-L197 — class InventoryPanel
 - constructor · method · L32-L57 — constructor(private g: Game, root: HTMLElement)
 - closeMenu · method · L59-L62 — private closeMenu()
 - refreshStats · method · L65-L71 — refreshStats()
 - row · function · L68-L68 — row = (k: string, v: number)
-- score · method · L74-L77 — private score(id: string)
-- compare · method · L80-L92 — private compare(id: string): string
-- refresh · method · L94-L171 — refresh()
-- kind · function · L121-L121 — kind = (id: string)
-- CharacterPanel · class · L174-L215 — class CharacterPanel
-- constructor · method · L176-L179 — constructor(private g: Game, root: HTMLElement)
-- refresh · method · L181-L214 — refresh()
-- NpcPanel · class · L217-L352 — class NpcPanel
-- constructor · method · L222-L224 — constructor(private g: Game, root: HTMLElement)
-- open · method · L226-L232 — open(m: Extract<S2C, { t: 'npc' }>)
-- refresh · method · L234-L236 — refresh()
-- syncQuest · method · L239-L248 — syncQuest(list: { id: string; progress: number }[])
-- render · method · L250-L325 — private render()
-- renderQuest · method · L327-L351 — private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement)
-- PartyPanel · class · L354-L410 — class PartyPanel
-- constructor · method · L364-L372 — constructor(private g: Game, parent: HTMLElement)
-- hit · method · L375-L388 — hit(src: number, v: number)
-- toggle · method · L390-L392 — toggle()
-- set · method · L394-L409 — set(members: PartyMember[] | null)
-- Dialogs · class · L412-L455 — class Dialogs
-- constructor · method · L414-L417 — constructor(private g: Game, parent: HTMLElement)
-- open · method · L419-L421 — get open()
-- close · method · L423-L425 — close()
-- show · method · L427-L439 — private show(html: string, buttons: [string, () => void, string?][], closable = true)
-- death · method · L441-L443 — death()
-- invite · method · L445-L450 — invite(from: string)
-- confirm · method · L452-L454 — confirm(text: string, ok: () => void)
-- createHelp · function · L457-L494 — function createHelp(root: HTMLElement): Win
+- score · method · L74-L77 — private score(it: InvItem)
+- hasScroll · method · L80-L83 — private hasScroll(id: string)
+- askEnchant · method · L86-L92 — private askEnchant(it: InvItem)
+- send · function · L88-L88 — send = ()
+- compare · method · L95-L108 — private compare(it: InvItem): string
+- val · function · L101-L101 — val = (def: typeof d | undefined, k: (typeof STATS)[number][0], e?: number)
+- refresh · method · L110-L196 — refresh()
+- kind · function · L140-L140 — kind = (id: string)
+- CharacterPanel · class · L199-L251 — class CharacterPanel
+- constructor · method · L201-L204 — constructor(private g: Game, root: HTMLElement)
+- refresh · method · L206-L250 — refresh()
+- NpcPanel · class · L253-L404 — class NpcPanel
+- constructor · method · L258-L260 — constructor(private g: Game, root: HTMLElement)
+- open · method · L262-L268 — open(m: Extract<S2C, { t: 'npc' }>)
+- refresh · method · L270-L272 — refresh()
+- syncQuest · method · L275-L284 — syncQuest(list: { id: string; progress: number }[])
+- render · method · L286-L377 — private render()
+- have · function · L344-L344 — have = (id: string)
+- renderQuest · method · L379-L403 — private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement)
+- PartyPanel · class · L406-L462 — class PartyPanel
+- constructor · method · L416-L424 — constructor(private g: Game, parent: HTMLElement)
+- hit · method · L427-L440 — hit(src: number, v: number)
+- toggle · method · L442-L444 — toggle()
+- set · method · L446-L461 — set(members: PartyMember[] | null)
+- Dialogs · class · L464-L507 — class Dialogs
+- constructor · method · L466-L469 — constructor(private g: Game, parent: HTMLElement)
+- open · method · L471-L473 — get open()
+- close · method · L475-L477 — close()
+- show · method · L479-L491 — private show(html: string, buttons: [string, () => void, string?][], closable = true)
+- death · method · L493-L495 — death()
+- invite · method · L497-L502 — invite(from: string)
+- confirm · method · L504-L506 — confirm(text: string, ok: () => void)
+- createHelp · function · L509-L548 — function createHelp(root: HTMLElement): Win

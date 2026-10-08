@@ -38,19 +38,19 @@ covers:
     at: 'shared/src/protocol.ts:L22-L22'
   - symbol: InvItem
     kind: interface
-    at: 'shared/src/protocol.ts:L31-L31'
+    at: 'shared/src/protocol.ts:L32-L32'
   - symbol: SelfState
     kind: interface
-    at: 'shared/src/protocol.ts:L33-L43'
+    at: 'shared/src/protocol.ts:L34-L44'
   - symbol: PartyMember
     kind: interface
-    at: 'shared/src/protocol.ts:L45-L45'
+    at: 'shared/src/protocol.ts:L46-L46'
   - symbol: C2S
     kind: type
-    at: 'shared/src/protocol.ts:L48-L82'
+    at: 'shared/src/protocol.ts:L49-L89'
   - symbol: S2C
     kind: type
-    at: 'shared/src/protocol.ts:L84-L114'
+    at: 'shared/src/protocol.ts:L91-L121'
   - symbol: StatusId
     kind: type
     at: 'shared/src/status.ts:L4-L4'

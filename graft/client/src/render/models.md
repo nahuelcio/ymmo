@@ -1,44 +1,47 @@
 # client/src/render/models.ts
 
-- Rig · interface · L10-L28 — interface Rig
-- AnimState · interface · L30-L36 — interface AnimState
-- shared · function · L44-L56 — function shared(geo: THREE.BufferGeometry): THREE.BufferGeometry
-- part · function · L58-L63 — function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh
-- B · function · L64-L64 — B = (w: number, h: number, d: number)
-- darker · function · L66-L70 — function darker(c: number, k = 0.7): number
-- WeaponKind · type · L72-L72 — type WeaponKind = 'sword' | 'staff' | 'blunt' | 'club' | 'bow' | 'axe' | 'spear' | 'shovel' | 'pickaxe' | null;
-- weaponMesh · function · L77-L127 — function weaponMesh(kind: WeaponKind, color: number): THREE.Group | null
-- shaft · function · L80-L80 — shaft = (len: number, r = 0.035, c = WOOD)
-- shieldMesh · function · L130-L135 — function shieldMesh(color: number, boss = IRON): THREE.Group
-- Gear · interface · L138-L138 — interface Gear
-- HumanoidOpts · interface · L140-L148 — interface HumanoidOpts
-- glow · function · L152-L156 — function glow(color: number): THREE.MeshLambertMaterial
-- trim · function · L157-L161 — function trim(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh
-- helmet · function · L165-L187 — function helmet(head: THREE.Group, def: ItemDef): boolean
-- chestArmor · function · L189-L218 — function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean)
-- raceFeatures · function · L220-L230 — function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin', tusks?: boolean)
-- heldWeapon · function · L233-L237 — function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null
-- humanoid · function · L239-L322 — function humanoid(o: HumanoidOpts): Rig
-- BeastOpts · interface · L324-L335 — interface BeastOpts
-- beast · function · L338-L406 — function beast(color: number, scale: number, o: BeastOpts): Rig
-- spider · function · L408-L442 — function spider(color: number, scale: number): Rig
-- golem · function · L445-L490 — function golem(color: number, scale: number): Rig
-- skeleton · function · L493-L545 — function skeleton(scale: number, opts: { lich?: boolean } = {}): Rig
-- hood · function · L548-L551 — function hood(head: THREE.Object3D, color: number)
-- cape · function · L552-L556 — function cape(torso: THREE.Object3D, color: number, len = 1.1)
-- apron · function · L557-L559 — function apron(torso: THREE.Object3D, color: number)
-- weaponKindOf · function · L561-L565 — function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind
-- playerModel · function · L567-L599 — function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig
-- it · function · L571-L571 — it = (id: string | null | undefined)
-- zone · function · L581-L581 — zone = (d: ItemDef | null): QZone
-- mobModel · function · L601-L644 — function mobModel(tplId: string): Rig
-- goblinRig · function · L646-L667 — function goblinRig(id: string, skin: number, scale: number): Rig
-- orcRig · function · L669-L702 — function orcRig(id: string, skin: number, scale: number): Rig
-- undeadRig · function · L704-L745 — function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig
-- Outfit · interface · L747-L759 — interface Outfit
-- npcModel · function · L780-L811 — function npcModel(npcId: string): Rig
-- itemModel · function · L814-L873 — function itemModel(itemId: string): THREE.Group
-- lerp · function · L875-L875 — lerp = (a: number, b: number, t: number)
-- bake · function · L887-L920 — function bake(rig: Rig): Rig
-- visit · function · L889-L917 — visit = (g: THREE.Object3D)
-- animate · function · L922-L972 — function animate(rig: Rig, s: AnimState)
+- topTier · function · L6-L6 — topTier = (g?: string)
+- Rig · interface · L13-L31 — interface Rig
+- AnimState · interface · L33-L39 — interface AnimState
+- shared · function · L47-L59 — function shared(geo: THREE.BufferGeometry): THREE.BufferGeometry
+- part · function · L61-L66 — function part(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh
+- B · function · L67-L67 — B = (w: number, h: number, d: number)
+- darker · function · L69-L73 — function darker(c: number, k = 0.7): number
+- WeaponKind · type · L75-L75 — type WeaponKind = 'sword' | 'staff' | 'blunt' | 'club' | 'bow' | 'axe' | 'spear' | 'shovel' | 'pickaxe' | null;
+- weaponMesh · function · L80-L130 — function weaponMesh(kind: WeaponKind, color: number): THREE.Group | null
+- shaft · function · L83-L83 — shaft = (len: number, r = 0.035, c = WOOD)
+- shieldMesh · function · L133-L138 — function shieldMesh(color: number, boss = IRON): THREE.Group
+- Gear · interface · L141-L141 — interface Gear
+- HumanoidOpts · interface · L143-L151 — interface HumanoidOpts
+- glow · function · L155-L159 — function glow(color: number): THREE.MeshLambertMaterial
+- trim · function · L160-L164 — function trim(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh
+- helmet · function · L168-L190 — function helmet(head: THREE.Group, def: ItemDef): boolean
+- chestArmor · function · L192-L221 — function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean)
+- raceFeatures · function · L223-L233 — function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin', tusks?: boolean)
+- heldWeapon · function · L236-L240 — function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null
+- humanoid · function · L242-L325 — function humanoid(o: HumanoidOpts): Rig
+- BeastOpts · interface · L327-L338 — interface BeastOpts
+- beast · function · L341-L409 — function beast(color: number, scale: number, o: BeastOpts): Rig
+- dragon · function · L412-L453 — function dragon(color: number, scale: number, age: 0 | 1 | 2): Rig
+- wing · function · L436-L448 — wing = (sx: number)
+- spider · function · L455-L489 — function spider(color: number, scale: number): Rig
+- golem · function · L492-L537 — function golem(color: number, scale: number): Rig
+- skeleton · function · L540-L592 — function skeleton(scale: number, opts: { lich?: boolean } = {}): Rig
+- hood · function · L595-L598 — function hood(head: THREE.Object3D, color: number)
+- cape · function · L599-L603 — function cape(torso: THREE.Object3D, color: number, len = 1.1)
+- apron · function · L604-L606 — function apron(torso: THREE.Object3D, color: number)
+- weaponKindOf · function · L608-L612 — function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind
+- playerModel · function · L614-L646 — function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig
+- it · function · L618-L618 — it = (id: string | null | undefined)
+- zone · function · L628-L628 — zone = (d: ItemDef | null): QZone
+- mobModel · function · L648-L705 — function mobModel(tplId: string): Rig
+- goblinRig · function · L707-L728 — function goblinRig(id: string, skin: number, scale: number): Rig
+- orcRig · function · L730-L763 — function orcRig(id: string, skin: number, scale: number): Rig
+- undeadRig · function · L765-L806 — function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig
+- Outfit · interface · L808-L820 — interface Outfit
+- npcModel · function · L841-L872 — function npcModel(npcId: string): Rig
+- itemModel · function · L875-L934 — function itemModel(itemId: string): THREE.Group
+- lerp · function · L936-L936 — lerp = (a: number, b: number, t: number)
+- bake · function · L948-L981 — function bake(rig: Rig): Rig
+- visit · function · L950-L978 — visit = (g: THREE.Object3D)
+- animate · function · L983-L1040 — function animate(rig: Rig, s: AnimState)

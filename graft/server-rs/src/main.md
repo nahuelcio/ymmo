@@ -34,8 +34,8 @@ The Rust MMO game server binary: a tokio hub handling sockets/login/character sc
 - chars_json · function · L92-L94 — Formats an account's stored characters as the JSON list the character screen displays.
 - spawn_world · function · L96-L106 — Creates a new world: assigns id 0 for the overworld or the next id for a raid, registers its command channel, and runs it on a dedicated OS thread.
 - to_world · function · L108-L110 — Routes a command to a world thread if it's still alive, silently dropping it once the world has ended.
-- hub_loop · function · L113-L168 — Async event loop consuming world messages: opens raid worlds and moves members in, returns players to the overworld, rescues members of crashed raids, reaps dead worlds, and records tick perf.
-- ws_handler · function · L170-L172 — Axum handler that upgrades HTTP requests on /ws into a per-connection client task.
-- client · function · L174-L218 — Owns one WebSocket for its lifetime: assigns a session id, spawns the outgoing writer task, enforces a per-second flood limit, dispatches messages, and on disconnect quits/saves the character in its world.
-- handle · function · L220-L337 — Routes pre-login messages (login/register with scrypt off the async threads, resume, logout, create/delete character, enter world) and once in a world forwards everything to that world thread; it also kicks duplicate logins of the same character.
-- main · function · L340-L386 — Bootstraps the server: prewarms collision tables, opens the database, spawns the overworld and the hub event loop, then serves the static client plus /ws on the configured port.
+- hub_loop · function · L113-L167 — Async event loop consuming world messages: opens raid worlds and moves members in, returns players to the overworld, rescues members of crashed raids, reaps dead worlds, and records tick perf.
+- ws_handler · function · L169-L171 — Axum handler that upgrades HTTP requests on /ws into a per-connection client task.
+- client · function · L173-L217 — Owns one WebSocket for its lifetime: assigns a session id, spawns the outgoing writer task, enforces a per-second flood limit, dispatches messages, and on disconnect quits/saves the character in its world.
+- handle · function · L219-L336 — Routes pre-login messages (login/register with scrypt off the async threads, resume, logout, create/delete character, enter world) and once in a world forwards everything to that world thread; it also kicks duplicate logins of the same character.
+- main · function · L339-L388 — Bootstraps the server: prewarms collision tables, opens the database, spawns the overworld and the hub event loop, then serves the static client plus /ws on the configured port.
