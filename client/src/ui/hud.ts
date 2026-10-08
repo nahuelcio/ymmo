@@ -13,10 +13,12 @@ import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
-export type Slot = { type: 'skill' | 'item' | 'attack'; id: string } | null;
+export type Slot = { type: 'skill' | 'item'; id: string } | null;
 
 export class Hud {
   private statusEl!: HTMLDivElement;
+  private atkEl!: HTMLDivElement;
+  private atkCd!: HTMLDivElement;
   private dashEl!: HTMLDivElement;
   private dashCd!: HTMLDivElement;
   private pvpBtn!: HTMLButtonElement;
@@ -96,18 +98,29 @@ export class Hud {
       };
       s.oncontextmenu = (e) => {
         e.preventDefault();
-        if (this.slots[i]?.type === 'attack') return;
         this.slots[i] = null;
         this.saveBar();
       };
       setTip(s, () => {
         const sl = this.slots[i];
         if (!sl) return '';
-        if (sl.type === 'attack') return `<div class="tt-title">${tx('Autoataque', 'Auto-attack')}</div>${tx('Ataca al objetivo seleccionado y sigue pegándole. Sin objetivo, elige el monstruo más cercano. Con Ctrl, fuerza el ataque a un jugador.', 'Attacks the selected target and keeps swinging. With no target, picks the nearest monster. Hold Ctrl to force an attack on a player.')}`;
         return sl.type === 'skill' ? skillTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
       });
       this.slotEls.push(s);
     }
+
+    // auto-attack button (Space by default), next to the bar instead of on it, with the swing as its sweep
+    this.atkEl = el('div', 'slot dash-btn', sc);
+    const atkKey = el('span', 'slot-key', this.atkEl);
+    const syncAtk = () => (atkKey.textContent = keyLabel(settings.s.keys.attack));
+    syncAtk();
+    settings.on((_, changed) => changed.includes('keys') && syncAtk());
+    const atkIcon = el('div', 'icon skill', this.atkEl);
+    glyph('ui', 'attack', '⚔', atkIcon);
+    atkIcon.style.background = 'radial-gradient(circle at 35% 30%, #ffaa44, #14161f 85%)';
+    this.atkCd = el('div', 'cd', this.atkEl);
+    setTip(this.atkEl, () => `<div class="tt-title">${tx('Autoataque', 'Auto-attack')} <span class="tt-dim">${keyLabel(settings.s.keys.attack)}</span></div>${tx('Ataca al objetivo seleccionado y sigue pegándole. Sin objetivo, elige el monstruo más cercano. Con Ctrl, fuerza el ataque a un jugador.', 'Attacks the selected target and keeps swinging. With no target, picks the nearest monster. Hold Ctrl to force an attack on a player.')}`);
+    this.atkEl.onclick = () => g.attackTarget();
 
     // Cast bar
     // dodge roll button (Shift) with cooldown sweep
@@ -247,19 +260,10 @@ export class Hud {
       } catch {
         /* corrupt or unavailable: start from the automatic layout */
       }
+      // auto-attack used to sit on the bar: free the slot a saved layout still gives it
+      this.slots = this.slots.map((s) => ((s?.type as string) === 'attack' ? null : s));
     }
-    
     let added = false;
-    if (!this.slots.some((s) => s?.type === 'attack')) {
-      const attack: NonNullable<Slot> = { type: 'attack', id: 'attack' };
-      const free = this.slots.indexOf(null);
-      if (free >= 0) this.slots[free] = attack;
-      else {
-        this.slots.pop();
-        this.slots.unshift(attack);
-      }
-      added = true;
-    }
     // anything new (a skill just learned, a first potion) lands on the first free slot, once
     const have: NonNullable<Slot>[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
     for (const id of CONSUMABLES) if (this.itemCount(id) > 0) have.push({ type: 'item', id });
@@ -283,29 +287,16 @@ export class Hud {
       // a consumable that ran out keeps its place, greyed out
       s.classList.toggle('spent', sl?.type === 'item' && this.itemCount(sl.id) === 0);
       if (!sl) return;
-      const ic = sl.type === 'attack' ? this.attackIcon() : sl.type === 'skill' ? skillIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
+      const ic = sl.type === 'skill' ? skillIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
       s.prepend(ic);
       el('div', 'cd', s);
       el('span', 'cd-num', s);
     });
   }
 
-  private attackIcon(): HTMLDivElement {
-    const d = el('div', 'icon skill');
-    glyph('ui', 'attack', '⚔', d);
-    d.style.background = 'radial-gradient(circle at 35% 30%, #ffaa44, #14161f 85%)';
-    return d;
-  }
-
   activateSlot(i: number) {
     const sl = this.slots[i];
     if (!sl) return;
-    if (sl.type === 'attack') {
-      this.slotEls[i].classList.add('pressed');
-      setTimeout(() => this.slotEls[i].classList.remove('pressed'), 120);
-      this.g.attackTarget();
-      return;
-    }
     // still cooling down for real (not a client guess): shake the slot instead of asking the server
     const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
     const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
@@ -344,22 +335,17 @@ export class Hud {
       if (!sl) return;
       const ov = s.querySelector('.cd') as HTMLDivElement | null;
       if (!ov) return;
-      let rem = 0, dur = 1;
-      if (sl.type === 'attack') {
-        const self = this.g.self;
-        dur = 60000 / Math.max(1, this.g.me.atkSpd);
-        rem = self && self.atkAt > 0 ? dur - (now - self.atkAt) : 0;
-      } else {
-        const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
-        rem = cd ? cd.end - now : 0;
-        dur = cd?.dur ?? 1;
-      }
+      const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
+      const rem = cd ? cd.end - now : 0, dur = cd?.dur ?? 1;
       ov.style.height = rem > 0 ? `${(rem / dur) * 100}%` : '0';
       const num = s.querySelector('.cd-num'), left = rem > 950 ? String(Math.ceil(rem / 1000)) : '';
       if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
     });
+    const self = this.g.self, swing = 60000 / Math.max(1, this.g.me.atkSpd);
+    const arem = self && self.atkAt > 0 ? swing - (now - self.atkAt) : 0;
+    this.atkCd.style.height = arem > 0 ? `${(arem / swing) * 100}%` : '0';
     const dcd = this.g.cooldowns.get('dash');
     const drem = dcd ? dcd.end - now : 0;
     this.dashCd.style.height = drem > 0 ? `${(drem / dcd!.dur) * 100}%` : '0';
