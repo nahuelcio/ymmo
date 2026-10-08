@@ -4,29 +4,29 @@ import { animate, playerModel, type AnimState, type Rig } from './models';
 import { RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 
 /**
- * Player characters built from the Quaternius modular kits (CC0): a base head, an
- * outfit piece per zone (torso, arms, legs, feet, hood, pauldron), a hairstyle and
- * the Universal Animation Library clips. Every file shares the same 65 joints in the
- * same order, so all the pieces of a character hang from one armature.
- * Assets live in client/public/q (regenerate with scripts/q-assets.mjs).
+ * Player characters built from the Quaternius modular kits (CC0): an outfit piece per
+ * zone (torso, arms, legs, feet, hood, pauldron), a hairstyle and the Universal Animation
+ * Library clips, under the head from heads.glb (art/blender/characters.py: the same base
+ * body with elf/orc ears as shape keys and tusks). Every file shares the same 65 joints in
+ * the same order, so all the pieces of a character hang from one armature.
+ * Assets live in client/public/q (regenerate the kit pieces with scripts/q-assets.mjs).
  */
 
 const SEX = { m: 'Male', f: 'Female' } as const;
 const FILES = [
-  ...(['m', 'f'] as const).flatMap((g) => [
-    `Superhero_${SEX[g]}_FullBody`,
-    ...['Peasant_Arms', 'Peasant_Body', 'Peasant_Legs', 'Peasant_Feet', 'Ranger_Arms', 'Ranger_Body', 'Ranger_Legs', 'Ranger_Head_Hood'].map((p) => `${SEX[g]}_${p}`),
-  ]),
+  ...(['m', 'f'] as const).flatMap((g) =>
+    ['Peasant_Body', 'Peasant_Arms', 'Peasant_Legs', 'Peasant_Feet', 'Ranger_Arms', 'Ranger_Body', 'Ranger_Legs', 'Ranger_Head_Hood'].map((p) => `${SEX[g]}_${p}`)),
   'Male_Ranger_Feet_Boots', 'Female_Ranger_Feet', 'Male_Ranger_Acc_Pauldron', 'Female_Ranger_Acc_Pauldrons',
   'Hair_Buzzed', 'Hair_SimpleParted', 'Hair_Long', 'Hair_Buns', 'Hair_Beard',
 ];
 const HAIR = ['Hair_SimpleParted', 'Hair_Long', 'Hair_Buns'];
 
-interface Prim { geo: THREE.BufferGeometry; tex: THREE.Texture | null; kind: 'skin' | 'hair' | 'eyes' | 'cloth'; fam: number }
+interface Prim { geo: THREE.BufferGeometry; tex: THREE.Texture | null; kind: 'skin' | 'hair' | 'eyes' | 'cloth'; fam: number; morphs?: Record<string, number> }
 const prims = new Map<string, Prim[]>();
 /** Distinct sets of inverse bind matrices: pieces of the same family share a Skeleton. */
 const families: THREE.Matrix4[][] = [];
 const armature: Partial<Record<Gender, THREE.Object3D>> = {};
+const tusks: Partial<Record<Gender, THREE.Mesh>> = {};
 const clips: Record<string, THREE.AnimationClip> = {};
 /** Rigid pieces modelled in Fiend around a head at the origin (see attach). */
 const PROPS = ['HelmC', 'HelmD'];
@@ -76,8 +76,9 @@ function headOnly(geo: THREE.BufferGeometry) {
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
     const loader = new GLTFLoader();
-    const [[anims, ...gltfs], rigid] = await Promise.all([
+    const [[anims, ...gltfs], heads, rigid] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
+      loader.loadAsync('q/heads.glb'),
       Promise.all(PROPS.map((f) => loader.loadAsync(`q/${f}.glb`))),
     ]);
     PROPS.forEach((name, i) => {
@@ -92,27 +93,36 @@ export function loadQ(): Promise<void> {
     });
     for (const clip of anims.animations) clips[clip.name] = clip;
     const famKeys = new Map<string, number>();
+    const collect = (key: string, meshes: THREE.SkinnedMesh[], head = false) =>
+      prims.set(key, meshes.map((m) => {
+        const mat = m.material as THREE.MeshStandardMaterial;
+        const kind = /Regular|^skin/.test(mat.name) ? 'skin' : /hair/i.test(mat.name) ? 'hair' : /eye/i.test(mat.name) ? 'eyes' : 'cloth';
+        const fkey = m.skeleton.boneInverses.map((b) => b.elements.map((e) => e.toFixed(3)).join()).join();
+        let fam = famKeys.get(fkey);
+        if (fam === undefined) famKeys.set(fkey, (fam = families.push(m.skeleton.boneInverses) - 1));
+        if (head && kind === 'skin') headOnly(m.geometry);
+        if (mat.map && !mat.map.userData.avg) mat.map.userData.avg = avgColor(mat.map);
+        return { geo: m.geometry, tex: mat.map, kind, fam, morphs: m.morphTargetDictionary };
+      }));
     FILES.forEach((file, i) => {
       const meshes: THREE.SkinnedMesh[] = [];
       gltfs[i].scene.traverse((o) => {
         if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh);
       });
       if (!joints.length) joints = meshes[0].skeleton.bones.map((b) => b.name);
-      prims.set(file, meshes.map((m) => {
-        const mat = m.material as THREE.MeshStandardMaterial;
-        const kind = /Regular|Superhero/.test(mat.name) ? 'skin' : /Hair/.test(mat.name) ? 'hair' : /Eye/.test(mat.name) ? 'eyes' : 'cloth';
-        const key = m.skeleton.boneInverses.map((b) => b.elements.map((e) => e.toFixed(3)).join()).join();
-        let fam = famKeys.get(key);
-        if (fam === undefined) famKeys.set(key, (fam = families.push(m.skeleton.boneInverses) - 1));
-        if (kind === 'skin' && file.startsWith('Superhero')) headOnly(m.geometry);
-        if (mat.map && !mat.map.userData.avg) mat.map.userData.avg = avgColor(mat.map);
-        return { geo: m.geometry, tex: mat.map, kind, fam };
-      }));
-      if (file.startsWith('Superhero')) {
+      collect(file, meshes);
+      if (file.endsWith('Peasant_Body')) {
         for (const m of meshes) m.removeFromParent();
-        armature[file.includes('Female') ? 'f' : 'm'] = gltfs[i].scene;
+        armature[file.startsWith('Female') ? 'f' : 'm'] = gltfs[i].scene; // what is left is the bone hierarchy
       }
     });
+    // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
+    for (const g of ['m', 'f'] as const) {
+      const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
+      collect(`Head_${g}`, [get('body'), get('eyes'), get('brows')], true);
+      const t = (tusks[g] = get('tusks'));
+      t.material = new THREE.MeshLambertMaterial({ color: 0xf0ecd8 });
+    }
     ready = true;
   })());
 }
@@ -163,7 +173,9 @@ export interface QOpts {
   scale: number; bulk: number;
   /** upper-body scale: chest, arms and head grow, the legs do not (brutes) */
   brawn?: number;
-  /** extras modelled around a head centred on the origin, facing +Z (helmet, ears, tusks) */
+  /** head scale, ear shape key and tusks of the race */
+  head?: number; ears?: 'elf_ears' | 'orc_ears'; tusks?: boolean;
+  /** extras modelled around a head centred on the origin, facing +Z (helmet) */
   onHead?: THREE.Object3D;
   /** weapon built along +Z with the grip at the origin */
   inHand?: THREE.Object3D | null;
@@ -198,6 +210,7 @@ export function qPlayer(o: QOpts): Rig {
       if (!sk) skeletons.set(p.fam, (sk = new THREE.Skeleton(bones, families[p.fam])));
       const m = new THREE.SkinnedMesh(p.geo, material(p, ...tint(p)));
       m.bind(sk, ID);
+      if (o.ears && p.morphs?.[o.ears] !== undefined) m.morphTargetInfluences![p.morphs[o.ears]] = 1;
       m.castShadow = true;
       m.frustumCulled = false; // the bounding sphere is the bind pose's; the game culls whole entities itself
       body.add(m);
@@ -207,7 +220,7 @@ export function qPlayer(o: QOpts): Rig {
   const zone = (z: QZone, hands?: number) => (p: Prim): [number | undefined, number, boolean] =>
     p.kind === 'skin' ? (hands !== undefined ? [new THREE.Color(hands).multiplyScalar(0.55).getHex(), 0, false] : [o.skin, 0, false]) : [z.dye, 0.85, !!z.glow];
   const kit = (z: QZone) => (z.ranger ? 'Ranger' : 'Peasant');
-  add(`Superhero_${S}_FullBody`, (p) => (p.kind === 'skin' ? [o.skin, 0, false] : p.kind === 'hair' ? [o.hair, 0.9, false] : [undefined, 0, false]));
+  add(`Head_${o.g}`, (p) => (p.kind === 'skin' ? [o.skin, 0, false] : p.kind === 'hair' ? [o.hair, 0.9, false] : [undefined, 0, false]));
   add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
   add(`${S}_${kit(o.chest)}_Arms`, zone(o.chest, o.gloves));
   add(`${S}_${kit(o.legs)}_Legs`, zone(o.legs));
@@ -218,7 +231,13 @@ export function qPlayer(o: QOpts): Rig {
   else if (!o.hideHair) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle] ?? HAIR[0], hair);
   if (o.beard) add('Hair_Beard', hair);
 
-  if (o.brawn) byName.spine_02.scale.multiplyScalar(o.brawn); // clips only carry rotations, so this sticks
+  if (o.tusks) {
+    const t = tusks[o.g]!.clone(); // keeps its offset from the head bone
+    if (o.g === 'f') t.scale.multiplyScalar(0.7);
+    byName.Head.add(t);
+  }
+  if (o.brawn) byName.spine_02.scale.multiplyScalar(o.brawn); // clips only carry rotations, so these stick
+  if (o.head) byName.Head.scale.multiplyScalar(o.head);
   body.updateMatrixWorld(true);
   const top = byName.Head.getWorldPosition(new THREE.Vector3()).y + 0.17; // crown of the unscaled model
   if (o.onHead) attach(byName.Head, o.onHead, 0, 0.09, 0.02, 0.58);
@@ -283,8 +302,9 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     renderer.setSize(innerWidth, innerHeight);
     cam.aspect = innerWidth / innerHeight;
     const d = 15 / zoom / Math.min(1, cam.aspect / 1.7);
-    cam.position.set(Number(p.get('x')) || 0, 1.3 + d * 0.08, d);
-    cam.lookAt(Number(p.get('x')) || 0, 1.1, 0);
+    const y = Number(p.get('y')) || 1.1;
+    cam.position.set(Number(p.get('x')) || 0, y + 0.2 + d * 0.08, d);
+    cam.lookAt(Number(p.get('x')) || 0, y, 0);
     cam.updateProjectionMatrix();
   };
   resize();

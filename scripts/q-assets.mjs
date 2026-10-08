@@ -1,5 +1,6 @@
 // Regenerates client/public/q from the Quaternius packs (all CC0):
-//   Modular Character Outfits - Fantasy, Universal Base Characters, Universal Animation Library.
+//   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library.
+// The heads come from heads.glb, built by art/blender/characters.py.
 // Usage: node scripts/q-assets.mjs <dir with the three packs unzipped>
 // Keeps only BaseColor (as 1024px WebP, via `npx sharp-cli`) and the animation clips the game plays.
 import { execSync } from 'node:child_process';
@@ -25,7 +26,7 @@ const webp = (uri) => path.basename(uri).replace(/(_png)?\.png$/, '.webp');
 fs.mkdirSync(OUT, { recursive: true });
 
 // --- models: drop everything but BaseColor, point the images at the shared .webp files
-const models = all.filter((f) => /Modular Parts[\\/].*\.gltf$|Godot - UE[\\/].*\.gltf$|Rigged to Head Bone[\\/]glTF[^\\/]*[\\/]Hair_.*\.gltf$/.test(f));
+const models = all.filter((f) => /Modular Parts[\\/].*\.gltf$|Rigged to Head Bone[\\/]glTF[^\\/]*[\\/]Hair_.*\.gltf$/.test(f));
 const textures = new Set();
 for (const f of models) {
   const g = JSON.parse(fs.readFileSync(f, 'utf8'));

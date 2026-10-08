@@ -579,17 +579,13 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const cap = head?.id === 'leather_cap'; // worn as a hood
     const hideHair = !!head && !cap;
     if (hideHair) onHead.add(qProp(head.grade === 'C' ? 'HelmC' : 'HelmD'));
-    if (head?.grade !== 'C') {
-      raceFeatures(onHead, skin, elf ? 'elf' : undefined);
-      // tusks rise from the lower jaw, at the corners of the mouth
-      if (tusks) for (const sx of [-1, 1]) onHead.add(part(new THREE.ConeGeometry(0.016, 0.065, 5), 0xf0f0e0, sx * 0.05, -0.2, 0.175));
-    }
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
       pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, onHead,
+      head: race === 'dwarf' ? 1.12 : undefined, ...(head?.grade !== 'C' && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
     });
   }
