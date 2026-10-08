@@ -1,5 +1,6 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { CAMPS } from '../../../shared/src/data/camps';
+import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees } from '../../../shared/src/layout';
@@ -67,6 +68,7 @@ export class Minimap {
   private lastDraw = 0;
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
+  private raidBtn: HTMLButtonElement;
 
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
@@ -84,6 +86,15 @@ export class Minimap {
     const zout = el('button', 'btn small', zoom, '−');
     zout.onclick = () => (this.viewR = Math.min(300, this.viewR / 0.75));
     this.canvas.onclick = () => this.toggleMap();
+    // leaving a raid is the /raid chat command; a second click confirms, so a stray one mid-fight doesn't throw you out
+    const leave = tx('Salir', 'Leave'), sure = tx('¿Seguro?', 'Sure?');
+    this.raidBtn = el('button', 'btn small mm-raid', box, leave);
+    this.raidBtn.title = tx('Salir de la raid y volver a la aldea', 'Leave the raid and return to the village');
+    this.raidBtn.onclick = () => {
+      if (this.raidBtn.textContent === sure) g.net.send({ t: 'chat', text: '/raid' });
+      else setTimeout(() => (this.raidBtn.textContent = leave), 3000);
+      this.raidBtn.textContent = this.raidBtn.textContent === sure ? leave : sure;
+    };
 
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
@@ -253,6 +264,7 @@ export class Minimap {
     this.lastDraw = now;
     const self = this.g.self;
     this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
+    this.raidBtn.style.display = Object.values(RAIDS).some((r) => r.name === this.g.me.zone) ? '' : 'none'; // inside one, the zone is the raid's name
     const clock = settings.s.dayNight ? gameClock() : '';
     if (this.clockEl.textContent !== clock) {
       this.clockEl.textContent = clock;

@@ -8,7 +8,8 @@ export interface ItemDef {
   type: 'weapon' | 'armor' | 'consumable' | 'material' | 'currency' | 'chest';
   slot?: Slot;
   grade?: Grade;
-  weaponType?: 'sword' | 'staff' | 'blunt';
+  /** cosmetic: picks the model and the tooltip label, combat only reads the stats */
+  weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger';
   pAtk?: number; mAtk?: number; pDef?: number; mDef?: number; mp?: number;
   price: number;
   stack?: boolean;
@@ -26,6 +27,12 @@ const list: ItemDef[] = [
   { id: 'broadsword', name: 'Espada Ancha', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 11, mAtk: 7, price: 600, icon: '⚔️', color: 0xc8d0d8 },
   { id: 'willow_staff', name: 'Báculo de Sauce', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 7, mAtk: 12, price: 600, icon: '🪄', color: 0x7a9b4a },
   { id: 'iron_hammer', name: 'Martillo de Hierro', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'blunt', pAtk: 12, mAtk: 6, price: 750, icon: '🔨', color: 0x8a8f95 },
+  { id: 'dagger', name: 'Daga', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'dagger', pAtk: 9, mAtk: 6, price: 250, icon: '🗡️', color: 0xb8c4cc },
+  { id: 'hand_axe', name: 'Hacha de Mano', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 11, mAtk: 6, price: 650, icon: '🪓', color: 0x9aa2aa },
+  { id: 'spear', name: 'Lanza', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'spear', pAtk: 11, mAtk: 7, price: 650, icon: '🔱', color: 0xb8c4cc },
+  { id: 'assassin_dagger', name: 'Daga del Asesino', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'dagger', pAtk: 19, mAtk: 12, price: 5800, icon: '🗡️', color: 0x7adf6a },
+  { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'axe', pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060 },
+  { id: 'partisan', name: 'Partesana', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'spear', pAtk: 21, mAtk: 11, price: 6200, icon: '🔱', color: 0xa8d8e8 },
   { id: 'sword_of_revolution', name: 'Espada de la Revolución', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'sword', pAtk: 20, mAtk: 12, price: 6000, icon: '⚔️', color: 0x9ad0ff },
   { id: 'war_hammer', name: 'Martillo de Guerra Enano', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'blunt', pAtk: 22, mAtk: 10, price: 6500, icon: '🔨', color: 0xc08a50 },
   { id: 'staff_of_life', name: 'Báculo de la Vida', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'staff', pAtk: 12, mAtk: 22, price: 6000, icon: '🪄', color: 0x6fe08a },
@@ -39,6 +46,7 @@ const list: ItemDef[] = [
   { id: 'leather_sandals', name: 'Sandalias de Cuero', type: 'armor', slot: 'feet', grade: 'NG', pDef: 2, price: 40, icon: '👢', color: 0x8b5a2b },
   // Armor D
   { id: 'brigandine_helm', name: 'Yelmo de Brigantina', type: 'armor', slot: 'head', grade: 'D', pDef: 6, mDef: 2, price: 1800, icon: '⛑️', color: 0x7c8a99 },
+  { id: 'karmian_hat', name: 'Sombrero Karmiano', type: 'armor', slot: 'head', grade: 'D', pDef: 4, mDef: 4, mp: 15, price: 1800, icon: '🎩', color: 0x3c5aa8 },
   { id: 'brigandine_tunic', name: 'Túnica de Brigantina', type: 'armor', slot: 'chest', grade: 'D', pDef: 15, mDef: 3, price: 4200, icon: '🛡️', color: 0x7c8a99 },
   { id: 'brigandine_gaiters', name: 'Grebas de Brigantina', type: 'armor', slot: 'legs', grade: 'D', pDef: 10, mDef: 2, price: 3000, icon: '👖', color: 0x5f6b78 },
   { id: 'reinforced_gloves', name: 'Guantes de Cuero Reforzado', type: 'armor', slot: 'gloves', grade: 'D', pDef: 4, mDef: 1, price: 1200, icon: '🧤', color: 0x6b4a2b },
@@ -47,6 +55,7 @@ const list: ItemDef[] = [
   { id: 'karmian_stockings', name: 'Calzas Karmianas', type: 'armor', slot: 'legs', grade: 'D', pDef: 7, mDef: 5, mp: 20, price: 3000, icon: '👖', color: 0x2c4a88 },
   // Armor C (drop only)
   { id: 'full_plate_helmet', name: 'Yelmo de Placas', type: 'armor', slot: 'head', grade: 'C', pDef: 9, mDef: 3, price: 9000, icon: '⛑️', color: 0xc0c8d0 },
+  { id: 'demons_circlet', name: 'Diadema del Demonio', type: 'armor', slot: 'head', grade: 'C', pDef: 6, mDef: 7, mp: 30, price: 9000, icon: '👑', color: 0x8a1f3a },
   { id: 'full_plate_armor', name: 'Armadura de Placas', type: 'armor', slot: 'chest', grade: 'C', pDef: 24, mDef: 4, price: 22000, icon: '🛡️', color: 0xc0c8d0 },
   { id: 'demons_tunic', name: 'Túnica del Demonio', type: 'armor', slot: 'chest', grade: 'C', pDef: 16, mDef: 14, mp: 80, price: 22000, icon: '👘', color: 0x8a1f3a },
   // Consumables

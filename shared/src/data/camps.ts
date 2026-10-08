@@ -33,7 +33,7 @@ export const CAMPS: CampDef[] = [
   { id: 'crypt', name: 'Cripta Profanada', zone: 'wastes', x: 40, z: 300, level: 17, leader: 'crypt_knight', banner: 0x3a1a4a,
     mobs: [{ mob: 'skeleton', count: 5 }, { mob: 'zombie', count: 3 }], respawn: 240000,
     chest: { adena: [5000, 9000], loot: [{ item: 'healing_potion', chance: 1, min: 4, max: 8 }, { item: 'cursed_bone', chance: 1, min: 3, max: 6 },
-      { item: 'full_plate_helmet', chance: 0.1 }, { item: 'full_plate_armor', chance: 0.06 }, { item: 'demons_tunic', chance: 0.06 }, { item: 'samurai_longsword', chance: 0.05 }] } },
+      { item: 'full_plate_helmet', chance: 0.1 }, { item: 'demons_circlet', chance: 0.1 }, { item: 'full_plate_armor', chance: 0.06 }, { item: 'demons_tunic', chance: 0.06 }, { item: 'samurai_longsword', chance: 0.05 }] } },
 ];
 
 export const CAMP_BY_ID: Record<string, CampDef> = Object.fromEntries(CAMPS.map((c) => [c.id, c]));

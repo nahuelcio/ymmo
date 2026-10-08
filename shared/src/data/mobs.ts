@@ -51,12 +51,12 @@ const list: MobDef[] = [
   { id: 'elder_keltir', name: 'Keltir Anciano', level: 3, shape: 'beast', color: 0x8a6030, scale: 0.75, aggressive: false, speed: 4.5, atkInterval: 1500, range: 1.8, adena: [10, 22],
     drops: [{ item: 'animal_skin', chance: 0.4, max: 2 }, { item: 'short_gloves', chance: 0.02 }] },
   { id: 'young_wolf', name: 'Lobo Joven', level: 4, shape: 'beast', color: 0x8c8c8c, scale: 0.8, aggressive: true, speed: 5, atkInterval: 1400, range: 1.8, adena: [14, 28],
-    drops: [{ item: 'wolf_pelt', chance: 0.25 }, { item: 'leather_sandals', chance: 0.03 }, { item: 'lesser_healing_potion', chance: 0.08 }] },
+    drops: [{ item: 'wolf_pelt', chance: 0.5 }, { item: 'leather_sandals', chance: 0.03 }, { item: 'lesser_healing_potion', chance: 0.08 }] },
   // Goblin Hills 5-10
   { id: 'goblin_scout', name: 'Explorador Goblin', level: 6, shape: 'goblin', color: 0x5f8f3a, scale: 0.75, aggressive: false, speed: 5, atkInterval: 1400, range: 1.8, adena: [25, 45],
     drops: [{ item: 'goblin_ear', chance: 0.3 }, { item: 'broadsword', chance: 0.015 }, { item: 'healing_potion', chance: 0.05 }] },
   { id: 'wolf', name: 'Lobo', level: 7, shape: 'beast', color: 0x6a6a70, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1300, range: 2, adena: [30, 55],
-    drops: [{ item: 'wolf_pelt', chance: 0.35, max: 2 }, { item: 'reinforced_boots', chance: 0.01 }] },
+    drops: [{ item: 'wolf_pelt', chance: 0.55, max: 2 }, { item: 'reinforced_boots', chance: 0.01 }] },
   { id: 'goblin_brute', name: 'Bruto Goblin', level: 8, shape: 'orc', color: 0x4f7f2a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1600, range: 2, hpMult: 1.2, special: { r: 3, windup: 1100, mult: 1.8, every: 9000, at: 'self' }, adena: [40, 70],
     drops: [{ item: 'goblin_ear', chance: 0.4, max: 2 }, { item: 'iron_hammer', chance: 0.015 }, { item: 'brigandine_helm', chance: 0.01 }] },
   { id: 'hill_lizard', name: 'Lagarto de las Colinas', level: 9, shape: 'beast', color: 0x4a8a6a, scale: 1.0, aggressive: true, speed: 5, atkInterval: 1400, range: 2, adena: [45, 80],
@@ -69,7 +69,7 @@ const list: MobDef[] = [
   { id: 'orc_shaman', name: 'Chamán Orco', level: 13, shape: 'orc', color: 0x8a5a7a, scale: 0.95, aggressive: false, speed: 4.5, atkInterval: 1800, range: 10, onHit: { id: 'slow', ms: 3000, chance: 0.3 }, adena: [90, 150],
     drops: [{ item: 'orc_tusk', chance: 0.3 }, { item: 'staff_of_life', chance: 0.01 }, { item: 'karmian_tunic', chance: 0.01 }, { item: 'mana_potion', chance: 0.1 }] },
   { id: 'werewolf', name: 'Hombre Lobo', level: 14, shape: 'beast', color: 0x4a3a30, scale: 1.4, aggressive: true, speed: 6, atkInterval: 1200, range: 2.4, onHit: { id: 'bleed', ms: 5000, chance: 0.25, dot: 0.2 }, adena: [100, 170],
-    drops: [{ item: 'wolf_pelt', chance: 0.5, max: 3 }, { item: 'sword_of_revolution', chance: 0.01 }, { item: 'brigandine_tunic', chance: 0.01 }] },
+    drops: [{ item: 'wolf_pelt', chance: 0.7, max: 3 }, { item: 'sword_of_revolution', chance: 0.01 }, { item: 'brigandine_tunic', chance: 0.01 }] },
   { id: 'orc_captain', name: 'Capitán Orco', level: 15, shape: 'orc', color: 0x8a2a2a, scale: 1.35, aggressive: true, speed: 5, atkInterval: 1500, range: 2.6, hpMult: 2.5, atkMult: 1.2, respawn: 60000, special: { r: 4.5, windup: 1200, mult: 2.2, every: 8000, at: 'self', stun: 1500 }, adena: [250, 450],
     drops: [{ item: 'orc_tusk', chance: 1, min: 2, max: 4 }, { item: 'war_hammer', chance: 0.05 }, { item: 'brigandine_tunic', chance: 0.05 }] },
   // Cursed Wastes 15-20
@@ -80,7 +80,7 @@ const list: MobDef[] = [
   { id: 'stone_golem', name: 'Gólem de Piedra', level: 18, shape: 'golem', color: 0x8a8580, scale: 1.4, aggressive: false, speed: 3.5, atkInterval: 2000, range: 2.6, hpMult: 1.6, defMult: 1.3, special: { r: 4.5, windup: 1400, mult: 2.4, every: 10000, at: 'self', stun: 1200 }, adena: [170, 260],
     drops: [{ item: 'stone_fragment', chance: 0.5, max: 2 }, { item: 'full_plate_armor', chance: 0.006 }] },
   { id: 'cave_spider', name: 'Araña de las Cavernas', level: 19, shape: 'spider', color: 0x3a2a4a, scale: 1.2, aggressive: true, speed: 6, atkInterval: 1200, range: 2.2, onHit: { id: 'poison', ms: 6000, chance: 0.3, dot: 0.18 }, adena: [180, 280],
-    drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'demons_tunic', chance: 0.006 }, { item: 'sages_staff', chance: 0.005 }] },
+    drops: [{ item: 'animal_skin', chance: 0.5, max: 3 }, { item: 'demons_tunic', chance: 0.006 }, { item: 'demons_circlet', chance: 0.006 }, { item: 'sages_staff', chance: 0.005 }] },
   { id: 'kaim_vanul', name: 'Kaim Vanul', level: 22, shape: 'undead', color: 0x6a2a8a, scale: 2.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 3.5, hpMult: 14, atkMult: 1.4, defMult: 1.2, respawn: 300000, boss: true, onHit: { id: 'slow', ms: 3000, chance: 0.25 }, special: { r: 6, windup: 1500, mult: 2.6, every: 7000, at: 'target' }, adena: [3000, 6000],
     drops: [{ item: 'samurai_longsword', chance: 0.25 }, { item: 'sages_staff', chance: 0.25 }, { item: 'full_plate_armor', chance: 0.2 }, { item: 'demons_tunic', chance: 0.2 }, { item: 'cursed_bone', chance: 1, min: 5, max: 10 }] },
   // Raid (instanced, see data/raids.ts): HP scales with the raid size when it spawns
