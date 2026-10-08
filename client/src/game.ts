@@ -33,6 +33,8 @@ export interface CEnt {
   rig: Rig | null;
   root: THREE.Group;
   model: THREE.Object3D;
+  /** the model's own size (mobs and races differ): squash effects multiply it instead of replacing it */
+  size: number;
   hit: THREE.Mesh;
   label: CSS2DObject;
   labelEl: HTMLDivElement;
@@ -585,7 +587,7 @@ export class Game {
     root.add(obj);
     const c: CEnt = {
       id: r.id, rec: r, rig, root, model, hit, label: obj, labelEl: el, snaps: [], pos: new THREE.Vector3(r.x, heightAt(r.x, r.z), r.z),
-      ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
+      size: model.scale.x, ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
     };
     this.refreshLabel(c);
     this.refreshQuestMarker(c);
@@ -996,16 +998,16 @@ export class Game {
       }
     }
     const now = performance.now();
-    const ready = (this.cooldowns.get('dash')?.end ?? 0) <= now && !(self.flags & STATUSES.stun.flag);
-    if (ready) {
-      // predict the roll locally so it starts on the key press, not a round-trip later
-      const end = dashEnd(self.pos.x, self.pos.z, dx, dz);
-      self.rollAt = now;
-      self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
-      play('dash');
-    }
+    // Not ready (cooling down, stunned, already rolling): do nothing at all. Asking the server anyway
+    // dropped our movement prediction, so a Shift press on cooldown made the character jump back.
+    if ((this.cooldowns.get('dash')?.end ?? 0) > now || self.flags & STATUSES.stun.flag || self.roll) return;
+    // predict the roll locally so it starts on the key press, not a round-trip later
+    const end = dashEnd(self.pos.x, self.pos.z, dx, dz);
+    self.rollAt = now;
+    self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
+    play('dash');
     // send our start point and direction so the server rolls along exactly the same path
-    this.serverAction({ t: 'dash', x: self.roll?.fx ?? self.pos.x, z: self.roll?.fz ?? self.pos.z, dx, dz });
+    this.serverAction({ t: 'dash', x: self.roll.fx, z: self.roll.fz, dx, dz });
   }
 
   /** Stand still: drop the current move and stop attacking (the target stays selected). */
@@ -1384,11 +1386,11 @@ export class Game {
         const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;
         if (hk > 0) {
           c.model.position.set(c.hitDx * 0.18 * hk, 0, c.hitDz * 0.18 * hk);
-          c.model.scale.set(1 + 0.08 * hk, 1 - 0.06 * hk, 1 + 0.08 * hk);
+          c.model.scale.set(1 + 0.08 * hk, 1 - 0.06 * hk, 1 + 0.08 * hk).multiplyScalar(c.size);
         } else if (c.hitAt) {
           c.hitAt = 0;
           c.model.position.set(0, 0, 0);
-          c.model.scale.set(1, 1, 1);
+          c.model.scale.setScalar(c.size);
         }
       }
       if (c.rig && c.rollAt) {
@@ -1402,12 +1404,12 @@ export class Game {
           c.model.rotation.x = th;
           const fwd = -h * Math.sin(th);
           c.model.position.set(Math.sin(c.ry) * fwd, h - h * Math.cos(th) - tuck * h * 0.35, Math.cos(c.ry) * fwd);
-          c.model.scale.set(1, 1 - tuck * 0.25, 1);
+          c.model.scale.set(1, 1 - tuck * 0.25, 1).multiplyScalar(c.size);
         } else {
           c.rollAt = 0;
           c.model.rotation.x = 0;
           c.model.position.set(0, 0, 0);
-          c.model.scale.set(1, 1, 1);
+          c.model.scale.setScalar(c.size);
         }
       }
       const dSelf = self ? c.pos.distanceTo(self.pos) : 0;

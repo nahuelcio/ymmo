@@ -413,7 +413,7 @@ export class World {
     if (p.has('stun', now)) return this.sys(p, 'Estás aturdido.', 'You are stunned.');
     if ((p.cooldowns.get('dash') ?? 0) > now) return;
     // the client predicts the roll from where it sees itself: accept that start if it's close to ours
-    if (Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x - p.x, z - p.z) < 2) {
+    if (Number.isFinite(x) && Number.isFinite(z) && Math.hypot(x - p.x, z - p.z) < 4) {
       const s = pushOut(x, z, p.radius);
       this.setPos(p, s.x, s.z);
     }

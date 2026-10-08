@@ -78,9 +78,10 @@ export const TELEPORTS = [
 export const NPCS: NpcDef[] = [
   { id: 'grocer', name: 'Lia', title: 'Almacenera', x: 10, z: -14, ry: Math.PI, kind: 'shop', color: 0x4a8a3a,
     shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
-  { id: 'weapons', name: 'Gerald', title: 'Armero', x: -14, z: -10, ry: Math.PI / 2, kind: 'shop', color: 0x8a3a3a,
+  // Gerald and Hilda keep their counters at the mouth of the smithy (layout.ts, house 4)
+  { id: 'weapons', name: 'Gerald', title: 'Armero', x: -26.3, z: -18.4, ry: Math.atan2(26.3, 18.4), kind: 'shop', color: 0x8a3a3a,
     shop: ['short_sword', 'apprentice_wand', 'broadsword', 'willow_staff', 'iron_hammer', 'sword_of_revolution', 'staff_of_life'], greeting: 'Con una buena hoja, cualquiera se anima.' },
-  { id: 'armor', name: 'Hilda', title: 'Armadurera', x: -12, z: 12, ry: Math.PI / 2, kind: 'shop', color: 0x3a5a8a,
+  { id: 'armor', name: 'Hilda', title: 'Armadurera', x: -28.6, z: -14.6, ry: Math.atan2(28.6, 14.6), kind: 'shop', color: 0x3a5a8a,
     shop: ['leather_cap', 'apprentice_tunic', 'apprentice_stockings', 'short_gloves', 'leather_sandals', 'brigandine_helm', 'brigandine_tunic', 'brigandine_gaiters', 'reinforced_gloves', 'reinforced_boots', 'karmian_tunic', 'karmian_stockings'],
     greeting: 'Antes de salir a pelear, cubrite bien. Después no me vengas llorando.' },
   { id: 'gatekeeper', name: 'Roxxy', title: 'Guardiana del Portal', x: 12, z: 12, ry: -Math.PI / 2, kind: 'gatekeeper', color: 0x8a3a8a,
@@ -95,7 +96,8 @@ export const NPCS: NpcDef[] = [
     greeting: 'Los goblins de las colinas están cada vez más agrandados.' },
   { id: 'dorian', name: 'Dorian', title: 'Rastreador', x: 26, z: 8, ry: Math.atan2(-26, -8), kind: 'quest', color: 0x4a5a3a,
     greeting: 'Algo con escamas se está comiendo las cabras.' },
-  { id: 'vessa', name: 'Vessa', title: 'Intendenta', x: -26, z: 8, ry: Math.atan2(26, -8), kind: 'quest', color: 0x8a6a3a,
+  // the Intendenta stands by the town hall steps (house 1)
+  { id: 'vessa', name: 'Vessa', title: 'Intendenta', x: 19.3, z: 23.9, ry: Math.atan2(-19.3, -23.9), kind: 'quest', color: 0x8a6a3a,
     greeting: 'El cuartel no se va a vaciar solo.' },
   { id: 'harun', name: 'Harun', title: 'Sepulturero', x: 14, z: 26, ry: Math.atan2(-14, -26), kind: 'quest', color: 0x4a4a55,
     greeting: 'Los páramos le devuelven los huesos a los vivos.' },

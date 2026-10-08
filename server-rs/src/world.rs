@@ -403,7 +403,7 @@ impl World {
         }
         let (px, pz, radius) = { let c = &self.ents[&pid].c; (c.x, c.z, c.radius) };
         // the client predicts the roll from where it sees itself: accept that start if it's close to ours
-        if x.is_finite() && z.is_finite() && (x - px).hypot(z - pz) < 2.0 {
+        if x.is_finite() && z.is_finite() && (x - px).hypot(z - pz) < 4.0 {
             let s = push_out(x, z, radius);
             self.set_pos(pid, s.x, s.z);
         }

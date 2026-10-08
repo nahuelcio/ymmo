@@ -33,7 +33,13 @@ export function zoneOf(x: number, z: number) {
 
 export interface TreeL { x: number; z: number; h: number; rot: number; sc: number; dead: boolean; pine: boolean; hue: number; light: number }
 export interface RockL { x: number; z: number; y: number; sc: number; e: [number, number, number]; s: [number, number, number]; light: number }
-export interface HouseL { x: number; z: number; rot: number; w: number; d: number; wall: number; roof: number }
+export interface HouseL { x: number; z: number; rot: number; w: number; d: number; wall: number; roof: number; kind?: 'hall' | 'tavern' | 'smithy' }
+/** Houses of the ring (by index) that are a landmark instead: bigger footprint, own model on the client. */
+const LANDMARKS: Record<number, Pick<HouseL, 'kind' | 'w' | 'd' | 'wall' | 'roof'> & { r: number }> = {
+  1: { kind: 'hall', r: 39, w: 13, d: 10, wall: 0xb8b2a4, roof: 0x4a5a7a },
+  2: { kind: 'tavern', r: 38.5, w: 12, d: 9, wall: 0xe0d4b8, roof: 0x8a3a2a },
+  4: { kind: 'smithy', r: 38, w: 10, d: 8, wall: 0x8a8478, roof: 0x3a3a3a },
+};
 export interface StallL { x: number; z: number; rot: number; color: number }
 export interface WallL { x: number; z: number; rot: number; tower: boolean }
 export interface PillarL { x: number; z: number; rot: number }
@@ -105,7 +111,9 @@ export function layoutTown(): TownL {
     const r = 32 + rng() * 8;
     const w = 5 + rng() * 3, d = 5 + rng() * 2;
     const wall = rng() < 0.5 ? 0xe0d4b8 : 0xd0c0a0, roof = rng() < 0.5 ? 0x8a3a2a : 0x4a5a7a;
-    town.houses.push({ x: TOWN.x + Math.cos(a) * r, z: TOWN.z + Math.sin(a) * r, rot: -a - Math.PI / 2, w, d, wall, roof });
+    const lm = LANDMARKS[town.houses.length]; // the rng calls above stay the same, so the other houses don't move
+    const hr = lm?.r ?? r;
+    town.houses.push({ x: TOWN.x + Math.cos(a) * hr, z: TOWN.z + Math.sin(a) * hr, rot: -a - Math.PI / 2, w: lm?.w ?? w, d: lm?.d ?? d, wall: lm?.wall ?? wall, roof: lm?.roof ?? roof, kind: lm?.kind });
   }
   // merchant stalls behind NPCs
   for (const n of NPCS) {

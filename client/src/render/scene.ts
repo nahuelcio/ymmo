@@ -511,6 +511,194 @@ function house(w: number, d: number, wall: number, roof: number): THREE.Group {
 
 const darken = (c: number, k = 0.72) => (Math.floor(((c >> 16) & 255) * k) << 16) | (Math.floor(((c >> 8) & 255) * k) << 8) | Math.floor((c & 255) * k);
 
+// ---------------------------------------------------------------- landmark buildings
+// All three are built front toward +z around the origin, like house(), on the footprint the shared layout gives.
+const LM_TIMBER = 0x5a3a20, LM_STONE = 0x8a8478, LM_DARK = 0x4a2a15;
+const WINDOW_LIT = new THREE.MeshLambertMaterial({ color: 0xffd98a, emissive: 0xffb040, emissiveIntensity: 0.85, flatShading: true });
+const EMBERS = new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0xff4a00, emissiveIntensity: 1, flatShading: true });
+
+/** Gabled roof (ridge along x) sitting on y = 0. */
+function gable(w: number, d: number, h: number, color: number): THREE.Mesh {
+  const rr = d / Math.sqrt(3), sy = h / (1.5 * rr);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, sy, 1), mat(color));
+  m.position.y = (rr / 2) * sy;
+  m.castShadow = true;
+  return m;
+}
+
+/** A window on a front/back wall (side = false) or a side wall: frame, pane, cross bar. */
+function pane(g: THREE.Group, x: number, y: number, z: number, side: boolean, w = 0.9, h = 0.9, lit = false) {
+  const t = 0.14;
+  g.add(box(side ? t : w + 0.24, h + 0.24, side ? w + 0.24 : t, LM_TIMBER, x, y, z));
+  const glass = box(side ? t + 0.02 : w, h, side ? w : t + 0.02, 0x9fd3ff, x, y, z);
+  if (lit) glass.material = WINDOW_LIT;
+  g.add(glass);
+  g.add(box(side ? t + 0.04 : 0.07, h, side ? 0.07 : t + 0.04, LM_TIMBER, x, y, z));
+}
+
+function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T {
+  o.position.set(x, y, z);
+  return o;
+}
+
+function barrel(x: number, y: number, z: number): THREE.Mesh {
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.85, 8), mat(0x7a5030));
+  b.position.set(x, y + 0.42, z);
+  b.castShadow = true;
+  return b;
+}
+
+/** Two-storey inn: stone ground floor, jettied timber upper floor, lit windows, a sign and tables outside. */
+function tavern(w: number, d: number): THREE.Group {
+  const g = new THREE.Group();
+  const f = d / 2, uw = w + 0.9, ud = d + 0.9, y1 = 3.5, y2 = 6.1;
+  g.add(box(w + 0.4, 0.5, d + 0.4, LM_STONE, 0, 0.25, 0));
+  g.add(box(w, y1 - 0.5, d, 0xa8a294, 0, (y1 + 0.5) / 2, 0)); // stone ground floor
+  g.add(box(uw + 0.2, 0.3, ud + 0.2, LM_TIMBER, 0, y1, 0)); // jetty beam
+  g.add(box(uw, y2 - y1, ud, 0xe0d4b8, 0, (y1 + y2) / 2, 0)); // plastered upper floor
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) g.add(box(0.3, y2 - y1, 0.3, LM_TIMBER, (sx * uw) / 2, (y1 + y2) / 2, (sz * ud) / 2));
+    for (const k of [-1, 0, 1]) g.add(box(0.18, y2 - y1, 0.1, LM_TIMBER, (k * uw) / 3.2, (y1 + y2) / 2, (sx * (ud + 0.06)) / 2));
+  }
+  g.add(box(uw + 0.3, 0.26, ud + 0.3, LM_TIMBER, 0, y2, 0));
+  g.add(at(gable(uw - 0.02, ud, 2.6, 0xe0d4b8), 0, y2 + 0.1, 0)); // gable ends
+  const roof = gable(uw + 1.1, ud + 1.5, 3.2, 0x8a3a2a);
+  roof.position.y += y2 + 0.1;
+  g.add(roof);
+  g.add(box(uw + 1.2, 0.16, 0.34, 0x5e2a1e, 0, y2 + 3.3, 0));
+  g.add(box(1.3, 9.2, 1.3, LM_STONE, -w / 2 - 0.3, 4.6, -d / 5)); // chimney up the side
+  g.add(box(1.6, 0.25, 1.6, 0x5e5a52, -w / 2 - 0.3, 9.3, -d / 5));
+  // double door, step and a lantern
+  g.add(box(2.7, 2.9, 0.14, LM_TIMBER, 0, 1.95, f + 0.05));
+  for (const sx of [-1, 1]) g.add(box(1.1, 2.6, 0.18, LM_DARK, sx * 0.58, 1.8, f + 0.06));
+  g.add(box(3.4, 0.25, 1.1, LM_STONE, 0, 0.37, f + 0.6));
+  g.add(at(new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), WINDOW_LIT), 1.75, 2.9, f + 0.35));
+  // windows: warm light on both floors
+  for (const sx of [-1, 1]) {
+    pane(g, sx * (w / 2 - 1.7), 2.1, f + 0.04, false, 1.4, 1.2, true);
+    pane(g, sx * (w / 2 + 0.04), 2.1, 0, true, 1.4, 1.2, true);
+    pane(g, sx * (uw / 2 + 0.04), 4.8, 0, true, 1.1, 1.1, true);
+  }
+  for (const k of [-1, 0, 1]) pane(g, (k * uw) / 3.2 + uw / 6.4, 4.8, ud / 2 + 0.04, false, 1, 1.1, k !== 0);
+  // hanging sign: a mug of ale
+  g.add(box(0.14, 0.14, 1.8, LM_TIMBER, -2.4, 3.3, f + 0.9));
+  g.add(box(1.2, 0.9, 0.1, 0x3a2a18, -2.4, 2.65, f + 1.5));
+  for (const sz of [-0.07, 0.07]) {
+    g.add(box(0.42, 0.46, 0.04, 0xe8c060, -2.45, 2.6, f + 1.5 + sz));
+    g.add(box(0.46, 0.14, 0.04, 0xf4f0e4, -2.45, 2.9, f + 1.5 + sz));
+  }
+  // out front: tables with stools, and the cellar's barrels
+  for (const sx of [-1, 1]) {
+    const tx = sx * (w / 2 - 1.2), tz = f + 2.6;
+    g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.1, 10), mat(0x7a5a3a)), tx, 0.85, tz));
+    g.add(box(0.2, 0.8, 0.2, LM_TIMBER, tx, 0.4, tz));
+    for (let k = 0; k < 3; k++) {
+      const a = k * 2.1 + sx;
+      g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.48, 8), mat(0x6a4a2a)), tx + Math.cos(a) * 1.15, 0.24, tz + Math.sin(a) * 1.15));
+    }
+    g.add(box(0.22, 0.26, 0.22, 0xe8c060, tx + 0.2, 1.03, tz - 0.1));
+  }
+  g.add(barrel(w / 2 + 0.7, 0, f - 1), barrel(w / 2 + 0.7, 0, f - 1.8), barrel(w / 2 + 0.7, 0.85, f - 1.4));
+  return g;
+}
+
+/** Stone town hall: steps, pilasters, banners and a clock tower with a bell and a spire. */
+function townHall(w: number, d: number): THREE.Group {
+  const g = new THREE.Group();
+  const f = d / 2, WALL = 0xb8b2a4, TRIM = 0x8f897d, SLATE = 0x4a5a7a, y0 = 0.8, y1 = 6;
+  g.add(box(w + 1.2, y0, d + 1.2, 0x7a746a, 0, y0 / 2, 0)); // plinth
+  g.add(box(w, y1 - y0, d, WALL, 0, (y0 + y1) / 2, 0));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.7, y1 - y0, 0.7, TRIM, (sx * w) / 2, (y0 + y1) / 2, (sz * d) / 2));
+  g.add(box(w + 0.8, 0.4, d + 0.8, TRIM, 0, y1, 0)); // cornice
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.78, 3, 4), mat(SLATE));
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.set(1, 1, (d + 1) / (w + 1));
+  roof.position.y = y1 + 1.7;
+  roof.castShadow = true;
+  g.add(roof);
+  // clock tower rising out of the front
+  const tz = f - 1.1, th = 11.5;
+  g.add(box(3.2, th, 3.2, WALL, 0, y0 + th / 2, tz));
+  for (const sx of [-1, 1]) g.add(box(0.5, th, 0.5, TRIM, sx * 1.6, y0 + th / 2, tz + 1.6));
+  g.add(box(3.8, 0.35, 3.8, TRIM, 0, y0 + th, tz));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.4, 1.9, 0.4, TRIM, sx * 1.4, y0 + th + 1.1, tz + sz * 1.4)); // belfry
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.65, 0.8, 8), mat(0xd8b050)), 0, y0 + th + 1.2, tz)); // bell
+  g.add(box(3.8, 0.3, 3.8, TRIM, 0, y0 + th + 2.2, tz));
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(2.7, 3.6, 4), mat(SLATE));
+  spire.rotation.y = Math.PI / 4;
+  spire.position.set(0, y0 + th + 4.1, tz);
+  spire.castShadow = true;
+  g.add(spire);
+  g.add(box(0.08, 1.6, 0.08, 0x2a2a2a, 0, y0 + th + 6.6, tz));
+  g.add(box(0.9, 0.5, 0.04, 0x8a1a2a, 0.5, y0 + th + 7.1, tz));
+  // clock face with its hands
+  const face = at(new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.12, 16).rotateX(Math.PI / 2), mat(0xf0ead8)), 0, y0 + 9.2, tz + 1.62);
+  g.add(face, at(new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.08, 16).rotateX(Math.PI / 2), mat(0x3a2a18)), 0, y0 + 9.2, tz + 1.6));
+  g.add(box(0.1, 0.75, 0.05, 0x1a1a1a, 0, y0 + 9.55, tz + 1.72));
+  const hand = box(0.08, 0.55, 0.05, 0x1a1a1a, 0.22, y0 + 9.35, tz + 1.72);
+  hand.rotation.z = -1.1;
+  g.add(hand);
+  // great door at the top of the steps
+  g.add(box(2.4, 3.5, 0.16, TRIM, 0, y0 + 1.75, tz + 1.62));
+  for (const sx of [-1, 1]) g.add(box(0.95, 3.1, 0.2, LM_DARK, sx * 0.5, y0 + 1.55, tz + 1.64));
+  for (let k = 0; k < 3; k++) g.add(box(6 - k * 0.6, y0 / 3, 0.6, 0x9a9488, 0, (y0 / 3) * (k + 0.5), tz + 2.9 - k * 0.6));
+  // banners and tall windows
+  for (const sx of [-1, 1]) {
+    g.add(box(1.1, 3.6, 0.08, 0x8a1a2a, sx * (w / 2 - 2.6), 3.9, f + 0.06));
+    g.add(box(0.5, 0.5, 0.1, 0xe8c060, sx * (w / 2 - 2.6), 4.4, f + 0.08));
+    pane(g, sx * (w / 2 - 1.1), 3.6, f + 0.04, false, 0.9, 2.4);
+    for (const k of [-1, 0, 1]) pane(g, sx * (w / 2 + 0.04), 3.6, k * (d / 3.4), true, 1, 2.4);
+  }
+  for (const k of [-1.5, -0.5, 0.5, 1.5]) pane(g, k * (w / 4.4), 3.6, -f - 0.04, false, 1, 2.4);
+  return g;
+}
+
+/** Open-fronted smithy: forge with glowing coals and a chimney, anvil, grindstone, quench trough and racks. */
+function smithy(w: number, d: number): THREE.Group {
+  const g = new THREE.Group();
+  const f = d / 2, h = 3.5, IRON = 0x3a3a3a;
+  g.add(box(w + 0.4, 0.3, d + 0.4, 0x7a746a, 0, 0.15, 0)); // flagstone floor
+  g.add(box(w, h - 0.3, 0.5, LM_STONE, 0, (h + 0.3) / 2, -f + 0.25)); // back wall
+  g.add(box(0.5, h - 0.3, d * 0.62, LM_STONE, -w / 2 + 0.25, (h + 0.3) / 2, -f + d * 0.31)); // forge-side wall
+  g.add(box(0.5, 1.2, d * 0.5, LM_STONE, w / 2 - 0.25, 0.9, -f + d * 0.25)); // low wall on the open side
+  for (const [px, pz] of [[-w / 2 + 0.2, f - 0.2], [w / 2 - 0.2, f - 0.2], [w / 2 - 0.2, -f + 0.2], [0, f - 0.2]]) g.add(box(0.36, h - 0.3, 0.36, LM_TIMBER, px, (h + 0.3) / 2, pz));
+  for (const sz of [-1, 1]) g.add(box(w + 0.6, 0.3, 0.3, LM_TIMBER, 0, h, sz * (f - 0.2)));
+  for (const sx of [-1, 0, 1]) g.add(box(0.3, 0.3, d + 0.6, LM_TIMBER, sx * (w / 2 - 0.2), h, 0));
+  const roof = gable(w + 1.6, d + 1.8, 2.3, 0x3a3a3a);
+  roof.position.y += h + 0.15;
+  g.add(roof);
+  // forge and chimney
+  const fx = -w / 4, fz = -f + 1.5;
+  g.add(box(2.6, 1.1, 1.9, 0x5e5a52, fx, 0.85, fz));
+  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 1.2), EMBERS), fx, 1.46, fz + 0.1));
+  g.add(box(2.6, 0.5, 0.3, 0x5e5a52, fx, 1.65, fz - 0.8));
+  g.add(box(1.5, 7.2, 1.3, LM_STONE, fx, 3.9, -f + 0.9));
+  g.add(box(1.8, 0.25, 1.6, 0x5e5a52, fx, 7.6, -f + 0.9));
+  g.add(box(1.1, 0.5, 0.7, 0x6a4a2a, fx - 1.7, 0.75, fz + 0.3)); // bellows
+  // anvil on its stump
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 0.7, 8), mat(0x6a4a2a)), 0.9, 0.65, 0.2));
+  g.add(box(0.5, 0.2, 0.36, IRON, 0.9, 1.1, 0.2), box(1.05, 0.24, 0.42, IRON, 0.95, 1.32, 0.2), box(0.3, 0.14, 0.3, IRON, 1.6, 1.3, 0.2));
+  // quench trough and grindstone
+  g.add(box(1.6, 0.7, 0.8, 0x6a4a2a, w / 2 - 1.4, 0.65, f - 1.2));
+  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.06, 0.55), new THREE.MeshLambertMaterial({ color: 0x4a90c8, flatShading: true })), w / 2 - 1.4, 0.98, f - 1.2));
+  g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.16, 12).rotateZ(Math.PI / 2), mat(0x9a9488)), -w / 2 + 1.4, 0.95, f - 1.4));
+  for (const sx of [-1, 1]) g.add(box(0.1, 0.9, 0.5, LM_TIMBER, -w / 2 + 1.4 + sx * 0.2, 0.7, f - 1.4));
+  // rack of finished blades on the back wall, shields and a stack of ingots
+  g.add(box(3, 0.12, 0.16, LM_TIMBER, w / 4, 2.4, -f + 0.6), box(3, 0.12, 0.16, LM_TIMBER, w / 4, 1.5, -f + 0.6));
+  for (let k = 0; k < 4; k++) {
+    g.add(box(0.1, 1.5, 0.04, 0xc8d0d8, w / 4 - 1.1 + k * 0.72, 1.95, -f + 0.7));
+    g.add(box(0.32, 0.07, 0.08, 0x8a6a2a, w / 4 - 1.1 + k * 0.72, 1.35, -f + 0.7));
+  }
+  for (const [sx, c] of [[-0.5, 0x8a1a2a], [0.5, 0x3a5a8a]] as const) g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 10).rotateX(Math.PI / 2), mat(c)), w / 2 - 0.55, 2.2, -f + d * 0.25 + sx));
+  for (let k = 0; k < 5; k++) g.add(box(0.6, 0.16, 0.26, k % 2 ? 0x8a8f95 : 0x7a7f85, w / 2 - 1.5 + (k % 2) * 0.1, 0.38 + (k >> 1) * 0.17, -f + 1 + (k % 2) * 0.3));
+  // hanging sign: an anvil
+  g.add(box(0.14, 0.14, 1.6, LM_TIMBER, w / 2 - 0.2, 3.1, f + 0.6));
+  g.add(box(1.1, 0.8, 0.1, 0x3a2a18, w / 2 - 0.2, 2.5, f + 1.1));
+  for (const sz of [-0.07, 0.07]) g.add(box(0.6, 0.16, 0.04, 0xc8d0d8, w / 2 - 0.2, 2.6, f + 1.1 + sz), box(0.26, 0.24, 0.04, 0xc8d0d8, w / 2 - 0.2, 2.4, f + 1.1 + sz));
+  g.add(barrel(-w / 2 - 0.6, 0, f - 0.8));
+  return g;
+}
+
 function buildTown(): THREE.Group {
   const g = new THREE.Group();
   const y = TOWN_HEIGHT;
@@ -599,7 +787,7 @@ function buildTown(): THREE.Group {
 
   const L = layoutTown();
   for (const h of L.houses) {
-    const hs = house(h.w, h.d, h.wall, h.roof);
+    const hs = h.kind === 'tavern' ? tavern(h.w, h.d) : h.kind === 'hall' ? townHall(h.w, h.d) : h.kind === 'smithy' ? smithy(h.w, h.d) : house(h.w, h.d, h.wall, h.roof);
     hs.position.set(h.x, y, h.z);
     hs.rotation.y = h.rot;
     g.add(hs);
@@ -729,7 +917,13 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
   for (const h of L.houses) {
     const yard = new THREE.Group();
     const f = h.d / 2;
-    yard.add(flat(box(1.5, 0.08, 4, STONE, 0, 0.05, f + 2.3)));
+    yard.add(flat(box(h.kind ? 3 : 1.5, 0.08, h.kind ? 7 : 4, STONE, 0, 0.05, f + (h.kind ? 4.2 : 2.3))));
+    if (h.kind) {
+      // landmarks bring their own props: just the wide path to the door
+      yard.position.set(h.x, y, h.z);
+      g.add(turned(yard, h.rot));
+      continue;
+    }
     const bx = h.w / 2 + 1.7;
     yard.add(flat(box(2.4, 0.22, 3, 0x4e3a24, bx, 0.11, 0)));
     for (let k = 0; k < 6; k++) {
