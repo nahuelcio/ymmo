@@ -6,7 +6,7 @@ use crate::data::{d, RaidDef};
 use crate::db::Db;
 use crate::ent::*;
 use crate::formulas::{jround, rnd, xp_to_next};
-use crate::i18n::{mob_name, npc_lines, Lang};
+use crate::i18n::{npc_lines, Lang};
 use crate::terrain::{zone_at, Mulberry32};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -32,7 +32,7 @@ pub enum HubEvent {
     /** left a raid (saved at the village): load them back into the overworld */
     ToMain { member: Member },
     /** the session's character was saved after its socket closed */
-    Closed { sid: u64 },
+    Closed,
     /** loading the character failed */
     JoinFailed { sid: u64 },
 }
@@ -584,7 +584,6 @@ impl World {
         }
     }
 
-    pub fn boss_name(&self, mid: u32, l: Lang) -> String { self.ents.get(&mid).and_then(|e| e.mob()).map(|m| mob_name(&m.tpl.id, l)).unwrap_or_default() }
 }
 
 pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }

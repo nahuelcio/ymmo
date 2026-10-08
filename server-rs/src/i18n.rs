@@ -18,18 +18,6 @@ pub fn trs(l: Lang, es: String, en: String) -> String { if l.en() { en } else { 
 pub fn item_name(id: &str, l: Lang) -> String {
     d().item(id).map(|i| if l.en() { i.name_en.clone() } else { i.name.clone() }).unwrap_or_else(|| id.to_string())
 }
-pub fn mob_name(id: &str, l: Lang) -> String {
-    d().mobs.get(id).map(|m| if l.en() { m.name_en.clone() } else { m.name.clone() }).unwrap_or_else(|| id.to_string())
-}
-pub fn skill_name(id: &str, l: Lang) -> String {
-    d().skill(id).map(|s| if l.en() { s.name_en.clone() } else { s.name.clone() }).unwrap_or_else(|| id.to_string())
-}
-pub fn camp_name(id: &str, l: Lang) -> String {
-    d().camp(id).map(|c| if l.en() { c.name_en.clone() } else { c.name.clone() }).unwrap_or_else(|| id.to_string())
-}
-pub fn quest_name(id: &str, l: Lang) -> String {
-    d().quest(id).map(|q| if l.en() { q.name_en.clone() } else { q.name.clone() }).unwrap_or_else(|| id.to_string())
-}
 pub fn teleport_name(id: &str, l: Lang) -> String {
     d().teleports.iter().find(|t| t.id == id).map(|t| if l.en() { t.name_en.clone() } else { t.name.clone() }).unwrap_or_else(|| id.to_string())
 }

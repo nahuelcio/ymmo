@@ -141,7 +141,7 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
                         send(&s.out, json!({ "t": "error", "msg": tr(s.lang, "No se encontró el personaje.", "Character not found.") }));
                     }
                 }
-                HubEvent::Closed { .. } => {}
+                HubEvent::Closed => {}
             },
             HubMsg::Ended { world } => {
                 let hub = &mut *app.hub.lock().unwrap();

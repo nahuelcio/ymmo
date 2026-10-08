@@ -80,7 +80,7 @@ impl World {
     pub fn quit(&mut self, sid: u64) {
         let Some(&pid) = self.sessions.get(&sid) else { return };
         let at = self.exit_point();
-        if self.take_out(pid, at).is_some() { self.events.push(HubEvent::Closed { sid }); }
+        if self.take_out(pid, at).is_some() { self.events.push(HubEvent::Closed); }
     }
 
     /** Raid world: leave for the overworld village. */
