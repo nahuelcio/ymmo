@@ -2,7 +2,7 @@ import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
-import { layoutCamps, layoutTown } from '../../../shared/src/layout';
+import { layoutCamps, layoutTown, layoutTrees } from '../../../shared/src/layout';
 import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
@@ -28,12 +28,17 @@ function worldImage(): HTMLCanvasElement {
   c.width = c.height = RES;
   const ctx = c.getContext('2d')!;
   const img = ctx.createImageData(RES, RES);
+  const at = (i: number) => (i / RES) * 2 * WORLD_HALF - WORLD_HALF;
+  const hs = new Float32Array(RES * RES);
+  for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) hs[j * RES + i] = heightAt(at(i), at(j));
+  const hAt = (i: number, j: number) => hs[Math.min(RES - 1, Math.max(0, j)) * RES + Math.min(RES - 1, Math.max(0, i))];
   for (let j = 0; j < RES; j++)
     for (let i = 0; i < RES; i++) {
-      const x = (i / RES) * 2 * WORLD_HALF - WORLD_HALF, z = (j / RES) * 2 * WORLD_HALF - WORLD_HALF;
-      const h = heightAt(x, z);
-      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(x, z, h);
-      const shade = 0.85 + Math.min(0.3, h / 120);
+      const h = hs[j * RES + i];
+      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(at(i), at(j), h);
+      // relief: slopes facing the north-west light are brighter, the far sides fall into shade
+      const slope = hAt(i + 1, j) - hAt(i - 1, j) + hAt(i, j + 1) - hAt(i, j - 1);
+      const shade = h < WATER_LEVEL ? 1 : (0.9 + Math.min(0.25, h / 140)) * Math.min(1.3, Math.max(0.62, 1 - slope * 0.11));
       const o = (j * RES + i) * 4;
       img.data[o] = Math.min(255, r * 255 * shade);
       img.data[o + 1] = Math.min(255, g * 255 * shade);
@@ -44,12 +49,15 @@ function worldImage(): HTMLCanvasElement {
   return c;
 }
 
+const css = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+
 const toMap = (v: number) => ((v + WORLD_HALF) / (2 * WORLD_HALF)) * RES;
 
 export class Minimap {
   private img = worldImage();
   private canvas: HTMLCanvasElement;
   private zoneEl: HTMLDivElement;
+  private coordsEl: HTMLDivElement;
   private viewR = 110;
   private mapWin: Win;
   private bigCanvas: HTMLCanvasElement;
@@ -60,6 +68,8 @@ export class Minimap {
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));
+    el('span', 'mm-north', box, 'N');
+    this.coordsEl = el('div', 'mm-coords', box);
     el('div', 'mm-legend', box).innerHTML = `<i style="color:#ff5544">●</i> ${tx('enemigos', 'enemies')} <i style="color:#ffd200">●</i> ${tx('misión', 'quest')} <i style="color:#66aaff">●</i> ${tx('jugadores', 'players')}`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
@@ -154,6 +164,8 @@ export class Minimap {
     ctx.rotate(-ry + Math.PI);
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(0, -s);
     ctx.lineTo(s * 0.7, s);
@@ -184,23 +196,60 @@ export class Minimap {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.img, toMap(px) - srcR, toMap(pz) - srcR, srcR * 2, srcR * 2, 0, 0, W, W);
     const toC = (x: number, z: number) => [(x - px) * scale + W / 2, (z - pz) * scale + W / 2];
-    // houses and camp tents as shapes, so there is crisp detail at any zoom
-    ctx.fillStyle = 'rgba(52, 40, 32, 0.9)';
-    for (const h of layoutTown().houses) {
-      const [x, y] = toC(h.x, h.z);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(-h.rot);
-      ctx.fillRect((-h.w / 2) * scale, (-h.d / 2) * scale, h.w * scale, h.d * scale);
-      ctx.restore();
+    // everything built or planted is drawn as shapes on top, so it stays crisp at any zoom
+    const seen = (x: number, y: number, m = 6) => x > -m && y > -m && x < W + m && y < W + m;
+    ctx.fillStyle = 'rgba(24, 62, 30, 0.8)';
+    for (const t of layoutTrees()) {
+      const [x, y] = toC(t.x, t.z);
+      if (!seen(x, y)) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(0.9, 1.1 * t.sc * scale), 0, Math.PI * 2);
+      ctx.fill();
     }
-    for (const c of layoutCamps())
-      for (const t of c.tents) {
-        const [x, y] = toC(t.x, t.z);
-        ctx.beginPath();
-        ctx.arc(x, y, 2.3 * scale, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    const town = layoutTown();
+    const segs = [...town.walls, ...layoutCamps().flatMap((c) => c.walls)];
+    ctx.strokeStyle = '#4a321c';
+    ctx.lineWidth = Math.max(1.6, 0.9 * scale);
+    ctx.beginPath();
+    for (const w of segs) {
+      const [x, y] = toC(w.x, w.z);
+      if (!seen(x, y, 12)) continue;
+      const dx = Math.cos(w.rot) * 3.6 * scale, dy = -Math.sin(w.rot) * 3.6 * scale;
+      ctx.moveTo(x - dx, y - dy);
+      ctx.lineTo(x + dx, y + dy);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(20, 14, 10, 0.9)';
+    const rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string) => {
+      const [cx, cy] = toC(x, z);
+      if (!seen(cx, cy, 12)) return;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-rot);
+      ctx.fillStyle = fill;
+      ctx.fillRect((-rw / 2) * scale, (-rd / 2) * scale, rw * scale, rd * scale);
+      ctx.strokeRect((-rw / 2) * scale, (-rd / 2) * scale, rw * scale, rd * scale);
+      ctx.restore();
+    };
+    for (const w of town.walls) if (w.tower) rect(w.x, w.z, 2.8, 2.8, w.rot, '#8a3a2a');
+    for (const h of town.houses) {
+      rect(h.x, h.z, h.w + 1, h.d + 1.2, h.rot, css(h.roof));
+      rect(h.x, h.z, h.w + 1, 0.01, h.rot, '#000'); // roof ridge
+    }
+    for (const st of town.stalls) rect(st.x, st.z, 3.4, 1.8, st.rot, css(st.color));
+    const disc = (x: number, z: number, r: number, fill: string) => {
+      const [cx, cy] = toC(x, z);
+      if (!seen(cx, cy, 12)) return;
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    };
+    disc(TOWN.x, TOWN.z, 4.4, '#bab4a6');
+    disc(TOWN.x, TOWN.z, 3.4, '#4a90c8');
+    for (const c of layoutCamps()) for (const t of c.tents) disc(t.x, t.z, 2.3, '#7a6040');
     // NPCs (always known)
     for (const n of NPCS) {
       const [x, y] = toC(n.x, n.z);
@@ -257,13 +306,15 @@ export class Minimap {
       ctx.arc(x, y, c.rec.k === 'i' ? 1.2 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    this.arrow(ctx, W / 2, W / 2, self.ry, 8);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, W - 14, W, 14);
-    ctx.fillStyle = '#cfd6e6';
-    ctx.font = '10px Tahoma, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${Math.round(px)}, ${Math.round(pz)}`, W / 2, W - 3);
+    // darken toward the rim so the round frame reads as a lens
+    const rim = ctx.createRadialGradient(W / 2, W / 2, W * 0.32, W / 2, W / 2, W / 2);
+    rim.addColorStop(0, 'rgba(0,0,0,0)');
+    rim.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = rim;
+    ctx.fillRect(0, 0, W, W);
+    this.arrow(ctx, W / 2, W / 2, self.ry, 7);
+    const coords = `${Math.round(px)}, ${Math.round(pz)}`;
+    if (this.coordsEl.textContent !== coords) this.coordsEl.textContent = coords;
     this.drawBig();
   }
 }

@@ -462,21 +462,54 @@ function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0
 
 function house(w: number, d: number, wall: number, roof: number): THREE.Group {
   const g = new THREE.Group();
-  const h = 3.2;
-  g.add(box(w, h, d, wall, 0, h / 2, 0));
-  // timber frame
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.3, h, 0.3, 0x5a3a20, (sx * w) / 2, h / 2, (sz * d) / 2));
-  g.add(box(w + 0.2, 0.25, d + 0.2, 0x5a3a20, 0, h, 0));
-  const r = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.82, 2.6, 4), mat(roof));
-  r.rotation.y = Math.PI / 4;
-  r.scale.set(w / Math.max(w, d), 1, d / Math.max(w, d));
-  r.position.y = h + 1.3;
+  const TIMBER = 0x5a3a20, STONE = 0x8a8478, base = 0.5, h = 3.4;
+  g.add(box(w + 0.3, base, d + 0.3, STONE, 0, base / 2, 0)); // stone footing
+  g.add(box(w, h - base, d, wall, 0, (h + base) / 2, 0));
+  // timber frame: corner posts, a beam at mid height and under the eaves, studs on the long walls
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.3, h - base, 0.3, TIMBER, (sx * w) / 2, (h + base) / 2, (sz * d) / 2));
+  for (const y of [base + (h - base) * 0.52, h]) {
+    for (const sz of [-1, 1]) g.add(box(w + 0.2, 0.22, 0.12, TIMBER, 0, y, (sz * (d + 0.1)) / 2));
+    for (const sx of [-1, 1]) g.add(box(0.12, 0.22, d + 0.2, TIMBER, (sx * (w + 0.1)) / 2, y, 0));
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.16, h - base, 0.1, TIMBER, (sx * w) / 4, (h + base) / 2, (sz * (d + 0.06)) / 2));
+  // gabled roof: a triangular prism along the width, overhanging the walls
+  const rr = (d + 1.4) / Math.sqrt(3), roofH = 2.7, sy = roofH / (1.5 * rr);
+  const prism = new THREE.CylinderGeometry(rr, rr, w + 1, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, sy, 1);
+  const r = new THREE.Mesh(prism, mat(roof));
+  r.position.y = h + 0.1 + (rr / 2) * sy;
   r.castShadow = true;
   g.add(r);
-  g.add(box(1.1, 2, 0.1, 0x4a2a15, 0, 1, d / 2 + 0.05));
-  g.add(box(0.8, 0.8, 0.1, 0x9fd3ff, w / 4, 2, d / 2 + 0.05));
+  g.add(box(w + 1.1, 0.14, 0.3, darken(roof), 0, h + 0.1 + roofH, 0)); // ridge cap
+  // the gable ends are wall, not roof
+  for (const sx of [-1, 1]) {
+    const gable = new THREE.Mesh(new THREE.CylinderGeometry(d / Math.sqrt(3), d / Math.sqrt(3), 0.1, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, (roofH * 0.82) / (1.5 * (d / Math.sqrt(3))), 1), mat(wall));
+    gable.position.set((sx * w) / 2, h + 0.1 + (d / Math.sqrt(3) / 2) * ((roofH * 0.82) / (1.5 * (d / Math.sqrt(3)))), 0);
+    g.add(gable);
+  }
+  g.add(box(0.7, 2, 0.7, 0x7a746a, -w / 4, h + 1.7, -d / 5)); // chimney
+  g.add(box(0.9, 0.16, 0.9, 0x5e5a52, -w / 4, h + 2.75, -d / 5));
+  // door with frame and step
+  const f = d / 2 + 0.06;
+  g.add(box(1.5, 2.35, 0.12, TIMBER, 0, base + 1.1, f));
+  g.add(box(1.15, 2.05, 0.14, 0x4a2a15, 0, base + 1.0, f + 0.02));
+  g.add(box(0.1, 0.1, 0.1, 0xd8b050, 0.38, base + 1.0, f + 0.1));
+  g.add(box(1.7, 0.2, 0.6, STONE, 0, base - 0.1, f + 0.3));
+  // windows: frame, glass, cross bar and a sill, on the front and both long sides
+  const win = (x: number, z: number, side: boolean) => {
+    const [fw, fd] = side ? [0.12, 1.1] : [1.1, 0.12], [gw, gd] = side ? [0.14, 0.86] : [0.86, 0.14];
+    g.add(box(fw, 1.1, fd, TIMBER, x, base + 1.75, z));
+    g.add(box(gw, 0.86, gd, 0x9fd3ff, x, base + 1.75, z));
+    g.add(box(side ? 0.16 : 0.07, 0.86, side ? 0.07 : 0.16, TIMBER, x, base + 1.75, z));
+    g.add(box(side ? 0.3 : 1.25, 0.1, side ? 1.25 : 0.3, TIMBER, x, base + 1.18, z));
+  };
+  win(w / 3.2, f, false);
+  win(-w / 3.2, f, false);
+  win(0, -f, false);
+  for (const sx of [-1, 1]) win(sx * (w / 2 + 0.06), 0, true);
   return g;
 }
+
+const darken = (c: number, k = 0.72) => (Math.floor(((c >> 16) & 255) * k) << 16) | (Math.floor(((c >> 8) & 255) * k) << 8) | Math.floor((c & 255) * k);
 
 function buildTown(): THREE.Group {
   const g = new THREE.Group();
@@ -563,17 +596,42 @@ function buildTown(): THREE.Group {
     stall.rotation.y = st.rot;
     g.add(stall);
   }
-  // palisade
+  // palisade: sharpened logs bound by a rail, with watchtowers on a stone base
   for (const w of L.walls) {
-    const seg = box(7, 3.2, 0.7, 0x7a5a3a, w.x, heightAt(w.x, w.z) + 1.4, w.z);
-    seg.rotation.y = w.rot;
-    g.add(seg);
+    const wy = heightAt(w.x, w.z);
+    for (let k = -3.5; k <= 3.5; k++) {
+      const lx = w.x + Math.cos(w.rot) * k * 0.9, lz = w.z - Math.sin(w.rot) * k * 0.9;
+      const h = 3.1 + (((k + 3.5) * 7 + 3) % 5) * 0.12;
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.45, h, 6), mat(k % 2 ? 0x6e4e2e : 0x7a5a3a));
+      log.position.set(lx, wy + h / 2 - 0.2, lz);
+      log.castShadow = log.receiveShadow = true;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.7, 6), mat(0x8a6a4a));
+      tip.position.set(lx, wy + h - 0.2 + 0.35, lz);
+      tip.castShadow = true;
+      g.add(log, tip);
+    }
+    const rail = box(7.3, 0.28, 0.2, 0x4a3420, w.x, wy + 2.1, w.z);
+    rail.rotation.y = w.rot;
+    rail.translateZ(-0.5); // on the town side
+    g.add(rail);
     if (w.tower) {
-      g.add(box(2, 6, 2, 0x6a4a2a, w.x, heightAt(w.x, w.z) + 3, w.z));
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2, 4), mat(0x8a3a2a));
-      roof.position.set(w.x, heightAt(w.x, w.z) + 7, w.z);
+      const tower = new THREE.Group();
+      tower.add(box(2.6, 3.4, 2.6, 0x8a8478, 0, 1.7, 0));
+      tower.add(box(2.8, 0.25, 2.8, 0x6e695f, 0, 3.4, 0));
+      tower.add(box(3.2, 0.3, 3.2, 0x5a3a20, 0, 3.7, 0)); // platform
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) tower.add(box(0.28, 2.6, 0.28, 0x5a3a20, sx * 1.4, 5.1, sz * 1.4));
+      for (const sx of [-1, 1]) {
+        tower.add(box(0.14, 0.9, 2.8, 0x6a4a2a, sx * 1.4, 4.3, 0));
+        tower.add(box(2.8, 0.9, 0.14, 0x6a4a2a, 0, 4.3, sx * 1.4));
+      }
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.2, 4), mat(0x8a3a2a));
+      roof.position.y = 7.5;
       roof.rotation.y = Math.PI / 4;
-      g.add(roof);
+      roof.castShadow = true;
+      tower.add(roof);
+      tower.position.set(w.x, wy - 0.2, w.z);
+      tower.rotation.y = w.rot;
+      g.add(tower);
     }
   }
   // gate pillars with banners at road exits

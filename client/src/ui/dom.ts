@@ -37,6 +37,32 @@ export function hideTip() {
   if (tipEl) tipEl.style.display = 'none';
 }
 
+// Native `title` tooltips take about a second to show up. Any element that has one gets the same
+// instant tooltip instead: the text moves to data-tip (and aria-label) the first time it is hovered.
+let tipOwner: HTMLElement | null = null;
+addEventListener('mouseover', (e) => {
+  const titled = (e.target as Element).closest?.<HTMLElement>('[title]');
+  if (titled?.title) {
+    titled.dataset.tip = titled.title;
+    titled.ariaLabel ??= titled.title;
+    titled.removeAttribute('title');
+  }
+  const owner = (e.target as Element).closest?.<HTMLElement>('[data-tip]') ?? null;
+  if (owner === tipOwner) return;
+  if (tipOwner) hideTip();
+  tipOwner = owner;
+  if (!owner) return;
+  const t = tipBox();
+  t.textContent = owner.dataset.tip!;
+  t.style.display = 'block';
+});
+addEventListener('mousemove', (e) => {
+  if (!tipOwner || !tipEl) return;
+  if (!tipOwner.isConnected) return void ((tipOwner = null), hideTip());
+  tipEl.style.left = `${Math.max(4, Math.min(e.clientX + 14, innerWidth - tipEl.offsetWidth - 8))}px`;
+  tipEl.style.top = `${Math.max(4, Math.min(e.clientY + 14, innerHeight - tipEl.offsetHeight - 8))}px`;
+});
+
 export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

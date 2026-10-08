@@ -12,6 +12,7 @@ import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
 import { el } from './ui/dom';
+import { glyph } from './ui/common';
 
 const screens = document.getElementById('screens')!;
 const net = new Net();
@@ -240,7 +241,8 @@ function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender) {
   for (const s of allSkillsFor(cls, race, g)) {
     const tag = s.race ? raceName(s.race, lang) : s.gender ? genderName(s.gender, lang) : className(cls, lang);
     const row = el('div', `diff-skill${s.race || s.gender ? ' special' : ''}`, list);
-    row.innerHTML = `<span class="ds-icon">${s.icon}</span><span><b></b> <span class="tt-dim">${t('Nv', 'Lv')} ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    row.innerHTML = `<span class="ds-icon"></span><span><b></b> <span class="tt-dim">${t('Nv', 'Lv')} ${s.level} · ${tag}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    glyph('skill', s.id, s.icon, row.querySelector<HTMLElement>('.ds-icon')!);
     row.querySelector('b')!.textContent = skillName(s.id, lang);
     row.querySelector('.ds-desc')!.textContent = skillDesc(s.id, lang);
   }

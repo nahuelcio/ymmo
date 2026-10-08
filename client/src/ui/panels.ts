@@ -6,7 +6,7 @@ import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
-import type { PartyMember, S2C } from '../../../shared/src/protocol';
+import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, itemIcon, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
 import { el, esc, hideTip, setTip, Win } from './dom';
@@ -19,13 +19,25 @@ export class InventoryPanel {
   private grid: HTMLDivElement;
   private footer: HTMLDivElement;
   private menu: HTMLDivElement | null = null;
+  private dollCells: Partial<Record<Slot, HTMLDivElement>> = {};
+  /** what is being dragged: a bag item (by its uid) or the item worn in a slot */
+  private drag: { u?: InvItem['u']; slot?: Slot } | null = null;
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('inventory', tx('Inventario', 'Inventory'), -370, 90, 344, root);
     this.doll = el('div', 'doll', this.win.body);
     this.grid = el('div', 'inv-grid', this.win.body);
     this.footer = el('div', 'inv-footer', this.win.body);
-    el('div', 'hint', this.win.body, tx('Doble click para usar o equipar · Click derecho para más opciones', 'Double-click to use or equip · Right-click for more options'));
+    el('div', 'hint', this.win.body, tx('Doble click o arrastrar para equipar · Click derecho para más opciones · ▲ mejora lo que llevás puesto',
+      'Double-click or drag to equip · Right-click for more options · ▲ is better than what you wear'));
+    // drag a bag item onto the paper doll to wear it, or a worn item into the bag to take it off
+    for (const zone of [this.doll, this.grid]) zone.ondragover = (e) => e.preventDefault();
+    this.doll.ondrop = () => {
+      if (this.drag?.u !== undefined) g.net.send({ t: 'use', u: this.drag.u });
+    };
+    this.grid.ondrop = () => {
+      if (this.drag?.slot) g.net.send({ t: 'unequip', slot: this.drag.slot });
+    };
     addEventListener('pointerdown', (e) => {
       if (this.menu && !this.menu.contains(e.target as Node)) this.closeMenu();
     });
@@ -36,14 +48,39 @@ export class InventoryPanel {
     this.menu = null;
   }
 
+  /** The stat a character cares about for this piece, to tell upgrades apart. */
+  private score(id: string) {
+    const d = ITEMS[id];
+    return d.type === 'weapon' ? (this.g.me.cls === 'mystic' ? d.mAtk ?? 0 : d.pAtk ?? 0) : (d.pDef ?? 0) + (d.mDef ?? 0);
+  }
+
+  /** Tooltip block: this item's stats against what is worn in the same slot. */
+  private compare(id: string): string {
+    const d = ITEMS[id];
+    if (!d.slot) return '';
+    const worn = this.g.inv.find((i) => i.s === d.slot);
+    const c = worn ? ITEMS[worn.i] : undefined;
+    const STATS = [['pAtk', tx('Atq.F', 'P.Atk')], ['mAtk', tx('Atq.M', 'M.Atk')], ['pDef', tx('Def.F', 'P.Def')], ['mDef', tx('Def.M', 'M.Def')], ['mp', 'MP']] as const;
+    const rows = STATS.map(([k, label]) => {
+      const dv = (d[k] ?? 0) - (c?.[k] ?? 0);
+      return dv ? `<span class="${dv > 0 ? 'tt-up' : 'tt-down'}">${label} ${dv > 0 ? '+' : ''}${dv}</span>` : '';
+    }).filter(Boolean);
+    const head = c ? `${tx('Contra lo equipado', 'Against equipped')}: ${esc(itemName(c.id, lang))}` : tx('No tenés nada equipado en ese lugar', 'Nothing equipped in that slot');
+    return `<div class="tt-cmp"><span class="tt-dim">${head}</span><br>${rows.join(' &nbsp; ') || tx('Mismas estadísticas', 'Same stats')}</div>`;
+  }
+
   refresh() {
     const g = this.g;
     this.doll.innerHTML = '';
+    this.dollCells = {};
     for (const s of SLOTS) {
-      const cell = el('div', 'doll-slot', this.doll);
+      const cell = (this.dollCells[s] = el('div', 'doll-slot', this.doll));
       const it = g.inv.find((i) => i.s === s);
       if (it) {
         itemIcon(it.i, cell);
+        cell.draggable = true;
+        cell.ondragstart = () => (hideTip(), (this.drag = { slot: s }));
+        cell.ondragend = () => (this.drag = null);
         cell.ondblclick = () => g.net.send({ t: 'unequip', slot: s });
         setTip(cell, () => itemTip(it.i) + '<br><span class="tt-dim">Doble click para sacártelo</span>');
       } else el('span', 'doll-label', cell, SLOT_LABEL[s]);
@@ -53,6 +90,16 @@ export class InventoryPanel {
     for (const it of bag) {
       const cell = el('div', 'inv-cell', this.grid);
       itemIcon(it.i, cell, it.c);
+      const slot = ITEMS[it.i].slot;
+      if (slot) {
+        const worn = g.inv.find((i) => i.s === slot);
+        if (this.score(it.i) > (worn ? this.score(worn.i) : 0)) el('span', 'inv-up', cell, '▲');
+        cell.draggable = true;
+        cell.ondragstart = () => (hideTip(), (this.drag = { u: it.u }), this.dollCells[slot]?.classList.add('match'));
+        cell.ondragend = () => ((this.drag = null), this.dollCells[slot]?.classList.remove('match'));
+        cell.onmouseenter = () => this.dollCells[slot]?.classList.add('match');
+        cell.onmouseleave = () => this.dollCells[slot]?.classList.remove('match');
+      }
       cell.ondblclick = () => {
         hideTip();
         g.net.send({ t: 'use', u: it.u });
@@ -78,7 +125,7 @@ export class InventoryPanel {
         };
         this.menu = m;
       };
-      setTip(cell, () => itemTip(it.i, it.c));
+      setTip(cell, () => itemTip(it.i, it.c) + this.compare(it.i));
     }
     for (let i = bag.length; i < 40; i++) el('div', 'inv-cell empty', this.grid);
     this.footer.innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span><span class="tt-dim">${g.inv.length}/80</span>`;

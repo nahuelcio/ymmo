@@ -109,7 +109,7 @@ input { font: inherit; user-select: text; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
 
 .party { position: absolute; left: 10px; top: 48px; width: 200px; padding: 6px 8px; }
-.quest-tracker { position: absolute; right: 10px; top: 230px; width: 180px; padding: 6px 8px; }
+.quest-tracker { position: absolute; right: 10px; top: 240px; width: 180px; padding: 6px 8px; }
 .qt-bar { height: 3px; margin-top: 3px; background: #08090d; border-radius: 2px; overflow: hidden; }
 .qt-bar > div { height: 100%; background: var(--cp); }
 .qt-row.ready .qt-name { color: #8fdc8f; }
@@ -210,9 +210,15 @@ input { font: inherit; user-select: text; }
 /* ---------- minimap ---------- */
 .minimap { position: absolute; right: 10px; top: 10px; padding: 4px; width: 180px; }
 .mm-zone { text-align: center; color: var(--gold); font-size: 11px; padding-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mm-canvas { display: block; width: 170px; height: 170px; border: 1px solid #2a2a2a; cursor: pointer; border-radius: 2px; }
-.mm-zoom { position: absolute; right: 8px; top: 24px; display: flex; flex-direction: column; gap: 2px; }
-.mm-legend { padding-top: 3px; text-align: center; font-size: 9px; color: var(--dim); white-space: nowrap; }
+.minimap { background: none; border: none; box-shadow: none; }
+.mm-zone { font-family: Georgia, serif; font-size: 12px; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 1px 2px #000; }
+.mm-canvas { display: block; width: 170px; height: 170px; cursor: pointer; border-radius: 50%; border: 2px solid var(--border-hi);
+  box-shadow: 0 0 0 2px #1a160e, 0 0 0 3px var(--border), 0 4px 14px rgba(0, 0, 0, 0.7); }
+.mm-north { position: absolute; left: 50%; top: 19px; transform: translateX(-50%); width: 16px; line-height: 14px; text-align: center; font: bold 10px Georgia, serif;
+  color: var(--gold); background: #1a160e; border: 1px solid var(--border-hi); border-radius: 50%; pointer-events: none; }
+.mm-coords { width: fit-content; margin: -9px auto 0; padding: 0 8px; position: relative; font-size: 10px; color: #cfd6e6; background: #1a160e; border: 1px solid var(--border); border-radius: 8px; }
+.mm-zoom { position: absolute; right: 2px; top: 24px; display: flex; flex-direction: column; gap: 2px; }
+.mm-legend { padding-top: 3px; text-align: center; font-size: 9px; color: #c8ccd6; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .mm-legend i { font-style: normal; }
 .big-map { display: block; width: 100%; height: auto; border: 1px solid #2a2a2a; }
 
@@ -245,6 +251,12 @@ input { font: inherit; user-select: text; }
 .inv-cell { aspect-ratio: 1; background: #07080c; border: 1px solid #2a2618; border-radius: 2px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .inv-cell .icon { width: 100%; height: 100%; }
 .inv-cell.empty { cursor: default; }
+.inv-cell { position: relative; }
+.inv-up { position: absolute; top: 0; right: 2px; z-index: 1; font-size: 9px; color: #6aff8a; text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: none; }
+.doll-slot.match { border-color: var(--gold); box-shadow: 0 0 8px rgba(232, 207, 138, 0.7); }
+.tt-cmp { margin-top: 5px; padding-top: 4px; border-top: 1px solid #3a3424; }
+.tt-up { color: #6aff8a; }
+.tt-down { color: #ff6a5a; }
 .inv-footer { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2618; }
 .adena { color: #ffd966; }
 .ctx-menu { position: fixed; z-index: 300; background: var(--panel-solid); border: 1px solid var(--border); border-radius: 3px; display: flex; flex-direction: column; min-width: 100px; }
@@ -338,7 +350,7 @@ input { font: inherit; user-select: text; }
 .diff-skills { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; }
 .diff-skill { display: flex; gap: 8px; align-items: flex-start; padding: 5px 6px; background: #0d0f16; border: 1px solid #262626; border-radius: 3px; line-height: 1.35; }
 .diff-skill.special { background: rgba(255, 210, 120, 0.08); border-color: #6a5a30; }
-.ds-icon { font-size: 18px; width: 22px; text-align: center; flex: 0 0 22px; }
+.ds-icon { font-size: 20px; width: 22px; text-align: center; flex: 0 0 22px; color: var(--gold); }
 @media (max-width: 760px) { .diff-grid, .diff-skills { grid-template-columns: repeat(2, 1fr); } .diff-skills { grid-template-columns: 1fr; } .studio { flex-direction: column; } .char-preview { flex-basis: 180px; } }
 .name-row { display: flex; gap: 8px; align-items: stretch; }
 .name-row .field { flex: 1; margin: 0; }
