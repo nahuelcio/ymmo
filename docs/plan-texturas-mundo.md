@@ -41,6 +41,31 @@ Hoy el mundo no usa ninguna textura. Todo se pinta con colores planos.
 - Tiene que ser repetible sin costuras: el ruido se envuelve en los bordes del tile.
 - Se cachea en memoria. Hay que medir cuánto tarda en generarse; el presupuesto es menos de 150 ms en high.
 
+**Estado: hecha.** Lo que quedó, y en qué cambió respecto de lo planeado:
+
+- **Archivos.**
+  - [texgen.ts](../client/src/render/texgen.ts): genera los texels, sin three.js. Usa su propio ruido periódico (value noise, fbm, ridged y Worley), porque el de `shared/terrain.ts` no se repite sin costuras.
+  - [texgen.worker.ts](../client/src/render/texgen.worker.ts): corre la generación en un Web Worker.
+  - [textures.ts](../client/src/render/textures.ts): expone `getTextureSet(quality)`, arma las `DataArrayTexture` y mantiene el cache.
+- **Formato del texel (RGBA8).**
+  - R: factor de brillo; 0,5 es neutro y el shader lo usa como `R*2`.
+  - G: altura, para la mezcla de capas de la Fase 2.
+  - B: variación de tinte.
+- **Capas.** Terreno: pasto, tierra, roca, arena, nieve y empedrado. Props: madera, piedra, tejas y revoque. Todas se verificaron en mosaico 2×2 y no muestran costuras.
+- **Tamaños.** En high, el terreno va a 512 px y los props a 256 px. En low, el terreno va a 256 px y los props a 128 px.
+- **Memoria de GPU** (mipmaps incluidos): 9,3 MB en high y 2,3 MB en low. Queda dentro del presupuesto de 16 MB.
+- **Tiempo de generación.** El presupuesto de 150 ms no se puede cumplir generando 2,6 M de texels en JS:
+
+  | | Primera vez | Desde la segunda carga |
+  |---|---|---|
+  | high | ~1,1 s | ~50 ms |
+  | low | ~0,3–0,5 s | ~50 ms |
+
+  Por eso el presupuesto pasa a ser este:
+  - **0 ms de bloqueo del hilo principal**, porque se genera en el worker.
+  - **Caché persistente en IndexedDB.** La clave lleva `TEX_VERSION` y las versiones viejas se borran al abrir la base. Si IndexedDB o el worker no están disponibles, se genera de nuevo o en el hilo principal.
+  - **En la Fase 2**, el terreno se muestra con los colores actuales hasta que llegan las texturas.
+
 ### Fase 2 — Terreno con mezcla de capas
 - Separar `groundColor` en `groundLayers(x, z, h)`, que devuelve el tinte y los pesos de cada capa. `groundColor` sigue existiendo para el minimapa ([ui/minimap.ts](../client/src/ui/minimap.ts)) como mezcla de esos mismos datos.
 - En `buildTerrain`, agregar los atributos `splatA` y `splatB` (vec4 cada uno, 8 capas como máximo). El peso de roca en pendiente se pasa del oscurecido actual por normal a un peso en el atributo.
