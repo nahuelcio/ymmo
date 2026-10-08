@@ -1,0 +1,6 @@
+node_modules
+server-rs/target
+client/dist
+server/data
+.git
+!.ca-test.crt

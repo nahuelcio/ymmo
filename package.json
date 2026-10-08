@@ -7,9 +7,14 @@
     "dev:server": "tsx watch --clear-screen=false server/src/index.ts",
     "dev:client": "vite --config client/vite.config.ts",
     "build": "vite build --config client/vite.config.ts",
-    "start": "tsx server/src/index.ts",
+    "start": "node scripts/start.mjs",
     "typecheck": "tsc --noEmit -p .",
-    "loadtest": "tsx scripts/loadtest.ts"
+    "loadtest": "tsx scripts/loadtest.ts",
+    "start:node": "tsx server/src/index.ts",
+    "start:rs": "server-rs/target/release/claudi-server",
+    "export-data": "tsx scripts/export-data.ts",
+    "build:rs": "npm run export-data && cargo build --release --manifest-path server-rs/Cargo.toml",
+    "dev:rs": "npm run export-data && cargo run --release --manifest-path server-rs/Cargo.toml"
   },
   "dependencies": {
     "three": "^0.170.0",
