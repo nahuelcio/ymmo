@@ -136,6 +136,8 @@ export class Win {
   }
 
   show() {
+    // phones: one window at a time, full width (see the portrait layout in style.css)
+    if (document.body.classList.contains('touch') && innerWidth <= 760) for (const w of [...Win.stack]) if (w !== this) w.hide();
     this.root.style.display = '';
     this.front();
     this.onShow?.();

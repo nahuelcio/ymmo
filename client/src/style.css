@@ -492,3 +492,44 @@ input { font: inherit; user-select: text; }
 .lang-btn.sel { border-color: var(--gold); color: var(--gold); }
 
 .remember { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--dim); cursor: pointer; }
+
+/* ---------- phones held upright: one column, nothing overlapping ----------
+   top:    status · menu row · target · chat (folded)       minimap + quests on the right
+   bottom: joystick / actions, then HP|MP + XP + shortcut bar along the bottom edge */
+@media (max-width: 760px) and (orientation: portrait) {
+  .touch .status { transform: scale(0.85); transform-origin: top left; top: calc(6px + env(safe-area-inset-top)); left: 6px; width: 230px; }
+  .touch .minimap { transform: scale(0.58); transform-origin: top right; top: calc(4px + env(safe-area-inset-top)); right: 2px; }
+  .touch .menu { top: calc(44px + env(safe-area-inset-top)); bottom: auto; left: 6px; right: auto; transform: none; flex-direction: row; flex-wrap: nowrap; gap: 3px; padding: 2px; }
+  .touch .menu .menu-btn { min-width: 34px; min-height: 34px; padding: 3px 5px; }
+  .touch .target { top: calc(86px + env(safe-area-inset-top)); bottom: auto; left: 6px; transform: none; width: min(270px, calc(100vw - 130px)); }
+  .touch .chat { top: calc(146px + env(safe-area-inset-top)); left: 6px; width: min(300px, calc(100vw - 140px)); height: 130px; }
+  .touch .chat.collapsed { height: auto; }
+  .touch .quest-tracker { top: calc(150px + env(safe-area-inset-top)); right: 4px; width: 118px; padding: 4px 6px; font-size: 10px; max-height: 150px; overflow: hidden; }
+  .touch .quest-tracker .quest-head { font-size: 11px; margin-bottom: 2px; }
+  .touch .party { top: auto; bottom: 420px; left: 6px; width: 150px; transform: scale(0.85); transform-origin: bottom left; }
+  .touch .buffs { left: 6px; top: auto; bottom: 380px; width: 60vw; }
+  .touch .status-row { left: 6px; top: auto; bottom: 350px; }
+  .touch .castbar { bottom: 330px; width: 60vw; }
+  /* thumb-sized hotbar: two rows of five big slots, with HP|MP and XP riding on top */
+  .touch .shortcuts { bottom: calc(4px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(310px, calc(100vw - 16px));
+    flex-wrap: wrap; justify-content: center; gap: 5px; padding: 5px; }
+  .touch .shortcuts .slot { width: 54px; height: 54px; }
+  .touch .shortcuts .slot .icon { font-size: 28px; }
+  .touch .shortcuts .slot-key { font-size: 11px; }
+  .touch .shortcuts .cd-num { font-size: 18px; }
+  .touch .joy-base { bottom: calc(196px + env(safe-area-inset-bottom)); left: 12px; width: 112px; height: 112px; }
+  .touch .touch-actions { bottom: calc(196px + env(safe-area-inset-bottom)); right: 8px; grid-template-columns: 58px 58px; gap: 8px; }
+  .touch .touch-btn { width: 58px; height: 58px; }
+  .touch .touch-btn.tb-attack { width: 66px; height: 66px; }
+  /* menu row: icons only, adena lives in the inventory; leaves room for the minimap */
+  .touch .menu .hud-adena { display: none; }
+  .touch .menu .menu-btn { min-width: 32px; min-height: 32px; padding: 2px 4px; }
+  .touch .menu { max-width: calc(100vw - 120px); }
+  .touch .chat-tabs { overflow-x: auto; scrollbar-width: none; }
+  .touch .chat-tab { padding: 2px 6px; font-size: 11px; flex: 0 0 auto; }
+  /* windows take the whole width instead of spilling off the side */
+  .touch .win { left: 6px !important; right: 6px; top: calc(44px + env(safe-area-inset-top)) !important; width: auto !important; max-width: none; }
+  .touch .win-body { max-height: calc(100dvh - 120px); }
+  .touch .win-title { cursor: default; padding: 8px 10px; }
+  .touch .win-close { font-size: 22px; padding: 0 4px; }
+}

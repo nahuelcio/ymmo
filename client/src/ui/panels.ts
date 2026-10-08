@@ -9,6 +9,7 @@ import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
+import { isTouchDevice } from './touch';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
 const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
@@ -457,6 +458,16 @@ export function createHelp(root: HTMLElement): Win {
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
   </div>`;
   hydrate(w.body);
+  if (isTouchDevice()) {
+    // phones: how the touch controls work, before the keyboard/mouse guide
+    const touch = document.createElement('div');
+    touch.className = 'help';
+    touch.innerHTML = tx(
+      '<h4>En el celular</h4><p><b>Joystick</b> (abajo a la izquierda) para caminar. <b>Tocá</b> el piso para ir caminando hasta ahí, o tocá un monstruo, un NPC o un objeto para atacar, hablar o juntar. <b>Arrastrá con un dedo</b> para girar la cámara y <b>pellizcá</b> para el zoom.</p><p><b>Atacar</b> pega al objetivo (o elige el más cercano), <b>Rodar</b> esquiva, <b>Objetivo</b> pasa al siguiente monstruo y <b>Juntar</b> levanta lo que esté cerca. Las habilidades y pociones están en la barra de abajo.</p>',
+      '<h4>On your phone</h4><p>The <b>joystick</b> (bottom left) walks. <b>Tap</b> the ground to walk there, or tap a monster, NPC or item to attack, talk or pick it up. <b>Drag one finger</b> to turn the camera and <b>pinch</b> to zoom.</p><p><b>Attack</b> hits your target (or picks the nearest), <b>Roll</b> dodges, <b>Target</b> cycles monsters and <b>Loot</b> picks up what is nearby. Skills and potions are on the bottom bar.</p>',
+    );
+    w.body.prepend(touch);
+  }
   return w;
 }
 
