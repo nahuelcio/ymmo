@@ -83,10 +83,10 @@ export class Minimap {
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = 512;
-    // click the map to walk there; Shift+click adds a stop; right click clears the route
+    // click the map to walk there; Ctrl+click adds a stop (Shift is the roll key); right click clears the route
     this.bigCanvas.onclick = (e) => {
       const k = (2 * WORLD_HALF) / this.bigCanvas.clientWidth;
-      g.travel(e.offsetX * k - WORLD_HALF, e.offsetY * k - WORLD_HALF, e.shiftKey);
+      g.travel(e.offsetX * k - WORLD_HALF, e.offsetY * k - WORLD_HALF, e.ctrlKey || e.metaKey);
       this.routeAt = 0;
     };
     this.bigCanvas.oncontextmenu = (e) => {
@@ -94,8 +94,8 @@ export class Minimap {
       g.stop();
       this.routeAt = 0;
     };
-    el('div', 'hint', this.mapWin.body, tx('Click: caminar hasta ahí · Shift+click: agregar una parada · Click derecho: cancelar la ruta',
-      'Click: walk there · Shift+click: add a stop · Right click: cancel the route'));
+    el('div', 'hint', this.mapWin.body, tx('Click: caminar hasta ahí · Ctrl+click: agregar una parada · Click derecho: cancelar la ruta',
+      'Click: walk there · Ctrl+click: add a stop · Right click: cancel the route'));
   }
 
   toggleMap() {
