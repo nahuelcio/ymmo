@@ -513,7 +513,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Movimiento y cámara</h4>
     <p><b>Click izquierdo</b> en el piso para moverte (si lo mantenés apretado, seguís al cursor). <b>Click derecho y arrastrar</b> gira la cámara y la <b>rueda</b> hace zoom. Q/E o las flechas también giran.</p>
     <h4>Combate</h4>
-    <p>Hacé click en un monstruo para <b>atacarlo</b> directamente (con <b>Espacio</b> o una habilidad de ataque sin objetivo se elige el más cercano). <b>R</b> va pasando por los monstruos cercanos. Manteniendo <b>Tab</b> ves quiénes están conectados.
+    <p><b>Click izquierdo</b> en un monstruo o jugador para <b>seleccionarlo</b>. El <b>autoataque</b> de la barra (o <b>Espacio</b>) lo ataca y sigue pegándole; sin objetivo, elige el más cercano. <b>Tab</b> va pasando por los monstruos cercanos.
     Las habilidades y pociones están en la barra de atajos: teclas <b>1-0</b> o <b>F1-F10</b>. Las habilidades nuevas se aprenden solas al subir de nivel.</p>
     <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: <i data-gi="status/stun"></i> aturdido, <i data-gi="status/slow"></i> ralentizado, <i data-gi="status/bleed"></i> sangrado y <i data-gi="status/poison"></i> veneno. Aturdir a un jefe le corta el ataque especial.</p>
     <h4>Botín</h4>
@@ -528,7 +528,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el equipo de grado B, y sus maestros <b>fabrican</b> el de grado A y S con los materiales que sueltan las zonas de nivel 30 a 50.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
-    El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl+click</b> sobre un jugador con PvP fuerza el ataque (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
+    El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
     matar a un jugador sin flag te suma karma y te pone en <span style="color:#ff4040">rojo</span>, y a los rojos se les pueden caer objetos al morir.</p>
     <h4>Ventanas</h4>
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
@@ -539,8 +539,8 @@ export function createHelp(root: HTMLElement): Win {
     const touch = document.createElement('div');
     touch.className = 'help';
     touch.innerHTML = tx(
-      '<h4>En el celular</h4><p><b>Joystick</b> (abajo a la izquierda) para caminar. <b>Tocá</b> el piso para ir caminando hasta ahí, o tocá un monstruo, un NPC o un objeto para atacar, hablar o juntar. <b>Arrastrá con un dedo</b> para girar la cámara y <b>pellizcá</b> para el zoom.</p><p><b>Atacar</b> pega al objetivo (o elige el más cercano), <b>Rodar</b> esquiva, <b>Objetivo</b> pasa al siguiente monstruo y <b>Juntar</b> levanta lo que esté cerca. Las habilidades y pociones están en la barra de abajo.</p>',
-      '<h4>On your phone</h4><p>The <b>joystick</b> (bottom left) walks. <b>Tap</b> the ground to walk there, or tap a monster, NPC or item to attack, talk or pick it up. <b>Drag one finger</b> to turn the camera and <b>pinch</b> to zoom.</p><p><b>Attack</b> hits your target (or picks the nearest), <b>Roll</b> dodges, <b>Target</b> cycles monsters and <b>Loot</b> picks up what is nearby. Skills and potions are on the bottom bar.</p>',
+      '<h4>En el celular</h4><p><b>Joystick</b> (abajo a la izquierda) para caminar. <b>Tocá</b> el piso para ir caminando hasta ahí, un monstruo o jugador para seleccionarlo, un NPC para hablar o un objeto para juntarlo. <b>Arrastrá con un dedo</b> para girar la cámara y <b>pellizcá</b> para el zoom.</p><p><b>Atacar</b> pega al objetivo (o elige el más cercano) y sigue pegándole, <b>Rodar</b> esquiva, <b>Objetivo</b> pasa al siguiente monstruo y <b>Juntar</b> levanta lo que esté cerca. Las habilidades y pociones están en la barra de abajo.</p>',
+      '<h4>On your phone</h4><p>The <b>joystick</b> (bottom left) walks. <b>Tap</b> the ground to walk there, a monster or player to select them, an NPC to talk or an item to pick it up. <b>Drag one finger</b> to turn the camera and <b>pinch</b> to zoom.</p><p><b>Attack</b> hits your target (or picks the nearest) and keeps swinging, <b>Roll</b> dodges, <b>Target</b> cycles monsters and <b>Loot</b> picks up what is nearby. Skills and potions are on the bottom bar.</p>',
     );
     w.body.prepend(touch);
   }
@@ -552,7 +552,7 @@ const HELP_EN = `
     <h4>Movement and camera</h4>
     <p><b>Left-click</b> the ground to move (hold it to follow the cursor). <b>Right-click and drag</b> rotates the camera and the <b>wheel</b> zooms. Q/E or the arrow keys also rotate.</p>
     <h4>Combat</h4>
-    <p>Click a monster to <b>attack</b> it (<b>Space</b> or an attack skill with no target picks the nearest one). <b>R</b> cycles through nearby monsters. Hold <b>Tab</b> to see who is online.
+    <p><b>Left-click</b> a monster or player to <b>select</b> them. The bar's <b>auto-attack</b> (or <b>Space</b>) attacks them and keeps swinging; with no target it picks the nearest one. <b>Tab</b> cycles through nearby monsters.
     Skills and potions live in the hotbar: keys <b>1-0</b> or <b>F1-F10</b>. New skills are learned automatically as you level up.</p>
     <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: <i data-gi="status/stun"></i> stunned, <i data-gi="status/slow"></i> slowed, <i data-gi="status/bleed"></i> bleeding and <i data-gi="status/poison"></i> poisoned. Stunning a boss interrupts its special attack.</p>
     <h4>Loot</h4>
@@ -567,7 +567,7 @@ const HELP_EN = `
     <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells B grade gear, and its masters <b>craft</b> A and S grade from the materials dropped in the level 30 to 50 zones.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
-    PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. <b>Ctrl+click</b> a PvP player to force an attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
+    PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives karma and turns you <span style="color:#ff4040">red</span>, and red players can drop items on death.</p>
     <h4>Windows</h4>
     <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>O</b> options · <b>Enter</b> chat · <b>Esc</b> close / clear target</p>

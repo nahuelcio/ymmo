@@ -28,7 +28,7 @@ export class TouchControls {
       b.addEventListener('pointerup', up);
       b.addEventListener('pointercancel', up);
     };
-    btn('tb-attack', 'pvp', tx('Atacar', 'Attack'), () => g.attackTarget());
+    btn('tb-attack', 'attack', tx('Atacar', 'Attack'), () => g.attackTarget());
     btn('tb-dash', 'dash', tx('Rodar', 'Roll'), () => g.dash());
     btn('tb-target', 'target', tx('Objetivo', 'Target'), () => g.nextTarget());
     // phones loot automatically (no Loot button): turned on once, it can still be switched off in Options
