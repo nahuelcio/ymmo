@@ -122,7 +122,7 @@ function texturedMaterial(set: TextureSet, quality: TextureQuality, uniforms: Te
       .replace('#include <common>', `#include <common>\n${FRAG_DECL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`);
   };
-  m.customProgramCacheKey = () => `terrain-tex-${quality}`;
+  m.customProgramCacheKey = () => 'terrain-tex'; // the defines already tell low and high apart
   return m;
 }
 
@@ -138,7 +138,15 @@ export class TerrainTextures {
     high: this.makeUniforms(),
   };
 
-  constructor(private terrain: THREE.Group, private plain: THREE.Material, private maxAnisotropy: number) {}
+  private building = new Map<TextureQuality, Promise<THREE.MeshLambertMaterial>>();
+
+  constructor(
+    private terrain: THREE.Group,
+    private plain: THREE.Material,
+    private maxAnisotropy: number,
+    /** compiles the textured shader off the critical path before it is swapped in */
+    private precompile?: (o: THREE.Object3D) => Promise<unknown>,
+  ) {}
 
   private makeUniforms(): TexUniforms {
     return {
@@ -167,13 +175,24 @@ export class TerrainTextures {
       this.setMaterial(ready);
       return;
     }
-    // keep showing what we have until the set is painted (or read back from the cache)
-    void getTextureSet(q, this.maxAnisotropy).then((set) => {
-      if (!this.materials.has(q)) {
+    // keep showing what we have until the set is painted (or read back from the cache) and compiled
+    let p = this.building.get(q);
+    if (!p) {
+      p = getTextureSet(q, this.maxAnisotropy).then(async (set) => {
         this.uniforms[q].uTexStrength.value = 0;
-        this.materials.set(q, texturedMaterial(set, q, this.uniforms[q]));
-      }
-      if (this.quality === q) this.setMaterial(this.materials.get(q)!);
+        const m = texturedMaterial(set, q, this.uniforms[q]);
+        if (this.precompile) {
+          const probe = new THREE.Mesh((this.terrain.children[0] as THREE.Mesh).geometry, m);
+          probe.receiveShadow = true;
+          await this.precompile(probe).catch(() => undefined);
+        }
+        this.materials.set(q, m);
+        return m;
+      });
+      this.building.set(q, p);
+    }
+    void p.then((m) => {
+      if (this.quality === q) this.setMaterial(m);
     });
   }
 

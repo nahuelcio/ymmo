@@ -107,6 +107,39 @@ Hoy el mundo no usa ninguna textura. Todo se pinta con colores planos.
 - Usar proyección triplanar en espacio de mundo. Funciona aunque `mergeStatic` fusione la geometría, porque no depende de UVs.
 - Las texturas tienen que ser direccionales donde importa: las vetas de madera verticales en postes y horizontales en tablones. Para eso alcanza con elegir el eje dominante de la normal.
 
+**Estado: hecha.** Lo que quedó, y en qué cambió respecto de lo planeado:
+
+- **Material.** En vez de un `texMat` aparte se extendió `mat(color, surface?)`. La tabla `SURFACE_OF` asigna una superficie (madera, piedra, tejas, revoque) a cada color con nombre de la paleta de edificios. Donde el color llega por parámetro (paredes, techo y frontones de `house`, techo de la herrería) se pasa la superficie explicitamente. Lo que no está en la tabla queda liso: metal, vidrio, tela, oro, el bronce de la estatua y las carpas.
+- **Personajes.** `models.ts` usa `mat(color, 'none')`, así que los personajes y monstruos nunca toman textura aunque compartan un color de la paleta.
+- **Shader** ([propTex.ts](../client/src/render/propTex.ts)).
+  - Se inyecta con `onBeforeCompile` en todos los materiales con superficie; queda desactivado por `defines` hasta que llegan las texturas.
+  - En high la proyección es triplanar. En low se usa solo el eje dominante, con una sola muestra.
+  - La madera lleva la veta vertical en las caras laterales (postes, puertas, barriles).
+  - Las tejas se proyectan solo desde los costados, así las hileras quedan horizontales en el faldón.
+  - Contraste 1,2, normalizado por el brillo medio de cada capa. La textura se atenúa entre 70 y 180 u.
+- **Imprevisto: rotación de las piezas.** Proyectar en ejes del mundo dejaba los patrones en diagonal sobre los edificios rotados alrededor de la plaza, y duplicaba las juntas verticales en las paredes en ángulo.
+  - `mergeStatic` ahora guarda el giro (yaw) de cada pieza en un atributo `propRot` (cos, sin).
+  - El shader proyecta en los ejes propios de cada pieza. Los meshes sin ese atributo leen (0, 0) y no se rotan.
+- **Imprevisto: tirones al compilar.** Cambiar de calidad recompilaba todos los programas en el hilo principal. Lo mismo iba a pasar al llegar las texturas después de entrar al juego. Se arregló así:
+  - Las variantes nuevas se precompilan con `renderer.compileAsync` antes del cambio, una por combinación distinta de `defines`. Terreno y props usan el mismo mecanismo.
+  - `PostFX.compileAsync` compila contra el buffer del composer, así coinciden las claves de programa con las del post-procesado.
+  - Los clones de precompilación se liberan unos frames después del cambio, porque three.js borra un programa en cuanto ningún material lo usa.
+  - `customProgramCacheKey` pasó a ser constante (`'prop-tex'` / `'terrain-tex'`); los `defines` ya separan las variantes.
+- **Verificado en el juego:**
+  - Taberna con bloques de piedra abajo, revoque arriba y tejas en hileras.
+  - Casas con techo de pizarra, plaza y caminos con losas alineadas a cada pieza, y empedrado del terreno alrededor.
+  - Sin errores de consola. El build de producción sale bien.
+- **Rendimiento** (vista del pueblo, la más cargada de props; promedio de 30 frames del pipeline real con post-FX):
+
+  | Texturas | Tiempo de frame | Diferencia |
+  |---|---|---|
+  | off | 29,8 ms | — |
+  | low | 29,0 ms | sin diferencia medible |
+  | high | 31,9 ms | +7 % |
+
+  El primer frame después de cambiar de calidad tarda 6–28 ms, sin compilaciones en ese momento.
+- **Nota sobre las mediciones.** Los FPS por `requestAnimationFrame` no sirven mientras el panel del navegador está oculto (`visibilityState: hidden`), porque el navegador los limita a ~1 por segundo. Desde esta fase se mide el tiempo de render directo.
+
 ### Fase 4 — Rocas, árboles y agua
 - **Rocas** (`buildRocks`, el `DodecahedronGeometry` instanciado): roca triplanar con el color de instancia como tinte.
 - **Troncos:** corteza con UV cilíndrica (la geometría ya la trae).

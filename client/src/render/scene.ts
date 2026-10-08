@@ -6,6 +6,7 @@ import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nea
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
+import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
 
 const SKY = 0xa9c6e0;
 
@@ -120,10 +121,32 @@ export function groundLayers(x: number, z: number, h: number, out: Float32Array,
   apply(2, smoothstep(0.07, 0.28, slopeAt(x, z)) * 0.85 * (1 - f.snow) * (1 - f.town));
 }
 
-const matCache = new Map<number, THREE.MeshLambertMaterial>();
-export function mat(color: number): THREE.MeshLambertMaterial {
-  let m = matCache.get(color);
-  if (!m) matCache.set(color, (m = new THREE.MeshLambertMaterial({ color, flatShading: true })));
+/**
+ * Surface texture for the building palette's named colours (render/propTex.ts). Colours that come in
+ * as parameters (a house's walls and roof) pass their surface explicitly to mat(); anything not listed
+ * here (metal, glass, cloth, gold, foliage) stays plain.
+ */
+const SURFACE_OF = new Map<number, Surface>([
+  // timber, planks, doors, barrels, crates, stools, signs
+  ...[0x5a3a20, 0x4a2a15, 0x7a5030, 0x7a5a3a, 0x6a4a2a, 0x6e4e2e, 0x8a6a4a, 0x4a3420, 0x9a7a4a, 0x3a2a18, 0x6a5a3a].map((c) => [c, 'wood'] as const),
+  // footings, walls, trim, chimneys, paving, fountain, ruins, graves
+  ...[0x8a8478, 0x7a746a, 0x5e5a52, 0x6e695f, 0xbab4a6, 0xcac4b6, 0xa8a294, 0xb8b2a4, 0x8f897d, 0x9a9488, 0x6a6460, 0x8a8480].map((c) => [c, 'stone'] as const),
+  // roof tiles, ridge caps, slate
+  ...[0x8a3a2a, 0x5e2a1e, 0x4a5a7a].map((c) => [c, 'roof'] as const),
+  [0xe0d4b8, 'plaster'],
+]);
+
+const matCache = new Map<string, THREE.MeshLambertMaterial>();
+/** Flat-shaded Lambert per colour; `surface` overrides the palette lookup ('none' = never textured). */
+export function mat(color: number, surface?: Surface | 'none'): THREE.MeshLambertMaterial {
+  const s = surface ?? SURFACE_OF.get(color) ?? 'none';
+  const key = `${color}|${s}`;
+  let m = matCache.get(key);
+  if (!m) {
+    m = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    if (s !== 'none') addSurface(m, s);
+    matCache.set(key, m);
+  }
   return m;
 }
 
@@ -141,7 +164,7 @@ export interface WorldScene {
   setTextureQuality(q: TerrainTexQuality): void;
 }
 
-export function createWorldScene(opts: { maxAnisotropy?: number } = {}): WorldScene {
+export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, 90, 420);
@@ -184,7 +207,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number } = {}): WorldSc
   scene.add(sun, sun.target);
 
   const terrain = buildTerrain();
-  const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1);
+  const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1, opts.precompile);
   scene.add(terrain);
   scene.add(buildTrees());
   scene.add(buildRocks());
@@ -203,9 +226,13 @@ export function createWorldScene(opts: { maxAnisotropy?: number } = {}): WorldSc
     scene, terrain, sun,
     detail,
     sky,
-    setTextureQuality: (q) => terrainTex.set(q),
+    setTextureQuality: (q) => {
+      terrainTex.set(q);
+      setPropTextures(q, opts.maxAnisotropy ?? 1, opts.precompile);
+    },
     updateSky(camera: THREE.Camera, far: number, dt: number) {
       terrainTex.update(dt);
+      updatePropTextures(dt);
       sky.position.copy(camera.position);
       sky.scale.setScalar(far * 0.92);
       clouds.position.set(camera.position.x, 0, camera.position.z);
@@ -375,6 +402,14 @@ function mergeStatic(src: THREE.Group): THREE.Group {
     if (!b) buckets.set(key, (b = { mat, geos: [], cast: o.castShadow }));
     const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
     for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    // each piece's yaw, so surface textures (propTex.ts) line up with its own walls, not the world axes
+    const e = o.matrixWorld.elements, yaw = Math.atan2(-e[2], e[0]);
+    const rot = new Float32Array(g.attributes.position.count * 2);
+    for (let i = 0; i < rot.length; i += 2) {
+      rot[i] = Math.cos(yaw);
+      rot[i + 1] = Math.sin(yaw);
+    }
+    g.setAttribute('propRot', new THREE.BufferAttribute(rot, 2));
     b.geos.push(g);
   });
   const out = new THREE.Group();
@@ -556,8 +591,8 @@ function buildDetail(): THREE.Group {
   return g;
 }
 
-function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0, surface?: Surface | 'none') {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, surface));
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -568,7 +603,7 @@ function house(w: number, d: number, wall: number, roof: number): THREE.Group {
   const g = new THREE.Group();
   const TIMBER = 0x5a3a20, STONE = 0x8a8478, base = 0.5, h = 3.4;
   g.add(box(w + 0.3, base, d + 0.3, STONE, 0, base / 2, 0)); // stone footing
-  g.add(box(w, h - base, d, wall, 0, (h + base) / 2, 0));
+  g.add(box(w, h - base, d, wall, 0, (h + base) / 2, 0, 'plaster'));
   // timber frame: corner posts, a beam at mid height and under the eaves, studs on the long walls
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.3, h - base, 0.3, TIMBER, (sx * w) / 2, (h + base) / 2, (sz * d) / 2));
   for (const y of [base + (h - base) * 0.52, h]) {
@@ -579,14 +614,14 @@ function house(w: number, d: number, wall: number, roof: number): THREE.Group {
   // gabled roof: a triangular prism along the width, overhanging the walls
   const rr = (d + 1.4) / Math.sqrt(3), roofH = 2.7, sy = roofH / (1.5 * rr);
   const prism = new THREE.CylinderGeometry(rr, rr, w + 1, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, sy, 1);
-  const r = new THREE.Mesh(prism, mat(roof));
+  const r = new THREE.Mesh(prism, mat(roof, 'roof'));
   r.position.y = h + 0.1 + (rr / 2) * sy;
   r.castShadow = true;
   g.add(r);
-  g.add(box(w + 1.1, 0.14, 0.3, darken(roof), 0, h + 0.1 + roofH, 0)); // ridge cap
+  g.add(box(w + 1.1, 0.14, 0.3, darken(roof), 0, h + 0.1 + roofH, 0, 'roof')); // ridge cap
   // the gable ends are wall, not roof
   for (const sx of [-1, 1]) {
-    const gable = new THREE.Mesh(new THREE.CylinderGeometry(d / Math.sqrt(3), d / Math.sqrt(3), 0.1, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, (roofH * 0.82) / (1.5 * (d / Math.sqrt(3))), 1), mat(wall));
+    const gable = new THREE.Mesh(new THREE.CylinderGeometry(d / Math.sqrt(3), d / Math.sqrt(3), 0.1, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, (roofH * 0.82) / (1.5 * (d / Math.sqrt(3))), 1), mat(wall, 'plaster'));
     gable.position.set((sx * w) / 2, h + 0.1 + (d / Math.sqrt(3) / 2) * ((roofH * 0.82) / (1.5 * (d / Math.sqrt(3)))), 0);
     g.add(gable);
   }
@@ -622,9 +657,9 @@ const WINDOW_LIT = new THREE.MeshLambertMaterial({ color: 0xffd98a, emissive: 0x
 const EMBERS = new THREE.MeshLambertMaterial({ color: 0xff7a1a, emissive: 0xff4a00, emissiveIntensity: 1, flatShading: true });
 
 /** Gabled roof (ridge along x) sitting on y = 0. */
-function gable(w: number, d: number, h: number, color: number): THREE.Mesh {
+function gable(w: number, d: number, h: number, color: number, surface?: Surface | 'none'): THREE.Mesh {
   const rr = d / Math.sqrt(3), sy = h / (1.5 * rr);
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, sy, 1), mat(color));
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, w, 3, 1).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).scale(1, sy, 1), mat(color, surface));
   m.position.y = (rr / 2) * sy;
   m.castShadow = true;
   return m;
@@ -768,7 +803,7 @@ function smithy(w: number, d: number): THREE.Group {
   for (const [px, pz] of [[-w / 2 + 0.2, f - 0.2], [w / 2 - 0.2, f - 0.2], [w / 2 - 0.2, -f + 0.2], [0, f - 0.2]]) g.add(box(0.36, h - 0.3, 0.36, LM_TIMBER, px, (h + 0.3) / 2, pz));
   for (const sz of [-1, 1]) g.add(box(w + 0.6, 0.3, 0.3, LM_TIMBER, 0, h, sz * (f - 0.2)));
   for (const sx of [-1, 0, 1]) g.add(box(0.3, 0.3, d + 0.6, LM_TIMBER, sx * (w / 2 - 0.2), h, 0));
-  const roof = gable(w + 1.6, d + 1.8, 2.3, 0x3a3a3a);
+  const roof = gable(w + 1.6, d + 1.8, 2.3, 0x3a3a3a, 'roof');
   roof.position.y += h + 0.15;
   g.add(roof);
   // forge and chimney
@@ -1157,7 +1192,7 @@ function buildZoneProps(): THREE.Group {
   const g = new THREE.Group();
   const zp = layoutZoneProps();
   for (const { x, z } of zp.tents) {
-    const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 5), mat(0x7a5a3a));
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 5), mat(0x7a5a3a, 'none')); // leather, not planks
     tent.position.set(x, heightAt(x, z) + 2, z);
     tent.castShadow = true;
     g.add(tent);

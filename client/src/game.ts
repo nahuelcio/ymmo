@@ -184,7 +184,11 @@ export class Game {
     host.appendChild(this.labels.domElement);
 
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.3, 700);
-    this.world = createWorldScene({ maxAnisotropy: this.renderer.capabilities.getMaxAnisotropy() });
+    this.world = createWorldScene({
+      maxAnisotropy: this.renderer.capabilities.getMaxAnisotropy(),
+      // texture shaders compile in the background (KHR_parallel_shader_compile) before they are swapped in
+      precompile: (o) => this.post.compileAsync(o),
+    });
     this.cam = new CameraController(this.camera, this.renderer.domElement);
     this.fx = new FxManager(this.world.scene);
     this.post = new PostFX(this.renderer, this.world.scene, this.camera);

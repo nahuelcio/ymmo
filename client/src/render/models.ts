@@ -4,8 +4,11 @@ import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { mat } from './scene';
+import { mat as sceneMat } from './scene';
 import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type QAnim, type QZone } from './quaternius';
+
+/** Creatures and gear stay untextured even when they share a colour with the building palette. */
+const mat = (color: number) => sceneMat(color, 'none');
 
 export interface Rig {
   root: THREE.Group;
