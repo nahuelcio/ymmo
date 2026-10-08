@@ -59,6 +59,10 @@ export interface CEnt {
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
 const INTERP_BASE = 70;
+// ponytail: the server reports these only as chat text, so they are recognised by wording (es/en);
+// a structured message would be sturdier but needs a protocol change.
+const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You have earned) (\d+) (?:de )?experienc/;
+const NOT_READY = /todavía no está lista\.$|is not ready yet\.$/;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
@@ -139,6 +143,9 @@ export class Game {
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
   private sphere = new THREE.Sphere();
+  /** nameplates shown this frame, with their distance (-1: target, hovered or a player, never hidden) */
+  private plates: { c: CEnt; d: number }[] = [];
+  private plateV = new THREE.Vector3();
   private hoverId: number | null = null;
   /** Client-side predicted move destination for our own character. */
   private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number } } | null = null;
@@ -354,7 +361,12 @@ export class Game {
       }
       if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
-    n.on('chat', (m) => this.ui.chat.add(m.ch, m.from, m.text));
+    n.on('chat', (m) => {
+      // gains pop up over the character and, like "not ready", stay out of the main chat tab
+      const gain = m.ch === 'sys' && settings.s.damageNumbers ? GAIN.exec(m.text) : null;
+      if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
+      this.ui.chat.add(gain || (m.ch === 'sys' && NOT_READY.test(m.text)) ? 'log' : m.ch, m.from, m.text);
+    });
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
     n.on('quests', (m) => {
@@ -1289,6 +1301,7 @@ export class Game {
     this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
     this.driveJoystick(now);
     const frozen = now < this.freezeUntil;
+    this.plates.length = 0;
     for (const c of this.ents.values()) {
       if (frozen) break;
       const s = c.snaps;
@@ -1372,11 +1385,24 @@ export class Game {
       if (self) {
         const d = dSelf;
         // player names always show (whenever they're on screen); items, mobs and NPCs fade by distance
-        const show = c.id === this.targetId || c.rec.k === 'p' || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
+        const hot = c.id === this.targetId || c.id === this.hoverId;
+        const show = hot || c.rec.k === 'p' || (c.rec.k === 'i' ? d < 18 : c.rec.k === 'm' ? d < 30 && !(c.flags & F_DEAD) : d < 55);
         c.label.visible = show && onScreen;
+        if (c.label.visible) this.plates.push({ c, d: hot || c.rec.k === 'p' ? -1 : d });
         // like WoW: quest markers show from afar, but not across the whole map
         if (c.marker) c.marker.obj.visible = onScreen && d < 90 && c.marker.el.textContent !== '';
       }
+    }
+    // declutter: nearest first, a nameplate that would land on top of one already placed is hidden
+    this.plates.sort((a, b) => a.d - b.d);
+    const taken: number[] = [];
+    for (const { c, d } of this.plates) {
+      const v = this.plateV.set(c.pos.x, c.pos.y + c.height, c.pos.z).project(this.camera);
+      const x = (v.x * innerWidth) / 2, y = (v.y * innerHeight) / 2;
+      let clash = false;
+      if (d >= 0) for (let i = 0; i < taken.length && !clash; i += 2) clash = Math.abs(taken[i] - x) < 64 && Math.abs(taken[i + 1] - y) < 24;
+      if (clash) c.label.visible = false;
+      else taken.push(x, y);
     }
 
     if (self) {

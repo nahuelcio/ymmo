@@ -57,6 +57,7 @@ export class Minimap {
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
     this.canvas.width = this.canvas.height = 170;
+    el('div', 'mm-legend', box).innerHTML = `<i style="color:#ff5544">●</i> ${tx('enemigos', 'enemies')} <i style="color:#ffd200">●</i> ${tx('misión', 'quest')} <i style="color:#66aaff">●</i> ${tx('jugadores', 'players')}`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
     zin.onclick = () => (this.viewR = Math.max(40, this.viewR * 0.75));
@@ -234,7 +235,7 @@ export class Minimap {
       ctx.arc(x, y, c.rec.k === 'i' ? 1.2 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    this.arrow(ctx, W / 2, W / 2, self.ry, 6);
+    this.arrow(ctx, W / 2, W / 2, self.ry, 8);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, W - 14, W, 14);
     ctx.fillStyle = '#cfd6e6';

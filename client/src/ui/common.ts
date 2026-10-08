@@ -48,9 +48,10 @@ export function skillTip(skillId: string): string {
     <span class="tt-dim">MP ${s.mp} · ${tx('Lanzamiento', 'Cast')} ${(s.cast / 1000).toFixed(1)} s · ${tx('Recarga', 'Cooldown')} ${(s.cooldown / 1000).toFixed(0)} s${s.range > 3 ? ` · ${tx('Alcance', 'Range')} ${s.range}` : ''}</span>`;
 }
 
-export function bar(parent: HTMLElement, cls: string): { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement; set(cur: number, max: number): void } {
+export function bar(parent: HTMLElement, cls: string, label?: string): { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement; set(cur: number, max: number): void } {
   const root = el('div', `bar ${cls}`, parent);
   const fill = el('div', 'bar-fill', root);
+  if (label) el('span', 'bar-label', root, label);
   const text = el('span', 'bar-text', root);
   let lastKey = '';
   return {

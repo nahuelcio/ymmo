@@ -2,12 +2,13 @@ import type { Game } from '../game';
 import { el } from './dom';
 import { lang, t as tx } from '../lang';
 
-type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce';
+// 'log' is client-side: routine system lines (gains, "not ready") that only the System tab lists
+type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce' | 'log';
 const TABS: { id: string; label: string; show: Ch[] }[] = [
   { id: 'all', label: tx('Todo', 'All'), show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
   { id: 'party', label: 'Party', show: ['party', 'announce'] },
   { id: 'whisper', label: tx('Susurros', 'Whispers'), show: ['whisper', 'announce'] },
-  { id: 'sys', label: tx('Sistema', 'System'), show: ['sys', 'announce'] },
+  { id: 'sys', label: tx('Sistema', 'System'), show: ['sys', 'log', 'announce'] },
 ];
 
 export class Chat {
@@ -110,7 +111,7 @@ export class Chat {
     if (this.lines.length > 250) this.lines.shift()!.node.remove();
     if (atBottom) this.log.scrollTop = this.log.scrollHeight;
     if (ch === 'announce') this.g.ui.hud.banner(text);
-    if (this.hidden && ch !== 'sys') {
+    if (this.hidden && ch !== 'sys' && ch !== 'log') {
       this.unread++;
       this.renderToggle();
     }

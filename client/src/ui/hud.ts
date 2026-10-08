@@ -4,6 +4,7 @@ import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
+import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, setTip } from './dom';
@@ -18,6 +19,7 @@ export class Hud {
   private dashEl!: HTMLDivElement;
   private dashCd!: HTMLDivElement;
   private pvpBtn!: HTMLButtonElement;
+  private adenaEl!: HTMLSpanElement;
   private name: HTMLDivElement;
   private cp; private hp; private mp; private xp;
   private buffs: HTMLDivElement;
@@ -40,10 +42,9 @@ export class Hud {
     // Status window (top-left)
     const st = el('div', 'panel status', root);
     this.name = el('div', 'status-name', st);
-    this.cp = bar(st, 'bar-cp');
-    this.hp = bar(st, 'bar-hp');
-    this.mp = bar(st, 'bar-mp');
-    this.xp = bar(st, 'bar-xp');
+    this.cp = bar(st, 'bar-cp', 'CP');
+    this.hp = bar(st, 'bar-hp', 'HP');
+    this.mp = bar(st, 'bar-mp', 'MP');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
 
@@ -58,6 +59,7 @@ export class Hud {
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
+    this.xp = bar(sc, 'bar-xp'); // thin strip along the top edge of the bar
     for (let i = 0; i < 10; i++) {
       const s = el('div', 'slot', sc);
       el('span', 'slot-key', s, i === 9 ? '0' : String(i + 1));
@@ -72,9 +74,9 @@ export class Hud {
 
     // Cast bar
     // dodge roll button (Shift) with cooldown sweep
-    this.dashEl = el('div', 'dash-btn', root);
-    el('span', 'dash-key', this.dashEl, 'Shift');
-    el('span', 'dash-icon', this.dashEl, '💨');
+    this.dashEl = el('div', 'slot dash-btn', sc);
+    el('span', 'slot-key', this.dashEl, 'Shift');
+    el('div', 'icon', this.dashEl, '💨');
     this.dashCd = el('div', 'cd', this.dashEl);
     this.dashEl.title = tx('Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.', 'Roll (Shift): dodge toward the cursor, briefly invulnerable. Great for getting out of red circles.');
     this.dashEl.onclick = () => g.dash();
@@ -85,11 +87,13 @@ export class Hud {
 
     // Menu (bottom-right)
     const menu = el('div', 'panel menu', root);
+    this.adenaEl = el('span', 'adena hud-adena', menu);
     // icon + label: on touch screens only the icon shows
     const btn = (icon: string, label: string, key: string, fn: () => void) => {
       const b = el('button', 'menu-btn', menu);
       el('span', 'mb-icon', b, icon);
       el('span', 'mb-label', b, label);
+      el('span', 'mb-key', b, key);
       b.title = `${label} (${key})`;
       b.onclick = fn;
     };
@@ -117,11 +121,14 @@ export class Hud {
       const q = QUESTS[row.id];
       if (!q) continue;
       shown++;
-      const line = el('div', 'qt-row', this.questList);
+      const ready = row.progress >= q.objective.count;
+      const line = el('div', `qt-row${ready ? ' ready' : ''}`, this.questList);
       el('div', 'qt-name', line, questField(q, 'name', lang));
       const prog = el('div', 'tt-dim', line);
-      const ready = row.progress >= q.objective.count;
-      prog.innerHTML = `${esc(questSummaryL(q, lang))} <b class="${ready ? 'qt-ready' : ''}">${row.progress}/${q.objective.count}</b>`;
+      prog.innerHTML = ready
+        ? `<b class="qt-ready">✔ ${tx('Volvé con', 'Return to')} ${esc(NPCS.find((n) => n.id === q.npc)?.name ?? '')}</b>`
+        : `${esc(questSummaryL(q, lang))} <b>${row.progress}/${q.objective.count}</b>`;
+      el('div', '', el('div', 'qt-bar', line)).style.width = `${Math.min(100, (row.progress / q.objective.count) * 100)}%`;
     }
     this.questRoot.style.display = shown ? '' : 'none';
   }
@@ -161,6 +168,7 @@ export class Hud {
 
   refreshSlots() {
     const m = this.g.me;
+    this.adenaEl.textContent = `🪙 ${this.g.adena.toLocaleString()}`;
     const slots: Slot[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
     for (const id of CONSUMABLES) if (this.itemCount(id) > 0) slots.push({ type: 'item', id });
     while (slots.length < 10) slots.push(null);
@@ -171,19 +179,25 @@ export class Hud {
     this.slotEls.forEach((s, i) => {
       s.querySelector('.icon')?.remove();
       s.querySelector('.cd')?.remove();
+      s.querySelector('.cd-num')?.remove();
       const sl = this.slots[i];
       if (!sl) return;
       const ic = sl.type === 'skill' ? skillIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
       s.prepend(ic);
       el('div', 'cd', s);
+      el('span', 'cd-num', s);
     });
   }
 
   activateSlot(i: number) {
     const sl = this.slots[i];
     if (!sl) return;
-    this.slotEls[i].classList.add('pressed');
-    setTimeout(() => this.slotEls[i].classList.remove('pressed'), 120);
+    // still cooling down for real (not a client guess): shake the slot instead of asking the server
+    const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
+    const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
+    this.slotEls[i].classList.add(cls);
+    setTimeout(() => this.slotEls[i].classList.remove(cls), cls === 'denied' ? 250 : 120);
+    if (cls === 'denied') return;
     if (sl.type === 'skill') this.g.useSkill(sl.id);
     else this.g.useItemById(sl.id);
   }
@@ -218,6 +232,8 @@ export class Hud {
       if (!ov) return;
       const rem = cd ? cd.end - now : 0;
       ov.style.height = rem > 0 ? `${(rem / cd!.dur) * 100}%` : '0';
+      const num = s.querySelector('.cd-num'), left = rem > 950 ? String(Math.ceil(rem / 1000)) : '';
+      if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
     });
