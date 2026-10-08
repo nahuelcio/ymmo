@@ -7,7 +7,7 @@
     "dev:server": "tsx watch --clear-screen=false server/src/index.ts",
     "dev:client": "vite --config client/vite.config.ts",
     "build": "vite build --config client/vite.config.ts",
-    "start": "node scripts/start.mjs",
+    "start": "if [ -x server-rs/target/release/claudi-server ] && [ \"$GAME_SERVER\" != node ]; then exec server-rs/target/release/claudi-server; else exec tsx server/src/index.ts; fi",
     "typecheck": "tsc --noEmit -p .",
     "loadtest": "tsx scripts/loadtest.ts",
     "start:node": "tsx server/src/index.ts",
