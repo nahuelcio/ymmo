@@ -62,6 +62,8 @@ export class Minimap {
   private mapWin: Win;
   private bigCanvas: HTMLCanvasElement;
   private lastDraw = 0;
+  private routePts: { x: number; z: number }[] = [];
+  private routeAt = 0;
 
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
@@ -81,6 +83,19 @@ export class Minimap {
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = 512;
+    // click the map to walk there; Shift+click adds a stop; right click clears the route
+    this.bigCanvas.onclick = (e) => {
+      const k = (2 * WORLD_HALF) / this.bigCanvas.clientWidth;
+      g.travel(e.offsetX * k - WORLD_HALF, e.offsetY * k - WORLD_HALF, e.shiftKey);
+      this.routeAt = 0;
+    };
+    this.bigCanvas.oncontextmenu = (e) => {
+      e.preventDefault();
+      g.stop();
+      this.routeAt = 0;
+    };
+    el('div', 'hint', this.mapWin.body, tx('Click: caminar hasta ahí · Shift+click: agregar una parada · Click derecho: cancelar la ruta',
+      'Click: walk there · Shift+click: add a stop · Right click: cancel the route'));
   }
 
   toggleMap() {
@@ -129,6 +144,7 @@ export class Minimap {
       ctx.lineWidth = 1;
       quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
     }
+    this.drawRoute(ctx, (x, z) => [toMap(x) * S, toMap(z) * S]);
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
   }
@@ -149,6 +165,42 @@ export class Minimap {
     ctx.moveTo(x + r * 0.55, y - r * 0.55); ctx.lineTo(x - r * 0.55, y + r * 0.55);
     ctx.stroke();
     ctx.lineWidth = 1;
+  }
+
+  /** The map route: a dashed line along the path that will be walked, with a numbered pin on each stop. */
+  private drawRoute(ctx: CanvasRenderingContext2D, at: (x: number, z: number) => number[]) {
+    const pts = this.routePts, stops = this.g.route;
+    if (pts.length < 2 || !stops.length) return;
+    ctx.save();
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.setLineDash([6, 5]);
+    for (const [w, c] of [[4.5, 'rgba(0,0,0,0.65)'], [2, '#ffe07a']] as const) {
+      ctx.lineWidth = w;
+      ctx.strokeStyle = c;
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        const [x, y] = at(p.x, p.z);
+        if (i) ctx.lineTo(x, y);
+        else ctx.moveTo(x, y);
+      });
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.font = 'bold 9px Tahoma, sans-serif';
+    ctx.textAlign = 'center';
+    stops.forEach((s, i) => {
+      const [x, y] = at(s.x, s.z);
+      ctx.fillStyle = '#ffe07a';
+      ctx.strokeStyle = '#1a1206';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1a1206';
+      ctx.fillText(String(i + 1), x, y + 3);
+    });
+    ctx.restore();
   }
 
   private label(ctx: CanvasRenderingContext2D, t: string, x: number, y: number) {
@@ -250,6 +302,12 @@ export class Minimap {
     disc(TOWN.x, TOWN.z, 4.4, '#bab4a6');
     disc(TOWN.x, TOWN.z, 3.4, '#4a90c8');
     for (const c of layoutCamps()) for (const t of c.tents) disc(t.x, t.z, 2.3, '#7a6040');
+    // the path is recomputed a couple of times a second, not on every redraw
+    if (now - this.routeAt > 500) {
+      this.routeAt = now;
+      this.routePts = this.g.routePath();
+    }
+    this.drawRoute(ctx, toC);
     // NPCs (always known)
     for (const n of NPCS) {
       const [x, y] = toC(n.x, n.z);

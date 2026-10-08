@@ -148,6 +148,9 @@ export class Game {
   private plates: { c: CEnt; d: number }[] = [];
   private plateV = new THREE.Vector3();
   private hoverId: number | null = null;
+  /** Destinations picked on the world map, walked in order; route[0] is where we are heading now. */
+  route: { x: number; z: number }[] = [];
+  private routeMovedAt = 0;
   /** Client-side predicted move destination for our own character. */
   private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number } } | null = null;
   private holdMove = false;
@@ -877,6 +880,7 @@ export class Game {
 
   /** Action whose movement the server drives: drop local prediction. */
   private serverAction(m: Parameters<Net['send']>[0]) {
+    this.route.length = 0;
     this.predict = null;
     // walking up to whatever we interact with: predict it like a click-move (the server walks the same way)
     if (m.t === 'attack' || m.t === 'pickup' || m.t === 'talk') {
@@ -890,9 +894,32 @@ export class Game {
     this.net.send(m);
   }
 
-  moveTo(p: THREE.Vector3, marker: boolean) {
+  /** Walk to a point on the world map; `append` queues it after the stops already set. */
+  travel(x: number, z: number, append: boolean) {
+    if (!append) this.route.length = 0;
+    this.route.push({ x, z });
+    if (this.route.length === 1) this.walkRoute();
+  }
+
+  private walkRoute() {
+    const wp = this.route[0];
+    this.routeMovedAt = performance.now();
+    this.moveTo(new THREE.Vector3(wp.x, heightAt(wp.x, wp.z), wp.z), false, true);
+  }
+
+  /** The walk ahead as points, from where we stand through every stop (drawn on the maps). */
+  routePath(): { x: number; z: number }[] {
+    const self = this.self;
+    if (!self || !this.route.length) return [];
+    const out = [{ x: self.pos.x, z: self.pos.z }];
+    for (const wp of this.route) out.push(...findPath(out[out.length - 1].x, out[out.length - 1].z, wp.x, wp.z));
+    return out;
+  }
+
+  moveTo(p: THREE.Vector3, marker: boolean, route = false) {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
+    if (!route) this.route.length = 0; // any other move replaces the map route
     this.net.send({ t: 'move', x: p.x, z: p.z });
     const path = findPath(self.pos.x, self.pos.z, p.x, p.z);
     const end = path[path.length - 1];
@@ -983,6 +1010,7 @@ export class Game {
 
   /** Stand still: drop the current move and stop attacking (the target stays selected). */
   stop() {
+    this.route.length = 0;
     this.predict = null;
     this.clickMarker.visible = false;
     this.net.send({ t: 'stop' });
@@ -1423,6 +1451,15 @@ export class Game {
       else taken.push(x, y);
     }
 
+    if (self && this.route.length) {
+      // reached a stop: on to the next one. Standing still for a while (blocked, dead, busy) drops the route.
+      const wp = this.route[0];
+      if (Math.hypot(wp.x - self.pos.x, wp.z - self.pos.z) < 1.5) {
+        this.route.shift();
+        if (this.route.length) this.walkRoute();
+      } else if (this.predict || self.flags & F_MOVING) this.routeMovedAt = now;
+      else if (now - this.routeMovedAt > 1500) this.route.length = 0;
+    }
     if (self) {
       this.cam.update(dt, self.pos);
       this.world.follow(self.pos);
