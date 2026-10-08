@@ -2,15 +2,13 @@
 use crate::data::d;
 
 pub fn in_town(x: f64, z: f64) -> bool {
-    let t = &d().town;
-    (x - t.x).hypot(z - t.z) < t.r + 5.0
+    d().towns.iter().any(|t| (x - t.x).hypot(z - t.z) < t.r + 5.0)
 }
 
 /** zoneAt(): Spanish zone name at (x,z) */
 pub fn zone_at(x: f64, z: f64) -> String {
     let data = d();
-    let t = &data.town;
-    if (x - t.x).hypot(z - t.z) < t.r + 10.0 { return t.name.clone(); }
+    if let Some(t) = data.towns.iter().find(|t| (x - t.x).hypot(z - t.z) < t.r + 10.0) { return t.name.clone(); }
     for zn in &data.zones {
         if (x - zn.x).hypot(z - zn.z) < zn.r { return zn.name.clone(); }
     }

@@ -68,6 +68,8 @@ export type C2S =
   | { t: 'enchant'; u: number }
   | { t: 'buy'; npc: number; item: string; qty: number }
   | { t: 'sell'; npc: number; u: number; qty: number }
+  /** have a merchant make an item from its recipe (ItemDef.craft) */
+  | { t: 'craft'; npc: number; item: string }
   | { t: 'teleport'; npc: number; dest: string }
   | { t: 'questAccept'; npc: number }
   | { t: 'questTurnIn'; npc: number }
@@ -106,7 +108,7 @@ export type S2C =
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'party'; members: PartyMember[] | null }

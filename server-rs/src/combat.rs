@@ -364,7 +364,7 @@ impl World {
         p.hp = p.stats.max_hp * 0.7;
         p.mp = p.stats.max_mp * 0.7;
         p.cp = p.stats.max_cp * 0.7;
-        let pt = self.town_point();
+        let pt = self.town_point(Some(pid));
         self.teleport(pid, pt.x, pt.z);
     }
 

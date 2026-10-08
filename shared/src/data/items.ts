@@ -15,6 +15,8 @@ export interface ItemDef {
   price: number;
   stack?: boolean;
   use?: { hp?: number; mp?: number; escape?: boolean; cd: number };
+  /** recipe: a merchant who lists this item in `craft` makes it for these materials and this much adena */
+  craft?: { mats: [string, number][]; adena: number };
   /** enchant scroll: the kind of gear it works on */
   enchant?: 'weapon' | 'armor';
   icon: string;
@@ -26,12 +28,14 @@ export interface ItemDef {
  * One full set per grade for levels 20-50. w: sword P.Atk (what a fighter needs to drop a same-level mob in ~12 hits,
  * see the balance_table test in server-rs/src/formulas.rs), a: plate P.Def, j: ring HP, price: base price.
  */
-function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: number, j: number, price: number, color: number): ItemDef[] {
+function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: number, j: number, price: number, color: number, mats?: [string, string]): ItemDef[] {
   const r = Math.round;
-  const armor = (id: string, name: string, slot: Slot, icon: string, k: number, s: Partial<ItemDef>): ItemDef => ({ id: `${p}_${id}`, name, type: 'armor', slot, grade, price: r(price * k), icon, color, ...s });
+  // crafted tiers: 4 of each material per price step (a weapon is 24 + 24) and a third of the price in adena
+  const craft = (k: number) => (mats ? { craft: { mats: mats.map((m) => [m, r(k * 4)] as [string, number]), adena: r((price * k) / 3) } } : {});
+  const armor = (id: string, name: string, slot: Slot, icon: string, k: number, s: Partial<ItemDef>): ItemDef => ({ id: `${p}_${id}`, name, type: 'armor', slot, grade, price: r(price * k), icon, color, ...s, ...craft(k) });
   return [
-    { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color },
-    { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, weaponType: 'staff', pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color },
+    { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color, ...craft(6) },
+    { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, weaponType: 'staff', pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
     armor('helm', `Yelmo ${sg}`, 'head', '⛑️', 2, { pDef: r(a * 0.4), mDef: r(a * 0.12) }),
     armor('plate', `Coraza ${sg}`, 'chest', '🛡️', 4, { pDef: a, mDef: r(a * 0.15) }),
     armor('robe', `Túnica ${sg}`, 'chest', '👘', 4, { pDef: r(a * 0.67), mDef: r(a * 0.6), mp: j * 2 }),
@@ -83,10 +87,10 @@ const list: ItemDef[] = [
   { id: 'demons_circlet', name: 'Diadema del Demonio', type: 'armor', slot: 'head', grade: 'C', pDef: 6, mDef: 7, mp: 30, price: 9000, icon: '👑', color: 0x8a1f3a },
   { id: 'full_plate_armor', name: 'Armadura de Placas', type: 'armor', slot: 'chest', grade: 'C', pDef: 24, mDef: 4, price: 22000, icon: '🛡️', color: 0xc0c8d0 },
   { id: 'demons_tunic', name: 'Túnica del Demonio', type: 'armor', slot: 'chest', grade: 'C', pDef: 16, mDef: 14, mp: 80, price: 22000, icon: '👘', color: 0x8a1f3a },
-  // Levels 20-50: B is sold in town (jewelry aside), A and S only drop
+  // Levels 20-50: B is sold in the Bastión del Ocaso; A and S drop, or its smiths make them from zone materials
   ...tier('B', 'abyssal', 'Abisal', 'Abisales', 52, 30, 60, 8000, 0x4a8ab0),
-  ...tier('A', 'ashforged', 'de Ceniza', 'de Ceniza', 92, 38, 85, 20000, 0xc8501a),
-  ...tier('S', 'dragon', 'del Dragón', 'del Dragón', 140, 48, 115, 45000, 0x8a1a2a),
+  ...tier('A', 'ashforged', 'de Ceniza', 'de Ceniza', 92, 38, 85, 20000, 0xc8501a, ['ember_shard', 'citadel_sigil']),
+  ...tier('S', 'dragon', 'del Dragón', 'del Dragón', 140, 48, 115, 45000, 0x8a1a2a, ['drake_scale', 'dragon_fang']),
   // Jewelry: armor without P.Def (D sold in town, C drop only)
   { id: 'ring_of_vigor', name: 'Anillo del Vigor', type: 'armor', slot: 'ring', grade: 'D', mDef: 3, hp: 25, price: 2200, icon: '💍', color: 0xc0a040 },
   { id: 'earring_of_focus', name: 'Pendiente del Foco', type: 'armor', slot: 'earring', grade: 'D', mDef: 4, mp: 30, price: 2600, icon: '✨', color: 0x6090d0 },

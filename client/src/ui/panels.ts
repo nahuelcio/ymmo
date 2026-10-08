@@ -253,7 +253,7 @@ export class CharacterPanel {
 export class NpcPanel {
   win: Win;
   private msg: Extract<S2C, { t: 'npc' }> | null = null;
-  private tab: 'buy' | 'sell' = 'buy';
+  private tab: 'buy' | 'craft' | 'sell' = 'buy';
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('npc', tx('Vendedor', 'Merchant'), 380, 110, 380, root);
@@ -314,8 +314,9 @@ export class NpcPanel {
       return;
     }
     const tabs = el('div', 'tabs', b);
-    for (const t of ['buy', 'sell'] as const) {
-      const tb = el('button', `tab${this.tab === t ? ' active' : ''}`, tabs, t === 'buy' ? tx('Comprar', 'Buy') : tx('Vender', 'Sell'));
+    const TAB = { buy: tx('Comprar', 'Buy'), craft: tx('Fabricar', 'Craft'), sell: tx('Vender', 'Sell') };
+    for (const t of m.craft ? (['buy', 'craft', 'sell'] as const) : (['buy', 'sell'] as const)) {
+      const tb = el('button', `tab${this.tab === t ? ' active' : ''}`, tabs, TAB[t]);
       tb.onclick = () => {
         this.tab = t;
         this.render();
@@ -337,6 +338,21 @@ export class NpcPanel {
         qty.addEventListener('keydown', (e) => e.stopPropagation());
         const btn = el('button', 'btn', row, tx('Comprar', 'Buy'));
         btn.onclick = () => g.net.send({ t: 'buy', npc: m.npc, item: id, qty: Math.max(1, Math.floor(+qty.value || 1)) });
+      }
+    } else if (this.tab === 'craft') {
+      // made to order: the recipe's materials (red when you are short) and a fee
+      const have = (id: string) => g.inv.reduce((n, i) => n + (i.i === id && !i.s ? i.c : 0), 0);
+      for (const id of m.craft ?? []) {
+        const def = ITEMS[id], rec = def.craft;
+        if (!rec) continue;
+        const row = el('div', 'shop-row', list);
+        itemIcon(id, row);
+        const mats = rec.mats.map(([mid, n]) => `<span class="${have(mid) >= n ? 'tt-dim' : 'tt-down'}">${n} × ${esc(itemName(mid, lang))} (${have(mid)})</span>`).join(' · ');
+        el('div', 'grow', row).innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br>${mats} · <span class="${g.adena >= rec.adena ? 'tt-dim' : 'tt-down'}">${rec.adena} adena</span>`;
+        setTip(row, () => itemTip(id));
+        const btn = el('button', 'btn', row, tx('Fabricar', 'Craft'));
+        btn.disabled = g.adena < rec.adena || rec.mats.some(([mid, n]) => have(mid) < n);
+        btn.onclick = () => g.net.send({ t: 'craft', npc: m.npc, item: id });
       }
     } else {
       const sellable = g.inv.filter((i) => !i.s);
@@ -509,6 +525,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Zonas de caza</h4>
     <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul) · Costa Abandonada (20-25) · Ruinas Hundidas (25-30) · Estepas Ardientes (30-35) · Ciudadela Orca (35-40) · Valle del Dragón (40-45) · Nido del Dragón (45-50).</p>
     <p>A nivel 20 elegís una <b>especialización</b> en Estado del Personaje. Con un <b>pergamino de encantar</b> en la mochila, click derecho sobre un arma o armadura la sube +1: hasta +3 es seguro, después puede fallar y destruirla.</p>
+    <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el equipo de grado B, y sus maestros <b>fabrican</b> el de grado A y S con los materiales que sueltan las zonas de nivel 30 a 50.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl+click</b> sobre un jugador con PvP fuerza el ataque (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
@@ -547,6 +564,7 @@ const HELP_EN = `
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul) · Forsaken Coast (20-25) · Sunken Ruins (25-30) · Burning Steppes (30-35) · Orc Citadel (35-40) · Dragon Valley (40-45) · Dragon's Nest (45-50).</p>
     <p>At level 20 you pick a <b>specialization</b> in Character Status. With an <b>enchant scroll</b> in your bag, right-click a weapon or armor piece to raise it by +1: safe up to +3, after that it can fail and destroy the piece.</p>
+    <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells B grade gear, and its masters <b>craft</b> A and S grade from the materials dropped in the level 30 to 50 zones.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. <b>Ctrl+click</b> a PvP player to force an attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;

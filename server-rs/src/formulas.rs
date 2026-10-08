@@ -165,7 +165,11 @@ mod tests {
             for ph in m.phases.iter().flatten() { if let Some(a) = &ph.adds { mob(&a.mob, &m.id); } }
         }
         for z in &data.zones { for s in &z.spawns { mob(&s.mob, &z.name); } }
-        for n in &data.npcs { for s in n.shop.iter().flatten() { item(s, &n.id); } }
+        for n in &data.npcs {
+            for s in n.shop.iter().flatten() { item(s, &n.id); }
+            for c in n.craft.iter().flatten() { assert!(data.item(c).map_or(false, |i| i.craft.is_some()), "{} crafts {c}, which has no recipe", n.id); }
+        }
+        for i in data.items.values() { for (m, _) in i.craft.iter().flat_map(|r| &r.mats) { item(m, &i.id); } }
         for q in &data.quests {
             assert!(data.npc(&q.npc).is_some(), "unknown npc {} in {}", q.npc, q.id);
             match &q.objective { crate::data::Objective::Kill { mob: m, .. } => mob(m, &q.id), crate::data::Objective::Collect { item: i, .. } => item(i, &q.id) }

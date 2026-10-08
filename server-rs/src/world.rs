@@ -186,8 +186,11 @@ impl World {
         self.players.iter().copied().find(|id| self.pl(*id).map_or(false, |p| p.name.to_lowercase() == l))
     }
 
-    pub fn town_point(&self) -> P {
-        let t = &d().town;
+    /// A free spot in the town closest to this entity (the starting village when there is none, or inside a raid).
+    pub fn town_point(&self, near: Option<u32>) -> P {
+        let c = near.filter(|_| self.raid.is_none()).and_then(|id| self.ents.get(&id)).map(|e| (e.c.x, e.c.z));
+        let dist = |t: &&crate::data::Town| c.map_or(0.0, |(x, z)| (x - t.x).hypot(z - t.z));
+        let t = d().towns.iter().min_by(|a, b| dist(a).total_cmp(&dist(b))).unwrap_or(&d().town);
         let (a, r) = (rnd() * std::f64::consts::TAU, 6.0 + rnd() * 6.0);
         push_out(t.x + a.cos() * r, t.z + a.sin() * r, d().c.walk_radius)
     }

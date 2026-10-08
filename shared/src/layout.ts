@@ -1,14 +1,18 @@
 // Deterministic placement of world props (trees, rocks, town, zone props).
 // Shared so the client renders exactly what the server collides against.
-import { NPCS, TELEPORTS, ZONES } from './data/world';
+import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
-import { heightAt, inTown, mulberry32, TOWN, WATER_LEVEL, WORLD_HALF } from './terrain';
+import { DUSK, heightAt, inTown, mulberry32, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
 
-/** Road segments from the village toward each hunting ground. */
-export const ROADS: [number, number, number, number][] = TELEPORTS.map((t) => {
-  const z = ZONES.find((zz) => zz.id === t.id)!;
-  return [TOWN.x, TOWN.z, z.x, z.z];
-});
+/**
+ * Road segments from the village: one toward each hunting ground around it and one to the second town.
+ * The 20-50 zones have no road (you get there by Gatekeeper): every road opens a gate in the village
+ * palisade and takes the houses in its way, which would move the landmarks the NPCs stand by.
+ */
+export const ROADS: [number, number, number, number][] = [
+  ...['meadows', 'hills', 'barracks', 'wastes'].map((id) => ZONES.find((z) => z.id === id)!),
+  DUSK,
+].map((to) => [TOWN.x, TOWN.z, to.x, to.z]);
 
 function distToSegment(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number]) {
   const dx = bx - ax, dz = bz - az;
@@ -33,7 +37,8 @@ export function zoneOf(x: number, z: number) {
 
 export interface TreeL { x: number; z: number; h: number; rot: number; sc: number; dead: boolean; pine: boolean; hue: number; light: number }
 export interface RockL { x: number; z: number; y: number; sc: number; e: [number, number, number]; s: [number, number, number]; light: number }
-export interface HouseL { x: number; z: number; rot: number; w: number; d: number; wall: number; roof: number; kind?: 'hall' | 'tavern' | 'smithy' }
+/** out: part of the second town (the village's own dressing skips those) */
+export interface HouseL { x: number; z: number; rot: number; w: number; d: number; wall: number; roof: number; kind?: 'hall' | 'tavern' | 'smithy'; out?: boolean }
 /** Houses of the ring (by index) that are a landmark instead: bigger footprint, own model on the client. */
 const LANDMARKS: Record<number, Pick<HouseL, 'kind' | 'w' | 'd' | 'wall' | 'roof'> & { r: number }> = {
   1: { kind: 'hall', r: 39, w: 13, d: 10, wall: 0xb8b2a4, roof: 0x4a5a7a },
@@ -41,8 +46,8 @@ const LANDMARKS: Record<number, Pick<HouseL, 'kind' | 'w' | 'd' | 'wall' | 'roof
   4: { kind: 'smithy', r: 38, w: 10, d: 8, wall: 0x8a8478, roof: 0x3a3a3a },
 };
 export interface StallL { x: number; z: number; rot: number; color: number }
-export interface WallL { x: number; z: number; rot: number; tower: boolean }
-export interface PillarL { x: number; z: number; rot: number }
+export interface WallL { x: number; z: number; rot: number; tower: boolean; out?: boolean }
+export interface PillarL { x: number; z: number; rot: number; out?: boolean }
 export interface TownL { houses: HouseL[]; stalls: StallL[]; walls: WallL[]; gates: PillarL[] }
 export interface ZonePropsL {
   tents: { x: number; z: number }[];
@@ -60,7 +65,7 @@ export function layoutTrees(): TreeL[] {
   const N = 2600;
   for (let i = 0; i < N * 3 && trees.length < N; i++) {
     const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
-    if (Math.hypot(x - TOWN.x, z - TOWN.z) < TOWN.r + 14 || roadDist(x, z) < 6) continue;
+    if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || roadDist(x, z) < 6) continue;
     const h = heightAt(x, z);
     if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) continue; // no trees on peaks, in ponds or in camps
     const zone = zoneOf(x, z);
@@ -134,6 +139,23 @@ export function layoutTown(): TownL {
       const r = TOWN.r + 2;
       town.gates.push({ x: TOWN.x + Math.cos(ra + off) * r, z: TOWN.z + Math.sin(ra + off) * r, rot: -ra });
     }
+  // the second town: a smaller ring of dark stone houses inside its own palisade, with a gate where the road
+  // from the village comes in and another on the far side, toward the ruins
+  const back = Math.atan2(TOWN.z - DUSK.z, TOWN.x - DUSK.x), gateAngles = [back, back + Math.PI];
+  const rng2 = mulberry32(17);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + 0.2;
+    if (gateAngles.some((ga) => angDiff(a, ga) < 0.42)) continue;
+    const r = DUSK.r - 9 + rng2() * 3;
+    town.houses.push({ x: DUSK.x + Math.cos(a) * r, z: DUSK.z + Math.sin(a) * r, rot: -a - Math.PI / 2, w: 5 + rng2() * 2, d: 4.5 + rng2() * 1.5, wall: rng2() < 0.5 ? 0x8a8478 : 0x9a8f80, roof: rng2() < 0.5 ? 0x3a3a44 : 0x5a2a2a, out: true });
+  }
+  for (let i = 0; i < 28; i++) {
+    const a = (i / 28) * Math.PI * 2, r = DUSK.r + 2;
+    if (gateAngles.some((ga) => angDiff(a, ga) < 0.2)) continue;
+    town.walls.push({ x: DUSK.x + Math.cos(a) * r, z: DUSK.z + Math.sin(a) * r, rot: -a + Math.PI / 2, tower: i % 7 === 0, out: true });
+  }
+  for (const ga of gateAngles)
+    for (const off of [-0.18, 0.18]) town.gates.push({ x: DUSK.x + Math.cos(ga + off) * (DUSK.r + 2), z: DUSK.z + Math.sin(ga + off) * (DUSK.r + 2), rot: -ga, out: true });
   return town;
 }
 

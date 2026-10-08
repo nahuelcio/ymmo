@@ -78,6 +78,7 @@ impl World {
             "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u) },
             "destroy" => if let Some(u) = id(m, "u") { self.destroy_item(pid, u) },
             "buy" => if let Some(n) = id(m, "npc") { self.buy(pid, n, &s(m, "item"), num(m, "qty")) },
+            "craft" => if let Some(n) = id(m, "npc") { self.craft(pid, n, &s(m, "item")) },
             "sell" => if let (Some(n), Some(u)) = (id(m, "npc"), id(m, "u")) { self.sell(pid, n, u, num(m, "qty")) },
             "teleport" => if let Some(n) = id(m, "npc") { self.gatekeeper(pid, n, &s(m, "dest")) },
             "questAccept" => if let Some(n) = id(m, "npc") { self.accept_quest(pid, n) },

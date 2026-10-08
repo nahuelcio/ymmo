@@ -408,6 +408,50 @@ function beast(color: number, scale: number, o: BeastOpts): Rig {
   return { root, body, kind: 'beast', legs, torso: head, head, tail, height: (o.low ? 0.95 : 1.3) * scale, radius: 0.6 * scale };
 }
 
+/** Drake or dragon: a beast with a long neck, swept horns, a bladed tail and wings that beat. age: 0 whelp, 1 grown, 2 ancient. */
+function dragon(color: number, scale: number, age: 0 | 1 | 2): Rig {
+  const rig = beast(color, scale, { tail: 'lizard', spines: true, fangs: true, claws: true, belly: 0xd8c070, eyes: age ? 0xff5a1a : 0xffe040 });
+  const { body } = rig, head = rig.head!, tail = rig.tail!;
+  const dark = darker(color, 0.6), membrane = darker(color, 1.35), BONE = 0xe8e0c0;
+  // long neck: the head sits higher and further out, on a slanted neck
+  const neck = part(B(0.3, 0.62, 0.3), color, 0, 1.12, 0.62);
+  neck.rotation.x = 0.55;
+  body.add(neck, part(B(0.2, 0.5, 0.1), 0xd8c070, 0, 1.06, 0.76));
+  head.position.y += 0.34;
+  head.position.z += 0.16;
+  head.userData.baseZ = head.position.z;
+  for (const sx of [-1, 1]) {
+    const horn = part(new THREE.ConeGeometry(0.06, 0.4 + age * 0.14, 5), BONE, sx * 0.16, 0.3, -0.1);
+    horn.rotation.x = -1.05;
+    horn.rotation.z = -sx * 0.25;
+    head.add(horn);
+    if (age) head.add(part(new THREE.ConeGeometry(0.035, 0.16, 4), BONE, sx * 0.2, 0.0, 0.2)); // cheek spikes
+  }
+  if (age === 2) for (let i = 0; i < 3; i++) head.add(part(new THREE.ConeGeometry(0.04, 0.2, 4), BONE, 0, 0.3, 0.2 - i * 0.14)); // crest
+  // two more tail segments and a blade at the tip
+  tail.add(part(B(0.08, 0.06, 0.4), color, 0, -0.24, -1.64));
+  tail.add(part(new THREE.ConeGeometry(0.15, 0.42, 4).rotateX(-Math.PI / 2), BONE, 0, -0.24, -2.0));
+  // wings: an arm bone, three membrane panels sweeping back and a claw at the wrist, hinged at the shoulder
+  const span = 0.75 + age * 0.45;
+  const wing = (sx: number) => {
+    const w = new THREE.Group();
+    w.position.set(sx * 0.3, 1.05, 0.22);
+    w.add(part(B(span, 0.08, 0.1), dark, (sx * span) / 2, 0, 0.04));
+    for (let i = 0; i < 3; i++) {
+      const l = span * (1 - i * 0.2);
+      w.add(part(B(l, 0.03, 0.36), i % 2 ? darker(membrane, 0.85) : membrane, (sx * l) / 2, -0.03, -0.16 - i * 0.33));
+    }
+    w.add(part(new THREE.ConeGeometry(0.04, 0.2, 4).rotateX(Math.PI / 2), BONE, sx * span, 0, 0.16));
+    w.rotation.z = sx * 0.45;
+    body.add(w);
+    return w;
+  };
+  rig.armL = wing(-1);
+  rig.armR = wing(1);
+  rig.height = 1.95 * scale;
+  return rig;
+}
+
 function spider(color: number, scale: number): Rig {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -618,15 +662,21 @@ export function mobModel(tplId: string): Rig {
     case 'werewolf':
       rig = beast(c, t.scale, { ears: 'wolf', tail: 'bushy', mane: true, fangs: true, claws: true, eyes: 0xffaa22 });
       break;
+    case 'drake_whelp':
+    case 'nest_hatchling':
+      rig = dragon(c, t.scale, 0);
+      break;
+    case 'wyvern':
+    case 'elder_drake':
+      rig = dragon(c, t.scale, 1);
+      break;
+    case 'ancient_drake':
+    case 'vharion':
+      rig = dragon(c, t.scale, 2);
+      break;
     case 'hill_lizard':
     case 'sea_serpent':
     case 'valley_basilisk':
-    case 'drake_whelp':
-    case 'wyvern':
-    case 'elder_drake':
-    case 'ancient_drake':
-    case 'nest_hatchling':
-    case 'vharion':
       rig = beast(c, t.scale, { tail: 'lizard', spines: true, horns: true, low: true, belly: 0xc8c890, eyes: 0xffe040 });
       break;
     default:
@@ -975,6 +1025,13 @@ export function animate(rig: Rig, s: AnimState) {
       torso.position.z = (torso.userData.baseZ ?? 0.65) + k * 0.2;
     }
     body.position.y = s.moving ? Math.abs(Math.sin(s.t * 11)) * 0.06 : 0;
+    if (armL && armR) {
+      // wings: a slow breath at rest, a full beat on the move or mid-attack
+      const busy = s.moving || s.atkAge < 400;
+      const f = Math.sin(s.t * (busy ? 9 : 2.2)) * (busy ? 0.45 : 0.12);
+      armR.rotation.z = 0.45 + f;
+      armL.rotation.z = -0.45 - f;
+    }
   } else {
     legs.forEach((l, i) => (l.rotation.x = s.moving ? Math.sin(s.t * 16 + i) * 0.35 : 0));
     const k = s.atkAge < 400 ? Math.sin((s.atkAge / 400) * Math.PI) : 0;

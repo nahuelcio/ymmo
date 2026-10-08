@@ -54,7 +54,11 @@ pub struct ItemDef {
     #[serde(rename = "use")]
     pub use_: Option<ItemUse>,
     pub enchant: Option<String>,
+    pub craft: Option<Recipe>,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
 
 #[derive(Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -165,6 +169,7 @@ pub struct NpcDef {
     pub z: f64,
     pub ry: f64,
     pub shop: Option<Vec<String>>,
+    pub craft: Option<Vec<String>>,
     pub title: String,
     pub title_en: String,
     pub greeting: String,
@@ -235,6 +240,7 @@ pub enum ObstacleDef {
 struct Raw {
     constants: Constants,
     town: Town,
+    towns: Vec<Town>,
     wild: Named,
     enchant: EnchantCfg,
     items: Vec<ItemDef>,
@@ -256,7 +262,10 @@ struct Raw {
 
 pub struct Data {
     pub c: Constants,
+    /** the starting village */
     pub town: Town,
+    /** every peace zone, the village included */
+    pub towns: Vec<Town>,
     pub wild: Named,
     pub enchant: EnchantCfg,
     pub items: HashMap<String, ItemDef>,
@@ -310,6 +319,7 @@ pub fn d() -> &'static Data {
         Data {
             c: raw.constants,
             town: raw.town,
+            towns: raw.towns,
             wild: raw.wild,
             enchant: raw.enchant,
             items: raw.items.into_iter().map(|i| (i.id.clone(), i)).collect(),

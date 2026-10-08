@@ -60,7 +60,7 @@ impl World {
     pub fn take_out(&mut self, pid: u32, at: Option<P>) -> Option<Member> {
         if !self.ents.contains_key(&pid) { return None; }
         if self.ents[&pid].c.dead {
-            let pt = if self.raid.is_some() { at.unwrap_or_else(|| self.town_point()) } else { self.town_point() };
+            let pt = if self.raid.is_some() { at.unwrap_or_else(|| self.town_point(None)) } else { self.town_point(Some(pid)) };
             self.ents.get_mut(&pid).unwrap().c.dead = false;
             let p = self.pl_mut(pid).unwrap();
             p.hp = p.stats.max_hp * 0.7;
@@ -75,7 +75,7 @@ impl World {
     }
 
     /** Where a character leaving a raid is saved: the village, never the arena's coordinates. */
-    fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point()) } else { None } }
+    fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point(None)) } else { None } }
 
     pub fn quit(&mut self, sid: u64) {
         let Some(&pid) = self.sessions.get(&sid) else { return };

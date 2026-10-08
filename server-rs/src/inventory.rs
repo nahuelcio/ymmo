@@ -196,6 +196,7 @@ impl World {
         } else { npc_greeting(&def.id, l) };
         let mut msg = json!({ "t": "npc", "npc": nid, "kind": def.kind, "name": def.name, "title": npc_title(&def.id, l), "greeting": greeting });
         if let Some(shop) = &def.shop { msg["shop"] = json!(shop); }
+        if let Some(craft) = &def.craft { msg["craft"] = json!(craft); }
         if def.kind == "gatekeeper" {
             let dests: Vec<Value> = d().teleports.iter().map(|t| json!({ "id": t.id, "name": teleport_name(&t.id, l), "cost": t.cost })).collect();
             msg["dests"] = json!(dests);
@@ -217,6 +218,22 @@ impl World {
         p.adena -= cost;
         p.inv_dirty = true;
         self.sys(pid, &format!("Compraste {}{} por {cost} de adena.", qty_prefix(qty), def.name), &format!("You bought {}{} for {cost} adena.", qty_prefix(qty), def.name_en));
+    }
+
+    /// A merchant makes one of the items it lists in `craft`: the recipe's materials and adena for the piece.
+    pub fn craft(&mut self, pid: u32, nid: u32, item: &str) {
+        let Some(n) = self.npc_in_range(pid, nid) else { return };
+        if !n.craft.as_ref().map_or(false, |c| c.iter().any(|x| x == item)) { return; }
+        let Some((def, rec)) = d().item(item).and_then(|i| Some((i, i.craft.as_ref()?))) else { return };
+        let p = self.pl_mut(pid).unwrap();
+        if p.adena < rec.adena { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
+        if rec.mats.iter().any(|(m, c)| count_item(p, m) < *c) { return self.sys(pid, "Te faltan materiales.", "You are missing materials."); }
+        // the piece goes in first: a full bag must not eat the materials
+        if !add_item(p, item, 1) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
+        for (m, c) in &rec.mats { take_items(p, m, *c); }
+        p.adena -= rec.adena;
+        p.inv_dirty = true;
+        self.sys(pid, &format!("Te fabricaron {}.", def.name), &format!("{} was made for you.", def.name_en));
     }
 
     pub fn sell(&mut self, pid: u32, nid: u32, uid: u32, qty: f64) {
