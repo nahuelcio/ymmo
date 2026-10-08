@@ -20,6 +20,19 @@ links:
       agree on status definitions
 generator:
   version: 1
+covers:
+  - symbol: StatusId
+    kind: type
+    at: 'shared/src/status.ts:L4-L4'
+  - symbol: StatusDef
+    kind: interface
+    at: 'shared/src/status.ts:L6-L6'
+  - symbol: StatusApply
+    kind: interface
+    at: 'shared/src/status.ts:L20-L27'
+  - symbol: statusIcons
+    kind: function
+    at: 'shared/src/status.ts:L29-L31'
 ---
 <!-- context:generated:start -->
 ## Summary

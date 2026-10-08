@@ -1,6 +1,8 @@
 # shared/src/data/mobs.ts
 
-- MobShape · type · L3-L3 — type MobShape = 'beast' | 'goblin' | 'orc' | 'golem' | 'undead' | 'spider';
-- Drop · interface · L5-L5 — interface Drop
-- MobDef · interface · L7-L33 — interface MobDef
-- MobPhase · interface · L35-L43 — interface MobPhase
+The game's monster bestiary: a catalog of every mob's stats, combat behaviors (aggression, on-hit statuses, telegraphed specials, elite/boss/raid phases) and loot, published as the MOBS id-lookup map.
+
+- MobShape · type · L3-L3 — Enumerates the body-model archetypes (beast, goblin, orc, etc.) so the client can pick which 3D shape to render each mob with.
+- Drop · interface · L5-L5 — Represents one entry in a mob's loot table — which item may drop, with what probability, and the optional stack-size range.
+- MobDef · interface · L7-L33 — The full contract for a monster species: identity, visuals and level, combat tuning (aggression, speed, attack cadence, stat multipliers), optional behaviors like on-hit statuses, telegraphed AoE specials and raid phases, plus its adena/drop rewards.
+- MobPhase · interface · L35-L43 — Describes one raid-boss phase trigger — what changes (adds summoned, attack-speed haste, special swap, boss yell) when the boss's HP crosses the 'at' percentage threshold.

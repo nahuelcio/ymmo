@@ -9,6 +9,46 @@ sources_digest: 2ac9ffa6749b12a1019bf3873472b774ea958fe417286452e8467ee4c6619c2e
 links: []
 generator:
   version: 1
+covers:
+  - symbol: NameColor
+    kind: type
+    at: 'shared/src/protocol.ts:L6-L6'
+  - symbol: CharSummary
+    kind: interface
+    at: 'shared/src/protocol.ts:L8-L8'
+  - symbol: EntPlayer
+    kind: interface
+    at: 'shared/src/protocol.ts:L10-L15'
+  - symbol: EntMob
+    kind: interface
+    at: 'shared/src/protocol.ts:L16-L16'
+  - symbol: EntNpc
+    kind: interface
+    at: 'shared/src/protocol.ts:L17-L17'
+  - symbol: EntItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L18-L18'
+  - symbol: EntAdd
+    kind: type
+    at: 'shared/src/protocol.ts:L19-L19'
+  - symbol: EntUpd
+    kind: type
+    at: 'shared/src/protocol.ts:L22-L22'
+  - symbol: InvItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L31-L31'
+  - symbol: SelfState
+    kind: interface
+    at: 'shared/src/protocol.ts:L33-L43'
+  - symbol: PartyMember
+    kind: interface
+    at: 'shared/src/protocol.ts:L45-L45'
+  - symbol: C2S
+    kind: type
+    at: 'shared/src/protocol.ts:L48-L82'
+  - symbol: S2C
+    kind: type
+    at: 'shared/src/protocol.ts:L84-L114'
 ---
 <!-- context:generated:start -->
 ## Summary

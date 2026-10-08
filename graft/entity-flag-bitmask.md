@@ -11,6 +11,58 @@ sources_digest: 372d2fe3dbbcb4fcc18e50d6f87dca17bd089daf119d104add7bf37ac6a666b4
 links: []
 generator:
   version: 1
+covers:
+  - symbol: NameColor
+    kind: type
+    at: 'shared/src/protocol.ts:L6-L6'
+  - symbol: CharSummary
+    kind: interface
+    at: 'shared/src/protocol.ts:L8-L8'
+  - symbol: EntPlayer
+    kind: interface
+    at: 'shared/src/protocol.ts:L10-L15'
+  - symbol: EntMob
+    kind: interface
+    at: 'shared/src/protocol.ts:L16-L16'
+  - symbol: EntNpc
+    kind: interface
+    at: 'shared/src/protocol.ts:L17-L17'
+  - symbol: EntItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L18-L18'
+  - symbol: EntAdd
+    kind: type
+    at: 'shared/src/protocol.ts:L19-L19'
+  - symbol: EntUpd
+    kind: type
+    at: 'shared/src/protocol.ts:L22-L22'
+  - symbol: InvItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L31-L31'
+  - symbol: SelfState
+    kind: interface
+    at: 'shared/src/protocol.ts:L33-L43'
+  - symbol: PartyMember
+    kind: interface
+    at: 'shared/src/protocol.ts:L45-L45'
+  - symbol: C2S
+    kind: type
+    at: 'shared/src/protocol.ts:L48-L82'
+  - symbol: S2C
+    kind: type
+    at: 'shared/src/protocol.ts:L84-L114'
+  - symbol: StatusId
+    kind: type
+    at: 'shared/src/status.ts:L4-L4'
+  - symbol: StatusDef
+    kind: interface
+    at: 'shared/src/status.ts:L6-L6'
+  - symbol: StatusApply
+    kind: interface
+    at: 'shared/src/status.ts:L20-L27'
+  - symbol: statusIcons
+    kind: function
+    at: 'shared/src/status.ts:L29-L31'
 ---
 <!-- context:generated:start -->
 ## Summary

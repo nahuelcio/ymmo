@@ -1,8 +1,10 @@
 # server-rs/src/msgs.rs
 
-- num · function · L6-L6 — fn num(m: &Value, k: &str) -> f64 { m.get(k).and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(f64::NAN) }
-- id · function · L7-L7 — fn id(m: &Value, k: &str) -> Option<u32> { let v = num(m, k); if v.is_finite() && v >= 0.0 { Some(v as u32) } else { None } }
-- truthy · function · L8-L10 — fn truthy(m: &Value, k: &str) -> bool
-- s · function · L11-L13 — fn s(m: &Value, k: &str) -> String
-- handle · function · L16-L24 — pub fn handle(&mut self, pid: u32, m: &Value)
-- handle_msg · function · L26-L103 — fn handle_msg(&mut self, pid: u32, t: &str, m: &Value, now: f64)
+Defines the client-to-server message protocol for the game world (port of World.handle/handleMsg): tolerant JSON field readers plus a dispatcher that routes each player command to the matching world action.
+
+- num · function · L6-L6 — Reads a numeric field from a client message, accepting JSON numbers or numeric strings and yielding NaN when missing/unparseable so malformed input never panics a handler.
+- id · function · L7-L7 — Validates a client-supplied entity id, rejecting non-finite or negative values so only sane u32 ids reach world logic like targeting and pickups.
+- truthy · function · L8-L10 — Coerces any JSON value type (bool, number, string, null) into a boolean flag per the protocol's loose typing, backing toggles like pvpMode, autoLoot, and attack force.
+- s · function · L11-L13 — Coerces any JSON value into a string field (empty when absent) for text-carrying commands such as chat, skill names, and equipment slots.
+- handle · function · L16-L24 — Entry point for every inbound client packet: dispatches it through handle_msg, then immediately runs the player's update after attack/pickup/talk/skill so interactions take effect at once instead of waiting for the next tick.
+- handle_msg · function · L26-L103 — The command dispatcher: verifies the sender still exists, then matches the message type to its world action (move, attack, trade, quest, party, respawn, pvp, dash...), enforcing per-command guards such as not acting while dead.

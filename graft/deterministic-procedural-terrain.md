@@ -14,6 +14,28 @@ links:
       can compute identical ground heights without sharing terrain data
 generator:
   version: 1
+covers:
+  - symbol: hash2
+    kind: function
+    at: 'shared/src/terrain.ts:L7-L12'
+  - symbol: smoothstep
+    kind: function
+    at: 'shared/src/terrain.ts:L14-L17'
+  - symbol: valueNoise
+    kind: function
+    at: 'shared/src/terrain.ts:L19-L25'
+  - symbol: fbm
+    kind: function
+    at: 'shared/src/terrain.ts:L27-L36'
+  - symbol: heightAt
+    kind: function
+    at: 'shared/src/terrain.ts:L40-L47'
+  - symbol: inTown
+    kind: function
+    at: 'shared/src/terrain.ts:L49-L51'
+  - symbol: mulberry32
+    kind: function
+    at: 'shared/src/terrain.ts:L54-L63'
 ---
 <!-- context:generated:start -->
 ## Summary

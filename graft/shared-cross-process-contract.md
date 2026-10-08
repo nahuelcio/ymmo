@@ -13,6 +13,79 @@ sources_digest: 485a4f77fb6c7d487fe7fb0cd1a447f8c0a1bb6f8a2c120efd06d4d11f5134a0
 links: []
 generator:
   version: 1
+covers:
+  - symbol: NameColor
+    kind: type
+    at: 'shared/src/protocol.ts:L6-L6'
+  - symbol: CharSummary
+    kind: interface
+    at: 'shared/src/protocol.ts:L8-L8'
+  - symbol: EntPlayer
+    kind: interface
+    at: 'shared/src/protocol.ts:L10-L15'
+  - symbol: EntMob
+    kind: interface
+    at: 'shared/src/protocol.ts:L16-L16'
+  - symbol: EntNpc
+    kind: interface
+    at: 'shared/src/protocol.ts:L17-L17'
+  - symbol: EntItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L18-L18'
+  - symbol: EntAdd
+    kind: type
+    at: 'shared/src/protocol.ts:L19-L19'
+  - symbol: EntUpd
+    kind: type
+    at: 'shared/src/protocol.ts:L22-L22'
+  - symbol: InvItem
+    kind: interface
+    at: 'shared/src/protocol.ts:L31-L31'
+  - symbol: SelfState
+    kind: interface
+    at: 'shared/src/protocol.ts:L33-L43'
+  - symbol: PartyMember
+    kind: interface
+    at: 'shared/src/protocol.ts:L45-L45'
+  - symbol: C2S
+    kind: type
+    at: 'shared/src/protocol.ts:L48-L82'
+  - symbol: S2C
+    kind: type
+    at: 'shared/src/protocol.ts:L84-L114'
+  - symbol: StatusId
+    kind: type
+    at: 'shared/src/status.ts:L4-L4'
+  - symbol: StatusDef
+    kind: interface
+    at: 'shared/src/status.ts:L6-L6'
+  - symbol: StatusApply
+    kind: interface
+    at: 'shared/src/status.ts:L20-L27'
+  - symbol: statusIcons
+    kind: function
+    at: 'shared/src/status.ts:L29-L31'
+  - symbol: hash2
+    kind: function
+    at: 'shared/src/terrain.ts:L7-L12'
+  - symbol: smoothstep
+    kind: function
+    at: 'shared/src/terrain.ts:L14-L17'
+  - symbol: valueNoise
+    kind: function
+    at: 'shared/src/terrain.ts:L19-L25'
+  - symbol: fbm
+    kind: function
+    at: 'shared/src/terrain.ts:L27-L36'
+  - symbol: heightAt
+    kind: function
+    at: 'shared/src/terrain.ts:L40-L47'
+  - symbol: inTown
+    kind: function
+    at: 'shared/src/terrain.ts:L49-L51'
+  - symbol: mulberry32
+    kind: function
+    at: 'shared/src/terrain.ts:L54-L63'
 ---
 <!-- context:generated:start -->
 ## Summary
