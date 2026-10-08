@@ -1,0 +1,5 @@
+All files are CC0 (public domain), from OpenGameArt.org.
+
+exploration.ogg  "Exploration Theme" by Cleyton Kauffman   https://opengameart.org/content/exploration-theme
+forest.mp3       "Forest Ambience" by TinyWorlds           https://opengameart.org/content/forest-ambience
+dungeon.ogg      "Loopable Dungeon Ambience" by JaggedStone https://opengameart.org/content/loopable-dungeon-ambience

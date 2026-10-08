@@ -71,6 +71,7 @@ export class SettingsPanel {
       }
       sel.onchange = () => setLang(sel.value as typeof lang);
       this.range(tx('Volumen de efectos', 'Effects volume'), 'volume', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : tx('Mudo', 'Muted')));
+      this.range(tx('Volumen de música y ambiente', 'Music & ambience volume'), 'music', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : tx('Mudo', 'Muted')));
       this.check(tx('Auto-loot (el botín va directo al inventario)', 'Auto-loot (loot goes straight to your bag)'), 'autoLoot');
       this.range(tx('Tamaño de la interfaz', 'UI scale'), 'uiScale', 0.7, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.check(tx('Nombres sobre los personajes', 'Names above characters'), 'nameplates');

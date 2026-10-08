@@ -1,6 +1,7 @@
 // Procedural sound effects (Web Audio, no asset files). Each effect is a tiny
 // recipe of oscillators / filtered noise with short envelopes.
 import { settings } from './settings';
+import { RAIDS } from '../../shared/src/data/raids';
 
 export type Sfx =
   | 'hit' | 'crit' | 'miss' | 'hurt' | 'cast' | 'magic' | 'heal' | 'buff' | 'levelUp' | 'death'
@@ -26,8 +27,36 @@ function audio(): AudioContext | null {
 }
 
 // browsers only allow audio after a user gesture
-addEventListener('pointerdown', () => void audio()?.resume(), { capture: true });
-addEventListener('keydown', () => void audio()?.resume(), { capture: true });
+addEventListener('pointerdown', () => (void audio()?.resume(), syncLoops()), { capture: true });
+addEventListener('keydown', () => (void audio()?.resume(), syncLoops()), { capture: true });
+
+// Background loops (CC0 files, see public/audio/CREDITS.txt), streamed so they never hold up loading.
+// ponytail: <audio loop> leaves a small gap at the seam (worst on the mp3) and cuts hard between
+// worlds; decode into AudioBuffers and crossfade through gain nodes if that gets noticeable.
+function loop(file: string, gain: number, dungeon: boolean) {
+  const el = new Audio(`/audio/${file}`);
+  el.loop = true;
+  el.preload = 'none';
+  return { el, gain, dungeon };
+}
+const LOOPS = [loop('exploration.ogg', 0.6, false), loop('forest.mp3', 0.5, false), loop('dungeon.ogg', 0.9, true)];
+let inDungeon = false;
+
+function syncLoops() {
+  for (const l of LOOPS) {
+    l.el.volume = settings.s.music * l.gain;
+    // play() rejects until the first user gesture (and on browsers without Ogg): the gesture listeners retry
+    if (l.el.volume > 0 && l.dungeon === inDungeon) void l.el.play().catch(() => {});
+    else l.el.pause();
+  }
+}
+settings.on(syncLoops);
+
+/** Pick the background loops for the zone the player is in (raid instances get the dungeon bed). */
+export function ambience(zone: string) {
+  inDungeon = Object.values(RAIDS).some((r) => r.name === zone);
+  syncLoops();
+}
 
 function tone(type: OscillatorType, f0: number, f1: number, t0: number, dur: number, vol: number, out: AudioNode) {
   const c = ctx!;

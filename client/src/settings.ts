@@ -43,6 +43,7 @@ export interface Settings {
   // gameplay
   autoLoot: boolean;
   volume: number;
+  music: number; // background music + ambience
 }
 
 type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage';
@@ -90,6 +91,7 @@ export const DEFAULTS: Settings = {
   invertY: false,
   autoLoot: false,
   volume: 0.5,
+  music: 0.35,
 };
 
 const KEY = 'settings:v2';

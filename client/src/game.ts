@@ -18,7 +18,7 @@ import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { PostFX } from './render/post';
 import { settings, type Settings } from './settings';
-import { play, type Sfx } from './audio';
+import { ambience, play, type Sfx } from './audio';
 import { STATUS_MASK, STATUSES, statusIcons } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
@@ -150,6 +150,7 @@ export class Game {
 
   constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>) {
     this.me = enter.self;
+    ambience(enter.self.zone);
     this.inv = enter.inv;
     this.adena = enter.self.adena;
     const host = document.getElementById('game')!;
@@ -275,7 +276,10 @@ export class Game {
       this.me = m.s;
       this.adena = m.s.adena;
       this.ui.onMe();
-      if (prevZone !== m.s.zone) this.ui.hud.banner(zoneName(m.s.zone, lang));
+      if (prevZone !== m.s.zone) {
+        this.ui.hud.banner(zoneName(m.s.zone, lang));
+        ambience(m.s.zone);
+      }
       if (prevLvl !== m.s.lvl) this.refreshQuestMarkers();
     });
     n.on('inv', (m) => {
@@ -377,6 +381,7 @@ export class Game {
       this.ui.onMe();
       this.ui.onInv();
       this.ui.hud.banner(zoneName(m.self.zone, lang));
+      ambience(m.self.zone);
     });
     n.on('teleported', () => {
       this.teleportPending = true;
