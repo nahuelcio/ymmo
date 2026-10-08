@@ -4,3 +4,4 @@ server/data
 .claude
 graft/.cache/
 graft/.graph/
+opencode.json
