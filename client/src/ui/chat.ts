@@ -3,9 +3,10 @@ import { el } from './dom';
 import { lang, t as tx } from '../lang';
 
 // 'log' is client-side: routine system lines (gains, "not ready") that only the System tab lists
-type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce' | 'log';
+// 'npc' is client-side too: lines villagers say out loud, which the NPC button can hide
+type Ch = 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce' | 'log' | 'npc';
 const TABS: { id: string; label: string; show: Ch[] }[] = [
-  { id: 'all', label: tx('Todo', 'All'), show: ['all', 'shout', 'party', 'whisper', 'sys', 'announce'] },
+  { id: 'all', label: tx('Todo', 'All'), show: ['all', 'npc', 'shout', 'party', 'whisper', 'sys', 'announce'] },
   { id: 'party', label: 'Party', show: ['party', 'announce'] },
   { id: 'whisper', label: tx('Susurros', 'Whispers'), show: ['whisper', 'announce'] },
   { id: 'sys', label: tx('Sistema', 'System'), show: ['sys', 'log', 'announce'] },
@@ -20,6 +21,9 @@ export class Chat {
   private box!: HTMLDivElement;
   private toggleBtn!: HTMLButtonElement;
   private unread = 0;
+  private showNpc = true;
+  /** the last line, to fold an identical one into it ("No enemy nearby. ×3") */
+  private last: { key: string; n: number; count: HTMLSpanElement | null } | null = null;
 
   constructor(private g: Game, root: HTMLElement) {
     const box = (this.box = el('div', 'panel chat', root));
@@ -32,6 +36,19 @@ export class Chat {
       };
       this.tabEls.push(b);
     }
+    const npcBtn = el('button', 'chat-toggle chat-npc', tabs, 'NPC');
+    npcBtn.title = tx('Mostrar u ocultar lo que dicen los NPC', 'Show or hide what NPCs say');
+    const setNpc = (on: boolean) => {
+      this.showNpc = on;
+      npcBtn.classList.toggle('off', !on);
+      this.setTab(this.tab.id);
+      try {
+        localStorage.setItem('chatNpc', on ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    };
+    npcBtn.onclick = () => setNpc(!this.showNpc);
     this.toggleBtn = el('button', 'chat-toggle', tabs);
     this.toggleBtn.onclick = () => this.setHidden(!this.hidden);
     this.log = el('div', 'chat-log', box);
@@ -54,6 +71,7 @@ export class Chat {
     let hidden = false;
     try {
       hidden = localStorage.getItem('chatHidden') === '1';
+      if (localStorage.getItem('chatNpc') === '0') setNpc(false);
     } catch {
       /* storage unavailable */
     }
@@ -86,8 +104,12 @@ export class Chat {
   private setTab(id: string) {
     this.tab = TABS.find((t) => t.id === id)!;
     this.tabEls.forEach((b, i) => b.classList.toggle('active', TABS[i] === this.tab));
-    for (const l of this.lines) l.node.style.display = this.tab.show.includes(l.ch) ? '' : 'none';
+    for (const l of this.lines) l.node.style.display = this.shows(l.ch) ? '' : 'none';
     this.log.scrollTop = this.log.scrollHeight;
+  }
+
+  private shows(ch: Ch) {
+    return this.tab.show.includes(ch) && (ch !== 'npc' || this.showNpc);
   }
 
   focus() {
@@ -102,16 +124,25 @@ export class Chat {
   }
 
   add(ch: Ch, from: string, text: string) {
+    const key = `${ch}|${from}|${text}`;
+    if (this.last?.key === key && this.lines.length) {
+      const l = this.last;
+      l.count ??= el('span', 'chat-count', this.lines[this.lines.length - 1].node);
+      l.count.textContent = ` ×${++l.n}`;
+      return;
+    }
+    this.last = { key, n: 1, count: null };
     const atBottom = this.log.scrollTop + this.log.clientHeight >= this.log.scrollHeight - 30;
     const line = el('div', `chat-line ch-${ch}`, this.log);
+    if (ch === 'npc') el('span', 'chat-tag', line, 'NPC');
     if (from) el('span', 'chat-from', line, `${ch === 'shout' ? '!' : ch === 'party' ? '#' : ''}${from}: `);
     line.appendChild(document.createTextNode(text));
-    line.style.display = this.tab.show.includes(ch) ? '' : 'none';
+    line.style.display = this.shows(ch) ? '' : 'none';
     this.lines.push({ ch, node: line });
     if (this.lines.length > 250) this.lines.shift()!.node.remove();
     if (atBottom) this.log.scrollTop = this.log.scrollHeight;
     if (ch === 'announce') this.g.ui.hud.banner(text);
-    if (this.hidden && ch !== 'sys' && ch !== 'log') {
+    if (this.hidden && ch !== 'sys' && ch !== 'log' && ch !== 'npc') {
       this.unread++;
       this.renderToggle();
     }

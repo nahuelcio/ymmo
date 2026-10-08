@@ -6,6 +6,22 @@ import { itemDesc, itemName, skillDesc, skillName } from '../../../shared/src/i1
 export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), chest: tx('Torso', 'Chest'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet') };
 export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt') };
 
+const ICONS = import.meta.glob('../icons/**/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+// the coin next to every adena amount (.adena::before)
+document.documentElement.style.setProperty('--gi-adena', `url("${ICONS['../icons/item/adena.svg']}")`);
+
+/**
+ * A custom icon from client/src/icons/<kind>/<id>.svg (see icons/CREDITS.txt), drawn as a mask so CSS
+ * picks its colour. Anything without a file falls back to the given text.
+ */
+export function glyph(kind: 'skill' | 'item' | 'status' | 'ui', id: string, fallback = '', parent?: HTMLElement): HTMLElement {
+  const url = ICONS[`../icons/${kind}/${id}.svg`];
+  if (!url) return el('span', '', parent, fallback);
+  const g = el('i', 'gi', parent);
+  g.style.setProperty('--gi', `url("${url}")`);
+  return g;
+}
+
 export function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
 }
@@ -13,7 +29,7 @@ export function hex(c: number): string {
 export function itemIcon(itemId: string, parent?: HTMLElement, count?: number): HTMLDivElement {
   const def = ITEMS[itemId];
   const d = el('div', 'icon', parent);
-  d.textContent = def?.icon ?? '?';
+  glyph('item', itemId, def?.icon ?? '?', d);
   d.style.background = `radial-gradient(circle at 35% 30%, ${hex(def?.color ?? 0x666666)}aa, #14161f 80%)`;
   if (def?.grade) d.style.borderColor = GRADE_COLOR[def.grade];
   if (count && count > 1) el('span', 'icon-count', d, count > 9999 ? `${Math.floor(count / 1000)}k` : String(count));
@@ -23,7 +39,7 @@ export function itemIcon(itemId: string, parent?: HTMLElement, count?: number): 
 export function skillIcon(skillId: string, parent?: HTMLElement): HTMLDivElement {
   const def = SKILLS[skillId];
   const d = el('div', 'icon skill', parent);
-  d.textContent = def?.icon ?? '?';
+  glyph('skill', skillId, def?.icon ?? '?', d);
   d.style.background = `radial-gradient(circle at 35% 30%, ${hex(def?.color ?? 0x666666)}, #14161f 85%)`;
   return d;
 }

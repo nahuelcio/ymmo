@@ -98,7 +98,7 @@ input { font: inherit; user-select: text; }
 .bar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 13px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 
 /* ---------- HUD ---------- */
-.status { position: absolute; left: 10px; top: 10px; width: 250px; padding: 6px 8px 8px; }
+.status { position: absolute; left: 10px; top: 10px; width: 250px; padding: 6px 8px; }
 .status-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lvl { display: inline-block; min-width: 20px; text-align: center; background: #2a2416; border: 1px solid var(--border); color: var(--gold); border-radius: 2px; padding: 0 3px; }
 .buffs { position: absolute; left: 270px; top: 10px; display: flex; gap: 3px; flex-wrap: wrap; width: 260px; }
@@ -108,7 +108,7 @@ input { font: inherit; user-select: text; }
 .buff.flag { width: auto; padding: 0 6px; line-height: 24px; border: 1px solid #a070ff; color: #d0a0ff; border-radius: 3px; background: #1a1028; font-weight: bold; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
 
-.party { position: absolute; left: 10px; top: 96px; width: 200px; padding: 6px 8px; }
+.party { position: absolute; left: 10px; top: 48px; width: 200px; padding: 6px 8px; }
 .quest-tracker { position: absolute; right: 10px; top: 230px; width: 180px; padding: 6px 8px; }
 .qt-bar { height: 3px; margin-top: 3px; background: #08090d; border-radius: 2px; overflow: hidden; }
 .qt-bar > div { height: 100%; background: var(--cp); }
@@ -141,12 +141,19 @@ input { font: inherit; user-select: text; }
 .cd-num { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; font: bold 15px Tahoma, sans-serif; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
 .slot.denied { border-color: #d04040; animation: slotDeny 0.25s; }
 @keyframes slotDeny { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+/* vitals: CP strip over HP | MP, sitting on the XP strip and the shortcut bar */
+.vitals { position: absolute; left: 0; right: 0; bottom: calc(100% + 15px); display: flex; flex-wrap: wrap; gap: 3px 4px; }
+.vitals .bar { flex: 1 1 40%; height: 16px; margin: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.vitals .bar-cp { flex-basis: 100%; height: 9px; }
+.vitals .bar-text { font-size: 11px; line-height: 15px; }
+.vitals .bar-label { line-height: 15px; }
+.vitals .bar-cp .bar-text, .vitals .bar-cp .bar-label { font-size: 8px; line-height: 8px; }
 /* XP: a thin strip along the top edge of the shortcut bar */
 .shortcuts .bar-xp { position: absolute; left: 0; right: 0; bottom: 100%; height: 10px; margin: 0 0 3px; }
 .shortcuts .bar-xp .bar-text { font-size: 8px; line-height: 9px; }
 .dash-btn { margin-left: 8px; }
 
-.castbar { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); width: 240px; height: 14px; background: #08090d; border: 1px solid var(--border); display: none; border-radius: 2px; overflow: hidden; }
+.castbar { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); width: 240px; height: 14px; background: #08090d; border: 1px solid var(--border); display: none; border-radius: 2px; overflow: hidden; }
 .castbar-fill { height: 100%; background: linear-gradient(#ffe38a, #b8862a); }
 .castbar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 13px; color: #fff; text-shadow: 0 0 2px #000; }
 
@@ -192,6 +199,9 @@ input { font: inherit; user-select: text; }
 .ch-whisper { color: #e08aff; }
 .ch-sys { color: #b8d0ff; }
 .ch-log { color: #7f8698; }
+.ch-npc { color: #cdbb8e; }
+.chat-tag { margin-right: 4px; padding: 0 3px; font-size: 9px; color: #14120d; background: #a8975f; border-radius: 2px; vertical-align: 1px; }
+.chat-count { color: var(--dim); }
 .ch-announce { color: #ffd966; font-weight: bold; }
 .chat-from { font-weight: bold; }
 .chat-input { margin-top: 3px; background: #07080c; color: var(--text); border: 1px solid #3a3424; padding: 4px 6px; outline: none; border-radius: 2px; }
@@ -218,6 +228,13 @@ input { font: inherit; user-select: text; }
   border: 1px solid #444; border-radius: 3px; flex-shrink: 0; text-shadow: 0 1px 2px #000;
 }
 .icon.skill { border-color: #8a7a4a; }
+/* custom icons: an SVG used as a mask, so the colour comes from CSS */
+.gi { display: inline-block; width: 1em; height: 1em; background: currentColor; -webkit-mask: var(--gi) center / contain no-repeat; mask: var(--gi) center / contain no-repeat; }
+.icon > .gi { width: 74%; height: 74%; color: #f6ecd2; filter: drop-shadow(0 1px 1px #000); }
+.adena::before { content: ''; display: inline-block; width: 13px; height: 13px; margin-right: 4px; vertical-align: -2px; background: currentColor; -webkit-mask: var(--gi-adena) center / contain no-repeat; mask: var(--gi-adena) center / contain no-repeat; }
+.nameplate .gi { vertical-align: -2px; margin: 0 2px; }
+.np-status .gi { color: #ff8a7a; }
+.np-elite .gi { color: #ffd966; }
 .icon-count { position: absolute; right: 1px; bottom: -1px; font-size: 10px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 
 .doll { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
@@ -291,7 +308,7 @@ input { font: inherit; user-select: text; }
 .chat { width: clamp(260px, calc(50vw - 275px), 420px); }
 .buffs { width: clamp(110px, calc(50vw - 420px), 260px); }
 /* no room for the full menu beside the bar: icons only (labels and keys stay in the tooltips) */
-@media (max-width: 1640px) { .menu .mb-label, .menu .mb-key { display: none; } .menu .mb-icon { display: inline; font-size: 15px; } }
+@media (max-width: 1640px) { .menu .mb-label, .menu .mb-key { display: none; } .menu .mb-icon { display: inline-flex; font-size: 16px; } }
 /* no room beside the bar at all: chat and menu sit above it */
 @media (max-width: 1140px) { .chat { width: min(420px, calc(100vw - 20px)); bottom: 84px; height: 170px; } .menu { bottom: 84px; } .castbar { bottom: 262px; } }
 @media (max-width: 760px) {
@@ -370,6 +387,9 @@ input { font: inherit; user-select: text; }
 .chat-tabs { align-items: center; }
 .chat-toggle { margin-left: auto; background: #14120d; color: var(--gold); border: 1px solid #3a3424; border-radius: 3px; padding: 1px 8px; cursor: pointer; font-size: 11px; }
 .chat-toggle:hover { border-color: var(--border-hi); }
+.chat-npc { margin-right: 3px; }
+.chat-npc + .chat-toggle { margin-left: 0; }
+.chat-npc.off { color: var(--dim); text-decoration: line-through; }
 .chat-toggle.has-unread { color: #fff; background: #6a4a10; border-color: var(--gold); }
 .chat.collapsed { height: auto; }
 .chat.collapsed .chat-log, .chat.collapsed .chat-input { display: none; }
@@ -377,7 +397,7 @@ input { font: inherit; user-select: text; }
 /* combat: statuses, dot numbers, dash */
 .np-status { font-size: 12px; line-height: 1; margin-top: 1px; letter-spacing: 1px; }
 .status-row { position: absolute; left: 270px; top: 44px; display: flex; gap: 3px; }
-.buff.status { display: flex; align-items: center; justify-content: center; font-size: 16px; background: #3a1010; border-color: #a03030; }
+.buff.status { display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffb0a0; background: #3a1010; border: 1px solid #a03030; border-radius: 3px; }
 .f-dot { color: #c88aff; font-size: 12px; }
 @media (max-width: 760px) { .status-row { left: 10px; top: 150px; } }
 .np-elite { font-size: 12px; font-weight: bold; }
@@ -398,7 +418,7 @@ input { font: inherit; user-select: text; }
 .touch-btn .tb-label { font-size: 9px; margin-top: 2px; }
 .touch-btn.tb-attack { width: 76px; height: 76px; border-color: #c04030; }
 .mb-icon { display: none; }
-.touch .mb-icon { display: inline; font-size: 18px; }
+.touch .mb-icon { display: inline-flex; font-size: 18px; }
 .touch .mb-label, .touch .mb-key { display: none; }
 .touch .menu { bottom: auto; top: 6px; right: auto; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 3px; }
 .touch .menu .menu-btn { padding: 4px 7px; min-width: 38px; min-height: 36px; }

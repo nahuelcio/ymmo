@@ -81,7 +81,7 @@ export class InventoryPanel {
       setTip(cell, () => itemTip(it.i, it.c));
     }
     for (let i = bag.length; i < 40; i++) el('div', 'inv-cell empty', this.grid);
-    this.footer.innerHTML = `<span class="adena">🪙 ${g.adena.toLocaleString(fmtLoc)} Adena</span><span class="tt-dim">${g.inv.length}/80</span>`;
+    this.footer.innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span><span class="tt-dim">${g.inv.length}/80</span>`;
   }
 }
 
@@ -228,7 +228,7 @@ export class NpcPanel {
         btn.onclick = () => g.net.send({ t: 'sell', npc: m.npc, u: it.u, qty: Math.min(it.c, Math.max(1, Math.floor(+qty.value || 1))) });
       }
     }
-    el('div', 'inv-footer', b).innerHTML = `<span class="adena">🪙 ${g.adena.toLocaleString(fmtLoc)} Adena</span>`;
+    el('div', 'inv-footer', b).innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span>`;
   }
 
   private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement) {

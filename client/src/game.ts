@@ -16,10 +16,11 @@ import { FxManager } from './render/fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, type Rig } from './render/models';
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
+import { glyph } from './ui/common';
 import { PostFX } from './render/post';
 import { settings, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
-import { STATUS_MASK, STATUSES, statusIcons } from '../../shared/src/status';
+import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -318,7 +319,7 @@ export class Game {
       }, m.ms);
     });
     n.on('say', (m) => {
-      this.ui.chat.add('all', m.name, m.text);
+      this.ui.chat.add('npc', m.name, m.text);
       const c = this.ents.get(m.id);
       if (c) this.speech(c, m.text);
     });
@@ -442,7 +443,8 @@ export class Game {
       el.className = 'nameplate np-mob';
       const n = document.createElement('div');
       const elite = MOBS[r.tpl]?.elite;
-      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${elite ? '👑 ' : ''}${mobName(r.tpl, lang)} `;
+      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${mobName(r.tpl, lang)} `;
+      if (elite) n.prepend(glyph('ui', 'crown'));
       if (elite) el.classList.add('np-elite');
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
@@ -512,16 +514,11 @@ export class Game {
 
   /** Status effect icons (stun, slow, bleed, poison) under the name. */
   private addStatusIcons(c: CEnt) {
-    const st = statusIcons(c.flags);
+    const st = STATUS_IDS.filter((id) => c.flags & STATUSES[id].flag);
     if (!st.length) return;
     const row = document.createElement('div');
     row.className = 'np-status';
-    for (const s of st) {
-      const i = document.createElement('span');
-      i.textContent = s.icon;
-      i.title = s.name;
-      row.appendChild(i);
-    }
+    for (const id of st) glyph('status', id, STATUSES[id].icon, row).title = STATUSES[id].name;
     c.labelEl.appendChild(row);
   }
 

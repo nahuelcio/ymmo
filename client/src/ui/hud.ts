@@ -6,7 +6,7 @@ import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
-import { bar, itemIcon, itemTip, skillIcon, skillTip } from './common';
+import { bar, glyph, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, setTip } from './dom';
 import { lang, t as tx, fmt } from '../lang';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
@@ -42,9 +42,6 @@ export class Hud {
     // Status window (top-left)
     const st = el('div', 'panel status', root);
     this.name = el('div', 'status-name', st);
-    this.cp = bar(st, 'bar-cp', 'CP');
-    this.hp = bar(st, 'bar-hp', 'HP');
-    this.mp = bar(st, 'bar-mp', 'MP');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
 
@@ -59,7 +56,14 @@ export class Hud {
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
-    this.xp = bar(sc, 'bar-xp'); // thin strip along the top edge of the bar
+    // vitals sit right above the bar, where the eyes are in a fight: CP strip, then HP | MP, then XP
+    const vit = el('div', 'vitals', sc);
+    this.cp = bar(vit, 'bar-cp', 'CP');
+    this.cp.root.title = tx('CP (Puntos de Combate): absorben el daño que te hacen otros jugadores antes de que baje la vida. No protegen de los monstruos.',
+      'CP (Combat Points): soak the damage other players deal before your HP drops. No protection against monsters.');
+    this.hp = bar(vit, 'bar-hp', 'HP');
+    this.mp = bar(vit, 'bar-mp', 'MP');
+    this.xp = bar(sc, 'bar-xp');
     for (let i = 0; i < 10; i++) {
       const s = el('div', 'slot', sc);
       el('span', 'slot-key', s, i === 9 ? '0' : String(i + 1));
@@ -76,7 +80,7 @@ export class Hud {
     // dodge roll button (Shift) with cooldown sweep
     this.dashEl = el('div', 'slot dash-btn', sc);
     el('span', 'slot-key', this.dashEl, 'Shift');
-    el('div', 'icon', this.dashEl, '💨');
+    glyph('ui', 'dash', '', el('div', 'icon', this.dashEl));
     this.dashCd = el('div', 'cd', this.dashEl);
     this.dashEl.title = tx('Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.', 'Roll (Shift): dodge toward the cursor, briefly invulnerable. Great for getting out of red circles.');
     this.dashEl.onclick = () => g.dash();
@@ -88,20 +92,20 @@ export class Hud {
     // Menu (bottom-right)
     const menu = el('div', 'panel menu', root);
     this.adenaEl = el('span', 'adena hud-adena', menu);
-    // icon + label: on touch screens only the icon shows
+    // icon + label: narrow and touch screens only show the icon
     const btn = (icon: string, label: string, key: string, fn: () => void) => {
       const b = el('button', 'menu-btn', menu);
-      el('span', 'mb-icon', b, icon);
+      glyph('ui', icon, '', el('span', 'mb-icon', b));
       el('span', 'mb-label', b, label);
       el('span', 'mb-key', b, key);
       b.title = `${label} (${key})`;
       b.onclick = fn;
     };
-    btn('👤', tx('Personaje', 'Character'), 'C', () => g.ui.character.win.toggle());
-    btn('🎒', tx('Inventario', 'Inventory'), 'I', () => g.ui.inventory.win.toggle());
-    btn('🗺️', tx('Mapa', 'Map'), 'M', () => g.ui.minimap.toggleMap());
-    btn('❓', tx('Ayuda', 'Help'), 'H', () => g.ui.help.toggle());
-    btn('⚙', tx('Opciones', 'Settings'), 'O', () => g.ui.settings.win.toggle());
+    btn('character', tx('Personaje', 'Character'), 'C', () => g.ui.character.win.toggle());
+    btn('inventory', tx('Inventario', 'Inventory'), 'I', () => g.ui.inventory.win.toggle());
+    btn('map', tx('Mapa', 'Map'), 'M', () => g.ui.minimap.toggleMap());
+    btn('help', tx('Ayuda', 'Help'), 'H', () => g.ui.help.toggle());
+    btn('settings', tx('Opciones', 'Settings'), 'O', () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
     this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
@@ -168,7 +172,7 @@ export class Hud {
 
   refreshSlots() {
     const m = this.g.me;
-    this.adenaEl.textContent = `🪙 ${this.g.adena.toLocaleString()}`;
+    this.adenaEl.textContent = this.g.adena.toLocaleString();
     const slots: Slot[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
     for (const id of CONSUMABLES) if (this.itemCount(id) > 0) slots.push({ type: 'item', id });
     while (slots.length < 10) slots.push(null);
@@ -210,7 +214,8 @@ export class Hud {
   setStatuses(flags: number) {
     this.statusEl.innerHTML = '';
     for (const id of STATUS_IDS.filter((i) => flags & STATUSES[i].flag)) {
-      const b = el('div', 'buff status', this.statusEl, STATUSES[id].icon);
+      const b = el('div', 'buff status', this.statusEl);
+      glyph('status', id, STATUSES[id].icon, b);
       b.title = `${statusName(id, lang)}: ${statusDesc(id, lang)}`;
     }
   }

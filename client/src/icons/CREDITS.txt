@@ -1,0 +1,3 @@
+Icons from https://game-icons.net, licensed CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/).
+Authors: Lorc, Delapouite, Skoll, sbed, Lucas, Zeromancer. Each file had its black background removed.
+The file list and the original name of each icon are in the commit that added them.

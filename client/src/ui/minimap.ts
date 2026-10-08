@@ -2,13 +2,16 @@ import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { heightAt, TOWN, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { layoutCamps, layoutTown } from '../../../shared/src/layout';
 import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
 import { lang, t as tx } from '../lang';
 import { campName, zoneName } from '../../../shared/src/i18n';
 
-const RES = 256;
+const RES = 512;
+/** minimap size in CSS px; its canvas is backed at device resolution so it stays sharp */
+const MM = 170;
 
 /** Hunting grounds where the active quests' mobs spawn. */
 function questAreas(targets: { quest: string; mobs: Set<string> }[]): { zone: ZoneDef; quests: string[] }[] {
@@ -56,7 +59,7 @@ export class Minimap {
     const box = el('div', 'panel minimap', root);
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
-    this.canvas.width = this.canvas.height = 170;
+    this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));
     el('div', 'mm-legend', box).innerHTML = `<i style="color:#ff5544">●</i> ${tx('enemigos', 'enemies')} <i style="color:#ffd200">●</i> ${tx('misión', 'quest')} <i style="color:#66aaff">●</i> ${tx('jugadores', 'players')}`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
@@ -169,7 +172,8 @@ export class Minimap {
     this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
     if (!self) return;
     const ctx = this.canvas.getContext('2d')!;
-    const W = this.canvas.width;
+    const W = MM;
+    ctx.setTransform(this.canvas.width / MM, 0, 0, this.canvas.width / MM, 0, 0);
     const R = this.viewR;
     const px = self.pos.x, pz = self.pos.z;
     const scale = W / (2 * R);
@@ -177,8 +181,26 @@ export class Minimap {
     ctx.fillRect(0, 0, W, W);
     const srcR = (R / (2 * WORLD_HALF)) * RES;
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(this.img, toMap(px) - srcR, toMap(pz) - srcR, srcR * 2, srcR * 2, 0, 0, W, W);
     const toC = (x: number, z: number) => [(x - px) * scale + W / 2, (z - pz) * scale + W / 2];
+    // houses and camp tents as shapes, so there is crisp detail at any zoom
+    ctx.fillStyle = 'rgba(52, 40, 32, 0.9)';
+    for (const h of layoutTown().houses) {
+      const [x, y] = toC(h.x, h.z);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-h.rot);
+      ctx.fillRect((-h.w / 2) * scale, (-h.d / 2) * scale, h.w * scale, h.d * scale);
+      ctx.restore();
+    }
+    for (const c of layoutCamps())
+      for (const t of c.tents) {
+        const [x, y] = toC(t.x, t.z);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.3 * scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
     // NPCs (always known)
     for (const n of NPCS) {
       const [x, y] = toC(n.x, n.z);
