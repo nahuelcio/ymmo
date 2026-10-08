@@ -5,6 +5,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat } from './scene';
+import { animateQ, qPlayer, qProp, qReady, type QAnim, type QZone } from './quaternius';
 
 export interface Rig {
   root: THREE.Group;
@@ -20,6 +21,10 @@ export interface Rig {
   pose?: 'zombie' | 'hunch' | 'float';
   height: number;
   radius: number;
+  /** skinned Quaternius character: clip-driven instead of per-limb */
+  q?: QAnim;
+  /** frees what is per-entity (shared geometries and materials stay) */
+  dispose?: () => void;
 }
 
 export interface AnimState {
@@ -64,12 +69,12 @@ function darker(c: number, k = 0.7): number {
   return col.getHex();
 }
 
-type WeaponKind = 'sword' | 'staff' | 'blunt' | 'club' | 'bow' | 'axe' | 'spear' | 'shovel' | 'pickaxe' | null;
+export type WeaponKind = 'sword' | 'staff' | 'blunt' | 'club' | 'bow' | 'axe' | 'spear' | 'shovel' | 'pickaxe' | null;
 
 const WOOD = 0x6a4a2a, IRON = 0x9aa2aa;
 
 /** Weapons are built along +Z (the grip at the origin, held in the right hand). */
-function weaponMesh(kind: WeaponKind, color: number): THREE.Group | null {
+export function weaponMesh(kind: WeaponKind, color: number): THREE.Group | null {
   if (!kind) return null;
   const g = new THREE.Group();
   const shaft = (len: number, r = 0.035, c = WOOD) => part(new THREE.CylinderGeometry(r, r, len, 6).rotateX(Math.PI / 2), c, 0, 0, len / 2 - 0.15);
@@ -212,6 +217,25 @@ function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean
   if (!female) torso.add(part(B(0.2, 0.04, d + 0.01), darker(c, 0.7), 0, 0.62, 0));
 }
 
+function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin', tusks?: boolean) {
+  if (ears) {
+    const len = ears === 'goblin' ? 0.3 : 0.2;
+    for (const sx of [-1, 1]) {
+      const ear = part(new THREE.ConeGeometry(0.045, len, 4), skin, sx * 0.2, 0.04, 0);
+      ear.rotation.z = -sx * (Math.PI / 2 - 0.35);
+      head.add(ear);
+    }
+  }
+  if (tusks) for (const sx of [-1, 1]) head.add(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xf0f0e0, sx * 0.07, -0.1, 0.16));
+}
+
+/** The weapon as held: C-grade blades glow. */
+function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
+  const w = weaponMesh(kind, color);
+  if (w && grade === 'C') w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
+  return w;
+}
+
 export function humanoid(o: HumanoidOpts): Rig {
   const root = new THREE.Group();
   const body = new THREE.Group();
@@ -268,15 +292,7 @@ export function humanoid(o: HumanoidOpts): Rig {
     }
     if (o.hairStyle === 2 && !g.head) head.add(part(new THREE.IcosahedronGeometry(0.1, 0), o.hair, 0, 0.25, -0.08));
   }
-  if (o.ears && !closedHelm) {
-    const len = o.ears === 'goblin' ? 0.3 : 0.2;
-    for (const sx of [-1, 1]) {
-      const ear = part(new THREE.ConeGeometry(0.045, len, 4), o.skin, sx * 0.2, 0.04, 0);
-      ear.rotation.z = -sx * (Math.PI / 2 - 0.35);
-      head.add(ear);
-    }
-  }
-  if (o.tusks && !closedHelm) for (const sx of [-1, 1]) head.add(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xf0f0e0, sx * 0.07, -0.1, 0.16));
+  if (!closedHelm) raceFeatures(head, o.skin, o.ears, o.tusks);
   if (o.beard && !closedHelm) head.add(part(B(0.26, 0.24, 0.12), o.hair, 0, -0.18, 0.12));
   if (o.hat !== undefined) {
     head.add(part(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 8), o.hat, 0, 0.12, 0));
@@ -296,9 +312,8 @@ export function humanoid(o: HumanoidOpts): Rig {
     body.add(arm);
     arms.push(arm);
   }
-  const w = weaponMesh(o.weapon, o.weaponColor ?? 0xc8d0d8);
+  const w = heldWeapon(o.weapon, o.weaponColor, o.weaponGrade);
   if (w) {
-    if (o.weaponGrade === 'C') w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(o.weaponColor ?? 0xffffff)));
     w.position.y = -0.64;
     arms[1].add(w);
   }
@@ -557,12 +572,33 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const chestDef = it(chest);
   const [head, gloves, legs, feet] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
+  const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, bald = race === 'orc' && !female && look.hs === 0;
+  if (qReady()) {
+    const onHead = new THREE.Group();
+    const skin = race === 'orc' ? 0x5a7340 : r.skin; // the flat-shaded green reads as neon on a textured face
+    const cap = head?.id === 'leather_cap'; // worn as a hood
+    const hideHair = !!head && !cap;
+    if (hideHair) onHead.add(qProp(head.grade === 'C' ? 'HelmC' : 'HelmD'));
+    if (head?.grade !== 'C') {
+      raceFeatures(onHead, skin, elf ? 'elf' : undefined);
+      // tusks rise from the lower jaw, at the corners of the mouth
+      if (tusks) for (const sx of [-1, 1]) onHead.add(part(new THREE.ConeGeometry(0.016, 0.065, 5), 0xf0f0e0, sx * 0.05, -0.2, 0.175));
+    }
+    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
+    return qPlayer({
+      g: look.g, skin, hair, hairStyle: look.hs, bald, beard, hideHair,
+      chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
+      pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
+      scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, onHead,
+      inHand: heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
+    });
+  }
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
   return bake(humanoid({
     skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
     hairStyle: look.hs, female,
     weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, robe,
-    ears: race === 'elf' || race === 'darkelf' ? 'elf' : undefined, tusks: race === 'orc' && !female, beard: race === 'dwarf' && !female, bald: race === 'orc' && !female && look.hs === 0,
+    ears: elf ? 'elf' : undefined, tusks, beard, bald,
     gear: { chest: chestDef, head, gloves, legs, feet },
   }));
 }
@@ -889,6 +925,7 @@ export function bake(rig: Rig): Rig {
 }
 
 export function animate(rig: Rig, s: AnimState) {
+  if (rig.q) return animateQ(rig.q, s);
   const { body, legs, armL, armR, torso } = rig;
   if (s.deadAge >= 0) {
     const k = Math.min(1, s.deadAge / 450);

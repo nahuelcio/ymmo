@@ -8,6 +8,7 @@ import { allSkillsFor } from '../../shared/src/data/skills';
 import { className, genderDesc, genderName, hairStyle, LANGS, raceDesc, raceName, skillDesc, skillName } from '../../shared/src/i18n';
 import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
+import { loadQ, mountQuaterniusPreview } from './render/quaternius';
 import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
@@ -347,8 +348,15 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 }
 
 async function boot() {
+  // ?q=1: character gallery only (no server needed)
+  if (new URLSearchParams(location.search).has('q')) {
+    cleanup = await mountQuaterniusPreview(document.body);
+    return;
+  }
   const box = screen();
   el('div', 'tt-dim', box, t('Conectando con el servidor...', 'Connecting to the server...'));
+  // character models download while we connect; without them players fall back to the procedural rig
+  const models = loadQ().catch((err) => console.warn('quaternius', err));
   for (let attempt = 1; ; attempt++) {
     try {
       await net.connect();
@@ -361,6 +369,7 @@ async function boot() {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
+  await models;
   net.onClose = reconnect;
   net.on('error', (m) => {
     if (!inGame) showError(m.msg);

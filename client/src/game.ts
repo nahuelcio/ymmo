@@ -639,6 +639,7 @@ export class Game {
     c.bubble?.remove();
     // part geometries are shared (see models.ts); baked limb meshes and the hitbox are per-entity
     c.hit.geometry.dispose();
+    c.rig?.dispose?.();
     c.root.traverse((o) => {
       if (o instanceof THREE.Mesh && o.userData.baked) o.geometry.dispose();
     });
