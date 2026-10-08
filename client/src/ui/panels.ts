@@ -461,7 +461,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Movimiento y cámara</h4>
     <p><b>Click izquierdo</b> en el piso para moverte (si lo mantenés apretado, seguís al cursor). <b>Click derecho y arrastrar</b> gira la cámara y la <b>rueda</b> hace zoom. Q/E o las flechas también giran.</p>
     <h4>Combate</h4>
-    <p>Hacé click en un monstruo para <b>atacarlo</b> directamente (con <b>Espacio</b> o una habilidad de ataque sin objetivo se elige el más cercano). <b>Tab</b> va pasando por los monstruos cercanos.
+    <p>Hacé click en un monstruo para <b>atacarlo</b> directamente (con <b>Espacio</b> o una habilidad de ataque sin objetivo se elige el más cercano). <b>R</b> va pasando por los monstruos cercanos. Manteniendo <b>Tab</b> ves quiénes están conectados.
     Las habilidades y pociones están en la barra de atajos: teclas <b>1-0</b> o <b>F1-F10</b>. Las habilidades nuevas se aprenden solas al subir de nivel.</p>
     <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: <i data-gi="status/stun"></i> aturdido, <i data-gi="status/slow"></i> ralentizado, <i data-gi="status/bleed"></i> sangrado y <i data-gi="status/poison"></i> veneno. Aturdir a un jefe le corta el ataque especial.</p>
     <h4>Botín</h4>
@@ -498,7 +498,7 @@ const HELP_EN = `
     <h4>Movement and camera</h4>
     <p><b>Left-click</b> the ground to move (hold it to follow the cursor). <b>Right-click and drag</b> rotates the camera and the <b>wheel</b> zooms. Q/E or the arrow keys also rotate.</p>
     <h4>Combat</h4>
-    <p>Click a monster to <b>attack</b> it (<b>Space</b> or an attack skill with no target picks the nearest one). <b>Tab</b> cycles through nearby monsters.
+    <p>Click a monster to <b>attack</b> it (<b>Space</b> or an attack skill with no target picks the nearest one). <b>R</b> cycles through nearby monsters. Hold <b>Tab</b> to see who is online.
     Skills and potions live in the hotbar: keys <b>1-0</b> or <b>F1-F10</b>. New skills are learned automatically as you level up.</p>
     <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: <i data-gi="status/stun"></i> stunned, <i data-gi="status/slow"></i> slowed, <i data-gi="status/bleed"></i> bleeding and <i data-gi="status/poison"></i> poisoned. Stunning a boss interrupts its special attack.</p>
     <h4>Loot</h4>

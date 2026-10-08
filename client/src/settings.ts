@@ -12,6 +12,7 @@ export const ACTIONS = {
   attack: tx('Atacar al objetivo', 'Attack target'),
   stop: tx('Frenar: dejar de moverse y de atacar', 'Stop: quit moving and attacking'),
   nextTarget: tx('Siguiente objetivo', 'Next target'),
+  players: tx('Jugadores conectados (mantener apretada)', 'Players online (hold)'),
   dash: tx('Rodar', 'Roll'),
   loot: tx('Juntar lo más cercano', 'Pick up nearest'),
   inventory: tx('Inventario', 'Inventory'),
@@ -27,7 +28,7 @@ export const ACTIONS = {
 export type Action = keyof typeof ACTIONS;
 /** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
 export const DEFAULT_KEYS: Record<Action, string> = {
-  attack: ' ', stop: 's', nextTarget: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
+  attack: ' ', stop: 's', nextTarget: 'r', players: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, String(n % 10)])) as Record<SlotAction, string>),
 };
 export const keyLabel = (k: string) => (k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
@@ -152,7 +153,10 @@ function load(): Settings {
     if (raw) {
       const saved = JSON.parse(raw) as Partial<Settings>;
       // actions added after these settings were saved keep their default key
-      return { ...DEFAULTS, ...saved, keys: { ...DEFAULT_KEYS, ...saved.keys } };
+      const keys = { ...DEFAULT_KEYS, ...saved.keys };
+      // Tab used to cycle targets; it now shows the player list, unless the player rebound things since
+      if (!saved.keys?.players && keys.nextTarget === keys.players) keys.nextTarget = DEFAULT_KEYS.nextTarget;
+      return { ...DEFAULTS, ...saved, keys };
     }
   } catch {
     /* storage unavailable or corrupt */

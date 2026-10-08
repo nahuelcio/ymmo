@@ -68,6 +68,8 @@ const INTERP_BASE = 70;
 // a structured message would be sturdier but needs a protocol change.
 const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You have earned) (\d+) (?:de )?experienc/;
 const NOT_READY = /todavía no está lista\.$|is not ready yet\.$/;
+/** the server's answer to /who, which the player list (hold Tab) asks for and shows instead of the chat */
+const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
@@ -389,6 +391,8 @@ export class Game {
       if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
     n.on('chat', (m) => {
+      const who = this.whoPending && m.ch === 'sys' ? WHO.exec(m.text) : null;
+      if (who) return this.fillWho(who[2].split(', '));
       // gains pop up over the character and, like "not ready", stay out of the main chat tab
       const gain = m.ch === 'sys' && settings.s.damageNumbers ? GAIN.exec(m.text) : null;
       if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
@@ -1086,6 +1090,40 @@ export class Game {
     this.moveTo(new THREE.Vector3(x, heightAt(x, z), z), false);
   }
 
+  // ponytail: the list comes from the /who chat command, so it only has names (level and class are filled in
+  // for players in view) and only this world's players; a real roster needs its own server message
+  private whoEl: HTMLDivElement | null = null;
+  private whoPending = false;
+
+  private showWho(on: boolean) {
+    if (!this.whoEl) {
+      this.whoEl = document.createElement('div');
+      this.whoEl.className = 'panel who';
+      this.ui.root.appendChild(this.whoEl);
+    }
+    this.whoEl.style.display = on ? 'block' : 'none';
+    if (!on) return;
+    this.whoPending = true;
+    this.net.send({ t: 'chat', text: '/who' });
+  }
+
+  private fillWho(names: string[]) {
+    this.whoPending = false;
+    const box = this.whoEl!, party = new Set(this.ui.party.members?.map((m) => m.name));
+    const seen = new Map([...this.ents.values()].flatMap((c) => (c.rec.k === 'p' ? [[c.rec.n, c.rec] as const] : [])));
+    box.textContent = '';
+    const head = box.appendChild(document.createElement('div'));
+    head.className = 'who-head';
+    head.textContent = tx(`Jugadores conectados (${names.length})`, `Players online (${names.length})`);
+    const list = box.appendChild(document.createElement('div'));
+    list.className = 'who-list';
+    for (const name of names.sort((a, b) => a.localeCompare(b))) {
+      const row = list.appendChild(document.createElement('div')), r = seen.get(name);
+      row.className = name === this.me.name ? 'who-me' : party.has(name) ? 'who-mate' : '';
+      row.textContent = r ? `${name} · ${tx('Nv', 'Lv')} ${r.l}` : name;
+    }
+  }
+
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
     // prediction: start the cooldown sweep right away when the skill is obviously usable
@@ -1246,6 +1284,7 @@ export class Game {
         case 'stop': this.stop(); break;
         case 'dash': this.dash(); break;
         case 'nextTarget': this.nextTarget(); break;
+        case 'players': if (!e.repeat) this.showWho(true); break;
         case 'camLeft': this.cam.keys.left = true; break;
         case 'camRight': this.cam.keys.right = true; break;
         case 'arrowleft': this.cam.keys.left = true; break;
@@ -1254,9 +1293,12 @@ export class Game {
         case 'arrowdown': this.cam.keys.down = true; break;
       }
     });
+    // Alt+Tab away: the key-up never arrives
+    addEventListener('blur', () => this.showWho(false));
     addEventListener('keyup', (e) => {
       this.ctrl = e.ctrlKey;
       switch (bound(e) ?? e.key.toLowerCase()) {
+        case 'players': this.showWho(false); break;
         case 'camLeft': case 'arrowleft': this.cam.keys.left = false; break;
         case 'camRight': case 'arrowright': this.cam.keys.right = false; break;
         case 'arrowup': this.cam.keys.up = false; break;
