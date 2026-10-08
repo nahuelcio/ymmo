@@ -47,7 +47,7 @@ export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: bo
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
- * carried that way; everything else is laid along +Z like weaponMesh(), hammers and axes with the head turned to strike downwards.
+ * turned to stand upright in a hanging hand; everything else is laid along +Z like weaponMesh(), hammers and axes with the head turned to strike downwards.
  */
 const WEAPONS = ['short_sword', 'broadsword', 'sword_of_revolution', 'samurai_longsword', 'apprentice_wand', 'willow_staff', 'staff_of_life', 'sages_staff', 'iron_hammer', 'war_hammer',
   'dagger', 'assassin_dagger', 'hand_axe', 'battle_axe', 'spear', 'partisan'];
@@ -106,7 +106,13 @@ export function loadQ(): Promise<void> {
     PROPS.forEach((name, i) => {
       const o = (props[name] = rigid[i].scene);
       o.children.forEach((c) => c.position.set(0, 0, 0));
-      if (WEAPONS.includes(name) && !/staff|wand/.test(name)) o.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, /hammer|axe/.test(name) ? -Math.PI / 2 : 0, 'ZYX'));
+      if (WEAPONS.includes(name)) {
+        if (/staff|wand/.test(name)) {
+          // along the arm (the bind pose has the arms out sideways), so it stands upright by the leg when the arm hangs
+          o.rotation.z = -Math.PI / 2;
+          o.position.z = 0.05;
+        } else o.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, /hammer|axe/.test(name) ? -Math.PI / 2 : 0, 'ZYX'));
+      }
       o.traverse((m) => {
         if (!(m instanceof THREE.Mesh)) return;
         const { color, emissive, emissiveIntensity } = m.material as THREE.MeshStandardMaterial;
