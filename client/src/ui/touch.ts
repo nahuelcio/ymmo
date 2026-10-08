@@ -2,6 +2,7 @@ import type { Game } from '../game';
 import { el } from './dom';
 import { glyph } from './common';
 import { t as tx } from '../lang';
+import { settings } from '../settings';
 
 /** Phones and tablets (coarse pointer / touch screen). Desktop never sees the touch UI. */
 export function isTouchDevice(): boolean {
@@ -30,7 +31,15 @@ export class TouchControls {
     btn('tb-attack', 'pvp', tx('Atacar', 'Attack'), () => g.attackTarget());
     btn('tb-dash', 'dash', tx('Rodar', 'Roll'), () => g.dash());
     btn('tb-target', 'target', tx('Objetivo', 'Target'), () => g.nextTarget());
-    btn('tb-loot', 'loot', tx('Juntar', 'Loot'), () => g.pickupNearest());
+    // phones loot automatically (no Loot button): turned on once, it can still be switched off in Options
+    try {
+      if (localStorage.getItem('touchAutoLoot') === null) {
+        localStorage.setItem('touchAutoLoot', '1');
+        settings.set({ autoLoot: true });
+      }
+    } catch {
+      settings.set({ autoLoot: true });
+    }
     this.focusToggle(root);
   }
 
