@@ -83,15 +83,15 @@ function screen(): HTMLDivElement {
   screens.innerHTML = '';
   screens.style.display = '';
   const wrap = el('div', 'screen', screens);
-  const logo = el('div', 'logo', wrap);
-  el('div', 'logo-title', logo, 'CLAUDI');
-  el('div', 'logo-sub', logo, t('Crónica I · El Alba de Aden', 'Chronicle I · Dawn of Aden'));
-  // language picker (reloads the page in the chosen language)
-  const lp = el('div', 'lang-pick', screens);
+  // language picker (reloads the page in the chosen language): first in the column, so it scrolls with the screen
+  const lp = el('div', 'lang-pick', wrap);
   for (const L of LANGS) {
     const b = el('button', `lang-btn${L.id === lang ? ' sel' : ''}`, lp, L.label);
     b.onclick = () => setLang(L.id);
   }
+  const logo = el('div', 'logo', wrap);
+  el('div', 'logo-title', logo, 'CLAUDI');
+  el('div', 'logo-sub', logo, t('Crónica I · El Alba de Aden', 'Chronicle I · Dawn of Aden'));
   return el('div', 'screen-box panel', wrap);
 }
 
