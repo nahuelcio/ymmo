@@ -387,6 +387,7 @@ export class Game {
       if (e) {
         this.fx.pillar(e.pos.clone(), 0xffd966);
         this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
+        this.fx.sparkles(e.pos.clone(), 0xfff0b0, 1400);
       }
       if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
@@ -757,16 +758,20 @@ export class Game {
 
   private floatText(c: CEnt, text: string, cls: string) {
     if (!settings.s.damageNumbers) return;
-    const el = document.createElement('div');
-    el.className = `floater ${cls}`;
-    el.textContent = text;
+    // the label layer positions `el` with its own transform, so the animation lives on a child
+    const el = document.createElement('div'), num = el.appendChild(document.createElement('div'));
+    num.className = `floater ${cls}`;
+    num.textContent = text;
+    // bigger numbers are bigger: 15px for one digit up to 24px for four or more
+    num.style.setProperty('--fs', `${12 + 3 * Math.min(4, (/\d+/.exec(text)?.[0].length ?? 1))}px`);
+    num.style.setProperty('--dx', `${Math.round((Math.random() - 0.5) * 70)}px`);
     const obj = new CSS2DObject(el);
     obj.position.set((Math.random() - 0.5) * 0.6, c.height + 0.2, 0);
     c.root.add(obj);
     setTimeout(() => {
       c.root.remove(obj);
       el.remove();
-    }, 1100);
+    }, 1250);
   }
 
   /** 0..1 loudness for something happening at c (fades out by ~45 m). */
@@ -831,7 +836,9 @@ export class Game {
     }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
     if (m.crit && m.s === this.me.id) this.sys(tx(`¡Crítico! ${m.v} de daño.`, `Critical hit! ${m.v} damage.`));
-    if (!mine) this.fx.burst(t.pos.clone().setY(t.pos.y + t.height * 0.55), m.crit ? 0xffcc33 : 0xffffff, 0.35, 220);
+    const hitAt = t.pos.clone().setY(t.pos.y + t.height * 0.55);
+    if (!mine) this.fx.burst(hitAt, m.crit ? 0xffcc33 : 0xffffff, m.crit ? 0.6 : 0.35, m.crit ? 320 : 220);
+    if (m.crit && src && src !== t) this.fx.slash(hitAt, src.pos.clone().setY(src.pos.y + src.height * 0.6), 0xffcc33, 1.3);
   }
 
   private onFx(sId: number, tId: number, skill: string) {
@@ -859,7 +866,10 @@ export class Game {
     switch (def.kind) {
       case 'magic':
         this.fx.projectile(chest(s), () => chest(t), def.color, 280, 0.3);
-        setTimeout(() => this.fx.burst(chest(t), def.color, def.aoe ? def.aoe * 0.6 : 0.9, 450), 280);
+        setTimeout(() => {
+          this.fx.burst(chest(t), def.color, def.aoe ? def.aoe * 0.6 : 0.9, 450);
+          if (def.aoe) this.fx.ring(t.pos.clone(), def.color, def.aoe, 500);
+        }, 280);
         break;
       case 'drain':
         this.fx.projectile(chest(t), () => chest(s), def.color, 400, 0.25);
@@ -869,7 +879,8 @@ export class Game {
         play('warn', this.near(s) * 0.6);
         break;
       case 'phys':
-        this.fx.burst(chest(t), def.color, 1.1, 350);
+        this.fx.slash(chest(t), chest(s), def.color, 1.4);
+        this.fx.burst(chest(t), def.color, 0.9, 350);
         if (def.aoe) this.fx.ring(s.pos.clone(), def.color, def.aoe, 500);
         break;
       case 'heal':
