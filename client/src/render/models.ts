@@ -259,7 +259,13 @@ export function humanoid(o: HumanoidOpts): Rig {
   const hideHair = g.head ? helmet(head, g.head) : false;
   if (!o.bald && !hideHair) {
     if (!g.head) head.add(part(new THREE.SphereGeometry(0.205, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5), o.hair, 0, 0.03, -0.02));
-    if (o.hairStyle === 1) head.add(part(B(0.36, 0.42, 0.1), o.hair, 0, -0.14, -0.15));
+    if (o.hairStyle === 1) {
+      // long hair: a mane that follows the back of the head and narrows to the tips, with a lock on each side
+      head.add(part(B(0.34, 0.2, 0.12), o.hair, 0, -0.05, -0.13));
+      head.add(part(B(0.3, 0.2, 0.1), o.hair, 0, -0.24, -0.15));
+      head.add(part(B(0.22, 0.16, 0.08), darker(o.hair, 0.9), 0, -0.41, -0.15));
+      for (const sx of [-1, 1]) head.add(part(B(0.06, 0.26, 0.14), o.hair, sx * 0.185, -0.08, -0.04));
+    }
     if (o.hairStyle === 2 && !g.head) head.add(part(new THREE.IcosahedronGeometry(0.1, 0), o.hair, 0, 0.25, -0.08));
   }
   if (o.ears && !closedHelm) {
