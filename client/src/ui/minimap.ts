@@ -7,6 +7,8 @@ import { F_RED, type Game } from '../game';
 import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
 import { lang, t as tx } from '../lang';
+import { settings } from '../settings';
+import { gameClock } from '../render/atmos';
 import { campName, zoneName } from '../../../shared/src/i18n';
 
 const RES = 512;
@@ -58,6 +60,7 @@ export class Minimap {
   private canvas: HTMLCanvasElement;
   private zoneEl: HTMLDivElement;
   private coordsEl: HTMLDivElement;
+  private clockEl: HTMLDivElement;
   private viewR = 110;
   private mapWin: Win;
   private bigCanvas: HTMLCanvasElement;
@@ -72,6 +75,8 @@ export class Minimap {
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));
     el('span', 'mm-north', box, 'N');
     this.coordsEl = el('div', 'mm-coords', box);
+    this.clockEl = el('div', 'mm-clock', box);
+    this.clockEl.title = tx('Hora del juego. La noche pasa rápido.', 'Game time. Nights pass quickly.');
     el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')}`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
@@ -234,6 +239,12 @@ export class Minimap {
     this.lastDraw = now;
     const self = this.g.self;
     this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
+    const clock = settings.s.dayNight ? gameClock() : '';
+    if (this.clockEl.textContent !== clock) {
+      this.clockEl.textContent = clock;
+      this.clockEl.style.display = clock ? '' : 'none';
+      this.clockEl.classList.toggle('night', clock < '06:00' || clock >= '18:00');
+    }
     if (!self) return;
     const ctx = this.canvas.getContext('2d')!;
     const W = MM;

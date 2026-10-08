@@ -8,6 +8,24 @@ import { heightAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 /** Length of a full day. It runs off the wall clock, so every player sees the same hour without the server. */
 export const DAY_MS = 20 * 60 * 1000;
 
+/** Share of the cycle the sun spends above the horizon: nights are short, about 4 of the 20 minutes. */
+const DAY_SHARE = 0.8;
+
+/**
+ * Where the sun is in its round: 0 = sunrise, π = sunset, 2π = the next sunrise. The day half is
+ * stretched and the night half squeezed, so the in-game clock simply runs faster after dark.
+ */
+export function sunPhase(): number {
+  const f = ((Date.now() % DAY_MS) / DAY_MS + 0.2) % 1; // offset so a fresh cycle starts mid-morning
+  return f < DAY_SHARE ? (f / DAY_SHARE) * Math.PI : Math.PI + ((f - DAY_SHARE) / (1 - DAY_SHARE)) * Math.PI;
+}
+
+/** In-game time as HH:MM (sunrise 06:00, sunset 18:00), to the nearest ten minutes. */
+export function gameClock(): string {
+  const m = Math.round((((sunPhase() / (2 * Math.PI)) * 24 + 6) % 24) * 6) * 10;
+  return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
 /** What the sky decided this frame, for everything else that reacts to it. */
 export const ATMOS = {
   /** 0 = deep night .. 1 = full day */

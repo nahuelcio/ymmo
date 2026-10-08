@@ -45,7 +45,7 @@ export class SettingsPanel {
       this.select<number>(tx('Límite de FPS', 'FPS cap'), 'fpsCap', [[0, tx('Sin límite', 'Unlimited')], [30, '30'], [60, '60'], [120, '120'], [144, '144']]);
       this.check(tx('Mostrar FPS', 'Show FPS'), 'showFps');
     } else if (this.tab === 'atmos') {
-      this.check(tx('Ciclo de día y noche (20 min, igual para todos)', 'Day and night cycle (20 min, the same for everyone)'), 'dayNight');
+      this.check(tx('Ciclo de día y noche (16 min de día, 4 de noche; igual para todos)', 'Day and night cycle (16 min of day, 4 of night; the same for everyone)'), 'dayNight');
       this.range(tx('Brillo de la noche', 'Night brightness'), 'nightBrightness', 0.3, 1, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.check(tx('Agua con olas y reflejos', 'Water with ripples and reflections'), 'fancyWater');
       this.check(tx('Viento en el pasto y los árboles', 'Wind in the grass and trees'), 'wind');

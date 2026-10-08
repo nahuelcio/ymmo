@@ -4,7 +4,7 @@ import { fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, WATER
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, zoneOf } from '../../../shared/src/layout';
 import { settings } from '../settings';
-import { ATMOS, DAY_MS, sway, waterMaterial, type LightSource } from './atmos';
+import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 
 const SKY = 0xa9c6e0;
 
@@ -171,12 +171,12 @@ export function createWorldScene(): WorldScene {
       cur.top.lerp(tgt.top, k); cur.horizon.lerp(tgt.horizon, k); cur.ground.lerp(tgt.ground, k);
       cur.sun.lerp(tgt.sun, k); cur.cloud.lerp(tgt.cloud, k);
       cur.sunI += (tgt.sunI - cur.sunI) * k; cur.hemi += (tgt.hemi - cur.hemi) * k;
-      // Hour of the day on top of the region's palette. `el` is the sun's elevation (-1 midnight .. 1 noon);
+      // Hour of the day on top of the region's palette. `el` is the sun's elevation (-0.9 midnight .. 0.9 noon);
       // with the cycle off it stays where the fixed sun always was.
       const A = ATMOS;
       if (settings.s.dayNight) {
-        const th = (((Date.now() % DAY_MS) / DAY_MS + 0.32) % 1) * Math.PI * 2;
-        A.sunDir.set(Math.sin(th) * 0.85, -Math.cos(th), 0.4).normalize();
+        const ph = sunPhase();
+        A.sunDir.set(Math.cos(ph) * 0.85, Math.sin(ph), 0.4).normalize();
       } else A.sunDir.set(0.45, 0.8, 0.3).normalize();
       const el = A.sunDir.y;
       const day = (A.day = smoothstep(-0.14, 0.28, el));
