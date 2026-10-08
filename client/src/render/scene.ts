@@ -36,7 +36,8 @@ const SkyShader = {
       float h = d.y;
       vec3 c = h > 0.0 ? mix(horizon, top, pow(smoothstep(0.0, 0.55, h), 0.8)) : mix(horizon, ground, smoothstep(0.0, 0.25, -h));
       float s = max(dot(d, sunDir), 0.0);
-      c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.18) * smoothstep(-0.1, 0.02, sunDir.y); // sun disc + glow
+      // the sun: a solid disc with a halo and a wide glow (it was a pinprick that was easy to miss)
+      c += sunColor * (smoothstep(0.9988, 0.9993, s) * 3.0 + pow(s, 90.0) * 0.5 + pow(s, 10.0) * 0.2) * smoothstep(-0.1, 0.02, sunDir.y);
       if (night > 0.01 && h > 0.0) {
         vec3 q = d * 330.0; // stars: one cell in a few hundred holds a small round dot
         c += vec3(0.85, 0.92, 1.0) * step(0.9955, hash(floor(q))) * smoothstep(0.3, 0.05, length(fract(q) - 0.5)) * night * smoothstep(0.03, 0.3, h);

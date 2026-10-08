@@ -152,6 +152,8 @@ export class Game {
   private plates: { c: CEnt; d: number }[] = [];
   private plateV = new THREE.Vector3();
   private hoverId: number | null = null;
+  /** Set while the benchmark runs: called every frame with its real duration (bench.ts). */
+  benchHook: ((frameMs: number, tSec: number) => void) | null = null;
   private motes = new Motes();
   private lights!: LocalLights;
   private sunScreen = new THREE.Vector3();
@@ -1376,6 +1378,7 @@ export class Game {
       this.fpsAt = now;
     }
     const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.benchHook?.(now - this.last, now / 1000);
     this.last = now;
     const rtNear = now - this.interpDelay;
     // far entities only get 10 Hz updates (interest management): draw them one more tick back

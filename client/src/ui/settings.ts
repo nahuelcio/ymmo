@@ -11,6 +11,8 @@ export class SettingsPanel {
   private tab = 'graphics';
   private tabs: HTMLDivElement;
   private body: HTMLDivElement;
+  /** set by the UI: runs the benchmark (it needs the game) */
+  onBenchmark: (() => void) | null = null;
 
   constructor(root: HTMLElement) {
     this.win = new Win('settings', tx('Opciones', 'Options'), 260, 60, 440, root);
@@ -36,6 +38,10 @@ export class SettingsPanel {
     const b = this.body;
     b.innerHTML = '';
     if (this.tab === 'graphics') {
+      const bench = el('button', 'btn primary set-bench', b, tx('Medir mi PC y recomendar ajustes', 'Benchmark my PC and recommend settings'));
+      bench.title = tx('Prueba unos segundos con muchos monstruos en pantalla, de la calidad más alta a la más baja, y te propone la mejor que tu equipo sostiene.',
+        'Runs for a few seconds with a crowd of monsters on screen, from the highest quality down, and proposes the best one your machine holds.');
+      bench.onclick = () => this.onBenchmark?.();
       this.select<Preset>(tx('Calidad', 'Quality'), 'preset', [['low', tx('Baja', 'Low')], ['medium', tx('Media', 'Medium')], ['high', tx('Alta', 'High')], ['ultra', 'Ultra'], ['custom', tx('Personalizada', 'Custom')]]);
       this.range(tx('Escala de resolución', 'Render scale'), 'renderScale', 0.5, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.select<ShadowQ>(tx('Sombras', 'Shadows'), 'shadows', [['off', tx('No', 'Off')], ['low', tx('Bajas', 'Low')], ['medium', tx('Medias', 'Medium')], ['high', tx('Altas (suaves)', 'High (soft)')]]);

@@ -6,6 +6,7 @@ import { Minimap } from './minimap';
 import { SettingsPanel } from './settings';
 import { isTouchDevice, TouchControls } from './touch';
 import { CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
+import { runBenchmark } from '../bench';
 
 export class UI {
   root: HTMLElement;
@@ -33,6 +34,10 @@ export class UI {
     this.dialogs = new Dialogs(g, this.root);
     this.help = createHelp(this.root);
     this.settings = new SettingsPanel(this.root);
+    this.settings.onBenchmark = () => {
+      this.settings.win.hide();
+      void runBenchmark(g);
+    };
     if (isTouchDevice()) {
       new TouchControls(g, this.root);
       // small screens: start with the chat folded away (the player can open it with ▲)
