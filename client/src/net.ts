@@ -19,7 +19,7 @@ export class Net {
       else {
         const snap = decodeSnap(ev.data as ArrayBuffer);
         if (!snap) return;
-        m = { t: 'snap', add: [], upd: snap.upd, gone: snap.gone };
+        m = { t: 'snap', add: [], upd: snap.upd, gone: snap.gone, st: snap.st };
       }
       for (const h of this.handlers.get(m.t) ?? []) h(m);
       for (const h of this.handlers.get('*') ?? []) h(m);

@@ -57,7 +57,8 @@ export interface CEnt {
   marker?: { obj: CSS2DObject; el: HTMLDivElement };
 }
 
-const INTERP_DELAY = 80;
+/** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
+const INTERP_BASE = 70;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
@@ -140,7 +141,7 @@ export class Game {
   private sphere = new THREE.Sphere();
   private hoverId: number | null = null;
   /** Client-side predicted move destination for our own character. */
-  private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[] } | null = null;
+  private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number } } | null = null;
   private holdMove = false;
   private lastHoldSend = 0;
   private teleportPending = true;
@@ -267,7 +268,7 @@ export class Game {
   // ---------------------------------------------------------------- network
   private bindNet() {
     const n = this.net;
-    n.on('snap', (m) => this.onSnap(m.add, m.upd, m.gone));
+    n.on('snap', (m) => this.onSnap(m.add, m.upd, m.gone, m.st));
     n.on('me', (m) => {
       const prevZone = this.me.zone;
       const prevLvl = this.me.lvl;
@@ -288,7 +289,7 @@ export class Game {
     // Other entities are drawn INTERP_DELAY in the past: play their combat events on that same
     // timeline so a swing, its damage number and the hit reaction line up. Our own are instant.
     const onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void) =>
-      n.on(t, (m) => (src(m) === this.me.id ? h(m) : setTimeout(() => h(m), INTERP_DELAY)));
+      n.on(t, (m) => (src(m) === this.me.id ? h(m) : setTimeout(() => h(m), this.interpDelay)));
     onSync('dmg', (m) => m.s, (m) => this.onDmg(m));
     n.on('ping', (m) => {
       this.net.send({ t: 'pong', s: m.s });
@@ -582,8 +583,27 @@ export class Game {
     this.ents.delete(id);
   }
 
-  private pushSnap(c: CEnt, x: number, z: number, ry: number) {
-    const now = performance.now();
+  /**
+   * Server time -> local time. The offset tracks the fastest packet seen (least queueing); how much
+   * later the others arrive is the jitter, which sets how far in the past we draw other entities.
+   */
+  private clockOff: number | null = null;
+  private jitter = 0;
+  interpDelay = INTERP_BASE + 10;
+  private serverToLocal(st: number | undefined): number {
+    const arrival = performance.now();
+    if (st === undefined) return arrival;
+    const d = arrival - st;
+    if (this.clockOff === null || Math.abs(d - this.clockOff) > 5000) this.clockOff = d; // first packet, clock wrap, world switch
+    else if (d < this.clockOff) this.clockOff = d;
+    else this.clockOff += (d - this.clockOff) * 0.002; // follow slow clock drift
+    this.jitter = this.jitter * 0.97 + (d - this.clockOff) * 0.03;
+    const want = Math.min(220, INTERP_BASE + this.jitter * 2);
+    this.interpDelay += (want - this.interpDelay) * 0.05;
+    return st + this.clockOff;
+  }
+
+  private pushSnap(c: CEnt, x: number, z: number, ry: number, now: number) {
     const last = c.snaps[c.snaps.length - 1];
     const isSelf = c.id === this.me.id;
     if ((isSelf && this.teleportPending) || (last && Math.hypot(last.x - x, last.z - z) > 25)) {
@@ -595,14 +615,16 @@ export class Game {
         this.cam.snap(c.pos);
       }
     } else if (last && now - last.t > 160) {
-      // entity was idle: re-anchor previous position so interpolation starts now
-      c.snaps.push({ t: now - 100, x: last.x, z: last.z, ry: last.ry });
+      // entity was idle (unchanged entities aren't sent): re-anchor its previous position one tick ago
+      c.snaps.push({ t: now - 50, x: last.x, z: last.z, ry: last.ry });
     }
+    if (c.snaps.length && now <= c.snaps[c.snaps.length - 1].t) return; // duplicate / reordered
     c.snaps.push({ t: now, x, z, ry });
     if (c.snaps.length > 12) c.snaps.splice(0, c.snaps.length - 12);
   }
 
-  private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[]) {
+  private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[], st?: number) {
+    const t = this.serverToLocal(st);
     for (const r of add) {
       const old = this.ents.get(r.id);
       let snaps: Snap[] = [];
@@ -619,7 +641,7 @@ export class Game {
       this.ents.set(r.id, c);
       this.world.scene.add(c.root);
       this.hitboxes.push(c.hit);
-      this.pushSnap(c, r.x, r.z, r.ry);
+      this.pushSnap(c, r.x, r.z, r.ry, t);
       if (!old && r.id !== this.me.id && r.k !== 'i') c.pos.set(r.x, heightAt(r.x, r.z), r.z);
     }
     for (const [id, x, z, ry, hp, f] of upd) {
@@ -639,7 +661,7 @@ export class Game {
       if (wasDead && !(f & F_DEAD)) c.deadAt = -1;
       if (!wasDead && f & F_DEAD && c.deadAt < 0) c.deadAt = performance.now();
       if (colorChanged) this.refreshLabel(c);
-      this.pushSnap(c, x, z, ry);
+      this.pushSnap(c, x, z, ry, t);
     }
     for (const id of gone) {
       if (id === this.targetId) this.setTarget(null);
@@ -825,9 +847,25 @@ export class Game {
     return this.me.pvpOn && (c.flags & F_PVP) !== 0 && (c.flags & F_PURPLE) !== 0;
   }
 
+  /** Start walking toward entity t locally until within range (the server does the same walk). */
+  private predictChase(t: CEnt, range: number) {
+    const self = this.self;
+    if (!self || self.flags & (F_DEAD | F_CASTING) || self.roll) return;
+    if (self.pos.distanceTo(t.pos) <= range) return;
+    this.predict = { x: t.pos.x, z: t.pos.z, arrivedAt: 0, path: findPath(self.pos.x, self.pos.z, t.pos.x, t.pos.z), chase: { id: t.id, range, repathAt: performance.now() + 400 } };
+  }
+
   /** Action whose movement the server drives: drop local prediction. */
   private serverAction(m: Parameters<Net['send']>[0]) {
     this.predict = null;
+    // walking up to whatever we interact with: predict it like a click-move (the server walks the same way)
+    if (m.t === 'attack' || m.t === 'pickup' || m.t === 'talk') {
+      const t = this.ents.get(m.id);
+      if (t) this.predictChase(t, m.t === 'attack' ? MELEE_RANGE + t.radius - 0.3 : m.t === 'pickup' ? 1.2 : 2.5);
+    } else if (m.t === 'skill') {
+      const def = SKILLS[m.skill], t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+      if (def && t && def.target === 'enemy' && this.isHostile(t)) this.predictChase(t, Math.max(0.5, def.range + t.radius - 0.4));
+    }
     this.holdMove = false;
     this.net.send(m);
   }
@@ -1154,6 +1192,30 @@ export class Game {
     const srv = s[s.length - 1];
     const pr = this.predict;
     if (pr && c.flags & F_DEAD) this.predict = null;
+    if (pr?.chase) {
+      const t = this.ents.get(pr.chase.id);
+      if (!t || t.flags & F_DEAD) this.predict = null;
+      else {
+        const left = Math.hypot(t.pos.x - c.pos.x, t.pos.z - c.pos.z);
+        if (left <= pr.chase.range) {
+          // in reach: stop here and let the server's position take over
+          pr.path = [{ x: c.pos.x, z: c.pos.z }];
+          if (!pr.arrivedAt) pr.arrivedAt = now;
+          pr.x = c.pos.x;
+          pr.z = c.pos.z;
+          let dr = Math.atan2(t.pos.x - c.pos.x, t.pos.z - c.pos.z) - c.ry;
+          dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+          c.ry += dr * Math.min(1, dt * 20);
+        } else if (now >= pr.chase.repathAt || Math.hypot(t.pos.x - pr.x, t.pos.z - pr.z) > 1.5) {
+          // the target moved: follow it
+          pr.chase.repathAt = now + 400;
+          pr.x = t.pos.x;
+          pr.z = t.pos.z;
+          pr.arrivedAt = 0;
+          pr.path = findPath(c.pos.x, c.pos.z, t.pos.x, t.pos.z);
+        }
+      }
+    }
     if (this.predict && pr) {
       while (pr.path.length > 1 && Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z) < 0.15) pr.path.shift();
       const wp = pr.path[0];
@@ -1211,7 +1273,9 @@ export class Game {
     }
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    const rt = now - INTERP_DELAY;
+    const rtNear = now - this.interpDelay;
+    // far entities only get 10 Hz updates (interest management): draw them one more tick back
+    const rtFar = rtNear - 50;
     const tSec = now / 1000;
     const self = this.self;
 
@@ -1226,6 +1290,7 @@ export class Game {
       let moving = (c.flags & F_MOVING) !== 0;
       if (c === self && s.length) moving = this.updateSelf(c, now, dt);
       else if (s.length) {
+        const rt = self && (c.pos.x - self.pos.x) ** 2 + (c.pos.z - self.pos.z) ** 2 > 2300 ? rtFar : rtNear;
         let x = s[s.length - 1].x, z = s[s.length - 1].z, ry = s[s.length - 1].ry;
         for (let i = s.length - 1; i > 0; i--) {
           if (s[i - 1].t <= rt) {

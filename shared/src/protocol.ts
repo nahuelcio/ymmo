@@ -88,7 +88,8 @@ export type S2C =
   | { t: 'enter'; self: SelfState; inv: InvItem[] }
   /** moved to another world (raid instance or back): forget every entity and start over */
   | { t: 'world'; self: SelfState; inv: InvItem[] }
-  | { t: 'snap'; add: EntAdd[]; upd: EntUpd[]; gone: number[] }
+  /** st: server time of the tick (wire clock, see binary.ts) */
+  | { t: 'snap'; add: EntAdd[]; upd: EntUpd[]; gone: number[]; st?: number }
   | { t: 'me'; s: SelfState }
   | { t: 'inv'; items: InvItem[]; adena: number }
   | { t: 'target'; id: number | null }

@@ -6,7 +6,7 @@ import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
 import { dashEnd, findPath, lineClear, pushOut } from '../../../shared/src/collision';
-import { encodeSnap, qPos, qRot } from '../../../shared/src/binary';
+import { encodeSnap, qPos, qRot, wireTime } from '../../../shared/src/binary';
 import { campName, mobName, npcLines, type Lang } from '../../../shared/src/i18n';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
 import { updatePlayer } from '../systems/player';
@@ -472,8 +472,8 @@ export class World {
     }
     // new entities (rare, full records) as JSON first; the per-tick updates and
     // despawns go in a compact binary frame (see shared/binary.ts)
-    if (add.length) p.send({ t: 'snap', add, upd: [], gone: [] });
-    if (upd.length || gone.length) p.sendBinary(encodeSnap(upd, gone));
+    if (add.length) p.send({ t: 'snap', add, upd: [], gone: [], st: wireTime(now) });
+    if (upd.length || gone.length) p.sendBinary(encodeSnap(upd, gone, now));
   }
 
   selfState(p: Player): SelfState {
