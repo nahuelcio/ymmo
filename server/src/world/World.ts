@@ -6,6 +6,7 @@ import { xpToNext } from '../../../shared/src/formulas';
 import type { C2S, EntAdd, EntUpd, S2C, SelfState } from '../../../shared/src/protocol';
 import { mulberry32, PLAYABLE_HALF, TOWN } from '../../../shared/src/terrain';
 import { dashEnd, findPath, lineClear, pushOut } from '../../../shared/src/collision';
+import { nearCamp } from '../../../shared/src/layout';
 import { encodeSnap, qPos, qRot, wireTime } from '../../../shared/src/binary';
 import { campName, mobName, npcLines, type Lang } from '../../../shared/src/i18n';
 import { Entity, GroundItem, Mob, Npc, Player, type Party } from './entities';
@@ -249,9 +250,14 @@ export class World {
       for (const sp of zone.spawns) {
         const tpl = MOBS[sp.mob];
         for (let i = 0; i < sp.count; i++) {
-          const a = rng() * Math.PI * 2;
-          const r = tpl.boss ? 0 : Math.sqrt(rng()) * zone.r * 0.85;
-          const { x, z } = pushOut(zone.x + Math.cos(a) * r, zone.z + Math.sin(a) * r, 1);
+          // zone wildlife keeps out of the hostile camps, which have their own garrison
+          let x: number, z: number;
+          for (;;) {
+            const a = rng() * Math.PI * 2;
+            const r = tpl.boss ? 0 : Math.sqrt(rng()) * zone.r * 0.85;
+            ({ x, z } = pushOut(zone.x + Math.cos(a) * r, zone.z + Math.sin(a) * r, 1));
+            if (r === 0 || !nearCamp(x, z, 19)) break;
+          }
           const m = new Mob(this.newId(), x, z, tpl, x, z, zone.r);
           m.ry = rng() * Math.PI * 2;
           this.mobs.push(m);

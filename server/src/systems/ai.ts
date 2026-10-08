@@ -1,3 +1,4 @@
+import { pushOut } from '../../../shared/src/collision';
 import { inTown } from '../../../shared/src/terrain';
 import { Mob } from '../world/entities';
 import { dist, face, type World } from '../world/World';
@@ -117,7 +118,10 @@ export function updateMob(w: World, m: Mob, dt: number, now: number) {
       m.wanderAt = now + 4000 + Math.random() * 9000;
       if (Math.random() < 0.6 && !m.tpl.boss) {
         const a = Math.random() * Math.PI * 2, r = Math.random() * 8;
-        m.dest = { x: m.homeX + Math.cos(a) * r, z: m.homeZ + Math.sin(a) * r };
+        const p = { x: m.homeX + Math.cos(a) * r, z: m.homeZ + Math.sin(a) * r };
+        // a spot inside a wall or a tent can never be reached: the mob would walk in place against it forever
+        const free = pushOut(p.x, p.z, m.radius);
+        if (Math.hypot(free.x - p.x, free.z - p.z) < 0.01) m.dest = p;
       }
     }
   }

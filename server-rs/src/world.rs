@@ -261,9 +261,13 @@ impl World {
             for sp in &zone.spawns {
                 let tpl = &data.mobs[&sp.mob];
                 for _ in 0..sp.count {
-                    let a = rng.next() * std::f64::consts::TAU;
-                    let r = if tpl.boss.unwrap_or(false) { 0.0 } else { rng.next().sqrt() * zone.r * 0.85 };
-                    let p = push_out(zone.x + a.cos() * r, zone.z + a.sin() * r, 1.0);
+                    // zone wildlife keeps out of the hostile camps, which have their own garrison
+                    let p = loop {
+                        let a = rng.next() * std::f64::consts::TAU;
+                        let r = if tpl.boss.unwrap_or(false) { 0.0 } else { rng.next().sqrt() * zone.r * 0.85 };
+                        let p = push_out(zone.x + a.cos() * r, zone.z + a.sin() * r, 1.0);
+                        if r == 0.0 || !data.camps.iter().any(|c| (c.x - p.x).hypot(c.z - p.z) < 19.0) { break p; }
+                    };
                     let id = self.new_id();
                     let mut c = Common::new(id, p.x, p.z);
                     c.ry = rng.next() * std::f64::consts::TAU;

@@ -136,12 +136,16 @@ impl World {
         } else {
             let e = self.ents.get_mut(&mid).unwrap();
             e.c.moving = false;
+            let radius = e.c.radius;
             let m = e.mob_mut().unwrap();
             if now >= m.wander_at {
                 m.wander_at = now + 4000.0 + rnd() * 9000.0;
                 if rnd() < 0.6 && !tpl.boss.unwrap_or(false) {
                     let (a, r) = (rnd() * std::f64::consts::TAU, rnd() * 8.0);
-                    m.dest = Some(crate::collision::P { x: m.home_x + a.cos() * r, z: m.home_z + a.sin() * r });
+                    let p = crate::collision::P { x: m.home_x + a.cos() * r, z: m.home_z + a.sin() * r };
+                    // a spot inside a wall or a tent can never be reached: the mob would walk in place against it forever
+                    let free = crate::collision::push_out(p.x, p.z, radius);
+                    if (free.x - p.x).hypot(free.z - p.z) < 0.01 { m.dest = Some(p); }
                 }
             }
         }
