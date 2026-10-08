@@ -188,6 +188,10 @@ export class Hud {
     this.cp.set(m.cp, m.maxCp);
     this.hp.set(m.hp, m.maxHp);
     this.mp.set(m.mp, m.maxMp);
+    // under 30% life the world drains of colour, down to full grey at zero; under 30% mana its bar trembles
+    const life = m.maxHp > 0 ? m.hp / m.maxHp : 1;
+    document.getElementById('game')!.style.filter = life < 0.3 ? `grayscale(${(1 - life / 0.3).toFixed(2)})` : '';
+    this.mp.root.classList.toggle('low', m.maxMp > 0 && m.mp / m.maxMp < 0.3);
     if (m.xpNeed > 0) {
       this.xp.set(m.xp, m.xpNeed);
       this.xp.text.textContent = `XP ${((m.xp / m.xpNeed) * 100).toFixed(2)}%`;
