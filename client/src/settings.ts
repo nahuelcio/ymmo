@@ -5,6 +5,29 @@ export type Preset = 'low' | 'medium' | 'high' | 'ultra' | 'custom';
 export type ShadowQ = 'off' | 'low' | 'medium' | 'high';
 export type LookPreset = 'off' | 'natural' | 'vivid' | 'aden' | 'cinematic' | 'noir' | 'custom';
 
+/** Things a key can be bound to. Slots (1-0, F1-F10), Enter, Esc and the arrow keys are fixed. */
+export const ACTIONS = {
+  attack: tx('Atacar al objetivo', 'Attack target'),
+  stop: tx('Frenar: dejar de moverse y de atacar', 'Stop: quit moving and attacking'),
+  nextTarget: tx('Siguiente objetivo', 'Next target'),
+  dash: tx('Rodar', 'Roll'),
+  loot: tx('Juntar lo más cercano', 'Pick up nearest'),
+  inventory: tx('Inventario', 'Inventory'),
+  character: tx('Personaje', 'Character'),
+  map: tx('Mapa', 'Map'),
+  party: 'Party',
+  help: tx('Ayuda', 'Help'),
+  settings: tx('Opciones', 'Options'),
+  camLeft: tx('Girar cámara a la izquierda', 'Rotate camera left'),
+  camRight: tx('Girar cámara a la derecha', 'Rotate camera right'),
+};
+export type Action = keyof typeof ACTIONS;
+/** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
+export const DEFAULT_KEYS: Record<Action, string> = {
+  attack: ' ', stop: 's', nextTarget: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
+};
+export const keyLabel = (k: string) => (k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
+
 export interface Settings {
   preset: Preset;
   // graphics
@@ -44,6 +67,7 @@ export interface Settings {
   autoLoot: boolean;
   volume: number;
   music: number; // background music + ambience
+  keys: Record<Action, string>;
 }
 
 type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage';
@@ -92,6 +116,7 @@ export const DEFAULTS: Settings = {
   autoLoot: false,
   volume: 0.5,
   music: 0.35,
+  keys: DEFAULT_KEYS,
 };
 
 const KEY = 'settings:v2';
@@ -99,7 +124,11 @@ const KEY = 'settings:v2';
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<Settings>;
+      // actions added after these settings were saved keep their default key
+      return { ...DEFAULTS, ...saved, keys: { ...DEFAULT_KEYS, ...saved.keys } };
+    }
   } catch {
     /* storage unavailable or corrupt */
   }

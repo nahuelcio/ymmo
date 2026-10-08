@@ -62,6 +62,7 @@ export class UI {
   onMe() {
     this.hud.onMe();
     this.character.refresh();
+    this.inventory.refreshStats();
   }
 
   onInv() {

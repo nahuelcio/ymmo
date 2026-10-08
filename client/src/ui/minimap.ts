@@ -70,7 +70,7 @@ export class Minimap {
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));
     el('span', 'mm-north', box, 'N');
     this.coordsEl = el('div', 'mm-coords', box);
-    el('div', 'mm-legend', box).innerHTML = `<i style="color:#ff5544">●</i> ${tx('enemigos', 'enemies')} <i style="color:#ffd200">●</i> ${tx('misión', 'quest')} <i style="color:#66aaff">●</i> ${tx('jugadores', 'players')}`;
+    el('div', 'mm-legend', box).innerHTML = `<i style="background:#ff5544"></i> ${tx('enemigos', 'enemies')} <i style="background:#ffd200"></i> ${tx('misión', 'quest')} <i style="background:#66aaff"></i> ${tx('jugadores', 'players')}`;
     const zoom = el('div', 'mm-zoom', box);
     const zin = el('button', 'btn small', zoom, '+');
     zin.onclick = () => (this.viewR = Math.max(40, this.viewR * 0.75));
@@ -127,7 +127,7 @@ export class Minimap {
       ctx.fill();
       ctx.stroke();
       ctx.lineWidth = 1;
-      quests.forEach((q, i) => this.label(ctx, `★ ${q}`, x, y + 18 + i * 14));
+      quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
     }
     const self = this.g.self;
     if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);

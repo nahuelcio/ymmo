@@ -6,9 +6,10 @@ import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
-import { bar, glyph, itemIcon, itemTip, skillIcon, skillTip } from './common';
+import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, setTip } from './dom';
 import { lang, t as tx, fmt } from '../lang';
+import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
@@ -93,19 +94,25 @@ export class Hud {
     const menu = el('div', 'panel menu', root);
     this.adenaEl = el('span', 'adena hud-adena', menu);
     // icon + label: narrow and touch screens only show the icon
-    const btn = (icon: string, label: string, key: string, fn: () => void) => {
+    const btn = (icon: Action, label: string, fn: () => void) => {
       const b = el('button', 'menu-btn', menu);
       glyph('ui', icon, '', el('span', 'mb-icon', b));
       el('span', 'mb-label', b, label);
-      el('span', 'mb-key', b, key);
-      b.title = `${label} (${key})`;
+      const k = el('span', 'mb-key', b);
+      const sync = () => {
+        k.textContent = keyLabel(settings.s.keys[icon]);
+        b.title = `${label} (${k.textContent})`;
+        delete b.dataset.tip;
+      };
+      sync();
+      settings.on((_, changed) => changed.includes('keys') && sync());
       b.onclick = fn;
     };
-    btn('character', tx('Personaje', 'Character'), 'C', () => g.ui.character.win.toggle());
-    btn('inventory', tx('Inventario', 'Inventory'), 'I', () => g.ui.inventory.win.toggle());
-    btn('map', tx('Mapa', 'Map'), 'M', () => g.ui.minimap.toggleMap());
-    btn('help', tx('Ayuda', 'Help'), 'H', () => g.ui.help.toggle());
-    btn('settings', tx('Opciones', 'Settings'), 'O', () => g.ui.settings.win.toggle());
+    btn('character', tx('Personaje', 'Character'), () => g.ui.character.win.toggle());
+    btn('inventory', tx('Inventario', 'Inventory'), () => g.ui.inventory.win.toggle());
+    btn('map', tx('Mapa', 'Map'), () => g.ui.minimap.toggleMap());
+    btn('help', tx('Ayuda', 'Help'), () => g.ui.help.toggle());
+    btn('settings', tx('Opciones', 'Settings'), () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
     this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
@@ -130,8 +137,9 @@ export class Hud {
       el('div', 'qt-name', line, questField(q, 'name', lang));
       const prog = el('div', 'tt-dim', line);
       prog.innerHTML = ready
-        ? `<b class="qt-ready">✔ ${tx('Volvé con', 'Return to')} ${esc(NPCS.find((n) => n.id === q.npc)?.name ?? '')}</b>`
+        ? `<b class="qt-ready"><i data-gi="ui/check"></i> ${tx('Volvé con', 'Return to')} ${esc(NPCS.find((n) => n.id === q.npc)?.name ?? '')}</b>`
         : `${esc(questSummaryL(q, lang))} <b>${row.progress}/${q.objective.count}</b>`;
+      hydrate(prog);
       el('div', '', el('div', 'qt-bar', line)).style.width = `${Math.min(100, (row.progress / q.objective.count) * 100)}%`;
     }
     this.questRoot.style.display = shown ? '' : 'none';
@@ -143,7 +151,8 @@ export class Hud {
 
   onMe() {
     const m = this.g.me;
-    this.pvpBtn.textContent = m.pvpOn ? tx('⚔ PvP: SÍ', '⚔ PvP: ON') : tx('PvP: NO', 'PvP: OFF');
+    this.pvpBtn.textContent = m.pvpOn ? tx(' PvP: SÍ', ' PvP: ON') : tx('PvP: NO', 'PvP: OFF');
+    if (m.pvpOn) this.pvpBtn.prepend(glyph('ui', 'pvp'));
     this.pvpBtn.classList.toggle('on', m.pvpOn);
     this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${raceName(m.race, lang)} ${className(m.cls, lang)}</span>`;
     this.cp.set(m.cp, m.maxCp);

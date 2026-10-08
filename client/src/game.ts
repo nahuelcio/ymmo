@@ -18,7 +18,7 @@ import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
 import { PostFX } from './render/post';
-import { settings, type Settings } from './settings';
+import { settings, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
 import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
@@ -425,7 +425,7 @@ export class Game {
       if (c.flags & F_PVP) {
         const sw = document.createElement('span');
         sw.className = 'np-pvp';
-        sw.textContent = '⚔';
+        glyph('ui', 'pvp', '', sw);
         sw.title = tx('PvP activado', 'PvP on');
         n.prepend(sw);
       }
@@ -443,8 +443,13 @@ export class Game {
       el.className = 'nameplate np-mob';
       const n = document.createElement('div');
       const elite = MOBS[r.tpl]?.elite;
-      n.textContent = `${this.questTargets().some((t) => t.mobs.has(r.tpl)) ? '★ ' : ''}${mobName(r.tpl, lang)} `;
+      n.textContent = `${mobName(r.tpl, lang)} `;
       if (elite) n.prepend(glyph('ui', 'crown'));
+      if (this.questTargets().some((t) => t.mobs.has(r.tpl))) {
+        const q = glyph('ui', 'quest');
+        q.classList.add('np-quest');
+        n.prepend(q);
+      }
       if (elite) el.classList.add('np-elite');
       n.style.color = conColor(r.l - this.me.lvl);
       const l = document.createElement('span');
@@ -462,7 +467,8 @@ export class Game {
       t.textContent = `<${npcText(r.npc, 'title', lang)}>`;
       const n = document.createElement('div');
       n.className = 'np-npc-name';
-      n.textContent = `◆ ${r.n}`;
+      n.textContent = r.n;
+      n.prepend(glyph('ui', 'npc'));
       el.append(t, n);
     } else {
       el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${itemName(r.item, lang)}${r.c > 1 ? ` (${r.c})` : ''}`;
@@ -975,6 +981,13 @@ export class Game {
     this.serverAction({ t: 'dash', x: self.roll?.fx ?? self.pos.x, z: self.roll?.fz ?? self.pos.z, dx, dz });
   }
 
+  /** Stand still: drop the current move and stop attacking (the target stays selected). */
+  stop() {
+    this.predict = null;
+    this.clickMarker.visible = false;
+    this.net.send({ t: 'stop' });
+  }
+
   /** Virtual joystick (mobile): dx/dy in -1..1, screen space; null when released. */
   private joy: { dx: number; dy: number } | null = null;
   private lastJoySend = 0;
@@ -1110,6 +1123,11 @@ export class Game {
       const a = document.activeElement;
       return a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement;
     };
+    /** the action bound to this key in Options > Controls, if any */
+    const bound = (e: KeyboardEvent) => {
+      const keys = settings.s.keys, k = e.key.toLowerCase();
+      return (Object.keys(keys) as Action[]).find((a) => keys[a] === k);
+    };
     addEventListener('keydown', (e) => {
       this.ctrl = e.ctrlKey;
       if (e.key === 'Enter' && !typing()) {
@@ -1134,19 +1152,22 @@ export class Game {
         this.ui.hud.activateSlot(num);
         return;
       }
-      switch (e.key.toLowerCase()) {
-        case 'i': this.ui.inventory.win.toggle(); break;
-        case 'c': this.ui.character.win.toggle(); break;
-        case 'm': this.ui.minimap.toggleMap(); break;
-        case 'h': this.ui.help.toggle(); break;
-        case 'o': this.ui.settings.win.toggle(); break;
-        case 'p': this.ui.party.toggle(); break;
-        case 'z': this.pickupNearest(); break;
-        case ' ': e.preventDefault(); this.attackTarget(); break;
-        case 'shift': this.dash(); break;
-        case 'tab': e.preventDefault(); this.nextTarget(); break;
-        case 'q': this.cam.keys.left = true; break;
-        case 'e': this.cam.keys.right = true; break;
+      const action = bound(e);
+      if (action && (e.key === ' ' || e.key === 'Tab')) e.preventDefault();
+      switch (action ?? e.key.toLowerCase()) {
+        case 'inventory': this.ui.inventory.win.toggle(); break;
+        case 'character': this.ui.character.win.toggle(); break;
+        case 'map': this.ui.minimap.toggleMap(); break;
+        case 'help': this.ui.help.toggle(); break;
+        case 'settings': this.ui.settings.win.toggle(); break;
+        case 'party': this.ui.party.toggle(); break;
+        case 'loot': this.pickupNearest(); break;
+        case 'attack': this.attackTarget(); break;
+        case 'stop': this.stop(); break;
+        case 'dash': this.dash(); break;
+        case 'nextTarget': this.nextTarget(); break;
+        case 'camLeft': this.cam.keys.left = true; break;
+        case 'camRight': this.cam.keys.right = true; break;
         case 'arrowleft': this.cam.keys.left = true; break;
         case 'arrowright': this.cam.keys.right = true; break;
         case 'arrowup': this.cam.keys.up = true; break;
@@ -1155,9 +1176,9 @@ export class Game {
     });
     addEventListener('keyup', (e) => {
       this.ctrl = e.ctrlKey;
-      switch (e.key.toLowerCase()) {
-        case 'q': case 'arrowleft': this.cam.keys.left = false; break;
-        case 'e': case 'arrowright': this.cam.keys.right = false; break;
+      switch (bound(e) ?? e.key.toLowerCase()) {
+        case 'camLeft': case 'arrowleft': this.cam.keys.left = false; break;
+        case 'camRight': case 'arrowright': this.cam.keys.right = false; break;
         case 'arrowup': this.cam.keys.up = false; break;
         case 'arrowdown': this.cam.keys.down = false; break;
       }

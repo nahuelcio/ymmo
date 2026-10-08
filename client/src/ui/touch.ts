@@ -1,5 +1,6 @@
 import type { Game } from '../game';
 import { el } from './dom';
+import { glyph } from './common';
 import { t as tx } from '../lang';
 
 /** Phones and tablets (coarse pointer / touch screen). Desktop never sees the touch UI. */
@@ -15,7 +16,7 @@ export class TouchControls {
     const pad = el('div', 'touch-actions', root);
     const btn = (cls: string, icon: string, label: string, fn: () => void) => {
       const b = el('button', `touch-btn ${cls}`, pad);
-      el('span', 'tb-icon', b, icon);
+      glyph('ui', icon, '', el('span', 'tb-icon', b));
       el('span', 'tb-label', b, label);
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -26,10 +27,10 @@ export class TouchControls {
       b.addEventListener('pointerup', up);
       b.addEventListener('pointercancel', up);
     };
-    btn('tb-attack', '⚔️', tx('Atacar', 'Attack'), () => g.attackTarget());
-    btn('tb-dash', '💨', tx('Rodar', 'Roll'), () => g.dash());
-    btn('tb-target', '🎯', tx('Objetivo', 'Target'), () => g.nextTarget());
-    btn('tb-loot', '✋', tx('Juntar', 'Loot'), () => g.pickupNearest());
+    btn('tb-attack', 'pvp', tx('Atacar', 'Attack'), () => g.attackTarget());
+    btn('tb-dash', 'dash', tx('Rodar', 'Roll'), () => g.dash());
+    btn('tb-target', 'target', tx('Objetivo', 'Target'), () => g.nextTarget());
+    btn('tb-loot', 'loot', tx('Juntar', 'Loot'), () => g.pickupNearest());
   }
 
   private joystick(root: HTMLElement) {

@@ -22,6 +22,14 @@ export function glyph(kind: 'skill' | 'item' | 'status' | 'ui', id: string, fall
   return g;
 }
 
+/** Swap every `<i data-gi="kind/id">` placeholder under root for its icon (for markup written as an HTML string). */
+export function hydrate(root: HTMLElement) {
+  for (const ph of root.querySelectorAll<HTMLElement>('[data-gi]')) {
+    const [kind, id] = ph.dataset.gi!.split('/');
+    ph.replaceWith(glyph(kind as 'ui', id));
+  }
+}
+
 export function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
 }

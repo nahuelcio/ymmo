@@ -8,10 +8,12 @@ const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, itemIcon, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
+import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
 const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
+/** the item whose icon outlines each empty equipment slot */
+const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots' };
 
 export class InventoryPanel {
   win: Win;
@@ -20,12 +22,22 @@ export class InventoryPanel {
   private footer: HTMLDivElement;
   private menu: HTMLDivElement | null = null;
   private dollCells: Partial<Record<Slot, HTMLDivElement>> = {};
+  private stats?: HTMLDivElement; // built with the doll on the first refresh
+  private tabs!: HTMLDivElement;
+  private filter: 'all' | 'gear' | 'use' | 'mat' = 'all';
   /** what is being dragged: a bag item (by its uid) or the item worn in a slot */
   private drag: { u?: InvItem['u']; slot?: Slot } | null = null;
 
   constructor(private g: Game, root: HTMLElement) {
-    this.win = new Win('inventory', tx('Inventario', 'Inventory'), -370, 90, 344, root);
+    this.win = new Win('inventory', tx('Inventario', 'Inventory'), -390, 90, 364, root);
     this.doll = el('div', 'doll', this.win.body);
+    this.tabs = el('div', 'tabs inv-tabs', this.win.body);
+    const FILTERS = [['all', tx('Todo', 'All')], ['gear', tx('Equipo', 'Gear')], ['use', tx('Consumibles', 'Consumables')], ['mat', tx('Materiales', 'Materials')]] as const;
+    for (const [id, label] of FILTERS) {
+      const b = el('button', 'tab', this.tabs, label);
+      b.dataset.f = id;
+      b.onclick = () => ((this.filter = id), this.refresh());
+    }
     this.grid = el('div', 'inv-grid', this.win.body);
     this.footer = el('div', 'inv-footer', this.win.body);
     el('div', 'hint', this.win.body, tx('Doble click o arrastrar para equipar · Click derecho para más opciones · ▲ mejora lo que llevás puesto',
@@ -46,6 +58,15 @@ export class InventoryPanel {
   private closeMenu() {
     this.menu?.remove();
     this.menu = null;
+  }
+
+  /** The stat card in the middle of the paper doll (also refreshed when the server sends new stats). */
+  refreshStats() {
+    if (!this.stats) return;
+    const m = this.g.me;
+    const row = (k: string, v: number) => `<span class="stat-k">${k}</span><span class="stat-v">${v}</span>`;
+    this.stats.innerHTML = `<div class="ds-name">${esc(m.name)}</div><div class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang)}</div>
+      <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}</div>`;
   }
 
   /** The stat a character cares about for this piece, to tell upgrades apart. */
@@ -73,8 +94,13 @@ export class InventoryPanel {
     const g = this.g;
     this.doll.innerHTML = '';
     this.dollCells = {};
-    for (const s of SLOTS) {
+    // slots down both sides (head/chest/legs, weapon/gloves/feet) around a card with the stats gear changes
+    this.stats = el('div', 'doll-stats', this.doll);
+    this.refreshStats();
+    SLOTS.forEach((s, k) => {
       const cell = (this.dollCells[s] = el('div', 'doll-slot', this.doll));
+      cell.style.gridColumn = k % 2 ? '3' : '1';
+      cell.style.gridRow = String((k >> 1) + 1);
       const it = g.inv.find((i) => i.s === s);
       if (it) {
         itemIcon(it.i, cell);
@@ -83,10 +109,16 @@ export class InventoryPanel {
         cell.ondragend = () => (this.drag = null);
         cell.ondblclick = () => g.net.send({ t: 'unequip', slot: s });
         setTip(cell, () => itemTip(it.i) + '<br><span class="tt-dim">Doble click para sacártelo</span>');
-      } else el('span', 'doll-label', cell, SLOT_LABEL[s]);
-    }
+      } else {
+        // empty: a faint outline of what goes there
+        glyph('item', GHOST[s], SLOT_LABEL[s], cell).classList.add('doll-ghost');
+        cell.title = SLOT_LABEL[s];
+      }
+    });
     this.grid.innerHTML = '';
-    const bag = g.inv.filter((i) => !i.s);
+    for (const b of this.tabs.children) b.classList.toggle('active', (b as HTMLElement).dataset.f === this.filter);
+    const kind = (id: string) => (ITEMS[id].slot ? 'gear' : ITEMS[id].use ? 'use' : 'mat');
+    const bag = g.inv.filter((i) => !i.s && (this.filter === 'all' || kind(i.i) === this.filter));
     for (const it of bag) {
       const cell = el('div', 'inv-cell', this.grid);
       itemIcon(it.i, cell, it.c);
@@ -330,7 +362,9 @@ export class PartyPanel {
     for (const m of members ?? []) {
       if (m.id === this.g.me.id) continue;
       const row = el('div', 'party-member', this.list);
-      el('div', 'pm-name', row).innerHTML = `${m.leader ? '👑 ' : ''}${esc(m.name)} <span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang)}</span>`;
+      const nm = el('div', 'pm-name', row);
+      nm.innerHTML = `${m.leader ? '<i data-gi="ui/crown"></i> ' : ''}${esc(m.name)} <span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang)}</span>`;
+      hydrate(nm);
       bar(row, 'bar-cp thin').set(m.cp, m.maxCp);
       bar(row, 'bar-hp thin').set(m.hp, m.maxHp);
       bar(row, 'bar-mp thin').set(m.mp, m.maxMp);
@@ -393,13 +427,13 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Combate</h4>
     <p>Hacé click en un monstruo para <b>atacarlo</b> directamente (con <b>Espacio</b> o una habilidad de ataque sin objetivo se elige el más cercano). <b>Tab</b> va pasando por los monstruos cercanos.
     Las habilidades y pociones están en la barra de atajos: teclas <b>1-0</b> o <b>F1-F10</b>. Las habilidades nuevas se aprenden solas al subir de nivel.</p>
-    <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: 💫 aturdido, 🐌 ralentizado, 🩸 sangrado y ☠️ veneno. Aturdir a un jefe le corta el ataque especial.</p>
+    <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: <i data-gi="status/stun"></i> aturdido, <i data-gi="status/slow"></i> ralentizado, <i data-gi="status/bleed"></i> sangrado y <i data-gi="status/poison"></i> veneno. Aturdir a un jefe le corta el ataque especial.</p>
     <h4>Botín</h4>
     <p>Hacé click en los objetos del piso o apretá <b>Z</b> para juntar el más cercano. Los materiales se los podés vender a cualquier vendedor.</p>
     <h4>Aldea del Alba</h4>
     <p>Hablá con <b>Lia</b> (pociones), <b>Gerald</b> (armas), <b>Hilda</b> (armaduras) y <b>Roxxy</b>, la Guardiana del Portal, que te lleva a las zonas de caza. Los vecinos con misiones te pagan por darles una mano. Y el viejo <b>Luigi</b>, al lado de la fuente, te va a contar todo sobre el chat. Todo.</p>
     <h4>Campamentos hostiles</h4>
-    <p>Cada zona tiene un campamento marcado con ⚔ en el mapa, defendido por un jefe 👑 <b>élite</b>. Si limpiás el campamento entero, aparece un <b>cofre</b> junto a la fogata para cada uno que peleó. El campamento se vuelve a llenar unos minutos después.</p>
+    <p>Cada zona tiene un campamento marcado con <i data-gi="ui/pvp"></i> en el mapa, defendido por un jefe <i data-gi="ui/crown"></i> <b>élite</b>. Si limpiás el campamento entero, aparece un <b>cofre</b> junto a la fogata para cada uno que peleó. El campamento se vuelve a llenar unos minutos después.</p>
     <h4>Zonas de caza</h4>
     <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul).</p>
     <h4>Party y PvP</h4>
@@ -409,6 +443,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Ventanas</h4>
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
   </div>`;
+  hydrate(w.body);
   return w;
 }
 
@@ -419,13 +454,13 @@ const HELP_EN = `
     <h4>Combat</h4>
     <p>Click a monster to <b>attack</b> it (<b>Space</b> or an attack skill with no target picks the nearest one). <b>Tab</b> cycles through nearby monsters.
     Skills and potions live in the hotbar: keys <b>1-0</b> or <b>F1-F10</b>. New skills are learned automatically as you level up.</p>
-    <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: 💫 stunned, 🐌 slowed, 🩸 bleeding and ☠️ poisoned. Stunning a boss interrupts its special attack.</p>
+    <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: <i data-gi="status/stun"></i> stunned, <i data-gi="status/slow"></i> slowed, <i data-gi="status/bleed"></i> bleeding and <i data-gi="status/poison"></i> poisoned. Stunning a boss interrupts its special attack.</p>
     <h4>Loot</h4>
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Materials can be sold to any merchant.</p>
     <h4>Dawn Village</h4>
     <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b>, the Gatekeeper, who takes you to the hunting grounds. Villagers with quests pay you for a hand. And old <b>Luigi</b>, by the fountain, will tell you everything about the chat. Everything.</p>
     <h4>Hostile camps</h4>
-    <p>Every zone has a camp marked with ⚔ on the map, guarded by an 👑 <b>elite</b> leader. Clear the whole camp and a <b>chest</b> appears by the campfire for everyone who fought. The camp refills a few minutes later.</p>
+    <p>Every zone has a camp marked with <i data-gi="ui/pvp"></i> on the map, guarded by an <i data-gi="ui/crown"></i> <b>elite</b> leader. Clear the whole camp and a <b>chest</b> appears by the campfire for everyone who fought. The camp refills a few minutes later.</p>
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul).</p>
     <h4>Party and PvP</h4>

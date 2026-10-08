@@ -1,4 +1,4 @@
-import { LOOKS, settings, type LookPreset, type Preset, type Settings, type ShadowQ } from '../settings';
+import { ACTIONS, keyLabel, LOOKS, settings, type Action, type LookPreset, type Preset, type Settings, type ShadowQ } from '../settings';
 import { el, Win } from './dom';
 import { LANGS } from '../../../shared/src/i18n';
 import { lang, setLang, t as tx } from '../lang';
@@ -26,7 +26,7 @@ export class SettingsPanel {
   private render() {
     const s = settings.s;
     this.tabs.innerHTML = '';
-    for (const [id, label] of [['graphics', tx('Gráficos', 'Graphics')], ['shaders', 'Shaders'], ['hud', tx('Juego e interfaz', 'Game & UI')], ['camera', tx('Cámara', 'Camera')]]) {
+    for (const [id, label] of [['graphics', tx('Gráficos', 'Graphics')], ['shaders', 'Shaders'], ['hud', tx('Juego e interfaz', 'Game & UI')], ['camera', tx('Cámara', 'Camera')], ['keys', tx('Controles', 'Controls')]]) {
       const b = el('button', `chat-tab${id === this.tab ? ' active' : ''}`, this.tabs, label);
       b.onclick = () => {
         this.tab = id;
@@ -65,7 +65,7 @@ export class SettingsPanel {
       const r = this.row(tx('Idioma', 'Language'));
       const sel = el('select', 'set-select', r);
       for (const l of LANGS) {
-        const o = el('option', '', sel, `${l.flag} ${l.label}`);
+        const o = el('option', '', sel, l.label);
         o.value = l.id;
         o.selected = l.id === lang;
       }
@@ -79,7 +79,8 @@ export class SettingsPanel {
       this.check(tx('Números de daño', 'Damage numbers'), 'damageNumbers');
       this.check(tx('Minimapa', 'Minimap'), 'minimap');
       this.range(tx('Opacidad del fondo del chat', 'Chat background opacity'), 'chatOpacity', 0, 1, 0.05, (v) => `${Math.round(v * 100)}%`);
-    } else {
+    } else if (this.tab === 'keys') this.keys();
+    else {
       this.range(tx('Sensibilidad al girar', 'Rotation sensitivity'), 'camSensitivity', 0.3, 2.5, 0.05, (v) => v.toFixed(2));
       this.check(tx('Invertir giro vertical', 'Invert vertical rotation'), 'invertY');
       this.check(tx('Sacudida de pantalla al pegar', 'Screen shake on hit'), 'screenShake');
@@ -96,6 +97,36 @@ export class SettingsPanel {
       c.onclick = () => settings.set({ look: id });
     }
     if (settings.s.look === 'custom') el('div', 'tt-dim set-hint', this.body, tx('Look personalizado (tocaste los valores de abajo).', 'Custom look (you tweaked the values below).'));
+  }
+
+  /** One row per action; click its key, then press the new one (Esc cancels). A key already in use swaps. */
+  private keys() {
+    for (const a of Object.keys(ACTIONS) as Action[]) {
+      const r = this.row(ACTIONS[a]);
+      const b = el('button', 'btn small set-key', r, keyLabel(settings.s.keys[a]));
+      b.onclick = (ev) => {
+        ev.preventDefault();
+        b.textContent = tx('Apretá una tecla…', 'Press a key…');
+        b.classList.add('primary');
+        const grab = (e: KeyboardEvent) => {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          removeEventListener('keydown', grab, true);
+          const k = e.key.toLowerCase();
+          const fixed = k === 'escape' || k === 'enter' || /^(f\d+|\d|arrow.*|control|alt|meta)$/.test(k);
+          if (fixed) return this.render();
+          const keys = { ...settings.s.keys };
+          const other = (Object.keys(keys) as Action[]).find((x) => keys[x] === k);
+          if (other) keys[other] = keys[a];
+          keys[a] = k;
+          settings.set({ keys });
+          this.render();
+        };
+        addEventListener('keydown', grab, true);
+      };
+    }
+    el('div', 'hint set-hint', this.body, tx('Fijas: 1-0 y F1-F10 usan la barra de habilidades, Enter abre el chat, Esc cierra y las flechas mueven la cámara. Se guarda en este navegador.',
+      'Fixed: 1-0 and F1-F10 use the skill bar, Enter opens chat, Esc closes and the arrows move the camera. Saved in this browser.'));
   }
 
   private row(label: string) {

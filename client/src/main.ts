@@ -33,7 +33,7 @@ function screen(): HTMLDivElement {
   // language picker (reloads the page in the chosen language)
   const lp = el('div', 'lang-pick', screens);
   for (const L of LANGS) {
-    const b = el('button', `lang-btn${L.id === lang ? ' sel' : ''}`, lp, `${L.flag} ${L.label}`);
+    const b = el('button', `lang-btn${L.id === lang ? ' sel' : ''}`, lp, L.label);
     b.onclick = () => setLang(L.id);
   }
   return el('div', 'screen-box panel', wrap);
