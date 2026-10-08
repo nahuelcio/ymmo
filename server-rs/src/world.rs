@@ -28,7 +28,7 @@ pub struct Member { pub sid: u64, pub account_id: i64, pub char_id: i64, pub lan
 
 pub enum HubEvent {
     /** /raid in the overworld: these members (already saved and removed) go into a new instance */
-    EnterRaid { members: Vec<Member> },
+    EnterRaid { raid: &'static RaidDef, members: Vec<Member> },
     /** left a raid (saved at the village): load them back into the overworld */
     ToMain { member: Member },
     /** the session's character was saved after its socket closed */
@@ -346,7 +346,7 @@ impl World {
                     let id = self.new_id();
                     let mut c = Common::new(id, pos.x, pos.z);
                     c.ry = rnd() * std::f64::consts::TAU;
-                    self.add(Ent { c, k: Kind::Item(GroundItem { item: "camp_chest".into(), count: 1, owners: Some([*pid].into_iter().collect()), owner_until: now + 180000.0, expire_at: now + 180000.0, camp_id: Some(def.id.clone()) }) });
+                    self.add(Ent { c, k: Kind::Item(GroundItem { item: "camp_chest".into(), count: 1, enchant: 0, owners: Some([*pid].into_iter().collect()), owner_until: now + 180000.0, expire_at: now + 180000.0, camp_id: Some(def.id.clone()) }) });
                     self.sys(*pid, &format!("¡Despejaste {}! Te espera un cofre junto a la fogata.", def.name), &format!("You cleared {}! A chest awaits you by the campfire.", def.name_en));
                 }
             } else if self.camps[i].cleared && now >= self.camps[i].respawn_at && none_dead {
@@ -442,7 +442,7 @@ impl World {
         match &e.k {
             Kind::Player(p) => {
                 let eqi = |s: &str| p.equipped_in(s).map(|i| Value::String(i.i.clone())).unwrap_or(Value::Null);
-                json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "p", "n": p.name, "l": p.level, "race": p.race, "cls": p.cls,
+                json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "p", "n": p.name, "l": p.level, "race": p.race, "cls": p.cls, "spec": p.spec,
                     "lk": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc }, "w": eqi("weapon"), "a": eqi("chest"), "nc": p.name_color(now),
                     "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet")] })
             }
@@ -504,10 +504,10 @@ impl World {
         let e = &self.ents[&pid];
         let p = e.player().unwrap();
         let s = &p.stats;
-        let skills: Vec<&str> = d().skills_for(&p.cls, p.level, &p.race, p.look.gender()).iter().map(|s| s.id.as_str()).collect();
+        let skills: Vec<&str> = d().skills_for(&p.cls, p.spec.as_deref(), p.level, &p.race, p.look.gender()).iter().map(|s| s.id.as_str()).collect();
         let buffs: Vec<Value> = p.buffs.iter().map(|b| json!({ "id": b.id, "rem": ((b.until - self.now) / 1000.0).round().max(0.0) })).collect();
         json!({
-            "id": pid, "name": p.name, "race": p.race, "cls": p.cls, "look": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc },
+            "id": pid, "name": p.name, "race": p.race, "cls": p.cls, "spec": p.spec, "look": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc },
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
             "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit,

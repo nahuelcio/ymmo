@@ -1,7 +1,7 @@
-import { CLASSES, RACES } from '../../../shared/src/data/classes';
-import { GRADE_COLOR, ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
+import { CLASSES, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
-import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
+import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
@@ -14,7 +14,7 @@ import { el, esc, hideTip, setTip, Win } from './dom';
 
 const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
 /** the item whose icon outlines each empty equipment slot */
-const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots' };
+const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
 
 export class InventoryPanel {
   win: Win;
@@ -66,25 +66,41 @@ export class InventoryPanel {
     if (!this.stats) return;
     const m = this.g.me;
     const row = (k: string, v: number) => `<span class="stat-k">${k}</span><span class="stat-v">${v}</span>`;
-    this.stats.innerHTML = `<div class="ds-name">${esc(m.name)}</div><div class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang)}</div>
+    this.stats.innerHTML = `<div class="ds-name">${esc(m.name)}</div><div class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang, m.spec)}</div>
       <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}</div>`;
   }
 
   /** The stat a character cares about for this piece, to tell upgrades apart. */
-  private score(id: string) {
-    const d = ITEMS[id];
-    return d.type === 'weapon' ? (this.g.me.cls === 'mystic' ? d.mAtk ?? 0 : d.pAtk ?? 0) : (d.pDef ?? 0) + (d.mDef ?? 0);
+  private score(it: InvItem) {
+    const d = ITEMS[it.i];
+    return d.type === 'weapon' ? enchanted(d, this.g.me.cls === 'mystic' ? 'mAtk' : 'pAtk', it.e) : enchanted(d, 'pDef', it.e) + enchanted(d, 'mDef', it.e);
+  }
+
+  /** Whether the bag holds a scroll that enchants this piece. */
+  private hasScroll(id: string) {
+    const kind = ITEMS[id].type === 'weapon' ? 'weapon' : 'armor';
+    return this.g.inv.some((i) => !i.s && ITEMS[i.i].enchant === kind);
+  }
+
+  /** Enchant a piece, asking first once the attempt can fail. */
+  private askEnchant(it: InvItem) {
+    const e = it.e ?? 0, pct = Math.round(enchantChance(e) * 100), name = itemName(it.i, lang);
+    const send = () => this.g.net.send({ t: 'enchant', u: it.u });
+    if (pct >= 100) return send();
+    const risk = ENCHANT.failDestroys ? tx('Si falla, se destruye.', 'If it fails, it is destroyed.') : tx('Si falla, vuelve a +0.', 'If it fails, it goes back to +0.');
+    this.g.ui.dialogs.confirm(tx(`¿Encantar ${name} a +${e + 1}? ${pct}% de éxito. ${risk}`, `Enchant ${name} to +${e + 1}? ${pct}% chance. ${risk}`), send);
   }
 
   /** Tooltip block: this item's stats against what is worn in the same slot. */
-  private compare(id: string): string {
-    const d = ITEMS[id];
+  private compare(it: InvItem): string {
+    const d = ITEMS[it.i];
     if (!d.slot) return '';
     const worn = this.g.inv.find((i) => i.s === d.slot);
     const c = worn ? ITEMS[worn.i] : undefined;
-    const STATS = [['pAtk', tx('Atq.F', 'P.Atk')], ['mAtk', tx('Atq.M', 'M.Atk')], ['pDef', tx('Def.F', 'P.Def')], ['mDef', tx('Def.M', 'M.Def')], ['mp', 'MP']] as const;
+    const STATS = [['pAtk', tx('Atq.F', 'P.Atk')], ['mAtk', tx('Atq.M', 'M.Atk')], ['pDef', tx('Def.F', 'P.Def')], ['mDef', tx('Def.M', 'M.Def')], ['hp', 'HP'], ['mp', 'MP']] as const;
+    const val = (def: typeof d | undefined, k: (typeof STATS)[number][0], e?: number) => (!def ? 0 : k === 'hp' || k === 'mp' ? def[k] ?? 0 : enchanted(def, k, e));
     const rows = STATS.map(([k, label]) => {
-      const dv = (d[k] ?? 0) - (c?.[k] ?? 0);
+      const dv = val(d, k, it.e) - val(c, k, worn?.e);
       return dv ? `<span class="${dv > 0 ? 'tt-up' : 'tt-down'}">${label} ${dv > 0 ? '+' : ''}${dv}</span>` : '';
     }).filter(Boolean);
     const head = c ? `${tx('Contra lo equipado', 'Against equipped')}: ${esc(itemName(c.id, lang))}` : tx('No tenés nada equipado en ese lugar', 'Nothing equipped in that slot');
@@ -100,29 +116,32 @@ export class InventoryPanel {
     this.refreshStats();
     SLOTS.forEach((s, k) => {
       const cell = (this.dollCells[s] = el('div', 'doll-slot', this.doll));
-      cell.style.gridColumn = k % 2 ? '3' : '1';
-      cell.style.gridRow = String((k >> 1) + 1);
+      // the ninth slot (ring) sits under the stat card
+      cell.style.gridColumn = k === 8 ? '2' : k % 2 ? '3' : '1';
+      cell.style.gridRow = String(k === 8 ? 4 : (k >> 1) + 1);
       const it = g.inv.find((i) => i.s === s);
       if (it) {
-        itemIcon(it.i, cell);
+        itemIcon(it.i, cell, undefined, it.e);
         cell.draggable = true;
         cell.ondragstart = () => (hideTip(), (this.drag = { slot: s }));
         cell.ondragend = () => (this.drag = null);
         cell.ondblclick = () => g.net.send({ t: 'unequip', slot: s });
-        setTip(cell, () => itemTip(it.i) + '<br><span class="tt-dim">Doble click para sacártelo</span>');
+        // right click enchants what you wear, when the bag holds a scroll for it
+        cell.oncontextmenu = (e) => (e.preventDefault(), this.hasScroll(it.i) && this.askEnchant(it));
+        setTip(cell, () => itemTip(it.i, 1, it.e) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.hasScroll(it.i) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
       } else {
         // empty: a faint outline of what goes there
-        glyph('item', GHOST[s], SLOT_LABEL[s], cell).classList.add('doll-ghost');
+        glyph('item', GHOST[s], ITEMS[GHOST[s]].icon, cell).classList.add('doll-ghost');
         cell.title = SLOT_LABEL[s];
       }
     });
     this.grid.innerHTML = '';
     for (const b of this.tabs.children) b.classList.toggle('active', (b as HTMLElement).dataset.f === this.filter);
-    const kind = (id: string) => (ITEMS[id].slot ? 'gear' : ITEMS[id].use ? 'use' : 'mat');
+    const kind = (id: string) => (ITEMS[id].slot ? 'gear' : ITEMS[id].use || ITEMS[id].enchant ? 'use' : 'mat');
     const bag = g.inv.filter((i) => !i.s && (this.filter === 'all' || kind(i.i) === this.filter));
     for (const it of bag) {
       const cell = el('div', 'inv-cell', this.grid);
-      itemIcon(it.i, cell, it.c);
+      itemIcon(it.i, cell, it.c, it.e);
       if (ITEMS[it.i].use) {
         // potions and scrolls can be dragged onto the skill bar
         cell.draggable = true;
@@ -132,7 +151,7 @@ export class InventoryPanel {
       const slot = ITEMS[it.i].slot;
       if (slot) {
         const worn = g.inv.find((i) => i.s === slot);
-        if (this.score(it.i) > (worn ? this.score(worn.i) : 0)) el('span', 'inv-up', cell, '▲');
+        if (this.score(it) > (worn ? this.score(worn) : 0)) el('span', 'inv-up', cell, '▲');
         cell.draggable = true;
         cell.ondragstart = () => (hideTip(), (this.drag = { u: it.u }), this.dollCells[slot]?.classList.add('match'));
         cell.ondragend = () => ((this.drag = null), this.dollCells[slot]?.classList.remove('match'));
@@ -157,6 +176,12 @@ export class InventoryPanel {
             this.closeMenu();
           };
         }
+        if (def.slot && this.hasScroll(it.i)) {
+          el('button', '', m, tx(`Encantar a +${(it.e ?? 0) + 1}`, `Enchant to +${(it.e ?? 0) + 1}`)).onclick = () => {
+            this.closeMenu();
+            this.askEnchant(it);
+          };
+        }
         const d = el('button', 'danger', m, tx('Destruir', 'Destroy'));
         d.onclick = () => {
           this.closeMenu();
@@ -164,7 +189,7 @@ export class InventoryPanel {
         };
         this.menu = m;
       };
-      setTip(cell, () => itemTip(it.i, it.c) + this.compare(it.i));
+      setTip(cell, () => itemTip(it.i, it.c, it.e) + this.compare(it));
     }
     for (let i = bag.length; i < 40; i++) el('div', 'inv-cell empty', this.grid);
     this.footer.innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span><span class="tt-dim">${g.inv.length}/80</span>`;
@@ -183,7 +208,7 @@ export class CharacterPanel {
     const m = this.g.me;
     const b = this.win.body;
     b.innerHTML = '';
-    el('div', 'char-head', b).innerHTML = `<b>${esc(m.name)}</b><br><span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${raceName(m.race, lang)} ${className(m.cls, lang)}</span>`;
+    el('div', 'char-head', b).innerHTML = `<b>${esc(m.name)}</b><br><span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${raceName(m.race, lang)} ${className(m.cls, lang, m.spec)}</span>`;
     const grid = el('div', 'stat-grid', b);
     const rows: [string, string | number][] = [
       ['HP', `${m.hp}/${m.maxHp}`], ['MP', `${m.mp}/${m.maxMp}`], ['CP', `${m.cp}/${m.maxCp}`],
@@ -196,9 +221,20 @@ export class CharacterPanel {
       el('span', 'stat-k', grid, k);
       el('span', 'stat-v', grid, String(v));
     }
+    if (m.lvl >= SPEC_LEVEL && !m.spec) {
+      el('div', 'section', b, tx('Elegí tu especialización', 'Choose your specialization'));
+      for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls)) {
+        const card = el('div', 'skill-row', b);
+        const skills = allSkillsFor(m.cls, m.race, m.look.g, sp).filter((s) => s.spec).map((s) => skillName(s.id, lang)).join(' · ');
+        el('div', '', card).innerHTML = `<b>${esc(specName(sp, lang))}</b><br><span class="tt-dim">${esc(specDesc(sp, lang))}<br>${esc(skills)}</span>`;
+        el('button', 'btn primary', card, tx('Elegir', 'Choose')).onclick = () => {
+          if (confirm(tx(`¿Ser ${specName(sp, lang)}? No se puede cambiar después.`, `Become a ${specName(sp, lang)}? This cannot be changed later.`))) this.g.net.send({ t: 'chooseSpec', spec: sp });
+        };
+      }
+    }
     el('div', 'section', b, tx('Habilidades', 'Skills'));
     const list = el('div', 'skill-list', b);
-    for (const s of allSkillsFor(m.cls, m.race, m.look.g)) {
+    for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
       const row = el('div', `skill-row${s.level > m.lvl ? ' locked' : ''}`, list);
       skillIcon(s.id, row);
       el('div', '', row).innerHTML = `<b>${esc(skillName(s.id, lang))}</b> <span class="tt-dim">${s.level > m.lvl ? tx(`se aprende en Nv ${s.level}`, `learned at Lv ${s.level}`) : `MP ${s.mp}`}</span><br><span class="tt-dim">${esc(skillDesc(s.id, lang))}</span>`;
@@ -399,7 +435,7 @@ export class PartyPanel {
       if (m.id === this.g.me.id) continue;
       const row = el('div', 'party-member', this.list);
       const nm = el('div', 'pm-name', row);
-      nm.innerHTML = `${m.leader ? '<i data-gi="ui/crown"></i> ' : ''}${esc(m.name)} <span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang)}</span>`;
+      nm.innerHTML = `${m.leader ? '<i data-gi="ui/crown"></i> ' : ''}${esc(m.name)} <span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang, m.spec)}</span>`;
       hydrate(nm);
       bar(row, 'bar-cp thin').set(m.cp, m.maxCp);
       bar(row, 'bar-hp thin').set(m.hp, m.maxHp);
@@ -471,7 +507,8 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Campamentos hostiles</h4>
     <p>Cada zona tiene un campamento marcado con <i data-gi="ui/pvp"></i> en el mapa, defendido por un jefe <i data-gi="ui/crown"></i> <b>élite</b>. Si limpiás el campamento entero, aparece un <b>cofre</b> junto a la fogata para cada uno que peleó. El campamento se vuelve a llenar unos minutos después.</p>
     <h4>Zonas de caza</h4>
-    <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul).</p>
+    <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul) · Costa Abandonada (20-25) · Ruinas Hundidas (25-30) · Estepas Ardientes (30-35) · Ciudadela Orca (35-40) · Valle del Dragón (40-45) · Nido del Dragón (45-50).</p>
+    <p>A nivel 20 elegís una <b>especialización</b> en Estado del Personaje. Con un <b>pergamino de encantar</b> en la mochila, click derecho sobre un arma o armadura la sube +1: hasta +3 es seguro, después puede fallar y destruirla.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl+click</b> sobre un jugador con PvP fuerza el ataque (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
@@ -508,7 +545,8 @@ const HELP_EN = `
     <h4>Hostile camps</h4>
     <p>Every zone has a camp marked with <i data-gi="ui/pvp"></i> on the map, guarded by an <i data-gi="ui/crown"></i> <b>elite</b> leader. Clear the whole camp and a <b>chest</b> appears by the campfire for everyone who fought. The camp refills a few minutes later.</p>
     <h4>Hunting grounds</h4>
-    <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul).</p>
+    <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul) · Forsaken Coast (20-25) · Sunken Ruins (25-30) · Burning Steppes (30-35) · Orc Citadel (35-40) · Dragon Valley (40-45) · Dragon's Nest (45-50).</p>
+    <p>At level 20 you pick a <b>specialization</b> in Character Status. With an <b>enchant scroll</b> in your bag, right-click a weapon or armor piece to raise it by +1: safe up to +3, after that it can fail and destroy the piece.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. <b>Ctrl+click</b> a PvP player to force an attack (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;

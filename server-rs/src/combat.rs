@@ -191,9 +191,12 @@ impl World {
             p.xp -= xp_to_next(p.level);
             p.level += 1;
             up = true;
-            let (cls, lvl, race, g) = (p.cls.clone(), p.level, p.race.clone(), p.look.gender());
-            for sk in d().skills_for(&cls, lvl, &race, g) {
+            let (cls, spec, lvl, race, g) = (p.cls.clone(), p.spec.clone(), p.level, p.race.clone(), p.look.gender());
+            for sk in d().skills_for(&cls, spec.as_deref(), lvl, &race, g) {
                 if sk.level == lvl { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
+            }
+            if lvl == d().c.spec_level && spec.is_none() {
+                self.sys(pid, "Ya podés elegir una especialización: abrí Estado del Personaje.", "You can now choose a specialization: open Character Status.");
             }
         }
         let p = self.pl_mut(pid).unwrap();
@@ -209,6 +212,26 @@ impl World {
             let (x, z) = (e.c.x, e.c.z);
             self.send_near(x, z, json!({ "t": "levelUp", "id": pid, "lvl": lvl }));
             self.sys(pid, &format!("¡Subiste a nivel {lvl}!"), &format!("Your level has increased to {lvl}!"));
+        }
+    }
+
+    /// One-time pick at SPEC_LEVEL: the base class stays, the spec's skills are added from then on.
+    pub fn choose_spec(&mut self, pid: u32, spec: &str) {
+        let data = d();
+        let p = self.pl(pid).unwrap();
+        let Some(def) = data.spec(spec).filter(|s| s.base == p.cls && p.spec.is_none() && p.level >= data.c.spec_level) else {
+            return self.sys(pid, "No podés elegir esa especialización.", "You cannot choose that specialization.");
+        };
+        if let Err(e) = self.db.set_spec(p.char_id, &def.id) {
+            eprintln!("[world] set_spec failed: {e}");
+            return self.sys(pid, "No se pudo guardar. Probá de nuevo.", "Could not save. Try again.");
+        }
+        let (lvl, race, g, cls) = (p.level, p.race.clone(), p.look.gender(), p.cls.clone());
+        self.pl_mut(pid).unwrap().spec = Some(def.id.clone());
+        self.ents.get_mut(&pid).unwrap().c.av += 1;
+        self.sys(pid, &format!("Ahora sos {}.", def.name), &format!("You are now a {}.", def.name_en));
+        for sk in data.skills_for(&cls, Some(&def.id), lvl, &race, g) {
+            if sk.spec.is_some() { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
         }
     }
 
@@ -348,7 +371,7 @@ impl World {
     pub fn request_skill(&mut self, pid: u32, skill_id: &str, force: bool, now: f64) {
         let data = d();
         let p = self.pl(pid).unwrap();
-        let Some(def) = data.skill(skill_id).filter(|s| data.skill_available(s, &p.cls, &p.race, p.look.gender()) && s.level <= p.level) else {
+        let Some(def) = data.skill(skill_id).filter(|s| data.skill_available(s, &p.cls, p.spec.as_deref(), &p.race, p.look.gender()) && s.level <= p.level) else {
             return self.sys(pid, "Todavía no aprendiste esa habilidad.", "You have not learned that skill.");
         };
         let c = &self.ents[&pid].c;

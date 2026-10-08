@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
-import { ITEMS, type ItemDef } from '../../../shared/src/data/items';
+import { GRADE_COLOR, ITEMS, type ItemDef } from '../../../shared/src/data/items';
+
+/** C grade and up share the top-tier look (trim, glow) */
+const topTier = (g?: string) => !!g && g !== 'NG' && g !== 'D';
 import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -169,7 +172,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
     head.add(part(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 8), darker(c, 0.7), 0, 0.03, -0.01));
     return false; // long hair still shows below a cap
   }
-  if (def.grade === 'C') {
+  if (topTier(def.grade)) {
     // closed great helm with visor slit and plume
     head.add(part(B(0.42, 0.44, 0.44), c, 0, 0.03, 0));
     head.add(part(B(0.3, 0.04, 0.02), 0x111111, 0, 0.04, 0.225));
@@ -188,7 +191,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
 
 function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean) {
   const c = def.color, d = 0.3 * Math.sqrt(k);
-  if (def.grade === 'C' && def.id !== 'demons_tunic') {
+  if (topTier(def.grade) && def.id !== 'demons_tunic') {
     // full plate: breastplate, gorget, big rounded pauldrons
     torso.add(part(B(0.54 * k, 0.4, d + 0.06), c, 0, 0.42, 0.01));
     torso.add(part(B(0.3 * k, 0.12, d + 0.04), darker(c, 0.85), 0, 0.66, 0));
@@ -210,7 +213,7 @@ function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean
     // caster robes: collar, sash; demon's tunic gets glowing runes
     torso.add(part(B(0.36 * k, 0.08, d + 0.02), darker(c, 0.7), 0, 0.64, 0));
     torso.add(part(B(0.08, 0.6, 0.02), darker(c, 1.4), 0, 0.32, d / 2 + 0.01));
-    if (def.grade === 'C') for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
+    if (topTier(def.grade)) for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
     return;
   }
   // cloth tunic: a simple collar
@@ -232,7 +235,7 @@ function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin
 /** The weapon as held: C-grade blades glow. */
 function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
   const w = weaponMesh(kind, color);
-  if (w && grade === 'C') w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
+  if (w && topTier(grade)) w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
   return w;
 }
 
@@ -250,7 +253,7 @@ export function humanoid(o: HumanoidOpts): Rig {
     leg.position.set(sx * 0.12 * k, 0.9, 0);
     leg.add(part(B(0.17 * k, 0.5, 0.2), legC, 0, -0.25, 0)); // thigh
     leg.add(part(B(0.15 * k, 0.42, 0.18), darker(legC, 0.92), 0, -0.64, 0)); // shin
-    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), g.legs.grade === 'C' ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
+    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), topTier(g.legs.grade) ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
     const sandals = g.feet?.id === 'leather_sandals';
     const tall = g.feet && g.feet.grade !== 'NG';
     if (tall) leg.add(part(B(0.18 * k, 0.26, 0.21), bootC, 0, -0.74, 0.01));
@@ -578,7 +581,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const cap = head?.id === 'leather_cap'; // worn as a hood
     const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
-    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
+    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: topTier(d?.grade) });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
@@ -616,6 +619,14 @@ export function mobModel(tplId: string): Rig {
       rig = beast(c, t.scale, { ears: 'wolf', tail: 'bushy', mane: true, fangs: true, claws: true, eyes: 0xffaa22 });
       break;
     case 'hill_lizard':
+    case 'sea_serpent':
+    case 'valley_basilisk':
+    case 'drake_whelp':
+    case 'wyvern':
+    case 'elder_drake':
+    case 'ancient_drake':
+    case 'nest_hatchling':
+    case 'vharion':
       rig = beast(c, t.scale, { tail: 'lizard', spines: true, horns: true, low: true, belly: 0xc8c890, eyes: 0xffe040 });
       break;
     default:
@@ -862,10 +873,10 @@ export function itemModel(itemId: string): THREE.Group {
     };
     g.add((shape[itemId] ?? (() => part(new THREE.IcosahedronGeometry(0.15, 0), c, 0, 0.15, 0)))());
   }
-  if (def?.grade === 'D' || def?.grade === 'C') {
+  if (def?.grade && def.grade !== 'NG') {
     // loot beam so good drops stand out
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 2.2, 8, 1, true),
-      new THREE.MeshBasicMaterial({ color: def.grade === 'C' ? 0xffd24d : 0x6fb2ff, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+      new THREE.MeshBasicMaterial({ color: GRADE_COLOR[def.grade], transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
     beam.position.y = 1.1;
     g.add(beam);
   }

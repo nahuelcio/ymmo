@@ -18,6 +18,19 @@ export const ZONES: ZoneDef[] = [
     spawns: [{ mob: 'orc_warrior', count: 14 }, { mob: 'orc_archer', count: 10 }, { mob: 'orc_shaman', count: 8 }, { mob: 'werewolf', count: 8 }, { mob: 'orc_captain', count: 2 }] },
   { id: 'wastes', name: 'Páramos Malditos', x: -20, z: 260, r: 120, levels: '15-20', tint: [0.42, 0.36, 0.34],
     spawns: [{ mob: 'skeleton', count: 14 }, { mob: 'zombie', count: 10 }, { mob: 'stone_golem', count: 8 }, { mob: 'cave_spider', count: 8 }, { mob: 'kaim_vanul', count: 1 }] },
+  // 20-50: the four corners of the map, then the two free stretches of its east and west edges (the world is not any bigger)
+  { id: 'coast', name: 'Costa Abandonada', x: 320, z: 320, r: 85, levels: '20-25', tint: [0.62, 0.58, 0.42],
+    spawns: [{ mob: 'drowned_sailor', count: 12 }, { mob: 'tide_crab', count: 10 }, { mob: 'sea_serpent', count: 8 }, { mob: 'drowned_corsair', count: 8 }, { mob: 'reef_golem', count: 5 }, { mob: 'coast_queen', count: 1 }] },
+  { id: 'ruins', name: 'Ruinas Hundidas', x: 320, z: -320, r: 85, levels: '25-30', tint: [0.36, 0.44, 0.46],
+    spawns: [{ mob: 'ruin_wraith', count: 12 }, { mob: 'deep_lurker', count: 10 }, { mob: 'ruin_sentinel', count: 8 }, { mob: 'abyssal_cultist', count: 8 }, { mob: 'aberration', count: 5 }] },
+  { id: 'steppes', name: 'Estepas Ardientes', x: -320, z: -320, r: 85, levels: '30-35', tint: [0.55, 0.34, 0.22],
+    spawns: [{ mob: 'ash_hound', count: 12 }, { mob: 'steppe_raider', count: 10 }, { mob: 'ember_spider', count: 8 }, { mob: 'steppe_shaman', count: 8 }, { mob: 'magma_golem', count: 5 }, { mob: 'gruhash', count: 1 }] },
+  { id: 'citadel', name: 'Ciudadela Orca', x: -320, z: 320, r: 85, levels: '35-40', tint: [0.34, 0.32, 0.26],
+    spawns: [{ mob: 'citadel_guard', count: 12 }, { mob: 'citadel_archer', count: 10 }, { mob: 'war_wolf', count: 8 }, { mob: 'citadel_warlock', count: 8 }, { mob: 'citadel_champion', count: 2 }] },
+  { id: 'valley', name: 'Valle del Dragón', x: 340, z: -130, r: 80, levels: '40-45', tint: [0.3, 0.4, 0.3],
+    spawns: [{ mob: 'drake_whelp', count: 12 }, { mob: 'valley_basilisk', count: 10 }, { mob: 'obsidian_golem', count: 7 }, { mob: 'wyvern', count: 7 }, { mob: 'elder_drake', count: 5 }, { mob: 'kaim_reborn', count: 1 }] },
+  { id: 'nest', name: 'Nido del Dragón', x: -340, z: 130, r: 80, levels: '45-50', tint: [0.28, 0.22, 0.3],
+    spawns: [{ mob: 'nest_guardian', count: 10 }, { mob: 'dragon_cultist', count: 10 }, { mob: 'brood_spider', count: 8 }, { mob: 'dragonkin', count: 8 }, { mob: 'ancient_drake', count: 5 }] },
 ];
 
 export function zoneAt(x: number, z: number): string {
@@ -73,16 +86,23 @@ export const TELEPORTS = [
   { id: 'hills', name: 'Colinas Goblin (Nv 5-10)', x: 15, z: -150, cost: 300 },
   { id: 'barracks', name: 'Cuartel Orco (Nv 10-15)', x: -150, z: -30, cost: 1000 },
   { id: 'wastes', name: 'Páramos Malditos (Nv 15-20)', x: -15, z: 175, cost: 2500 },
+  { id: 'coast', name: 'Costa Abandonada (Nv 20-25)', x: 263, z: 263, cost: 5000 },
+  { id: 'ruins', name: 'Ruinas Hundidas (Nv 25-30)', x: 263, z: -263, cost: 8000 },
+  { id: 'steppes', name: 'Estepas Ardientes (Nv 30-35)', x: -263, z: -263, cost: 12000 },
+  { id: 'citadel', name: 'Ciudadela Orca (Nv 35-40)', x: -263, z: 263, cost: 16000 },
+  { id: 'valley', name: 'Valle del Dragón (Nv 40-45)', x: 270, z: -103, cost: 22000 },
+  { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', x: -270, z: 103, cost: 30000 },
 ];
 
 export const NPCS: NpcDef[] = [
   { id: 'grocer', name: 'Lia', title: 'Almacenera', x: 10, z: -14, ry: Math.PI, kind: 'shop', color: 0x4a8a3a,
-    shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
+    shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'greater_healing_potion', 'greater_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
   // Gerald and Hilda keep their counters at the mouth of the smithy (layout.ts, house 4)
   { id: 'weapons', name: 'Gerald', title: 'Armero', x: -26.3, z: -18.4, ry: Math.atan2(26.3, 18.4), kind: 'shop', color: 0x8a3a3a,
-    shop: ['short_sword', 'apprentice_wand', 'dagger', 'broadsword', 'willow_staff', 'hand_axe', 'spear', 'iron_hammer', 'sword_of_revolution', 'staff_of_life', 'assassin_dagger', 'partisan', 'battle_axe'], greeting: 'Con una buena hoja, cualquiera se anima.' },
+    shop: ['short_sword', 'apprentice_wand', 'dagger', 'broadsword', 'willow_staff', 'hand_axe', 'spear', 'iron_hammer', 'sword_of_revolution', 'staff_of_life', 'assassin_dagger', 'partisan', 'battle_axe', 'abyssal_blade', 'abyssal_staff'], greeting: 'Con una buena hoja, cualquiera se anima.' },
   { id: 'armor', name: 'Hilda', title: 'Armadurera', x: -28.6, z: -14.6, ry: Math.atan2(28.6, 14.6), kind: 'shop', color: 0x3a5a8a,
-    shop: ['leather_cap', 'apprentice_tunic', 'apprentice_stockings', 'short_gloves', 'leather_sandals', 'brigandine_helm', 'karmian_hat', 'brigandine_tunic', 'brigandine_gaiters', 'reinforced_gloves', 'reinforced_boots', 'karmian_tunic', 'karmian_stockings'],
+    shop: ['leather_cap', 'apprentice_tunic', 'apprentice_stockings', 'short_gloves', 'leather_sandals', 'brigandine_helm', 'karmian_hat', 'brigandine_tunic', 'brigandine_gaiters', 'reinforced_gloves', 'reinforced_boots', 'karmian_tunic', 'karmian_stockings', 'ring_of_vigor', 'earring_of_focus', 'necklace_of_valor',
+      'abyssal_helm', 'abyssal_plate', 'abyssal_robe', 'abyssal_greaves', 'abyssal_gauntlets', 'abyssal_boots'],
     greeting: 'Antes de salir a pelear, cubrite bien. Después no me vengas llorando.' },
   { id: 'gatekeeper', name: 'Roxxy', title: 'Guardiana del Portal', x: 12, z: 12, ry: -Math.PI / 2, kind: 'gatekeeper', color: 0x8a3a8a,
     greeting: '¿A dónde te llevo? Por una módica suma, obvio.' },
@@ -111,4 +131,17 @@ export const NPCS: NpcDef[] = [
     greeting: 'Su capitán sigue dando órdenes desde el cuartel.' },
   { id: 'mael', name: 'Mael', title: 'Hermana', x: -30, z: 160, ry: Math.atan2(15, 15), kind: 'quest', color: 0x5a3a6a,
     greeting: 'No podemos dejar que Kaim Vanul se levante.' },
+  // one quest giver where the Gatekeeper drops you in each 20-50 zone
+  { id: 'tobias', name: 'Tobías', title: 'Farero', x: 258, z: 268, ry: Math.atan2(-1, -1), kind: 'quest', color: 0x5a7a8a,
+    greeting: 'La marea devuelve a los que se llevó.' },
+  { id: 'ysolde', name: 'Ysolde', title: 'Arqueóloga', x: 258, z: -268, ry: Math.atan2(-1, 1), kind: 'quest', color: 0x6a8a7a,
+    greeting: 'Estas ruinas eran una ciudad antes de que subiera el agua.' },
+  { id: 'korgan', name: 'Korgan', title: 'Explorador de las Estepas', x: -258, z: -268, ry: Math.atan2(1, 1), kind: 'quest', color: 0x9a6a3a,
+    greeting: 'Acá hasta el viento quema.' },
+  { id: 'brenna', name: 'Brenna', title: 'Capitana del Asedio', x: -258, z: 268, ry: Math.atan2(1, -1), kind: 'quest', color: 0x7a3a3a,
+    greeting: 'La ciudadela no cae mientras sus campeones sigan en pie.' },
+  { id: 'aldric', name: 'Aldric', title: 'Cazador de Dragones', x: 265, z: -98, ry: Math.atan2(-1, 0.4), kind: 'quest', color: 0x4a6a3a,
+    greeting: 'Todo lo que camina en este valle tiene escamas.' },
+  { id: 'sibila', name: 'Sibila', title: 'Vidente', x: -265, z: 98, ry: Math.atan2(1, -0.4), kind: 'quest', color: 0x6a3a7a,
+    greeting: 'El nido está despierto. Lo siento en los huesos.' },
 ];

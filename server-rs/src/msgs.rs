@@ -73,11 +73,9 @@ impl World {
                 }
             }
             "equip" => if let Some(u) = id(m, "u") { self.equip(pid, u) },
-            "unequip" => {
-                let slot = s(m, "slot");
-                if ["weapon", "head", "chest", "legs", "gloves", "feet"].contains(&slot.as_str()) { self.unequip(pid, &slot); }
-            }
+            "unequip" => self.unequip(pid, &s(m, "slot")),
             "use" => if let Some(u) = id(m, "u") { self.use_item(pid, u, now) },
+            "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u) },
             "destroy" => if let Some(u) = id(m, "u") { self.destroy_item(pid, u) },
             "buy" => if let Some(n) = id(m, "npc") { self.buy(pid, n, &s(m, "item"), num(m, "qty")) },
             "sell" => if let (Some(n), Some(u)) = (id(m, "npc"), id(m, "u")) { self.sell(pid, n, u, num(m, "qty")) },
@@ -91,6 +89,7 @@ impl World {
             "partyInvite" => self.party_invite(pid, &s(m, "name")),
             "partyRespond" => self.party_respond(pid, truthy(m, "accept")),
             "partyLeave" => self.party_leave(pid, false),
+            "chooseSpec" => self.choose_spec(pid, &s(m, "spec")),
             "respawn" => {
                 // dying in a raid sends you back to the village
                 if self.raid.is_some() { self.exit_to_town(pid) } else { self.respawn_player(pid) }

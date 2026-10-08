@@ -191,7 +191,7 @@ export class Hud {
     this.pvpBtn.textContent = m.pvpOn ? tx(' PvP: SÍ', ' PvP: ON') : tx('PvP: NO', 'PvP: OFF');
     if (m.pvpOn) this.pvpBtn.prepend(glyph('ui', 'pvp'));
     this.pvpBtn.classList.toggle('on', m.pvpOn);
-    this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${raceName(m.race, lang)} ${className(m.cls, lang)}</span>`;
+    this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${raceName(m.race, lang)} ${className(m.cls, lang, m.spec)}</span>`;
     this.cp.set(m.cp, m.maxCp);
     this.hp.set(m.hp, m.maxHp);
     this.mp.set(m.mp, m.maxMp);
@@ -355,7 +355,7 @@ export class Hud {
     if (r.k === 'm') nameHtml = `<span style="color:${conColor(r.l - this.g.me.lvl)}">${esc(mobName(r.tpl, lang))}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l}</span>`;
     else if (r.k === 'p') {
       const c = t.flags & F_RED ? '#ff4040' : t.flags & F_PURPLE ? '#d080ff' : '#fff';
-      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l} ${raceName(r.race, lang)} ${className(r.cls, lang)}</span>`;
+      nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l} ${raceName(r.race, lang)} ${className(r.cls, lang, r.spec)}</span>`;
     } else if (r.k === 'n') nameHtml = `${esc(r.n)} <span class="tt-dim">${esc(npcText(r.npc, 'title', lang))}</span>`;
     else nameHtml = esc(r.item === 'adena' ? 'Adena' : itemName(r.item, lang));
     this.tName.innerHTML = nameHtml + (t.flags & F_DEAD ? ' <span class="tt-dim">(muerto)</span>' : '');

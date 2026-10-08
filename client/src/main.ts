@@ -178,7 +178,7 @@ function charScreen(list: CharSummary[]) {
     if (!list.length) el('div', 'tt-dim', left, t('Todavía no tenés personajes. Creá uno →', 'No characters yet. Create one →'));
     for (const c of list) {
       const card = el('div', `char-card${c.id === selected ? ' sel' : ''}`, left);
-      card.innerHTML = `<b></b><br><span class="tt-dim">${t('Nv', 'Lv')} ${c.level} ${genderName(c.look.g, lang)} ${raceName(c.race, lang)} ${className(c.cls, lang)}</span>`;
+      card.innerHTML = `<b></b><br><span class="tt-dim">${t('Nv', 'Lv')} ${c.level} ${genderName(c.look.g, lang)} ${raceName(c.race, lang)} ${className(c.cls, lang, c.spec)}</span>`;
       card.querySelector('b')!.textContent = c.name;
       card.onclick = () => {
         selected = c.id;

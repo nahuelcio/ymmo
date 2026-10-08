@@ -5,7 +5,7 @@ import { MOBS } from '../data/mobs';
 import { SKILLS } from '../data/skills';
 import { QUESTS, type QuestDef } from '../data/quests';
 import { NPCS, TELEPORTS, ZONES } from '../data/world';
-import { CLASSES, GENDERS, HAIR_STYLES, RACES, type ClassType, type Gender, type Race } from '../data/classes';
+import { CLASSES, GENDERS, HAIR_STYLES, RACES, SPECS, type ClassType, type Gender, type Race, type Spec } from '../data/classes';
 import { CAMP_BY_ID } from '../data/camps';
 import { STATUSES, type StatusId } from '../status';
 import { TOWN } from '../terrain';
@@ -23,7 +23,7 @@ const en = EN as unknown as {
   items: Record<string, { name: string; desc?: string }>; mobs: Record<string, string>; skills: Record<string, { name: string; desc: string }>;
   quests: Record<string, Record<string, string>>; npcs: Record<string, { title: string; greeting: string; lines?: string[] }>;
   zones: Record<string, string>; teleports: Record<string, string>; races: Record<string, { name: string; desc: string }>;
-  classes: Record<string, string>; genders: Record<string, { name: string; desc: string }>; hairStyles: string[];
+  classes: Record<string, string>; specs: Record<string, { name: string; desc: string }>; genders: Record<string, { name: string; desc: string }>; hairStyles: string[];
   camps: Record<string, string>; statuses: Record<string, { name: string; desc: string }>;
 } & Dict;
 
@@ -36,7 +36,10 @@ export const skillName = (id: string, l: Lang) => pick(l, SKILLS[id]?.name ?? id
 export const skillDesc = (id: string, l: Lang) => pick(l, SKILLS[id]?.desc ?? '', en.skills[id]?.desc);
 export const raceName = (r: Race, l: Lang) => pick(l, RACES[r].name, en.races[r]?.name);
 export const raceDesc = (r: Race, l: Lang) => pick(l, RACES[r].desc, en.races[r]?.desc);
-export const className = (c: ClassType, l: Lang) => pick(l, CLASSES[c].name, en.classes[c]);
+export const specName = (s: Spec, l: Lang) => pick(l, SPECS[s].name, en.specs[s]?.name);
+export const specDesc = (s: Spec, l: Lang) => pick(l, SPECS[s].desc, en.specs[s]?.desc);
+/** the class to show: the specialization once the character picked one */
+export const className = (c: ClassType, l: Lang, spec?: Spec | null) => (spec && SPECS[spec] ? specName(spec, l) : pick(l, CLASSES[c].name, en.classes[c]));
 export const genderName = (g: Gender, l: Lang) => pick(l, GENDERS[g].name, en.genders[g]?.name);
 export const genderDesc = (g: Gender, l: Lang) => pick(l, GENDERS[g].desc, en.genders[g]?.desc);
 export const hairStyle = (i: number, l: Lang) => pick(l, HAIR_STYLES[i], en.hairStyles[i]);

@@ -42,14 +42,14 @@ impl World {
                     self.pl_mut(pid).unwrap().escape_at = now + 10000.0;
                     self.sys(pid, "En 10 segundos volvés a la aldea...", "You will be returned to the village in 10 seconds...");
                 }
-                "raid" => self.raid_command(pid),
+                "raid" => self.raid_command(pid, &arg.to_lowercase()),
                 "pvp" => {
                     let on = if arg.is_empty() { !self.pl(pid).unwrap().pvp_on } else { arg.to_lowercase() == "on" };
                     self.set_pvp_mode(pid, on);
                 }
                 "help" => self.sys(pid,
-                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /raid (entrar o salir de la raid con tu party)",
-                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /raid (enter or leave the raid with your party)"),
+                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /raid [nest] (entrar o salir de una raid con tu party: la de Kaim, o /raid nest para el Nido del Dragón)",
+                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /raid [nest] (enter or leave a raid with your party: Kaim's, or /raid nest for the Dragon's Nest)"),
                 _ => self.sys(pid, &format!("No existe el comando /{cmd}. Escribí /help."), &format!("Unknown command /{cmd}. Type /help.")),
             }
             return;

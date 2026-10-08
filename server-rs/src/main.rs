@@ -90,7 +90,7 @@ fn db_msg(l: Lang, m: &str) -> String {
 }
 
 fn chars_json(db: &Db, account: i64) -> Vec<Value> {
-    db.list_chars(account).into_iter().map(|c| json!({ "id": c.id, "name": c.name, "race": c.race, "cls": c.cls, "level": c.level, "look": { "g": c.look.g.to_string(), "hs": c.look.hs, "hc": c.look.hc } })).collect()
+    db.list_chars(account).into_iter().map(|c| json!({ "id": c.id, "name": c.name, "race": c.race, "cls": c.cls, "spec": c.spec, "level": c.level, "look": { "g": c.look.g.to_string(), "hs": c.look.hs, "hc": c.look.hc } })).collect()
 }
 
 fn spawn_world(app: &App, raid: Option<(&'static data::RaidDef, usize)>) -> u32 {
@@ -114,8 +114,7 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
     while let Some(msg) = rx.recv().await {
         match msg {
             HubMsg::Event { world, ev } => match ev {
-                HubEvent::EnterRaid { members } => {
-                    let raid = &d().raids["kaim"];
+                HubEvent::EnterRaid { raid, members } => {
                     let rid = spawn_world(&app, Some((raid, members.len())));
                     let hub = &mut *app.hub.lock().unwrap();
                     for m in members {
@@ -373,8 +372,11 @@ async fn main() {
 
     let shutdown_app = app.clone();
     axum::serve(listener, router).with_graceful_shutdown(async move {
-        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap();
-        tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
+        #[cfg(unix)]
+        let term = async { tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap().recv().await; };
+        #[cfg(not(unix))]
+        let term = std::future::pending::<()>();
+        tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term => {} }
         // save everyone: worlds quit their players on Shutdown
         {
             let hub = shutdown_app.hub.lock().unwrap();

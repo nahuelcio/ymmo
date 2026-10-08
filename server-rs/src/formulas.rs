@@ -1,4 +1,4 @@
-//! Stats and combat math (port of shared/src/formulas.ts).
+//! Stats and combat math: the only copy, the client shows what the server sends.
 use crate::data::{d, BuffMods, ItemDef, MobDef, StatMods};
 use rand::Rng;
 
@@ -34,19 +34,30 @@ pub fn stat_mods(race: &str, g: &str) -> StatMods {
     }
 }
 
-pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[&ItemDef], buffs: &[&BuffMods], gender: &str) -> Stats {
+/** Chance that enchanting a piece currently at +e succeeds. */
+pub fn enchant_chance(e: i64) -> f64 {
+    let c = &d().enchant;
+    if e < c.safe { 1.0 } else { 1.0 - c.step * (e - c.safe + 1) as f64 }
+}
+
+/** equipped: each worn piece with its enchant level (+N) */
+pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats {
     let r = stat_mods(race, gender);
     let c = &d().classes[cls];
+    let ench = &d().enchant;
     let lm = level_mod(level);
-    let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut mp_bonus) = (4.0, 4.0, 0.0, 0.0, 0.0);
-    for it in equipped {
+    let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0);
+    for &(it, e) in equipped {
         if it.kind == "weapon" {
-            w_p = it.p_atk.unwrap_or(0.0) + 4.0;
-            w_m = it.m_atk.unwrap_or(0.0) + 4.0;
+            let k = 1.0 + ench.weapon * e as f64;
+            w_p = it.p_atk.unwrap_or(0.0) * k + 4.0;
+            w_m = it.m_atk.unwrap_or(0.0) * k + 4.0;
         } else {
-            arm_p += it.p_def.unwrap_or(0.0);
-            arm_m += it.m_def.unwrap_or(0.0);
+            let k = 1.0 + ench.armor * e as f64;
+            arm_p += it.p_def.unwrap_or(0.0) * k;
+            arm_m += it.m_def.unwrap_or(0.0) * k;
         }
+        hp_bonus += it.hp.unwrap_or(0.0);
         mp_bonus += it.mp.unwrap_or(0.0);
     }
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
@@ -59,7 +70,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[&ItemDef], b
         ba *= b.atk_spd.unwrap_or(1.0);
     }
     let lvl = (level - 1) as f64;
-    let max_hp = jround((c.base_hp + c.hp_lvl * lvl) * r.hp);
+    let max_hp = jround((c.base_hp + c.hp_lvl * lvl) * r.hp + hp_bonus);
     let max_mp = jround((c.base_mp + c.mp_lvl * lvl) * r.mp + mp_bonus);
     let max_cp = jround(max_hp * c.cp_ratio);
     let mystic = cls == "mystic";
@@ -119,4 +130,60 @@ pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5
 pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64 {
     let diff = player_lvl - mob_lvl;
     if diff <= 5 { 1.0 } else { (1.0 - (diff - 5) as f64 * 0.2).max(0.05) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pacing table for levels 1..max: `cargo test balance -- --nocapture` prints it.
+    #[test]
+    fn balance_table() {
+        let mut mob = d().mobs.values().next().unwrap().clone();
+        (mob.hp_mult, mob.def_mult) = (None, None);
+        for l in 1..d().c.max_level {
+            mob.level = l;
+            let s = mob_stats(&mob);
+            let kills = xp_to_next(l) as f64 / mob_xp(&mob);
+            // weapon P.Atk a fighter needs to drop a same-level mob in 12 hits: the target for gear tiers
+            let weapon = s.max_hp * s.p_def / (70.0 * level_mod(l) * 12.0) - 4.0;
+            println!("lvl {l:2}  xp {:7}  kills/lvl {kills:4.1}  mob hp {:5}  weapon for 12 hits {weapon:5.0}", xp_to_next(l), s.max_hp);
+            assert!((2.0..=12.0).contains(&kills), "level {l}: {kills:.1} same-level kills to level up");
+            assert!(xp_to_next(l) > xp_to_next(l - 1), "xp curve must grow at level {l}");
+        }
+        assert_eq!(xp_to_next(d().c.max_level), 0);
+    }
+
+    /// Every id the data points at exists: a typo in a drop or a spawn would otherwise only show up in play.
+    #[test]
+    fn data_refs() {
+        let data = d();
+        let item = |id: &str, at: &str| assert!(data.items.contains_key(id), "unknown item {id} in {at}");
+        let mob = |id: &str, at: &str| assert!(data.mobs.contains_key(id), "unknown mob {id} in {at}");
+        for m in data.mobs.values() {
+            for dr in &m.drops { item(&dr.item, &m.id); }
+            for ph in m.phases.iter().flatten() { if let Some(a) = &ph.adds { mob(&a.mob, &m.id); } }
+        }
+        for z in &data.zones { for s in &z.spawns { mob(&s.mob, &z.name); } }
+        for n in &data.npcs { for s in n.shop.iter().flatten() { item(s, &n.id); } }
+        for q in &data.quests {
+            assert!(data.npc(&q.npc).is_some(), "unknown npc {} in {}", q.npc, q.id);
+            match &q.objective { crate::data::Objective::Kill { mob: m, .. } => mob(m, &q.id), crate::data::Objective::Collect { item: i, .. } => item(i, &q.id) }
+        }
+        for r in data.raids.values() {
+            mob(&r.boss, &r.id);
+            if let Some(q) = &r.quest { assert!(data.quest(q).is_some(), "unknown quest {q} in {}", r.id); }
+        }
+        for s in &data.skills { if let Some(sp) = &s.spec { assert!(data.spec(sp).is_some(), "unknown spec {sp} in {}", s.id); } }
+    }
+
+    #[test]
+    fn enchant() {
+        assert_eq!(enchant_chance(0), 1.0);
+        assert_eq!(enchant_chance(2), 1.0);
+        assert!((enchant_chance(3) - 0.9).abs() < 1e-9 && (enchant_chance(9) - 0.3).abs() < 1e-9);
+        let sword = &d().items["broadsword"];
+        let at = |e| compute_stats("human", "fighter", 10, &[(sword, e)], &[], "m").p_atk;
+        assert!(at(0) < at(3) && at(3) < at(10));
+    }
 }
