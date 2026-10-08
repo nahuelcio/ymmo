@@ -5,7 +5,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat } from './scene';
-import { animateQ, qPlayer, qProp, qReady, type QAnim, type QZone } from './quaternius';
+import { animateQ, qPlayer, qReady, type QAnim, type QZone } from './quaternius';
 
 export interface Rig {
   root: THREE.Group;
@@ -574,17 +574,15 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const top = chestDef?.color ?? 0xb0a080;
   const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, bald = race === 'orc' && !female && look.hs === 0;
   if (qReady()) {
-    const onHead = new THREE.Group();
     const skin = race === 'orc' ? 0x5a7340 : r.skin; // the flat-shaded green reads as neon on a textured face
     const cap = head?.id === 'leather_cap'; // worn as a hood
     const hideHair = !!head && !cap;
-    if (hideHair) onHead.add(qProp(head.grade === 'C' ? 'HelmC' : 'HelmD'));
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: d?.grade === 'C' });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
       pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
-      scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, onHead,
+      scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: hideHair ? (head.grade === 'C' ? 'HelmC' : 'HelmD') : undefined,
       head: race === 'dwarf' ? 1.12 : undefined, ...(head?.grade !== 'C' && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
     });

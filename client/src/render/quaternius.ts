@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { animate, playerModel, type AnimState, type Rig } from './models';
 import { RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 
@@ -21,23 +22,29 @@ const FILES = [
 ];
 const HAIR = ['Hair_SimpleParted', 'Hair_Long', 'Hair_Buns'];
 
-interface Prim { geo: THREE.BufferGeometry; tex: THREE.Texture | null; kind: 'skin' | 'hair' | 'eyes' | 'cloth'; fam: number; morphs?: Record<string, number> }
+interface Prim { geo: THREE.BufferGeometry; tex: THREE.Texture | null; kind: 'skin' | 'hair' | 'eyes' | 'cloth'; fam: number; bind: THREE.Matrix4; morphs?: Record<string, number> }
 const prims = new Map<string, Prim[]>();
-/** Distinct sets of inverse bind matrices: pieces of the same family share a Skeleton. */
+/**
+ * Distinct sets of inverse bind matrices, relative to the root joint's: pieces of the same family
+ * share a Skeleton. The root's own inverse goes in each piece's bind matrix, which is where the
+ * per-file quantization transform ends up, so compression doesn't split the families. */
 const families: THREE.Matrix4[][] = [];
 const armature: Partial<Record<Gender, THREE.Object3D>> = {};
 const tusks: Partial<Record<Gender, THREE.Mesh>> = {};
 const clips: Record<string, THREE.AnimationClip> = {};
-/** Rigid pieces modelled in Fiend around a head at the origin (see attach). */
-const PROPS = ['HelmC', 'HelmD'];
+/**
+ * Helmets modelled in Fiend around a head at the origin: [height above the head bone, forward, scale].
+ * Fitted to the real head, which spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
+ */
+const HELMS = { HelmC: [0.086, 0.02, 0.48], HelmD: [0.14, 0.02, 0.48] } as const;
+export type Helm = keyof typeof HELMS;
+const PROPS = Object.keys(HELMS) as Helm[];
 const props: Record<string, THREE.Object3D> = {};
 let joints: string[] = [];
 let ready = false;
 let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
-/** A fresh instance of a rigid prop (geometry and materials are shared). */
-export const qProp = (name: string) => props[name].clone();
 
 /**
  * Typical colour of a texture, to recolour it relative to its own tone. Only the brighter
@@ -75,7 +82,7 @@ function headOnly(geo: THREE.BufferGeometry) {
 
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
-    const loader = new GLTFLoader();
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const [[anims, ...gltfs], heads, rigid] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
       loader.loadAsync('q/heads.glb'),
@@ -93,16 +100,24 @@ export function loadQ(): Promise<void> {
     });
     for (const clip of anims.animations) clips[clip.name] = clip;
     const famKeys = new Map<string, number>();
+    const sources = new Map<string, THREE.Source>(); // every file loads its own copy of the shared .webp: keep one on the GPU
     const collect = (key: string, meshes: THREE.SkinnedMesh[], head = false) =>
       prims.set(key, meshes.map((m) => {
         const mat = m.material as THREE.MeshStandardMaterial;
         const kind = /Regular|^skin/.test(mat.name) ? 'skin' : /hair/i.test(mat.name) ? 'hair' : /eye/i.test(mat.name) ? 'eyes' : 'cloth';
-        const fkey = m.skeleton.boneInverses.map((b) => b.elements.map((e) => e.toFixed(3)).join()).join();
+        const inv = m.skeleton.boneInverses, bind = inv[0].clone(), root = bind.clone().invert();
+        const rel = inv.map((b) => b.clone().multiply(root));
+        const fkey = rel.map((b) => b.elements.map((e) => e.toFixed(3)).join()).join();
         let fam = famKeys.get(fkey);
-        if (fam === undefined) famKeys.set(fkey, (fam = families.push(m.skeleton.boneInverses) - 1));
+        if (fam === undefined) famKeys.set(fkey, (fam = families.push(rel) - 1));
+        if (mat.map?.name.endsWith('.webp')) {
+          const shared = sources.get(mat.map.name);
+          if (shared) mat.map.source = shared;
+          else sources.set(mat.map.name, mat.map.source);
+        }
         if (head && kind === 'skin') headOnly(m.geometry);
         if (mat.map && !mat.map.userData.avg) mat.map.userData.avg = avgColor(mat.map);
-        return { geo: m.geometry, tex: mat.map, kind, fam, morphs: m.morphTargetDictionary };
+        return { geo: m.geometry, tex: mat.map, kind, fam, bind, morphs: m.morphTargetDictionary };
       }));
     FILES.forEach((file, i) => {
       const meshes: THREE.SkinnedMesh[] = [];
@@ -175,15 +190,13 @@ export interface QOpts {
   brawn?: number;
   /** head scale, ear shape key and tusks of the race */
   head?: number; ears?: 'elf_ears' | 'orc_ears'; tusks?: boolean;
-  /** extras modelled around a head centred on the origin, facing +Z (helmet) */
-  onHead?: THREE.Object3D;
+  helm?: Helm;
   /** weapon built along +Z with the grip at the origin */
   inHand?: THREE.Object3D | null;
 }
 
 export interface QAnim { mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean }
 
-const ID = new THREE.Matrix4();
 /** Hangs `o` from a bone keeping the orientation it was modelled in (bones have arbitrary axes). */
 function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number) {
   const q = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
@@ -209,7 +222,7 @@ export function qPlayer(o: QOpts): Rig {
       let sk = skeletons.get(p.fam);
       if (!sk) skeletons.set(p.fam, (sk = new THREE.Skeleton(bones, families[p.fam])));
       const m = new THREE.SkinnedMesh(p.geo, material(p, ...tint(p)));
-      m.bind(sk, ID);
+      m.bind(sk, p.bind);
       if (o.ears && p.morphs?.[o.ears] !== undefined) m.morphTargetInfluences![p.morphs[o.ears]] = 1;
       m.castShadow = true;
       m.frustumCulled = false; // the bounding sphere is the bind pose's; the game culls whole entities itself
@@ -240,7 +253,10 @@ export function qPlayer(o: QOpts): Rig {
   if (o.head) byName.Head.scale.multiplyScalar(o.head);
   body.updateMatrixWorld(true);
   const top = byName.Head.getWorldPosition(new THREE.Vector3()).y + 0.17; // crown of the unscaled model
-  if (o.onHead) attach(byName.Head, o.onHead, 0, 0.09, 0.02, 0.58);
+  if (o.helm) {
+    const [y, z, s] = HELMS[o.helm];
+    attach(byName.Head, props[o.helm].clone(), 0, y, z, s); // geometry and materials are shared
+  }
   if (o.inHand) attach(byName.hand_r, o.inHand, -0.09, -0.02, 0.03, 0.85);
 
   const mixer = new THREE.AnimationMixer(arm);

@@ -2,7 +2,8 @@
 //   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library.
 // The heads come from heads.glb, built by art/blender/characters.py.
 // Usage: node scripts/q-assets.mjs <dir with the three packs unzipped>
-// Keeps only BaseColor (as 1024px WebP, via `npx sharp-cli`) and the animation clips the game plays.
+// Keeps only BaseColor (as 1024px WebP, via `npx sharp-cli`) and the animation clips the game plays,
+// then quantizes and meshopt-compresses every model (via `npx @gltf-transform/cli`).
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +22,13 @@ const walk = (d, o = []) => {
 };
 const all = walk(SRC);
 const webp = (uri) => path.basename(uri).replace(/(_png)?\.png$/, '.webp');
+/** Quantize + meshopt in place (also prunes whatever the file no longer references). */
+const compress = (file) => {
+  const tmp = fs.mkdtempSync(path.join(OUT, '.opt-'));
+  execSync(`npx -y @gltf-transform/cli meshopt "${path.join(OUT, file)}" "${path.join(tmp, file)}"`, { stdio: 'ignore' });
+  for (const f of fs.readdirSync(tmp)) if (!f.endsWith('.webp')) fs.copyFileSync(path.join(tmp, f), path.join(OUT, f));
+  fs.rmSync(tmp, { recursive: true });
+};
 
 // hand-made props (*.glb, modelled in Fiend) live here too: overwrite, never wipe
 fs.mkdirSync(OUT, { recursive: true });
@@ -40,9 +48,11 @@ for (const f of models) {
   g.textures = used.map((_, i) => ({ source: i }));
   delete g.samplers;
   delete g.animations;
+  for (const m of g.meshes) for (const p of m.primitives) for (const k of ['COLOR_0', 'COLOR_1', 'TANGENT']) delete p.attributes[k]; // unused by the game's materials
   used.forEach((uri) => textures.add(webp(uri)));
   fs.writeFileSync(path.join(OUT, path.basename(f)), JSON.stringify(g));
   for (const b of g.buffers) fs.copyFileSync(path.join(path.dirname(f), decodeURIComponent(b.uri)), path.join(OUT, b.uri));
+  compress(path.basename(f));
 }
 
 // --- textures: every BaseColor the models reference, 1024px WebP
@@ -89,6 +99,25 @@ fs.writeFileSync(path.join(OUT, 'anims.bin'), Buffer.concat(chunks));
 fs.writeFileSync(path.join(OUT, 'anims.gltf'), JSON.stringify({
   asset: g.asset, scene: 0, scenes: g.scenes, nodes, animations, accessors, bufferViews, buffers: [{ uri: 'anims.bin', byteLength: offset }],
 }));
+
+compress('anims.gltf');
+
+// --- heads.glb (art/blender/characters.py output): only the body, eyes, brows and tusks are used
+if (fs.existsSync(path.join(OUT, 'heads.glb'))) {
+  const h = fs.readFileSync(path.join(OUT, 'heads.glb'));
+  const len = h.readUInt32LE(12), j = JSON.parse(h.subarray(20, 20 + len).toString());
+  const drop = new Set(j.nodes.flatMap((n, i) => (/__(belt|boots|bottom|gloves|top|hair\d|buzz|beard|sock_\w+)$/.test(n.name) ? [i] : [])));
+  for (const n of j.nodes) if (n.children) n.children = n.children.filter((c) => !drop.has(c));
+  const json = Buffer.from(JSON.stringify(j).padEnd(Math.ceil(Buffer.byteLength(JSON.stringify(j)) / 4) * 4));
+  const head = Buffer.alloc(20);
+  head.writeUInt32LE(0x46546c67, 0);
+  head.writeUInt32LE(2, 4);
+  head.writeUInt32LE(20 + json.length + h.length - 20 - len, 8);
+  head.writeUInt32LE(json.length, 12);
+  head.writeUInt32LE(0x4e4f534a, 16);
+  fs.writeFileSync(path.join(OUT, 'heads.glb'), Buffer.concat([head, json, h.subarray(20 + len)]));
+  compress('heads.glb');
+}
 
 const size = fs.readdirSync(OUT).reduce((n, f) => n + fs.statSync(path.join(OUT, f)).size, 0);
 console.log(`${fs.readdirSync(OUT).length} files, ${(size / 1e6).toFixed(1)} MB -> ${OUT}`);
