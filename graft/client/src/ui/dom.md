@@ -1,0 +1,21 @@
+# client/src/ui/dom.ts
+
+- el · function · L1-L7 — function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', parent?: HTMLElement | null, text?: string): HTMLElementTagNameMap[K]
+- tipBox · function · L10-L13 — function tipBox()
+- touching · function · L25-L25 — touching = ()
+- setTip · function · L27-L46 — function setTip(target: HTMLElement, html: () => string)
+- move · function · L28-L34 — move = (e: MouseEvent)
+- hideTip · function · L48-L50 — function hideTip()
+- esc · function · L78-L80 — function esc(s: string): string
+- loadPos · function · L82-L89 — function loadPos(id: string): { x: number; y: number } | null
+- savePos · function · L91-L97 — function savePos(id: string, x: number, y: number)
+- Win · class · L100-L168 — class Win
+- constructor · method · L107-L132 — constructor(public id: string, title: string, x: number, y: number, width: number, parent: HTMLElement)
+- mv · function · L123-L123 — mv = (ev: PointerEvent)
+- up · function · L124-L128 — up = ()
+- place · method · L134-L138 — private place(x: number, y: number)
+- visible · method · L140-L142 — get visible()
+- front · method · L144-L148 — front()
+- show · method · L150-L156 — show()
+- hide · method · L158-L162 — hide()
+- toggle · method · L164-L167 — toggle()

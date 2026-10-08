@@ -2,3 +2,5 @@ node_modules
 client/dist
 server/data
 .claude
+graft/.cache/
+graft/.graph/

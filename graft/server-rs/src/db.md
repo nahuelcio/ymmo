@@ -1,0 +1,24 @@
+# server-rs/src/db.rs
+
+- Db · struct · L8-L8 — pub struct Db { pub c: Connection }
+- CharRow · struct · L10-L13 — pub struct CharRow
+- CharSummary · struct · L15-L15 — pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub look: Look }
+- TOKEN_TTL · constant · L17-L17 — const TOKEN_TTL: f64 = 30.0 * 24.0 * 3600.0 * 1000.0;
+- db_path · function · L19-L22 — pub fn db_path() -> String
+- look_of · function · L24-L27 — fn look_of(g: String, hs: i64, hc: i64) -> Look
+- now_ms · function · L29-L29 — fn now_ms() -> f64 { crate::world::now_ms() }
+- sha · function · L30-L30 — fn sha(t: &str) -> String { hex::encode(Sha256::digest(t.as_bytes())) }
+- scrypt_hash · function · L33-L38 — fn scrypt_hash(pass: &str, salt: &[u8], len: usize) -> Vec<u8>
+- hash_pass · function · L40-L43 — pub fn hash_pass(pass: &str) -> String
+- check_pass · function · L45-L51 — pub fn check_pass(pass: &str, stored: &str) -> bool
+- open · function · L54-L77 — pub fn open() -> Db
+- account · function · L79-L81 — pub fn account(&self, user: &str) -> Option<(i64, String)>
+- insert_account · function · L83-L86 — pub fn insert_account(&self, user: &str, hash: &str) -> Result<i64, String>
+- create_session · function · L88-L94 — pub fn create_session(&self, account_id: i64) -> String
+- resume_session · function · L96-L107 — pub fn resume_session(&self, token: &str) -> Option<i64>
+- delete_session · function · L109-L109 — pub fn delete_session(&self, token: &str) { let _ = self.c.execute("DELETE FROM sessions WHERE hash = ?", [sha(token)]); }
+- list_chars · function · L111-L115 — pub fn list_chars(&self, account_id: i64) -> Vec<CharSummary>
+- create_char · function · L117-L135 — pub fn create_char(&self, account_id: i64, name: &str, race: &str, cls: &str, look: Look) -> Option<String>
+- delete_char · function · L137-L144 — pub fn delete_char(&self, account_id: i64, id: i64)
+- load_char · function · L146-L164 — pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>)>, Vec<(String, i64, bool)>)>
+- save_char · function · L167-L177 — pub fn save_char(&mut self, id: i64, level: i64, xp: i64, x: f64, z: f64, hp: f64, mp: f64, cp: f64, adena: i64, karma: i64, pk: i64, pvp: i64, inv: &[InvItem], quests: &[(String, i64, bool)]) -> rusqlite::Result<()>

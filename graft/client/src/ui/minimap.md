@@ -1,0 +1,22 @@
+# client/src/ui/minimap.ts
+
+- questAreas · function · L20-L27 — function questAreas(targets: { quest: string; mobs: Set<string> }[]): { zone: ZoneDef; quests: string[] }[]
+- worldImage · function · L29-L53 — function worldImage(): HTMLCanvasElement
+- at · function · L34-L34 — at = (i: number)
+- hAt · function · L37-L37 — hAt = (i: number, j: number)
+- css · function · L55-L55 — css = (c: number)
+- toMap · function · L57-L57 — toMap = (v: number)
+- Minimap · class · L59-L415 — class Minimap
+- constructor · method · L73-L115 — constructor(private g: Game, root: HTMLElement)
+- toggleMap · method · L117-L120 — toggleMap()
+- drawBig · method · L122-L180 — private drawBig()
+- campIcon · method · L183-L198 — private campIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
+- drawRoute · method · L201-L234 — private drawRoute(ctx: CanvasRenderingContext2D, at: (x: number, z: number) => number[])
+- label · method · L236-L241 — private label(ctx: CanvasRenderingContext2D, t: string, x: number, y: number)
+- arrow · method · L243-L260 — private arrow(ctx: CanvasRenderingContext2D, x: number, y: number, ry: number, s: number)
+- update · method · L262-L414 — update(now: number)
+- toC · function · L287-L287 — toC = (x: number, z: number)
+- seen · function · L289-L289 — seen = (x: number, y: number, m = 6)
+- rect · function · L313-L323 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
+- disc · function · L330-L338 — disc = (x: number, z: number, r: number, fill: string)
+- questMob · function · L378-L378 — questMob = (tpl: string)

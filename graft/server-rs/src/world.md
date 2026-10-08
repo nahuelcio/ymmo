@@ -1,0 +1,52 @@
+# server-rs/src/world.rs
+
+- AOI · constant · L14-L14 — pub const AOI: f64 = 90.0;
+- TICK_MS · constant · L15-L15 — pub const TICK_MS: f64 = 50.0;
+- DASH_CD · constant · L16-L16 — const DASH_CD: f64 = 5000.0;
+- DODGE_MS · constant · L17-L17 — const DODGE_MS: f64 = 450.0;
+- GRID · constant · L18-L18 — const GRID: f64 = 30.0;
+- now_ms · function · L20-L22 — pub fn now_ms() -> f64
+- dist · function · L24-L24 — pub fn dist(a: &Common, b: &Common) -> f64 { (a.x - b.x).hypot(a.z - b.z) }
+- Member · struct · L27-L27 — pub struct Member { pub sid: u64, pub account_id: i64, pub char_id: i64, pub lang: Lang, pub out: Outbox }
+- HubEvent · enum · L29-L38 — pub enum HubEvent
+- Party · struct · L40-L40 — pub struct Party { pub id: u32, pub members: Vec<u32> }
+- CampState · struct · L42-L42 — pub struct CampState { pub def: &'static crate::data::CampDef, pub mobs: Vec<u32>, pub contributors: HashSet<u32>, pub cleared: bool, pub respawn_at: f64 }
+- Deferred · type · L44-L44 — type Deferred = Box<dyn FnOnce(&mut World, f64) + Send>;
+- World · struct · L46-L67 — pub struct World
+- new · function · L70-L95 — pub fn new(db: Db, raid: Option<(&'static RaidDef, usize)>) -> World
+- new_id · function · L97-L97 — pub fn new_id(&mut self) -> u32 { let id = self.next_id; self.next_id += 1; id }
+- key · function · L99-L99 — fn key(x: f64, z: f64) -> (i64, i64) { ((x / GRID).floor() as i64, (z / GRID).floor() as i64) }
+- add · function · L101-L107 — pub fn add(&mut self, mut e: Ent)
+- remove · function · L109-L114 — pub fn remove(&mut self, id: u32) -> Option<Ent>
+- set_pos · function · L116-L128 — pub fn set_pos(&mut self, id: u32, x: f64, z: f64)
+- near · function · L131-L147 — pub fn near(&self, x: f64, z: f64, r: f64) -> Vec<u32>
+- near_players · function · L149-L151 — pub fn near_players(&self, x: f64, z: f64, r: f64) -> Vec<u32>
+- pl · function · L153-L153 — pub fn pl(&self, id: u32) -> Option<&Player> { self.ents.get(&id).and_then(|e| e.player()) }
+- pl_mut · function · L154-L154 — pub fn pl_mut(&mut self, id: u32) -> Option<&mut Player> { self.ents.get_mut(&id).and_then(|e| e.player_mut()) }
+- c · function · L155-L155 — pub fn c(&self, id: u32) -> Option<&Common> { self.ents.get(&id).map(|e| &e.c) }
+- send · function · L157-L157 — pub fn send(&self, pid: u32, v: Value) { if let Some(p) = self.pl(pid) { p.send(v) } }
+- sys · function · L160-L164 — pub fn sys(&self, pid: u32, es: &str, en: &str)
+- announce · function · L166-L171 — pub fn announce(&self, f: impl Fn(Lang) -> String)
+- send_near · function · L173-L173 — pub fn send_near(&self, x: f64, z: f64, v: Value) { self.send_near_r(x, z, v, AOI) }
+- send_near_r · function · L174-L177 — pub fn send_near_r(&self, x: f64, z: f64, v: Value, r: f64)
+- broadcast · function · L179-L182 — pub fn broadcast(&self, v: Value)
+- find_player · function · L184-L187 — pub fn find_player(&self, name: &str) -> Option<u32>
+- town_point · function · L189-L193 — pub fn town_point(&self) -> P
+- teleport · function · L195-L206 — pub fn teleport(&mut self, pid: u32, x: f64, z: f64)
+- later · function · L208-L208 — pub fn later(&mut self, at: f64, f: impl FnOnce(&mut World, f64) + Send + 'static) { self.deferred.push((at, Box::new(f))); }
+- step_toward · function · L214-L252 — pub fn step_toward(&mut self, id: u32, tx: f64, tz: f64, speed: f64, dt: f64, stop: f64) -> bool
+- face · function · L254-L259 — pub fn face(&mut self, a: u32, b: u32)
+- spawn_mobs · function · L263-L306 — fn spawn_mobs(&mut self)
+- spawn_mob · function · L309-L320 — pub fn spawn_mob(&mut self, tpl_id: &str, x: f64, z: f64) -> u32
+- can_respawn · function · L323-L328 — pub fn can_respawn(&self, mob: &Mob, now: f64) -> bool
+- update_camps · function · L330-L357 — fn update_camps(&mut self, now: f64)
+- mob_killed · function · L360-L393 — pub fn mob_killed(&mut self, mid: u32, now: f64)
+- dash · function · L397-L434 — pub fn dash(&mut self, pid: u32, x: f64, z: f64, dx: f64, dz: f64, now: f64)
+- ent_record · function · L438-L453 — pub fn ent_record(&self, id: u32, now: f64) -> Value
+- send_snapshot · function · L455-L501 — fn send_snapshot(&mut self, pid: u32, now: f64)
+- self_state · function · L503-L519 — pub fn self_state(&self, pid: u32) -> Value
+- send_self · function · L521-L529 — fn send_self(&mut self, pid: u32)
+- tick · function · L533-L572 — pub fn tick(&mut self)
+- npc_chatter · function · L575-L582 — fn npc_chatter(&mut self, now: f64)
+- npc_say · function · L585-L595 — pub fn npc_say(&self, nid: u32, r: f64)
+- round2 · function · L599-L599 — pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }

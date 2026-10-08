@@ -1,0 +1,25 @@
+# server-rs/src/inventory.rs
+
+- INV_MAX · constant · L10-L10 — const INV_MAX: usize = 80;
+- NPC_RANGE · constant · L11-L11 — const NPC_RANGE: f64 = 8.0;
+- AUTOLOOT_RANGE · constant · L12-L12 — const AUTOLOOT_RANGE: f64 = 40.0;
+- qty_prefix · function · L14-L14 — fn qty_prefix(n: i64) -> String { if n > 1 { format!("{n} × ") } else { String::new() } }
+- add_item · function · L16-L43 — pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool
+- count_item · function · L45-L45 — pub fn count_item(p: &Player, item: &str) -> i64 { p.inv.iter().filter(|i| i.i == item && i.s.is_none()).map(|i| i.c).sum() }
+- take_items · function · L47-L61 — pub fn take_items(p: &mut Player, item: &str, count: i64) -> bool
+- consume · function · L63-L68 — fn consume(p: &mut Player, uid: u32, count: i64)
+- equip · function · L71-L84 — pub fn equip(&mut self, pid: u32, uid: u32)
+- unequip · function · L86-L96 — pub fn unequip(&mut self, pid: u32, slot: &str)
+- use_item · function · L98-L132 — pub fn use_item(&mut self, pid: u32, uid: u32, now: f64)
+- destroy_item · function · L134-L141 — pub fn destroy_item(&mut self, pid: u32, uid: u32)
+- npc_in_range · function · L143-L152 — fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef>
+- open_npc · function · L154-L171 — pub fn open_npc(&mut self, pid: u32, nid: u32)
+- buy · function · L173-L187 — pub fn buy(&mut self, pid: u32, nid: u32, item: &str, qty: f64)
+- sell · function · L189-L202 — pub fn sell(&mut self, pid: u32, nid: u32, uid: u32, qty: f64)
+- gatekeeper · function · L204-L213 — pub fn gatekeeper(&mut self, pid: u32, nid: u32, dest: &str)
+- spawn_ground · function · L215-L222 — pub fn spawn_ground(&mut self, x: f64, z: f64, item: &str, count: i64, owners: Option<HashSet<u32>>, now: f64) -> u32
+- auto_looter · function · L225-L230 — fn auto_looter(&self, mx: f64, mz: f64, owners: &HashSet<u32>) -> Option<u32>
+- open_chest · function · L233-L258 — fn open_chest(&mut self, pid: u32, gid: u32, now: f64)
+- drop_loot · function · L260-L274 — pub fn drop_loot(&mut self, mid: u32, owners: &HashSet<u32>, now: f64)
+- drop_from_player · function · L276-L288 — pub fn drop_from_player(&mut self, pid: u32, now: f64)
+- pickup · function · L290-L305 — pub fn pickup(&mut self, pid: u32, gid: u32, now: f64)

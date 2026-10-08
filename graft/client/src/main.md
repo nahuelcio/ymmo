@@ -1,0 +1,23 @@
+# client/src/main.ts
+
+- get · method · L24-L30 — get(k: string): string | null
+- set · method · L31-L38 — set(k: string, v: string | null)
+- enterWorld · function · L41-L44 — function enterWorld(id: number)
+- reconnect · function · L51-L75 — function reconnect()
+- knock · function · L62-L72 — knock = ()
+- screen · function · L80-L96 — function screen(): HTMLDivElement
+- errorLine · function · L98-L101 — function errorLine(box: HTMLElement)
+- showError · function · L103-L103 — showError: (m: string) => void = ()
+- get · method · L107-L113 — get(k: string): string | null
+- set · method · L114-L121 — set(k: string, v: string | null)
+- loginScreen · function · L124-L167 — function loginScreen()
+- go · function · L148-L156 — go = (register: boolean)
+- charScreen · function · L169-L276 — function charScreen(list: CharSummary[])
+- renderList · function · L176-L206 — renderList = ()
+- label · function · L219-L219 — label = (t: string)
+- pickRow · function · L235-L245 — pickRow = <T,>(host: HTMLElement, items: [T, string][], cur: T, set: (v: T) => void, enabled: (v: T) => boolean = () => true)
+- renderPick · function · L246-L267 — renderPick = ()
+- renderDiff · function · L279-L305 — function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender)
+- pct · function · L281-L281 — pct = (v: number)
+- previewRenderer · function · L308-L348 — function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassType; look: Look })
+- boot · function · L350-L405 — async function boot()

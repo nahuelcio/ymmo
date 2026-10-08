@@ -1,0 +1,29 @@
+# shared/src/i18n/index.ts
+
+- Lang · type · L14-L14 — type Lang = 'es' | 'en';
+- isLang · function · L19-L19 — isLang = (v: unknown): v is Lang
+- Dict · type · L21-L21 — type Dict = Record<string, unknown>;
+- pick · function · L30-L30 — pick = <T>(lang: Lang, es: T, enV: T | undefined): T
+- itemName · function · L32-L32 — itemName = (id: string, l: Lang)
+- itemDesc · function · L33-L33 — itemDesc = (id: string, l: Lang)
+- mobName · function · L34-L34 — mobName = (id: string, l: Lang)
+- skillName · function · L35-L35 — skillName = (id: string, l: Lang)
+- skillDesc · function · L36-L36 — skillDesc = (id: string, l: Lang)
+- raceName · function · L37-L37 — raceName = (r: Race, l: Lang)
+- raceDesc · function · L38-L38 — raceDesc = (r: Race, l: Lang)
+- className · function · L39-L39 — className = (c: ClassType, l: Lang)
+- genderName · function · L40-L40 — genderName = (g: Gender, l: Lang)
+- genderDesc · function · L41-L41 — genderDesc = (g: Gender, l: Lang)
+- hairStyle · function · L42-L42 — hairStyle = (i: number, l: Lang)
+- campName · function · L43-L43 — campName = (id: string, l: Lang)
+- statusName · function · L44-L44 — statusName = (id: StatusId, l: Lang)
+- statusDesc · function · L45-L45 — statusDesc = (id: StatusId, l: Lang)
+- teleportName · function · L46-L46 — teleportName = (id: string, l: Lang)
+- npcText · function · L48-L51 — function npcText(id: string, field: 'title' | 'greeting', l: Lang): string
+- npcLines · function · L52-L55 — function npcLines(id: string, l: Lang): string[]
+- zoneName · function · L58-L65 — function zoneName(es: string, l: Lang): string
+- questField · function · L67-L69 — function questField(q: QuestDef, field: 'name' | 'story' | 'offer' | 'busy' | 'ready' | 'doneText', l: Lang): string
+- questName · function · L70-L70 — questName = (id: string, l: Lang)
+- tr · function · L73-L73 — tr = (l: Lang, es: string, enS: string)
+- questSummaryL · function · L76-L80 — function questSummaryL(q: QuestDef, l: Lang): string
+- questLineL · function · L82-L85 — function questLineL(q: QuestDef, status: 'locked' | 'available' | 'active' | 'ready' | 'done', l: Lang): string

@@ -1,0 +1,46 @@
+# server-rs/src/data.rs
+
+- Constants · struct · L8-L21 — pub struct Constants
+- Town · struct · L25-L25 — pub struct Town { pub x: f64, pub z: f64, pub r: f64, pub name: String, pub name_en: String }
+- Named · struct · L29-L29 — pub struct Named { pub name: String, pub name_en: String }
+- ItemUse · struct · L33-L33 — pub struct ItemUse { pub hp: Option<f64>, pub mp: Option<f64>, pub escape: Option<bool>, pub cd: f64 }
+- ItemDef · struct · L37-L53 — pub struct ItemDef
+- StatusApply · struct · L57-L57 — pub struct StatusApply { pub id: String, pub ms: f64, pub chance: Option<f64>, pub dot: Option<f64> }
+- Special · struct · L61-L61 — pub struct Special { pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub at: String, pub stun: Option<f64> }
+- MobCount · struct · L64-L64 — pub struct MobCount { pub mob: String, pub count: u32 }
+- MobPhase · struct · L68-L68 — pub struct MobPhase { pub at: f64, pub adds: Option<MobCount>, pub haste: Option<f64>, pub special: Option<Special>, pub say: (String, String) }
+- Drop · struct · L72-L72 — pub struct Drop { pub item: String, pub chance: f64, pub min: Option<i64>, pub max: Option<i64> }
+- MobDef · struct · L76-L96 — pub struct MobDef
+- BuffMods · struct · L100-L107 — pub struct BuffMods
+- BuffDef · struct · L110-L110 — pub struct BuffDef { pub dur: f64, pub mods: BuffMods }
+- SkillDef · struct · L114-L133 — pub struct SkillDef
+- Objective · enum · L137-L140 — pub enum Objective
+- count · function · L142-L142 — pub fn count(&self) -> i64 { match self { Objective::Kill { count, .. } | Objective::Collect { count, .. } => *count } }
+- QuestDef · struct · L147-L147 — pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64 }
+- NpcDef · struct · L151-L165 — pub struct NpcDef
+- ZoneDef · struct · L169-L169 — pub struct ZoneDef { pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub spawns: Vec<MobCount> }
+- Teleport · struct · L173-L173 — pub struct Teleport { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub cost: i64 }
+- CampChest · struct · L176-L176 — pub struct CampChest { pub adena: (f64, f64), pub loot: Vec<Drop> }
+- CampDef · struct · L180-L180 — pub struct CampDef { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub leader: String, pub mobs: Vec<MobCount>, pub respawn: f64, pub chest: CampChest }
+- StatMods · struct · L184-L187 — pub struct StatMods
+- RaceDef · struct · L190-L190 — pub struct RaceDef { pub id: String, pub classes: Vec<String>, pub mods: StatMods }
+- GenderDef · struct · L193-L193 — pub struct GenderDef { pub id: String, pub mods: StatMods }
+- StartItem · struct · L196-L196 — pub struct StartItem { pub item: String, pub count: i64, pub equip: bool }
+- ClassDef · struct · L200-L200 — pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub base_mp: f64, pub mp_lvl: f64, pub cp_ratio: f64, pub atk_interval: f64, pub start_items: Vec<StartItem> }
+- StatusDef · struct · L203-L203 — pub struct StatusDef { pub id: String, pub flag: u16 }
+- Pos · struct · L206-L206 — pub struct Pos { pub x: f64, pub z: f64 }
+- RaidDef · struct · L210-L210 — pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub close_after_kill: f64 }
+- ObstacleDef · enum · L214-L219 — pub enum ObstacleDef
+- Raw · struct · L222-L240 — struct Raw
+- Data · struct · L242-L262 — pub struct Data
+- item · function · L265-L265 — pub fn item(&self, id: &str) -> Option<&ItemDef> { self.items.get(id) }
+- skill · function · L266-L266 — pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
+- quest · function · L267-L267 — pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
+- quest_by_npc · function · L268-L268 — pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc) }
+- camp · function · L269-L269 — pub fn camp(&self, id: &str) -> Option<&CampDef> { self.camps.iter().find(|c| c.id == id) }
+- npc · function · L270-L270 — pub fn npc(&self, id: &str) -> Option<&NpcDef> { self.npcs.iter().find(|n| n.id == id) }
+- status_flag · function · L271-L271 — pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
+- skill_available · function · L273-L275 — pub fn skill_available(&self, s: &SkillDef, cls: &str, race: &str, gender: &str) -> bool
+- skills_for · function · L278-L282 — pub fn skills_for(&self, cls: &str, level: i64, race: &str, gender: &str) -> Vec<&SkillDef>
+- DATA · constant · L285-L285 — static DATA: OnceLock<Data> = OnceLock::new();
+- d · function · L287-L312 — pub fn d() -> &'static Data

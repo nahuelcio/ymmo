@@ -1,0 +1,22 @@
+# server-rs/src/combat.rs
+
+- PVP_OFF_COOLDOWN · constant · L11-L11 — const PVP_OFF_COOLDOWN: f64 = 10000.0;
+- is_fighter · function · L13-L13 — fn is_fighter(w: &World, id: u32) -> bool { w.ents.get(&id).map_or(false, |e| e.is_fighter()) }
+- set_pvp_mode · function · L17-L30 — pub fn set_pvp_mode(&mut self, pid: u32, on: bool)
+- can_attack · function · L32-L47 — pub fn can_attack(&self, pid: u32, tid: u32, force: bool, now: f64) -> Option<String>
+- def_stats · function · L49-L55 — fn def_stats(&self, id: u32) -> (f64, f64, f64)
+- send_miss · function · L57-L61 — fn send_miss(&self, src: u32, t: u32)
+- auto_attack · function · L63-L73 — pub fn auto_attack(&mut self, pid: u32, tid: u32, now: f64)
+- mob_attack · function · L75-L88 — pub fn mob_attack(&mut self, mid: u32, tid: u32, now: f64)
+- apply_status · function · L91-L104 — pub fn apply_status(&mut self, src: u32, tid: u32, sa: &StatusApply, hit: f64, now: f64)
+- tick_statuses · function · L107-L123 — pub fn tick_statuses(&mut self, id: u32, now: f64)
+- add_threat · function · L125-L127 — pub fn add_threat(&mut self, mid: u32, pid: u32, v: f64)
+- apply_damage · function · L129-L172 — pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool)
+- gain_xp · function · L174-L213 — pub fn gain_xp(&mut self, pid: u32, amount: f64)
+- kill_mob · function · L215-L292 — pub fn kill_mob(&mut self, mid: u32, now: f64)
+- Unit · struct · L245-L245 — struct Unit { dmg: f64, party: Option<u32>, player: u32 }
+- kill_player · function · L294-L335 — pub fn kill_player(&mut self, tid: u32, killer: u32, now: f64)
+- respawn_player · function · L337-L346 — pub fn respawn_player(&mut self, pid: u32)
+- request_skill · function · L348-L370 — pub fn request_skill(&mut self, pid: u32, skill_id: &str, force: bool, now: f64)
+- process_skill_intent · function · L372-L407 — pub fn process_skill_intent(&mut self, pid: u32, skill: &str, target: u32, force: bool, dt: f64, now: f64)
+- finish_cast · function · L409-L492 — pub fn finish_cast(&mut self, pid: u32, now: f64)

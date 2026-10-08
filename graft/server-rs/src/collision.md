@@ -1,0 +1,25 @@
+# server-rs/src/collision.rs
+
+- CELL · constant · L6-L6 — const CELL: f64 = 8.0;
+- RES · constant · L7-L7 — const RES: f64 = 1.0;
+- MAX_NODES · constant · L8-L8 — const MAX_NODES: usize = 40000;
+- DASH_DIST · constant · L9-L9 — pub const DASH_DIST: f64 = 6.0;
+- P · struct · L12-L12 — pub struct P { pub x: f64, pub z: f64 }
+- Geo · struct · L14-L19 — struct Geo
+- bound · function · L21-L23 — fn bound(o: &ObstacleDef) -> f64
+- pos · function · L24-L26 — fn pos(o: &ObstacleDef) -> (f64, f64)
+- GEO · constant · L28-L28 — static GEO: OnceLock<Geo> = OnceLock::new();
+- geo · function · L30-L71 — fn geo() -> &'static Geo
+- warm · function · L74-L74 — pub fn warm() { let _ = geo(); }
+- push_out · function · L76-L122 — pub fn push_out(mut x: f64, mut z: f64, r: f64) -> P
+- to_cell · function · L124-L127 — fn to_cell(v: f64) -> i64
+- to_world · function · L128-L128 — fn to_world(c: i64) -> f64 { c as f64 * RES - geo().half }
+- blocked · function · L130-L133 — fn blocked(cx: i64, cz: i64) -> bool
+- line_clear · function · L135-L143 — pub fn line_clear(ax: f64, az: f64, bx: f64, bz: f64) -> bool
+- nearest_free · function · L145-L156 — fn nearest_free(cx: i64, cz: i64) -> Option<(i64, i64)>
+- Node · struct · L159-L159 — struct Node(f32, u32);
+- partial_cmp · function · L161-L161 — impl PartialOrd for Node { fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> { Some(self.cmp(o)) } }
+- cmp · function · L164-L164 — fn cmp(&self, o: &Self) -> std::cmp::Ordering { o.0.partial_cmp(&self.0).unwrap_or(std::cmp::Ordering::Equal) }
+- Scratch · struct · L167-L167 — struct Scratch { stamp: i32, g: Vec<f32>, came: Vec<u32>, seen: Vec<i32>, closed: Vec<i32> }
+- find_path · function · L174-L268 — pub fn find_path(sx: f64, sz: f64, tx: f64, tz: f64) -> Vec<P>
+- dash_end · function · L271-L279 — pub fn dash_end(mut x: f64, mut z: f64, dx: f64, dz: f64, r: f64) -> P

@@ -1,0 +1,24 @@
+# shared/src/collision.ts
+
+- Obstacle · type · L6-L8 — type Obstacle = | { k: 'c'; x: number; z: number; r: number } | { k: 'b'; x: number; z: number; hw: number; hd: number; rot: number; cos: number; sin: number };
+- circle · function · L13-L13 — circle = (x: number, z: number, r: number): Obstacle
+- obb · function · L14-L15 — obb = (x: number, z: number, hw: number, hd: number, rot: number): Obstacle
+- buildObstacles · function · L17-L44 — function buildObstacles(): Obstacle[]
+- bound · function · L46-L46 — bound = (ob: Obstacle)
+- hkey · function · L52-L52 — hkey = (cx: number, cz: number)
+- ensure · function · L54-L68 — function ensure()
+- getObstacles · function · L70-L73 — function getObstacles(): Obstacle[]
+- pushOut · function · L76-L120 — function pushOut(x: number, z: number, r = WALK_RADIUS): { x: number; z: number }
+- toCell · function · L127-L127 — toCell = (v: number)
+- toWorld · function · L128-L128 — toWorld = (c: number)
+- navGrid · function · L130-L152 — function navGrid(): Uint8Array
+- blockedCell · function · L154-L154 — blockedCell = (cx: number, cz: number)
+- lineClear · function · L157-L165 — function lineClear(ax: number, az: number, bx: number, bz: number): boolean
+- nearestFree · function · L167-L176 — function nearestFree(cx: number, cz: number): [number, number] | null
+- scratch · function · L182-L188 — function scratch()
+- findPath · function · L195-L317 — function findPath(sx: number, sz: number, tx: number, tz: number): { x: number; z: number }[]
+- push · function · L216-L234 — push = (f: number, n: number)
+- pop · function · L235-L251 — pop = (): number
+- h · function · L253-L256 — h = (n: number)
+- free · function · L257-L257 — free = (cx: number, cz: number)
+- dashEnd · function · L321-L329 — function dashEnd(x: number, z: number, dx: number, dz: number, r = WALK_RADIUS): { x: number; z: number }

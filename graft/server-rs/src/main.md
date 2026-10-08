@@ -1,0 +1,39 @@
+# server-rs/src/main.rs
+
+- ai · module · L5-L5 — mod ai;
+- binary · module · L6-L6 — mod binary;
+- chat · module · L7-L7 — mod chat;
+- collision · module · L8-L8 — mod collision;
+- combat · module · L9-L9 — mod combat;
+- data · module · L10-L10 — mod data;
+- db · module · L11-L11 — mod db;
+- ent · module · L12-L12 — mod ent;
+- formulas · module · L13-L13 — mod formulas;
+- i18n · module · L14-L14 — mod i18n;
+- inventory · module · L15-L15 — mod inventory;
+- msgs · module · L16-L16 — mod msgs;
+- party · module · L17-L17 — mod party;
+- player · module · L18-L18 — mod player;
+- quests · module · L19-L19 — mod quests;
+- raid · module · L20-L20 — mod raid;
+- realm · module · L21-L21 — mod realm;
+- terrain · module · L22-L22 — mod terrain;
+- world · module · L23-L23 — mod world;
+- MAIN_WORLD · constant · L44-L44 — const MAIN_WORLD: u32 = 0;
+- Sess · struct · L47-L56 — struct Sess
+- Hub · struct · L58-L63 — struct Hub
+- Shared · type · L65-L65 — type Shared = Arc<Mutex<Hub>>;
+- App · struct · L68-L72 — struct App
+- NEXT_SID · constant · L74-L74 — static NEXT_SID: AtomicU64 = AtomicU64::new(1);
+- member · function · L76-L78 — fn member(sid: u64, s: &Sess, char_id: i64) -> Member
+- send · function · L80-L80 — fn send(out: &Outbox, v: Value) { out.text(v.to_string()); }
+- DB_EN · constant · L82-L87 — const DB_EN: [(&str, &str); 4] = [
+- db_msg · function · L88-L90 — fn db_msg(l: Lang, m: &str) -> String
+- chars_json · function · L92-L94 — fn chars_json(db: &Db, account: i64) -> Vec<Value>
+- spawn_world · function · L96-L106 — fn spawn_world(app: &App, raid: Option<(&'static data::RaidDef, usize)>) -> u32
+- to_world · function · L108-L110 — fn to_world(hub: &Hub, world: u32, cmd: WorldCmd)
+- hub_loop · function · L113-L168 — async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>)
+- ws_handler · function · L170-L172 — async fn ws_handler(ws: WebSocketUpgrade, State(app): State<App>) -> impl IntoResponse
+- client · function · L174-L218 — async fn client(socket: WebSocket, app: App)
+- handle · function · L220-L337 — async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool)
+- main · function · L340-L386 — async fn main()

@@ -1,0 +1,35 @@
+# client/src/ui/panels.ts
+
+- InventoryPanel · class · L19-L172 — class InventoryPanel
+- constructor · method · L32-L57 — constructor(private g: Game, root: HTMLElement)
+- closeMenu · method · L59-L62 — private closeMenu()
+- refreshStats · method · L65-L71 — refreshStats()
+- row · function · L68-L68 — row = (k: string, v: number)
+- score · method · L74-L77 — private score(id: string)
+- compare · method · L80-L92 — private compare(id: string): string
+- refresh · method · L94-L171 — refresh()
+- kind · function · L121-L121 — kind = (id: string)
+- CharacterPanel · class · L174-L215 — class CharacterPanel
+- constructor · method · L176-L179 — constructor(private g: Game, root: HTMLElement)
+- refresh · method · L181-L214 — refresh()
+- NpcPanel · class · L217-L352 — class NpcPanel
+- constructor · method · L222-L224 — constructor(private g: Game, root: HTMLElement)
+- open · method · L226-L232 — open(m: Extract<S2C, { t: 'npc' }>)
+- refresh · method · L234-L236 — refresh()
+- syncQuest · method · L239-L248 — syncQuest(list: { id: string; progress: number }[])
+- render · method · L250-L325 — private render()
+- renderQuest · method · L327-L351 — private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement)
+- PartyPanel · class · L354-L410 — class PartyPanel
+- constructor · method · L364-L372 — constructor(private g: Game, parent: HTMLElement)
+- hit · method · L375-L388 — hit(src: number, v: number)
+- toggle · method · L390-L392 — toggle()
+- set · method · L394-L409 — set(members: PartyMember[] | null)
+- Dialogs · class · L412-L455 — class Dialogs
+- constructor · method · L414-L417 — constructor(private g: Game, parent: HTMLElement)
+- open · method · L419-L421 — get open()
+- close · method · L423-L425 — close()
+- show · method · L427-L439 — private show(html: string, buttons: [string, () => void, string?][], closable = true)
+- death · method · L441-L443 — death()
+- invite · method · L445-L450 — invite(from: string)
+- confirm · method · L452-L454 — confirm(text: string, ok: () => void)
+- createHelp · function · L457-L494 — function createHelp(root: HTMLElement): Win
