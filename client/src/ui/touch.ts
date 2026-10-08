@@ -31,6 +31,34 @@ export class TouchControls {
     btn('tb-dash', 'dash', tx('Rodar', 'Roll'), () => g.dash());
     btn('tb-target', 'target', tx('Objetivo', 'Target'), () => g.nextTarget());
     btn('tb-loot', 'loot', tx('Juntar', 'Loot'), () => g.pickupNearest());
+    this.focusToggle(root);
+  }
+
+  /** Combat focus: hide everything but movement, combat and the minimap (menu, chat, quests...). */
+  private focusToggle(root: HTMLElement) {
+    const b = el('button', 'focus-btn', root);
+    const set = (on: boolean) => {
+      document.body.classList.toggle('hud-focus', on);
+      b.textContent = on ? '◱' : '◰';
+      b.setAttribute('aria-label', on ? tx('Mostrar interfaz', 'Show interface') : tx('Modo combate: ocultar interfaz', 'Combat mode: hide interface'));
+      try {
+        localStorage.setItem('hudFocus', on ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    };
+    let on = false;
+    try {
+      on = localStorage.getItem('hudFocus') === '1';
+    } catch {
+      /* ignore */
+    }
+    set(on);
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      set(!document.body.classList.contains('hud-focus'));
+    });
   }
 
   private joystick(root: HTMLElement) {

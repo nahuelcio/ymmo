@@ -511,14 +511,14 @@ input { font: inherit; user-select: text; }
   .touch .status-row { left: 6px; top: auto; bottom: 350px; }
   .touch .castbar { bottom: 330px; width: 60vw; }
   /* thumb-sized hotbar: two rows of five big slots, with HP|MP and XP riding on top */
-  .touch .shortcuts { bottom: calc(4px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(310px, calc(100vw - 16px));
-    flex-wrap: wrap; justify-content: center; gap: 5px; padding: 5px; }
-  .touch .shortcuts .slot { width: 54px; height: 54px; }
+  .touch .shortcuts { bottom: calc(4px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: calc(100vw - 12px);
+    flex-wrap: wrap; justify-content: space-between; gap: 5px; padding: 5px; }
+  .touch .shortcuts .slot { width: calc((100% - 20px) / 5); height: 58px; }
   .touch .shortcuts .slot .icon { font-size: 28px; }
   .touch .shortcuts .slot-key { font-size: 11px; }
   .touch .shortcuts .cd-num { font-size: 18px; }
-  .touch .joy-base { bottom: calc(196px + env(safe-area-inset-bottom)); left: 12px; width: 112px; height: 112px; }
-  .touch .touch-actions { bottom: calc(196px + env(safe-area-inset-bottom)); right: 8px; grid-template-columns: 58px 58px; gap: 8px; }
+  .touch .joy-base { bottom: calc(206px + env(safe-area-inset-bottom)); left: 12px; width: 112px; height: 112px; }
+  .touch .touch-actions { bottom: calc(206px + env(safe-area-inset-bottom)); right: 8px; grid-template-columns: 58px 58px; gap: 8px; }
   .touch .touch-btn { width: 58px; height: 58px; }
   .touch .touch-btn.tb-attack { width: 66px; height: 66px; }
   /* menu row: icons only, adena lives in the inventory; leaves room for the minimap */
@@ -533,3 +533,10 @@ input { font: inherit; user-select: text; }
   .touch .win-title { cursor: default; padding: 8px 10px; }
   .touch .win-close { font-size: 22px; padding: 0 4px; }
 }
+
+/* combat focus toggle (touch): hides menu, chat, quests, party, buffs and the player card */
+.focus-btn { display: none; }
+.touch .focus-btn { display: block; position: absolute; z-index: 7; left: calc(6px + env(safe-area-inset-left)); top: calc(6px + env(safe-area-inset-top));
+  width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--border); background: rgba(12, 14, 22, 0.85); color: var(--gold); font-size: 20px; line-height: 1; padding: 0; }
+.touch .status { left: 46px; }
+.hud-focus .menu, .hud-focus .chat, .hud-focus .quest-tracker, .hud-focus .party, .hud-focus .status, .hud-focus .buffs { display: none !important; }
