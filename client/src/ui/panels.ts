@@ -8,7 +8,7 @@ const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
+import { bar, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
 import { isTouchDevice } from './touch';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
@@ -131,7 +131,7 @@ export class InventoryPanel {
         setTip(cell, () => itemTip(it.i, 1, it.e) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.hasScroll(it.i) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
       } else {
         // empty: a faint outline of what goes there
-        glyph('item', GHOST[s], ITEMS[GHOST[s]].icon, cell).classList.add('doll-ghost');
+        glyph('item', itemIconId(GHOST[s]), SLOT_LABEL[s], cell).classList.add('doll-ghost');
         cell.title = SLOT_LABEL[s];
       }
     });

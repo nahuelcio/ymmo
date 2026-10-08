@@ -34,10 +34,18 @@ export function hex(c: number): string {
   return `#${c.toString(16).padStart(6, '0')}`;
 }
 
+/** Pieces of a set share the drawing of their kind: the icon's colour and border tell the sets apart. */
+const SHARED_ICON: Record<string, string> = {
+  ring: 'ring', earring: 'earring', necklace: 'necklace', blade: 'samurai_longsword', staff: 'sages_staff', helm: 'full_plate_helmet', plate: 'full_plate_armor',
+  robe: 'demons_tunic', greaves: 'brigandine_gaiters', gauntlets: 'reinforced_gloves', boots: 'reinforced_boots',
+};
+/** The icon file an item uses: its own, or the one for its kind (abyssal_ring and ring_of_vigor both draw `ring`). */
+export const itemIconId = (id: string) => (ICONS[`../icons/item/${id}.svg`] ? id : SHARED_ICON[id.split('_').find((w) => w in SHARED_ICON) ?? ''] ?? id);
+
 export function itemIcon(itemId: string, parent?: HTMLElement, count?: number, ench = 0): HTMLDivElement {
   const def = ITEMS[itemId];
   const d = el('div', 'icon', parent);
-  glyph('item', itemId, def?.icon ?? '?', d);
+  glyph('item', itemIconId(itemId), def?.icon ?? '?', d);
   d.style.background = `radial-gradient(circle at 35% 30%, ${hex(def?.color ?? 0x666666)}aa, #14161f 80%)`;
   if (def?.grade) d.style.borderColor = GRADE_COLOR[def.grade];
   if (count && count > 1) el('span', 'icon-count', d, count > 9999 ? `${Math.floor(count / 1000)}k` : String(count));
