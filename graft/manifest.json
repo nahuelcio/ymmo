@@ -1,0 +1,354 @@
+{
+  "version": 1,
+  "model": "openai:glm-5.3-flash",
+  "repoDigest": "e31cc99d1c4044cbabc28fb4d9a99384d685d70639211f2ada4ebd7e61b76709",
+  "files": [
+    {
+      "path": "art/blender/characters.py",
+      "hash": "794c7ecc564551685586a8d1cb2670b05cd68c4634754aaa09691fd1701c09c3"
+    },
+    {
+      "path": "client/src/audio.ts",
+      "hash": "dbb809bb48c692bdd93aa9e39761472d89f27e8f30fb2d3ee2f9f2665e1b00b1"
+    },
+    {
+      "path": "client/src/bench.ts",
+      "hash": "38596e3debc4108a7fe805ab07cfca43e3ee1b65ea9aab5d3c7fb0cf6a6d0359"
+    },
+    {
+      "path": "client/src/game.ts",
+      "hash": "fbdb4c6e6f1138584beffbd03753e54ff4fc2dcd9921e75eb1d1d8ef7bb08984"
+    },
+    {
+      "path": "client/src/lang.ts",
+      "hash": "152a307a25b9245fe1154c516751c8e2e0db5968d52f02381b1a214e5aeaf757"
+    },
+    {
+      "path": "client/src/main.ts",
+      "hash": "9bd7a9f0b145d150f119c9c6899d771c761619e9086fe643229dc75355766ec6"
+    },
+    {
+      "path": "client/src/net.ts",
+      "hash": "cbaf59ca83cc81c62770c088f16113ecdef6b3ece7a8310d320b9c5811727faf"
+    },
+    {
+      "path": "client/src/render/atmos.ts",
+      "hash": "64680cc14f92b9b0c5ab46bfca6291ec7dd7cd0fc953e86df359124710e32341"
+    },
+    {
+      "path": "client/src/render/camera.ts",
+      "hash": "a450f493246cc6fb6f9b21e192cd5e187e28aad36df0fea770ec9c3457e9d980"
+    },
+    {
+      "path": "client/src/render/fx.ts",
+      "hash": "fa89e1b4772136fad47d497851bf169b514b3f1afb6765d0cbb2a052ea580fb3"
+    },
+    {
+      "path": "client/src/render/models.ts",
+      "hash": "003f3d6c44840c866bd2e4149916e0fd3577dd235edefe68ffd149168c73e6f1"
+    },
+    {
+      "path": "client/src/render/post.ts",
+      "hash": "33222bec7b424cb4796417be1204e0accb6710af1d6ccaaa8679e5844430063f"
+    },
+    {
+      "path": "client/src/render/quaternius.ts",
+      "hash": "c0e1830c5a24676c4ecfcce2209a5f70a7ab79c35dad6fcd3f202b4a0897b6d1"
+    },
+    {
+      "path": "client/src/render/scene.ts",
+      "hash": "b10f298ae40fc04c5a4431bc76e6e3165a474b291cd08514ab20676ff5aaeec3"
+    },
+    {
+      "path": "client/src/settings.ts",
+      "hash": "3fa0137ba3bd917d9d25854b7048c30fa4c1018681a696f6fee7349330cee201"
+    },
+    {
+      "path": "client/src/ui/chat.ts",
+      "hash": "a79b5d3ba6eb21ac2ad6c00eaf4986367a8a1348a86e48a6adadc54f182ba443"
+    },
+    {
+      "path": "client/src/ui/common.ts",
+      "hash": "62e8d095fa396885ea33704f592a51aa00264e43976f4c459d4ea90b93b51e1a"
+    },
+    {
+      "path": "client/src/ui/dom.ts",
+      "hash": "dc270fcba670a98f8be04eb2c53b7e86ca7b6af90615a106ea09b148e54af913"
+    },
+    {
+      "path": "client/src/ui/hud.ts",
+      "hash": "0eb67f4ad91d0f7645d752af2a98e94b69ed59da303a1412fefb46b6492f356e"
+    },
+    {
+      "path": "client/src/ui/index.ts",
+      "hash": "14609a22bab1a91a9919df9bf33f7dfed877b50e555dc1b647baded902643296"
+    },
+    {
+      "path": "client/src/ui/minimap.ts",
+      "hash": "4df27d3789af675b06f75e1a154689c1506746642b75cbbe8bafe9405fc26d2f"
+    },
+    {
+      "path": "client/src/ui/panels.ts",
+      "hash": "4f93343109a9628ec0817a86f700c58f85ad111fc764924fb0ed7b59f749ffac"
+    },
+    {
+      "path": "client/src/ui/settings.ts",
+      "hash": "10cb84a66bbe676a00a086e29cdc0b11c522a13eb0fb1cd452ab418112f8efd6"
+    },
+    {
+      "path": "client/src/ui/touch.ts",
+      "hash": "763e22d5d214d58607e218b0da6b93aac00fdffe4e50a7d404f62cc6d0d32d4f"
+    },
+    {
+      "path": "client/vite.config.ts",
+      "hash": "1014446685ee24091005095d3f55219a27ee70ec561a73f19a309a53d33231b5"
+    },
+    {
+      "path": "deploy/autoupdate.sh",
+      "hash": "5ffcb1b948bd6c89470143f9aad612d2c61627787a90989e44f511f81da805ec"
+    },
+    {
+      "path": "deploy/install.sh",
+      "hash": "77293b013078119eca37a46645bec43d4cdc96067033766eab24a4de0d815b6d"
+    },
+    {
+      "path": "deploy/update.sh",
+      "hash": "38eaf1a0aa4aedafde345a297fb60419504af246b9e86ca089f73f285b925b63"
+    },
+    {
+      "path": "scripts/check-wander.ts",
+      "hash": "1784d3eaae894a265a6b00fbb2d937f2aec7aea043f58851f1698b7100b66811"
+    },
+    {
+      "path": "scripts/export-data.ts",
+      "hash": "6275a42df1d96c29a4298bf0b3b9aa847eb59de0138500488ddf7259fd3e0e33"
+    },
+    {
+      "path": "scripts/loadtest.ts",
+      "hash": "1e4c3c7ba733c95029f2c6f88a84a3bd6231b2d6962c3442ee5997a6ef4e4c06"
+    },
+    {
+      "path": "scripts/q-assets.mjs",
+      "hash": "295f9624f490168d5f786cf959804a0de9d115eade3c7f175d80054812d02d86"
+    },
+    {
+      "path": "server-rs/src/ai.rs",
+      "hash": "c06e3f2d30224b4d3651b75334931d5ff52823dd2dd5ba199e07c27d747f754c"
+    },
+    {
+      "path": "server-rs/src/binary.rs",
+      "hash": "5af6c61aa310a7974df742836268c062df7903730567cd12c0fe464671881c06"
+    },
+    {
+      "path": "server-rs/src/chat.rs",
+      "hash": "c230583ce9645fb2eb953acf8e6a8fd33d8aa85529449b308f5fcdd2aee7e50c"
+    },
+    {
+      "path": "server-rs/src/collision.rs",
+      "hash": "2afec1d1ecb157b1c949c66f77a744fe500144a84f99b99dd210c78506fe6436"
+    },
+    {
+      "path": "server-rs/src/combat.rs",
+      "hash": "6e1eca7178b1325d1da04d0de06255d538ad3f1e703fdae425be2f99af16b41a"
+    },
+    {
+      "path": "server-rs/src/data.rs",
+      "hash": "8522275b9e17f8ad7cfc4098af5bbf106eee35eaca93c6ed7e58f24572d8df46"
+    },
+    {
+      "path": "server-rs/src/db.rs",
+      "hash": "b2fc079f6c14e1194384a872bcfc5b53a5cbd3f4bbd1e0105a5899d1dc9c9bb2"
+    },
+    {
+      "path": "server-rs/src/ent.rs",
+      "hash": "ef3d5a42c10d5c508f70781c04ae98441c8e07f49d7003829d0d277de65743db"
+    },
+    {
+      "path": "server-rs/src/formulas.rs",
+      "hash": "a6f3bd1e4265bf6ff4b8de85387eb40a6ec471da38336f69edda79b3dc756936"
+    },
+    {
+      "path": "server-rs/src/i18n.rs",
+      "hash": "7ad24f2aa82f03f40c716f7dcdfffabf7383aaf68efd89619378f3041c90b441"
+    },
+    {
+      "path": "server-rs/src/inventory.rs",
+      "hash": "bfc514a3f6c03f239da2283ec1811ef11abc1a787f20a7210625923b68a603d1"
+    },
+    {
+      "path": "server-rs/src/main.rs",
+      "hash": "8512b0dd30223760f9725cf6716b49eb145cf8d036daec2805ae403502b2d450"
+    },
+    {
+      "path": "server-rs/src/msgs.rs",
+      "hash": "7a468c5c2c540bb9f7d806a243152d5852c3852cb9dc08ba2c0c625086c46d1f"
+    },
+    {
+      "path": "server-rs/src/party.rs",
+      "hash": "55b0288d39333364b4ebe5a117bea8babe19de4c6c354b76743681183ceb6803"
+    },
+    {
+      "path": "server-rs/src/player.rs",
+      "hash": "aad821c5659b7270c8318f71d72f1070855ccb46b1cda5dc3a42c8d6678aa8e9"
+    },
+    {
+      "path": "server-rs/src/quests.rs",
+      "hash": "5818771406b193359fd73bfeb1cb1b3942a38e34620a2a13e4c5dd74fcbbaaca"
+    },
+    {
+      "path": "server-rs/src/raid.rs",
+      "hash": "aca59deb1439b57c2570e7f1d092c1e78d30d176612724218ed999bf1fa8f2b4"
+    },
+    {
+      "path": "server-rs/src/realm.rs",
+      "hash": "ba74216b751559656adcc435181e7d3a617dd38832d73ae3f69bdffe35ecdaeb"
+    },
+    {
+      "path": "server-rs/src/terrain.rs",
+      "hash": "bd0589b6ea51dd0c31c275bffd3a10f7190bf10b39d76ead67325677c20a42b3"
+    },
+    {
+      "path": "server-rs/src/world.rs",
+      "hash": "f79b10a47446272207b449d57373a86a00415bf45b78ecb75209e616b0d0b915"
+    },
+    {
+      "path": "server/src/db.ts",
+      "hash": "64d5dabe0bbd755c25f3b2442b047f8257c57bb60dc809037b0e2d2fc2010fe3"
+    },
+    {
+      "path": "server/src/index.ts",
+      "hash": "06cbb8d9876788383b4a9d672ce700c9e86b5e11d974a321b2464bc75153214f"
+    },
+    {
+      "path": "server/src/raid/boot.mjs",
+      "hash": "a45a2ae38fd64c71727b7e0c4a9c73d023d09984ae2a7493d485926dc4a7114b"
+    },
+    {
+      "path": "shared/src/binary.ts",
+      "hash": "7fa2b164744319c62ca717ee0ff31adb61a248c1c15eaa1d3a8580df21551dec"
+    },
+    {
+      "path": "shared/src/collision.ts",
+      "hash": "d988f87c6c8ef0184db7214e6350dc2f3149294bb21a71261771b547376e1c0f"
+    },
+    {
+      "path": "shared/src/data/camps.ts",
+      "hash": "d2e8927daeb698d0516840dbb55829170d6c7ed619dcd949b26cedbbfe12cbcc"
+    },
+    {
+      "path": "shared/src/data/classes.ts",
+      "hash": "52f986750c3bcee11333af48682dedf09b27dab4a675d3b849ae7d802ee630bc"
+    },
+    {
+      "path": "shared/src/data/items.ts",
+      "hash": "595a4a5ca6a02171f4d04497651b3de46457e54a9dcf58cc85e93f2fcf5a7c0e"
+    },
+    {
+      "path": "shared/src/data/mobs.ts",
+      "hash": "8b2f69ab4350416c14fc7e70affc9946895fef6f8e594f6beccb010bd8d47503"
+    },
+    {
+      "path": "shared/src/data/quests.ts",
+      "hash": "285f09fdb5685ff4fb496d67954df7c58c1519cbf4d7f8269f1c808a83a99a7c"
+    },
+    {
+      "path": "shared/src/data/raids.ts",
+      "hash": "43b7a252e494cadb3d53e28cc711c8dc7367dc4d631b108ed4a248462c039cf8"
+    },
+    {
+      "path": "shared/src/data/skills.ts",
+      "hash": "a473734acf43e1c9c326ca4aa797272f966665734812b36acaab2ac16ff38e44"
+    },
+    {
+      "path": "shared/src/data/world.ts",
+      "hash": "f65369695ec16541fba971179907c1e406b423ff7ad7efd4cfe0fb4cde6156bf"
+    },
+    {
+      "path": "shared/src/formulas.ts",
+      "hash": "f3c5045df7aafc6e6176e52b57c7101ff9d9db67e9fc47ff022e97f3487c58ad"
+    },
+    {
+      "path": "shared/src/i18n/en.ts",
+      "hash": "f73282a1cd2459054cd7cb8c1e6d89220b76d256d2bc2e542632a15dd015bf3d"
+    },
+    {
+      "path": "shared/src/i18n/index.ts",
+      "hash": "898ae51577c14fdf699ca94dbec5a2bb5731f82fb0fa6dbed2519b70fe31c676"
+    },
+    {
+      "path": "shared/src/layout.ts",
+      "hash": "c3c393b2f7395af1658fdfa9282590d869668c7dd61717fe69d41f2aac9fa5c0"
+    },
+    {
+      "path": "shared/src/protocol.ts",
+      "hash": "4348ca088f73a0e920ce11b8cfabaa69c7a7b3e48955d26dc78bcec8497dca43"
+    },
+    {
+      "path": "shared/src/status.ts",
+      "hash": "07c244f16821e9e5d9a75dd46c1997284c7569978f127cae5912fbede8221765"
+    },
+    {
+      "path": "shared/src/terrain.ts",
+      "hash": "985dc1f3492f5d1556d7201f87d5582f9ba9aba9cde8caff06636675fcf1e757"
+    }
+  ],
+  "nodes": [
+    {
+      "slug": "delta-snapshot-bandwidth-model",
+      "name": "Delta snapshot bandwidth model",
+      "type": "concept",
+      "sources": [
+        "shared/src/protocol.ts"
+      ],
+      "sourcesDigest": "2ac9ffa6749b12a1019bf3873472b774ea958fe417286452e8467ee4c6619c2e"
+    },
+    {
+      "slug": "deterministic-procedural-terrain",
+      "name": "Deterministic procedural terrain",
+      "type": "file",
+      "sources": [
+        "shared/src/terrain.ts"
+      ],
+      "sourcesDigest": "e42cecf698341c0adaa8ea64f9bf911db0b7e3f9bf0210c950acdddaf1c3a31a"
+    },
+    {
+      "slug": "entity-flag-bitmask",
+      "name": "Entity flag bitmask",
+      "type": "concept",
+      "sources": [
+        "shared/src/protocol.ts",
+        "shared/src/status.ts"
+      ],
+      "sourcesDigest": "372d2fe3dbbcb4fcc18e50d6f87dca17bd089daf119d104add7bf37ac6a666b4"
+    },
+    {
+      "slug": "shared-cross-process-contract",
+      "name": "Shared cross-process contract",
+      "type": "system",
+      "sources": [
+        "shared/src/protocol.ts",
+        "shared/src/status.ts",
+        "shared/src/terrain.ts"
+      ],
+      "sourcesDigest": "485a4f77fb6c7d487fe7fb0cd1a447f8c0a1bb6f8a2c120efd06d4d11f5134a0"
+    },
+    {
+      "slug": "status-effect-registry",
+      "name": "Status effect registry",
+      "type": "file",
+      "sources": [
+        "shared/src/status.ts"
+      ],
+      "sourcesDigest": "382ed3f938dfd6597bbe0976928983b0a9d2632b55d35d19a0d7a02e63c15322"
+    },
+    {
+      "slug": "wire-protocol-entity-schema",
+      "name": "Wire protocol & entity schema",
+      "type": "file",
+      "sources": [
+        "shared/src/protocol.ts"
+      ],
+      "sourcesDigest": "2ac9ffa6749b12a1019bf3873472b774ea958fe417286452e8467ee4c6619c2e"
+    }
+  ]
+}
