@@ -9,6 +9,7 @@ import { className, genderDesc, genderName, hairStyle, LANGS, raceDesc, raceName
 import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
 import { loadQ, mountQuaterniusPreview } from './render/quaternius';
+import { loadV } from './render/village';
 import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
@@ -356,7 +357,10 @@ async function boot() {
   const box = screen();
   el('div', 'tt-dim', box, t('Conectando con el servidor...', 'Connecting to the server...'));
   // character models download while we connect; without them players fall back to the procedural rig
-  const models = loadQ().catch((err) => console.warn('quaternius', err));
+  const models = Promise.all([
+    loadQ().catch((err) => console.warn('quaternius', err)),
+    loadV().catch((err) => console.warn('village', err)),
+  ]);
   for (let attempt = 1; ; attempt++) {
     try {
       await net.connect();

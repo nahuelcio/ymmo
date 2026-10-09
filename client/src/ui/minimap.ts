@@ -11,6 +11,7 @@ import { lang, t as tx } from '../lang';
 import { settings } from '../settings';
 import { gameClock } from '../render/atmos';
 import { campName, zoneName } from '../../../shared/src/i18n';
+import { BELL_TOWER } from '../../../shared/src/village';
 
 const RES = 512;
 /** minimap size in CSS px; its canvas is backed at device resolution so it stays sharp */
@@ -298,17 +299,19 @@ export class Minimap {
       ctx.fill();
     }
     const town = layoutTown();
-    const segs = [...town.walls, ...layoutCamps().flatMap((c) => c.walls)];
     ctx.strokeStyle = '#4a321c';
     ctx.lineWidth = Math.max(1.6, 0.9 * scale);
     ctx.beginPath();
-    for (const w of segs) {
+    const strokeWall = (w: { x: number; z: number; rot: number; hw?: number }) => {
       const [x, y] = toC(w.x, w.z);
-      if (!seen(x, y, 12)) continue;
-      const dx = Math.cos(w.rot) * 3.6 * scale, dy = -Math.sin(w.rot) * 3.6 * scale;
+      if (!seen(x, y, 12)) return;
+      const hw = w.hw ?? 3.6;
+      const dx = Math.cos(w.rot) * hw * scale, dy = -Math.sin(w.rot) * hw * scale;
       ctx.moveTo(x - dx, y - dy);
       ctx.lineTo(x + dx, y + dy);
-    }
+    };
+    for (const w of town.walls) if (!w.tower) strokeWall(w);
+    for (const c of layoutCamps()) for (const w of c.walls) strokeWall(w);
     ctx.stroke();
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(20, 14, 10, 0.9)';
@@ -323,7 +326,11 @@ export class Minimap {
       ctx.strokeRect((-rw / 2) * scale, (-rd / 2) * scale, rw * scale, rd * scale);
       ctx.restore();
     };
-    for (const w of town.walls) if (w.tower) rect(w.x, w.z, 2.8, 2.8, w.rot, '#8a3a2a');
+    for (const w of town.walls) if (w.tower) {
+      const rw = w.hw != null ? w.hw * 2 : 2.8;
+      const rd = w.hd != null ? w.hd * 2 : rw;
+      rect(w.x, w.z, rw, rd, w.rot, w.out ? '#8a3a2a' : '#9a9488');
+    }
     for (const h of town.houses) {
       rect(h.x, h.z, h.w + 1, h.d + 1.2, h.rot, css(h.roof));
       rect(h.x, h.z, h.w + 1, 0.01, h.rot, '#000'); // roof ridge
@@ -338,8 +345,7 @@ export class Minimap {
       ctx.fill();
       ctx.stroke();
     };
-    disc(TOWN.x, TOWN.z, 4.4, '#bab4a6');
-    disc(TOWN.x, TOWN.z, 3.4, '#4a90c8');
+    rect(TOWN.x + BELL_TOWER.x, TOWN.z + BELL_TOWER.z, BELL_TOWER.hw * 2, BELL_TOWER.hd * 2, BELL_TOWER.rot, '#5a5a62');
     for (const c of layoutCamps()) for (const t of c.tents) disc(t.x, t.z, 2.3, '#7a6040');
     // the path is recomputed a couple of times a second, not on every redraw
     if (now - this.routeAt > 500) {

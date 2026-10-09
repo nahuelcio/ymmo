@@ -1,0 +1,334 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 3048,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 1752,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 1
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 1752,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 2
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 8340,
+      "normalized": false,
+      "byteOffset": 6096,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 2372,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 3
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2372,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 4
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 1752,
+      "max": [
+        26795,
+        15489,
+        32595
+      ],
+      "min": [
+        -26795,
+        -19194,
+        -32767
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 5
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 2372,
+      "max": [
+        27919,
+        19194,
+        32767
+      ],
+      "min": [
+        -27919,
+        -18222,
+        -32275
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 6
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 1,
+      "byteOffset": 0,
+      "byteLength": 22776,
+      "target": 34963,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": 4024,
+          "mode": "TRIANGLES",
+          "byteStride": 2,
+          "count": 11388
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 22776,
+      "byteLength": 7008,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 4024,
+          "byteLength": 1271,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 1752
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 29784,
+      "byteLength": 14016,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 5296,
+          "byteLength": 10295,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 1752
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 43800,
+      "byteLength": 9488,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 15592,
+          "byteLength": 2396,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 2372
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 53288,
+      "byteLength": 18976,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 17988,
+          "byteLength": 13217,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 2372
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 72264,
+      "byteLength": 14016,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 31208,
+          "byteLength": 7996,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 1752
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 86280,
+      "byteLength": 18976,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 39204,
+          "byteLength": 11953,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 2372
+        }
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 1,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "T_WoodTrim_BaseColor.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "T_RoundTiles_BaseColor.webp"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "Roof_RoundTiles_6x8.bin",
+      "byteLength": 51160
+    },
+    {
+      "byteLength": 105256,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "fallback": true
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "name": "MI_WoodTrim",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "MI_RoundTiles",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Cube.015",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "POSITION": 6
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 0
+        },
+        {
+          "attributes": {
+            "NORMAL": 4,
+            "TEXCOORD_0": 5,
+            "POSITION": 7
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 3
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Roof_RoundTiles_6x8",
+      "translation": [
+        0,
+        2.0539588928222656,
+        0.012616395950317383
+      ],
+      "scale": [
+        4.841369867324829,
+        4.841369867324829,
+        4.841369867324829
+      ],
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0,
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ]
+}
