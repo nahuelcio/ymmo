@@ -6,7 +6,7 @@
 // --raid n   group the bots in parties of n and send each party into its own raid instance
 //            (0 = stay in the overworld and run around)
 import WebSocket from 'ws';
-import { decodeSnap } from '../../shared/src/binary';
+import { decodeEvent, decodeSnap } from '../../shared/src/binary';
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -46,7 +46,11 @@ function startBot(i: number) {
   ws.on('message', (d, bin) => {
     if (bin) {
       const ab = d as Buffer;
-      const snap = decodeSnap(ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength) as ArrayBuffer);
+      const buf = ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength) as ArrayBuffer;
+      const ev = decodeEvent(buf); // combat events (atk / dmg / fx) are binary too
+      if (ev?.t === 'dmg' && ev.s === bot.meId) stats.hits++;
+      if (ev) return;
+      const snap = decodeSnap(buf);
       const me = snap?.upd.find((u) => u[0] === bot.meId);
       if (me) [bot.x, bot.z] = [me[1], me[2]];
       return;

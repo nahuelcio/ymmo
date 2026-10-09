@@ -1,5 +1,5 @@
 import type { C2S, S2C } from '../../shared/src/protocol';
-import { decodeSnap } from '../../shared/src/binary';
+import { decodeEvent, decodeSnap, SNAP_UPD } from '../../shared/src/binary';
 import { lang } from './lang';
 
 type Handler = (m: S2C) => void;
@@ -20,9 +20,16 @@ export class Net {
       let m: S2C;
       if (typeof ev.data === 'string') m = JSON.parse(ev.data) as S2C;
       else {
-        const snap = decodeSnap(ev.data as ArrayBuffer);
-        if (!snap) return;
-        m = { t: 'snap', add: [], upd: snap.upd, gone: snap.gone, st: snap.st };
+        const buf = ev.data as ArrayBuffer;
+        if (new Uint8Array(buf, 0, 1)[0] === SNAP_UPD) {
+          const snap = decodeSnap(buf);
+          if (!snap) return;
+          m = { t: 'snap', add: [], upd: snap.upd, gone: snap.gone, st: snap.st };
+        } else {
+          const e = decodeEvent(buf);
+          if (!e) return;
+          m = e;
+        }
       }
       for (const h of this.handlers.get(m.t) ?? []) h(m);
       for (const h of this.handlers.get('*') ?? []) h(m);

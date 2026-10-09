@@ -21,3 +21,36 @@ pub fn encode_snap(upd: &[[f64; 6]], gone: &[u32], time: f64) -> Vec<u8> {
     for id in gone { b.extend_from_slice(&id.to_le_bytes()); }
     b
 }
+
+/** Combat events, the other hot path (same layouts as shared/src/binary.ts):
+ *    atk: u8 2, u32 s, u32 tg
+ *    dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot)
+ *    fx:  u8 4, u32 s, u32 tg, u8 len, skill (utf-8)
+ *  Anything else (or an unexpected shape) stays JSON: returns None. */
+pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
+    let t = v.get("t")?.as_str()?;
+    let id = |k: &str| v.get(k).and_then(|x| x.as_u64()).filter(|n| *n <= u32::MAX as u64).map(|n| n as u32);
+    let flag = |k: &str| v.get(k).and_then(|x| x.as_bool()).unwrap_or(false);
+    let obj = v.as_object()?;
+    let kind = match t {
+        "atk" if obj.len() == 3 => 2u8,
+        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot")) => 3,
+        "fx" if obj.len() == 4 => 4,
+        _ => return None,
+    };
+    let (s, tg) = (id("s")?, id("tg")?);
+    let mut b = Vec::with_capacity(24);
+    b.push(kind);
+    b.extend_from_slice(&s.to_le_bytes());
+    b.extend_from_slice(&tg.to_le_bytes());
+    if kind == 3 {
+        b.extend_from_slice(&v.get("v")?.as_f64()?.to_le_bytes());
+        b.push(flag("crit") as u8 | (flag("miss") as u8) << 1 | (flag("heal") as u8) << 2 | (flag("dot") as u8) << 3);
+    } else if kind == 4 {
+        let sk = v.get("skill")?.as_str()?.as_bytes();
+        if sk.len() > 255 { return None; }
+        b.push(sk.len() as u8);
+        b.extend_from_slice(sk);
+    }
+    Some(b)
+}

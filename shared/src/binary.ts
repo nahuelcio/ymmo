@@ -6,7 +6,7 @@
 //   u16 update count, u16 gone count, u32 server time (ms, wraps every ~49 days)
 //   update × n: u32 id, i16 x·50, i16 z·50, i16 ry·10000, u8 hp%, u16 flags   (13 bytes)
 //   gone   × m: u32 id
-import type { EntUpd } from './protocol';
+import type { EntUpd, S2C } from './protocol';
 
 export const SNAP_UPD = 1;
 const UPD_BYTES = 13;
@@ -56,4 +56,34 @@ export function decodeSnap(buf: ArrayBuffer): { upd: EntUpd[]; gone: number[]; s
     upd.push([v.getUint32(o, true), v.getInt16(o + 4, true) / 50, v.getInt16(o + 6, true) / 50, v.getInt16(o + 8, true) / 10000, v.getUint8(o + 10), v.getUint16(o + 11, true)]);
   for (let i = 0; i < m; i++, o += 4) gone.push(v.getUint32(o, true));
   return { upd, gone, st };
+}
+
+// Combat events, the other hot path (server-rs/src/binary.rs encode_event), decoded back into the JSON
+// message they stand for:
+//   atk: u8 2, u32 s, u32 tg
+//   dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot)
+//   fx:  u8 4, u32 s, u32 tg, u8 len, skill (utf-8)
+export const EV_ATK = 2, EV_DMG = 3, EV_FX = 4;
+const utf8 = new TextDecoder();
+
+export function decodeEvent(buf: ArrayBuffer): Extract<S2C, { t: 'atk' | 'dmg' | 'fx' }> | null {
+  const v = new DataView(buf);
+  if (v.byteLength < 9) return null;
+  const k = v.getUint8(0), s = v.getUint32(1, true), tg = v.getUint32(5, true);
+  if (k === EV_ATK) return { t: 'atk', s, tg };
+  if (k === EV_DMG && v.byteLength >= 18) {
+    const f = v.getUint8(17);
+    const m: Extract<S2C, { t: 'dmg' }> = { t: 'dmg', s, tg, v: v.getFloat64(9, true) };
+    if (f & 1) m.crit = true;
+    if (f & 2) m.miss = true;
+    if (f & 4) m.heal = true;
+    if (f & 8) m.dot = true;
+    return m;
+  }
+  if (k === EV_FX && v.byteLength >= 10) {
+    const n = v.getUint8(9);
+    if (v.byteLength < 10 + n) return null;
+    return { t: 'fx', s, tg, skill: utf8.decode(new Uint8Array(buf, 10, n)) };
+  }
+  return null;
 }

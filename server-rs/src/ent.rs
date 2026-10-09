@@ -34,6 +34,10 @@ impl Outbox {
         self.pending.fetch_add(1, Ordering::Relaxed);
         let _ = self.tx.send(Out::Bin(b));
     }
+    /** A message: the hot combat events go binary (binary::encode_event), the rest JSON. */
+    pub fn value(&self, v: &Value) {
+        match crate::binary::encode_event(v) { Some(b) => self.bin(b), None => self.text(v.to_string()) }
+    }
     /** a slow client: skip snapshots until its socket drains */
     pub fn congested(&self) -> bool { self.pending.load(Ordering::Relaxed) > 48 }
 }
@@ -151,7 +155,7 @@ pub struct Player {
 
 impl Player {
     pub fn one_way(&self) -> f64 { (self.rtt / 2.0).min(150.0) }
-    pub fn send(&self, v: Value) { self.out.text(v.to_string()); }
+    pub fn send(&self, v: Value) { self.out.value(&v); }
     pub fn equipped_in(&self, slot: &str) -> Option<&InvItem> { self.inv.iter().find(|i| i.s.as_deref() == Some(slot)) }
     pub fn recalc(&mut self) {
         let data = d();

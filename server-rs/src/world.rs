@@ -172,6 +172,10 @@ impl World {
 
     pub fn send_near(&self, x: f64, z: f64, v: Value) { self.send_near_r(x, z, v, AOI) }
     pub fn send_near_r(&self, x: f64, z: f64, v: Value, r: f64) {
+        if let Some(b) = crate::binary::encode_event(&v) {
+            for id in self.near_players(x, z, r) { self.pl(id).unwrap().out.bin(b.clone()); }
+            return;
+        }
         let s = v.to_string();
         for id in self.near_players(x, z, r) { self.pl(id).unwrap().out.text(s.clone()); }
     }
