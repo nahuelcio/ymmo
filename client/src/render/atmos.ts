@@ -211,6 +211,8 @@ export interface LightSource { x: number; y: number; z: number; fire: boolean }
 export class LocalLights {
   private pool: THREE.PointLight[] = [];
   private static readonly SIZE = 4;
+  private near: (LightSource | null)[] = new Array(LocalLights.SIZE).fill(null);
+  private nearD = new Float64Array(LocalLights.SIZE);
 
   constructor(private scene: THREE.Scene, private sources: LightSource[]) {}
 
@@ -223,18 +225,26 @@ export class LocalLights {
     }
     if (!on) return;
     const night = 1 - ATMOS.day;
-    const near = this.sources
-      .map((s) => ({ s, d: (s.x - p.x) ** 2 + (s.z - p.z) ** 2 }))
-      .filter((e) => e.d < 60 * 60)
-      .sort((a, b) => a.d - b.d);
+    // nearest SIZE sources within 60 m, by insertion into fixed slots: no per-frame arrays to collect
+    const near = this.near, nd = this.nearD;
+    near.fill(null);
+    nd.fill(60 * 60);
+    for (const s of this.sources) {
+      const d = (s.x - p.x) ** 2 + (s.z - p.z) ** 2;
+      if (d >= nd[nd.length - 1]) continue;
+      let j = nd.length - 1;
+      for (; j > 0 && nd[j - 1] > d; j--) (nd[j] = nd[j - 1]), (near[j] = near[j - 1]);
+      nd[j] = d;
+      near[j] = s;
+    }
     this.pool.forEach((l, i) => {
-      const e = near[i];
-      if (!e) return void (l.intensity = 0);
-      l.position.set(e.s.x, e.s.y, e.s.z);
-      l.color.set(e.s.fire ? 0xff8a3a : 0xffc878);
-      const flicker = e.s.fire ? 0.88 + 0.12 * Math.sin(t * 11 + i * 2.1) * Math.sin(t * 5.3 + i) : 1;
+      const s = near[i];
+      if (!s) return void (l.intensity = 0);
+      l.position.set(s.x, s.y, s.z);
+      l.color.set(s.fire ? 0xff8a3a : 0xffc878);
+      const flicker = s.fire ? 0.88 + 0.12 * Math.sin(t * 11 + i * 2.1) * Math.sin(t * 5.3 + i) : 1;
       // modest: a light sits close to walls and the ground, and bloom multiplies whatever blows out
-      l.intensity = (e.s.fire ? 26 * (0.4 + 0.6 * night) : 16 * night) * flicker;
+      l.intensity = (s.fire ? 26 * (0.4 + 0.6 * night) : 16 * night) * flicker;
     });
   }
 }
