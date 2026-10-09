@@ -37,6 +37,7 @@ export interface Settings {
   preset: Preset;
   // graphics
   renderScale: number; // multiplier on the (capped) device pixel ratio
+  dynamicRes: boolean; // drop the pixel ratio (to 70% of renderScale) while frames run long
   antialias: boolean; // MSAA (on the post-processing target when FX are on)
   shadows: ShadowQ;
   viewDistance: number; // fog end / camera far, world units
@@ -118,6 +119,7 @@ export const DEFAULTS: Settings = {
   preset: 'high',
   ...PRESETS.high,
   fpsCap: 0,
+  dynamicRes: true,
   showFps: false,
   relief: 0.4,
   look: 'natural',

@@ -248,6 +248,47 @@ export class Game {
     return this.ents.get(this.me.id);
   }
 
+  /** the user's pixel ratio: device ratio (capped) times the renderScale setting */
+  private basePixelRatio() {
+    return Math.max(0.4, Math.min(3, Math.min(devicePixelRatio, 1.5) * settings.s.renderScale));
+  }
+
+  private setResScale(k: number) {
+    this.resScale = k;
+    this.renderer.setPixelRatio(this.basePixelRatio() * k);
+    this.resize();
+  }
+
+  /**
+   * Dynamic resolution: a window averaging over 20 ms a frame (under 50 fps) steps the pixel ratio down by 5%,
+   * down to 70% of the user's setting. Two good windows in a row (under 15 ms) step it back up. Never above the setting.
+   */
+  private resScale = 1;
+  private resSum = 0;
+  private resN = 0;
+  private resAt = 0;
+  private resGood = 0;
+  private adaptRes(now: number, ms: number) {
+    if (!settings.s.dynamicRes || (settings.s.fpsCap && settings.s.fpsCap < 60)) {
+      if (this.resScale !== 1) this.setResScale(1);
+      return;
+    }
+    this.resSum += Math.min(100, ms);
+    this.resN++;
+    if (now - this.resAt < 2000) return;
+    const avg = this.resSum / this.resN;
+    this.resSum = 0;
+    this.resN = 0;
+    this.resAt = now;
+    if (avg > 20 && this.resScale > 0.7) {
+      this.resGood = 0;
+      this.setResScale(Math.max(0.7, +(this.resScale - 0.05).toFixed(2)));
+    } else if (avg < 15 && this.resScale < 1 && ++this.resGood >= 2) {
+      this.resGood = 0;
+      this.setResScale(Math.min(1, +(this.resScale + 0.05).toFixed(2)));
+    } else if (avg >= 15) this.resGood = 0;
+  }
+
   private resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h);
@@ -260,9 +301,9 @@ export class Game {
   private applySettings(s: Settings, changed: (keyof Settings)[]) {
     const has = (...k: (keyof Settings)[]) => k.some((x) => changed.includes(x));
     if (has('preset')) this.world.setTextureQuality(textureQuality(s));
-    if (has('renderScale')) {
-      this.renderer.setPixelRatio(Math.max(0.4, Math.min(3, Math.min(devicePixelRatio, 1.5) * s.renderScale)));
-      this.resize();
+    if (has('renderScale', 'dynamicRes')) {
+      if (!s.dynamicRes) this.resScale = 1;
+      this.setResScale(this.resScale);
     }
     if (has('shadows', 'softShadows', 'shadowRange')) {
       const sun = this.world.sun;
@@ -1494,6 +1535,7 @@ export class Game {
       this.fpsFrames = 0;
       this.fpsAt = now;
     }
+    this.adaptRes(now, now - this.last);
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.benchHook?.(now - this.last, now / 1000);
     this.last = now;

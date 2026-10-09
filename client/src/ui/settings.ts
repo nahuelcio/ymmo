@@ -44,6 +44,7 @@ export class SettingsPanel {
       bench.onclick = () => this.onBenchmark?.();
       this.select<Preset>(tx('Calidad', 'Quality'), 'preset', [['low', tx('Baja', 'Low')], ['medium', tx('Media', 'Medium')], ['high', tx('Alta', 'High')], ['ultra', 'Ultra'], ['custom', tx('Personalizada', 'Custom')]]);
       this.range(tx('Escala de resolución', 'Render scale'), 'renderScale', 0.5, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
+      this.check(tx('Resolución dinámica (baja si el FPS cae)', 'Dynamic resolution (lowers if FPS drops)'), 'dynamicRes');
       this.select<ShadowQ>(tx('Sombras', 'Shadows'), 'shadows', [['off', tx('No', 'Off')], ['low', tx('Bajas', 'Low')], ['medium', tx('Medias', 'Medium')], ['high', tx('Altas (suaves)', 'High (soft)')]]);
       this.range(tx('Distancia de visión', 'View distance'), 'viewDistance', 150, 700, 10, (v) => `${v} m`);
       this.check('Antialiasing (MSAA)', 'antialias');
