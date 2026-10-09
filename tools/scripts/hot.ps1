@@ -8,4 +8,4 @@ if ($running -ne 'true') {
 }
 
 $env:GAME_PORT = '3002'
-npm run dev
+npx vite --config client/vite.config.ts

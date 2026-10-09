@@ -9,24 +9,17 @@ MMORPG 3D low-poly estilo Lineage 2, jugable desde el navegador.
 ## Cómo correrlo
 
 ```bash
-npm install
-npm run dev        # Vite :5173 → abrir http://localhost:5173 (proxyea /ws al server)
+npm run dev        # Docker: cliente (Vite) + servidor (Rust) con hot reload → http://localhost:5173
 ```
 
-En otra terminal, el servidor (Rust). La primera vez lo compilás:
-
-```bash
-npm run dev:rs     # export-data + cargo run --release → server :3001
-```
+Solo hace falta Docker. La base de datos de dev queda en el volumen `dev-data`.
 
 Producción (un solo puerto):
 
 ```bash
-npm run build:rs   # cliente + export-data + binario Rust
-npm start          # http://localhost:3001  (puerto configurable con GAME_PORT)
+docker build -t claudi-mmo .
+docker run -p 3001:3001 -v claudi-data:/app/server/data claudi-mmo   # http://localhost:3001
 ```
-
-La base de datos queda en `server-rs/data/game.db` (la crea el server si no existe).
 
 Panel de admin: poné `ADMIN_PASSWORD=<8+ caracteres>` en un `.env` (o en el entorno) y escribí `/admin` en el chat del juego (rendimiento por mundo, jugadores, logs, kick y anuncios). Sin esa variable el panel queda desactivado.
 

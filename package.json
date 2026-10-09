@@ -3,16 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --config client/vite.config.ts",
-    "dev:docker": "docker compose -f docker-compose.dev.yml up --build",
+    "dev": "docker compose -f docker-compose.dev.yml up --build",
     "build": "vite build --config client/vite.config.ts",
-    "start": "server-rs/target/release/claudi-server",
-    "typecheck": "tsc --noEmit -p .",
-    "loadtest": "tsx tools/scripts/loadtest.ts",
-    "start:rs": "server-rs/target/release/claudi-server",
     "export-data": "tsx tools/scripts/export-data.ts",
-    "build:rs": "npm run export-data && cargo build --release --manifest-path server-rs/Cargo.toml",
-    "dev:rs": "npm run export-data && cargo run --release --manifest-path server-rs/Cargo.toml"
+    "typecheck": "tsc --noEmit -p .",
+    "loadtest": "tsx tools/scripts/loadtest.ts"
   },
   "dependencies": {
     "three": "^0.170.0",

@@ -12,4 +12,4 @@ if [[ "$(docker inspect -f '{{.State.Running}}' claudi-mmo-50 2>/dev/null || tru
 fi
 
 export GAME_PORT=3002
-exec npm run dev
+exec npx vite --config client/vite.config.ts

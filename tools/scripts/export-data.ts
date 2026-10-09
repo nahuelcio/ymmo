@@ -1,6 +1,6 @@
 // Exports the shared game data (shared/src) to JSON for the Rust server, so both servers and the
 // client keep one source of truth. English names are resolved here, so Rust needs no overlay logic.
-//   npm run export-data   (also run by `npm run build:rs`)
+//   npm run export-data   (also run by the Docker builds)
 import { writeFileSync } from 'node:fs';
 import { ENCHANT, ITEMS } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';

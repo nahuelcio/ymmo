@@ -1,4 +1,4 @@
-# Hot reload for client and server:  npm run dev:docker  →  http://localhost:5173
+# Hot reload for client and server:  npm run dev  →  http://localhost:5173
 # The server restarts when server-rs changes, Vite hot-reloads the client. .env (ADMIN_PASSWORD) is read from the repo.
 services:
   dev:
@@ -23,7 +23,7 @@ services:
       - |
         npm install --no-audit --no-fund && npm run export-data || exit 1
         cargo watch --poll -w server-rs/src -w server-rs/Cargo.toml -w server-rs/data/game.json -x 'run --manifest-path server-rs/Cargo.toml' &
-        exec npm run dev -- --host 0.0.0.0
+        exec npx vite --config client/vite.config.ts --host 0.0.0.0
 
 volumes:
   dev-node-modules:
