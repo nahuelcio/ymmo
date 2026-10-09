@@ -123,7 +123,7 @@ export function loadQ(): Promise<void> {
     });
     for (const clip of anims.animations) clips[clip.name] = clip;
     const famKeys = new Map<string, number>();
-    const sources = new Map<string, THREE.Source>(); // every file loads its own copy of the shared .webp: keep one on the GPU
+    const sources = new Map<string, THREE.Texture['source']>(); // every file loads its own copy of the shared .webp: keep one on the GPU
     const collect = (key: string, meshes: THREE.SkinnedMesh[], head = false) =>
       prims.set(key, meshes.map((m) => {
         const mat = m.material as THREE.MeshStandardMaterial;

@@ -154,7 +154,7 @@ export function loadV(): Promise<void> {
   return (loading ??= (async () => {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const gltfs = await Promise.all(V_PIECES.map((f) => loader.loadAsync(`v/${f}.gltf`)));
-    const sources = new Map<string, THREE.Source>();
+    const sources = new Map<string, THREE.Texture['source']>();
     V_PIECES.forEach((name, i) => {
       const scene = gltfs[i].scene;
       scene.updateMatrixWorld(true);
