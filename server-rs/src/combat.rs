@@ -377,7 +377,7 @@ impl World {
         let c = &self.ents[&pid].c;
         if c.dead { return; }
         if c.has("stun", now) { return self.sys(pid, "Estás aturdido.", "You are stunned."); }
-        if p.casting.is_some() { return; }
+        if p.casting.is_some() { return self.sys(pid, "Ya estás lanzando una habilidad.", "You are already casting."); }
         if p.cooldowns.get(&def.id).copied().unwrap_or(0.0) > now { return self.sys(pid, &format!("{} todavía no está lista.", def.name), &format!("{} is not ready yet.", def.name_en)); }
         if p.mp < def.mp { return self.sys(pid, "No te alcanza el MP.", "Not enough MP."); }
         let mut target = pid;
@@ -419,9 +419,6 @@ impl World {
             p.intent = None;
             return;
         }
-        p.mp -= def.mp;
-        p.cooldowns.insert(def.id.clone(), now + def.cooldown);
-        p.send(json!({ "t": "cd", "key": def.id, "ms": def.cooldown }));
         let dur = jround(def.cast * p.stats.cast_mul);
         p.casting = Some((def.id.clone(), target, now + dur));
         p.intent = if def.target == "enemy" && p.cls == "fighter" { Some(Intent::Attack { id: target, force }) } else { None };
@@ -432,6 +429,13 @@ impl World {
     pub fn finish_cast(&mut self, pid: u32, now: f64) {
         let Some((skill, target, _)) = self.pl_mut(pid).unwrap().casting.take() else { return };
         let def = d().skill(&skill).unwrap();
+        {
+            let p = self.pl_mut(pid).unwrap();
+            if p.mp < def.mp { return; }
+            p.mp -= def.mp;
+            p.cooldowns.insert(def.id.clone(), now + def.cooldown);
+            p.send(json!({ "t": "cd", "key": def.id, "ms": def.cooldown }));
+        }
         match self.ents.get(&target) { Some(t) if !t.c.dead && t.is_fighter() => {}, _ => return }
         let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(px, pz, json!({ "t": "fx", "s": pid, "tg": target, "skill": def.id }));

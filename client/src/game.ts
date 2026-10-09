@@ -69,7 +69,7 @@ const INTERP_BASE = 70;
 // ponytail: the server reports these only as chat text, so they are recognised by wording (es/en);
 // a structured message would be sturdier but needs a protocol change.
 const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You have earned) (\d+) (?:de )?experienc/;
-const NOT_READY = /todavía no está lista\.$|is not ready yet\.$/;
+const NOT_READY = /todavía no está lista\.$|is not ready yet\.$|Ya estás lanzando una habilidad\.$|You are already casting\.$/;
 /** the server's answer to /who, which the player list (hold Tab) asks for and shows instead of the chat */
 const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
 const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -729,6 +729,7 @@ export class Game {
       const STUN = 128;
       if (f & STUN && !(c.flags & STUN)) play('stun', c.id === this.me.id ? 1 : this.near(c) * 0.6);
       if (c.id === this.me.id && (c.flags & STATUS_MASK) !== (f & STATUS_MASK)) this.ui.hud.setStatuses(f);
+      if (c.id === this.me.id && (c.flags & F_CASTING) && !(f & F_CASTING)) this.dropPredictedCooldowns();
       const hpChanged = c.hp !== hp;
       c.hp = hp;
       c.flags = f;
@@ -982,6 +983,7 @@ export class Game {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
     if (!route) this.route.length = 0; // any other move replaces the map route
+    this.dropPredictedCooldowns();
     this.net.send({ t: 'move', x: p.x, z: p.z });
     const path = findPath(self.pos.x, self.pos.z, p.x, p.z);
     const end = path[path.length - 1];
@@ -1066,6 +1068,7 @@ export class Game {
     self.rollAt = now;
     self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
     play('dash');
+    this.dropPredictedCooldowns();
     // send our start point and direction so the server rolls along exactly the same path
     this.serverAction({ t: 'dash', x: self.roll.fx, z: self.roll.fz, dx, dz });
   }
@@ -1140,10 +1143,17 @@ export class Game {
     }
   }
 
+  /** A guess the server never confirmed. Drop it when another action replaces the skill. */
+  private dropPredictedCooldowns(except?: string) {
+    for (const [k, v] of this.cooldowns) if (v.predicted && k !== except) this.cooldowns.delete(k);
+    if (!except) this.castBar = null;
+  }
+
   useSkill(id: string) {
     if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
     // prediction: start the cooldown sweep right away when the skill is obviously usable
     const def = SKILLS[id], now = performance.now();
+    this.dropPredictedCooldowns(id);
     if (def && (this.cooldowns.get(id)?.end ?? 0) <= now && this.me.mp >= def.mp && !this.castBar && this.self && !(this.self.flags & F_DEAD))
       this.cooldowns.set(id, { end: now + def.cooldown + (def.cast ?? 0), dur: def.cooldown + (def.cast ?? 0), predicted: true });
     // the server didn't take it (out of range, no target...): drop the guess
