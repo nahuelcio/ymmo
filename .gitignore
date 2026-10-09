@@ -6,3 +6,4 @@ graft/.cache/
 graft/.graph/
 opencode.json
 .env
+server-rs/data/game.db*
