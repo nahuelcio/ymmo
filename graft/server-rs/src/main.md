@@ -1,42 +1,41 @@
 # server-rs/src/main.rs
 
-Entry module of the Rust MMO game server: an async tokio hub handling WebSocket connections, login/account and character-screen messages, which routes players into dedicated world threads (one overworld, one per raid) over channels, using the same protocol, data and database as the Node server.
-
 - admin · module · L6-L6 — mod admin;
-- ai · module · L7-L7 — Declares the NPC AI module that drives monster behavior (aggro, pathing, attack decisions) inside worlds.
-- binary · module · L8-L8 — Declares the module that encodes/decodes the compact binary wire format used for bulk world updates to clients.
-- chat · module · L9-L9 — Declares the chat subsystem that handles player messages and channels.
-- collision · module · L10-L10 — Declares the spatial collision module (walkability/line-of-sight queries) whose tables are prewarmed at startup.
-- combat · module · L11-L11 — Declares the combat subsystem that resolves attacks, damage, and deaths in worlds.
-- data · module · L12-L12 — Declares the static game-data module (races, classes, raids, items) loaded via d() and shared with the Node server.
-- db · module · L13-L13 — Declares the SQLite persistence layer for accounts, characters, and login sessions.
-- ent · module · L14-L14 — Declares shared entity and output types (Look, Out, Outbox) used to describe characters and talk to clients.
-- formulas · module · L15-L15 — Declares the stat/damage formula module mirroring the Node server's math so both servers stay in sync.
-- i18n · module · L16-L16 — Declares the bilingual (Spanish/English) support: Lang parsing and the tr() message translator.
-- inventory · module · L17-L17 — Declares the inventory subsystem enforcing item and equipment rules.
-- msgs · module · L18-L18 — Declares the protocol message definitions used on the client-server wire.
-- party · module · L19-L19 — Declares the party subsystem governing grouping rules among players.
-- player · module · L20-L20 — Declares the per-player action and state handling inside a world.
-- quests · module · L21-L21 — Declares the quest subsystem tracking objectives and progress.
-- raid · module · L22-L22 — Declares the per-raid world runner (run_world, HubMsg, WorldCmd) that runs each raid instance on its own OS thread.
-- realm · module · L23-L23 — Declares the realm/zone handling for the game's regions.
-- terrain · module · L24-L24 — Declares the terrain module holding map/tile data used by collision and rendering positions.
-- world · module · L25-L25 — Declares the world simulation types (Member, HubEvent) shared between world threads and the async hub.
-- MAIN_WORLD · constant · L46-L46 — Reserves world id 0 for the shared overworld every character occupies before entering raids.
-- Sess · struct · L49-L60 — Holds all hub-tracked state of one connected socket: its output queue, language, account/character, current world, and a kick signal for duplicate logins.
-- Hub · struct · L62-L68 — The central registry behind the mutex: live sessions, send-channels to each world thread, next raid id, and perf stats.
-- Shared · type · L70-L70 — Type alias for the mutex-protected Hub shared across all async tasks and world threads.
-- App · struct · L73-L77 — Cloneable axum state bundling the shared hub, the database handle, and the channel used to send messages to the hub loop.
-- NEXT_SID · constant · L79-L79 — Global atomic counter that hands every new connection a unique session id.
-- member · function · L81-L83 — Builds the Member packet the hub hands to a world thread so it can identify a player and write replies to that socket.
-- send · function · L85-L85 — Serializes a JSON value into a session's outbox as a text frame.
-- DB_EN · constant · L87-L92 — English translations for the four Spanish error strings the database layer returns.
-- db_msg · function · L93-L95 — Translates a Spanish database error message into English when the client's language is English, passing anything unknown through unchanged.
-- chars_json · function · L97-L99 — Shapes an account's stored characters into the JSON list shown on the character screen (id, name, race, class, spec, level, look), reused as the reply for login, resume, create and delete.
-- spawn_world · function · L101-L111 — Creates a new world: assigns id 0 for the overworld or the next id for a raid, registers its command channel, and runs it on a dedicated OS thread.
-- to_world · function · L113-L115 — Routes a command to a world thread if it's still alive, silently dropping it once the world has ended.
-- hub_loop · function · L118-L172 — Consumes messages coming back from world threads to drive the raid lifecycle: spawning raid worlds and moving members into them, returning players to the overworld, rescuing players when a raid crashes, recording per-world perf, and cleaning up ended worlds.
-- ws_handler · function · L174-L176 — Axum handler that upgrades HTTP requests on /ws into a per-connection client task.
-- client · function · L178-L222 — Owns one WebSocket for its lifetime: assigns a session id, spawns the outgoing writer task, enforces a per-second flood limit, dispatches messages, and on disconnect quits/saves the character in its world.
-- handle · function · L224-L342 — Routes pre-login messages (login/register with scrypt off the async threads, resume, logout, create/delete character, enter world) and once in a world forwards everything to that world thread; it also kicks duplicate logins of the same character.
-- main · function · L345-L401 — Boots the whole server: warms collision data, builds the shared hub and database, spawns the overworld and the hub event loop, starts the periodic perf logger, and serves the /ws WebSocket route plus static client files with graceful shutdown.
+- ai · module · L7-L7 — mod ai;
+- binary · module · L8-L8 — mod binary;
+- chat · module · L9-L9 — mod chat;
+- collision · module · L10-L10 — mod collision;
+- combat · module · L11-L11 — mod combat;
+- data · module · L12-L12 — mod data;
+- db · module · L13-L13 — mod db;
+- ent · module · L14-L14 — mod ent;
+- formulas · module · L15-L15 — mod formulas;
+- i18n · module · L16-L16 — mod i18n;
+- inventory · module · L17-L17 — mod inventory;
+- msgs · module · L18-L18 — mod msgs;
+- party · module · L19-L19 — mod party;
+- player · module · L20-L20 — mod player;
+- quests · module · L21-L21 — mod quests;
+- raid · module · L22-L22 — mod raid;
+- realm · module · L23-L23 — mod realm;
+- terrain · module · L24-L24 — mod terrain;
+- world · module · L25-L25 — mod world;
+- MAIN_WORLD · constant · L46-L46 — const MAIN_WORLD: u32 = 0;
+- Sess · struct · L49-L60 — struct Sess
+- Hub · struct · L62-L68 — struct Hub
+- Shared · type · L70-L70 — type Shared = Arc<Mutex<Hub>>;
+- App · struct · L73-L77 — struct App
+- NEXT_SID · constant · L79-L79 — static NEXT_SID: AtomicU64 = AtomicU64::new(1);
+- member · function · L81-L83 — fn member(sid: u64, s: &Sess, char_id: i64) -> Member
+- send · function · L85-L85 — fn send(out: &Outbox, v: Value) { out.text(v.to_string()); }
+- DB_EN · constant · L87-L92 — const DB_EN: [(&str, &str); 4] = [
+- db_msg · function · L93-L95 — fn db_msg(l: Lang, m: &str) -> String
+- chars_json · function · L97-L99 — fn chars_json(db: &Db, account: i64) -> Vec<Value>
+- spawn_world · function · L101-L111 — fn spawn_world(app: &App, raid: Option<(&'static data::RaidDef, usize)>) -> u32
+- to_world · function · L113-L115 — fn to_world(hub: &Hub, world: u32, cmd: WorldCmd)
+- hub_loop · function · L118-L172 — async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>)
+- ws_handler · function · L174-L176 — async fn ws_handler(ws: WebSocketUpgrade, State(app): State<App>) -> impl IntoResponse
+- LINKDEAD · constant · L179-L179 — const LINKDEAD: std::time::Duration = std::time::Duration::from_secs(30);
+- client · function · L181-L236 — async fn client(socket: WebSocket, app: App)
+- handle · function · L238-L356 — async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool)
+- main · function · L359-L422 — async fn main()

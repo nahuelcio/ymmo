@@ -1,52 +1,50 @@
 # server-rs/src/data.rs
 
-This module is the server's typed view of the shared game database (items, mobs, skills, quests, NPCs, zones, raids, world geometry) exported from the client's source of truth, deserializing game.json once into an immutable lookup-friendly Data singleton exposed via d().
-
-- Constants · struct · L8-L23 — Holds the global tuning numbers shared with the client — playable area half, walk radius, starting adena, level caps, and appearance option counts.
-- Town · struct · L27-L27 — Defines the safe town's circular location and its bilingual display name.
-- Named · struct · L31-L31 — Names a shared region (used for the wild area) in both languages.
-- ItemUse · struct · L35-L35 — Describes a consumable item's on-use effects (HP/MP restore, escape scroll) and its cooldown.
-- ItemDef · struct · L39-L58 — Defines one item type — combat stats, price, stackability, usable effects, enchant slot, and craft recipe — so shops, inventory, and enchanting all evaluate against a single authoritative definition.
-- Recipe · struct · L61-L61 — The crafting cost of an item: the required material list plus the adena fee.
-- EnchantCfg · struct · L65-L65 — Rules of the enchantment system — weapon/armor success rates, safe enchant level, step, cap, and whether a failed enchant destroys the item.
-- StatusApply · struct · L69-L69 — Describes a status/ailment to inflict, with duration, trigger chance, and optional damage-over-time.
-- Special · struct · L73-L73 — Describes a mob special attack: radius, windup, damage multiplier, cadence, targeting mode, and optional stun.
-- MobCount · struct · L76-L76 — Pairs a mob type with how many of it spawn (used for zones, camps, and boss-phase adds).
-- MobPhase · struct · L80-L80 — Defines a boss fight phase trigger with optional adds, haste buff, special attack, and a spoken line.
-- Drop · struct · L84-L84 — One loot-table entry: the item, its drop chance, and the quantity range.
-- MobDef · struct · L88-L108 — Complete monster template: combat stats, aggression, respawn, boss flags, on-hit status/special/phases, and adena/drop rewards.
-- BuffMods · struct · L112-L119 — The set of optional stat modifiers a buff can grant.
-- BuffDef · struct · L122-L122 — A buff's duration together with the stat mods it applies.
-- SkillDef · struct · L126-L146 — Skill card defining who can learn it (class/spec/race/gender + level requirement) and how it behaves in combat (kind, target, power, MP/cast/cooldown, AoE, buffs, status).
-- Objective · enum · L150-L153 — What a quest requires: either killing N of a mob or collecting N of an item.
-- count · function · L155-L155 — Extracts the required quantity from either objective variant so quest-progress code needn't match on the enum.
-- QuestDef · struct · L160-L160 — One quest: the giving NPC, minimum level gate, objective, and XP/adena rewards.
-- NpcDef · struct · L164-L179 — World NPC record: placement/heading plus interaction services (shop and craft item lists) and localized greeting/dialogue text.
-- ZoneDef · struct · L183-L183 — A hunting zone: a circular area plus which mobs spawn inside it.
-- Teleport · struct · L187-L187 — A fast-travel destination with coordinates and its adena cost.
-- CampChest · struct · L190-L190 — The treasure chest found at a camp: adena range and loot table.
-- CampDef · struct · L194-L194 — An outdoor camp: location, leader NPC, its mob spawns with respawn timer, and chest loot.
-- StatMods · struct · L198-L201 — A complete set of stat modifiers, used for race and gender base bonuses.
-- RaceDef · struct · L204-L204 — One playable race: its allowed classes and its stat modifiers.
-- GenderDef · struct · L207-L207 — One gender's stat modifiers.
-- StartItem · struct · L210-L210 — An item granted at character creation, with count and whether it is auto-equipped.
-- ClassDef · struct · L214-L214 — One playable class: HP/MP growth curve, CP ratio, attack interval, and starting gear.
-- SpecDef · struct · L218-L218 — Specialization entry tying a spec id to its base class, used for class/spec-gated lookups like skill availability.
-- StatusDef · struct · L221-L221 — Maps a status id to the bitmask flag used to encode active statuses.
-- Pos · struct · L224-L224 — A 2D world coordinate (x,z), e.g. a raid's entry point.
-- RaidDef · struct · L228-L228 — Raid instance configuration: boss mob, entry point, player/level gates, optional entry quest, and how long the raid stays open after the kill.
-- ObstacleDef · enum · L232-L237 — A collision obstacle in the world, either a circle or a rotated box.
-- Raw · struct · L240-L261 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
-- Data · struct · L263-L288 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
-- item · function · L291-L291 — O(1) item-catalog lookup by id.
-- skill · function · L292-L292 — Skill lookup by id via the id→index map, preserving data order.
-- quest · function · L293-L293 — Finds a quest by its id.
-- quest_by_npc · function · L294-L294 — Finds the quest offered by a given NPC.
-- camp · function · L295-L295 — Finds a camp by its id.
-- npc · function · L296-L296 — Finds an NPC by its id.
-- status_flag · function · L297-L297 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
-- spec · function · L299-L299 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
-- skill_available · function · L301-L303 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
-- skills_for · function · L306-L310 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
-- DATA · constant · L313-L313 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
-- d · function · L315-L343 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.
+- Constants · struct · L8-L23 — pub struct Constants
+- Town · struct · L27-L27 — pub struct Town { pub x: f64, pub z: f64, pub r: f64, pub name: String, pub name_en: String }
+- Named · struct · L31-L31 — pub struct Named { pub name: String, pub name_en: String }
+- ItemUse · struct · L35-L35 — pub struct ItemUse { pub hp: Option<f64>, pub mp: Option<f64>, pub escape: Option<bool>, pub cd: f64 }
+- ItemDef · struct · L39-L58 — pub struct ItemDef
+- Recipe · struct · L61-L61 — pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
+- EnchantCfg · struct · L65-L65 — pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub step: f64, pub max: i64, pub fail_destroys: bool }
+- StatusApply · struct · L69-L69 — pub struct StatusApply { pub id: String, pub ms: f64, pub chance: Option<f64>, pub dot: Option<f64> }
+- Special · struct · L73-L73 — pub struct Special { pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub at: String, pub stun: Option<f64> }
+- MobCount · struct · L76-L76 — pub struct MobCount { pub mob: String, pub count: u32 }
+- MobPhase · struct · L80-L80 — pub struct MobPhase { pub at: f64, pub adds: Option<MobCount>, pub haste: Option<f64>, pub special: Option<Special>, pub say: (String, String) }
+- Drop · struct · L84-L84 — pub struct Drop { pub item: String, pub chance: f64, pub min: Option<i64>, pub max: Option<i64> }
+- MobDef · struct · L88-L108 — pub struct MobDef
+- BuffMods · struct · L112-L119 — pub struct BuffMods
+- BuffDef · struct · L122-L122 — pub struct BuffDef { pub dur: f64, pub mods: BuffMods }
+- SkillDef · struct · L126-L146 — pub struct SkillDef
+- Objective · enum · L150-L153 — pub enum Objective
+- count · function · L155-L155 — pub fn count(&self) -> i64 { match self { Objective::Kill { count, .. } | Objective::Collect { count, .. } => *count } }
+- QuestDef · struct · L160-L160 — pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64 }
+- NpcDef · struct · L164-L179 — pub struct NpcDef
+- ZoneDef · struct · L183-L183 — pub struct ZoneDef { pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub spawns: Vec<MobCount> }
+- Teleport · struct · L187-L187 — pub struct Teleport { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub cost: i64 }
+- CampChest · struct · L190-L190 — pub struct CampChest { pub adena: (f64, f64), pub loot: Vec<Drop> }
+- CampDef · struct · L194-L194 — pub struct CampDef { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub leader: String, pub mobs: Vec<MobCount>, pub respawn: f64, pub chest: CampChest }
+- StatMods · struct · L198-L201 — pub struct StatMods
+- RaceDef · struct · L204-L204 — pub struct RaceDef { pub id: String, pub classes: Vec<String>, pub mods: StatMods }
+- GenderDef · struct · L207-L207 — pub struct GenderDef { pub id: String, pub mods: StatMods }
+- StartItem · struct · L210-L210 — pub struct StartItem { pub item: String, pub count: i64, pub equip: bool }
+- ClassDef · struct · L214-L214 — pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub base_mp: f64, pub mp_lvl: f64, pub cp_ratio: f64, pub atk_interval: f64, pub start_items: Vec<StartItem> }
+- SpecDef · struct · L218-L218 — pub struct SpecDef { pub id: String, pub base: String, pub name: String, pub name_en: String }
+- StatusDef · struct · L221-L221 — pub struct StatusDef { pub id: String, pub flag: u16 }
+- Pos · struct · L224-L224 — pub struct Pos { pub x: f64, pub z: f64 }
+- RaidDef · struct · L228-L228 — pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64 }
+- ObstacleDef · enum · L232-L237 — pub enum ObstacleDef
+- Raw · struct · L240-L261 — struct Raw
+- Data · struct · L263-L288 — pub struct Data
+- item · function · L291-L291 — pub fn item(&self, id: &str) -> Option<&ItemDef> { self.items.get(id) }
+- skill · function · L292-L292 — pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
+- quest · function · L293-L293 — pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
+- quest_by_npc · function · L294-L294 — pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc) }
+- camp · function · L295-L295 — pub fn camp(&self, id: &str) -> Option<&CampDef> { self.camps.iter().find(|c| c.id == id) }
+- npc · function · L296-L296 — pub fn npc(&self, id: &str) -> Option<&NpcDef> { self.npcs.iter().find(|n| n.id == id) }
+- status_flag · function · L297-L297 — pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
+- spec · function · L299-L299 — pub fn spec(&self, id: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.id == id) }
+- skill_available · function · L301-L303 — pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool
+- skills_for · function · L306-L310 — pub fn skills_for(&self, cls: &str, spec: Option<&str>, level: i64, race: &str, gender: &str) -> Vec<&SkillDef>
+- DATA · constant · L313-L313 — static DATA: OnceLock<Data> = OnceLock::new();
+- d · function · L315-L343 — pub fn d() -> &'static Data

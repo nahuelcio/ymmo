@@ -1,20 +1,18 @@
 # client/src/settings.ts
 
-Central player-settings module that defines quality/look presets, all tunable graphics/HUD/gameplay options, and a persisted, observable store that other client modules subscribe to.
-
-- Preset · type · L4-L4 — Names the bundled graphics-quality tiers (low/medium/high/ultra) plus 'custom', which marks settings the player has hand-tuned instead of a preset.
-- ShadowQ · type · L5-L5 — Enumerates the four shadow quality levels (off/low/medium/high) used by the graphics presets and the shadow setting.
-- LookPreset · type · L6-L6 — Enumerates the available visual post-processing styles plus 'custom' for hand-tuned shader values.
-- SlotAction · type · L9-L9 — Template-literal type naming the ten skill-bar key bindings (slot1..slot10) generated from SLOT_N.
-- Action · type · L28-L28 — Union of every bindable in-game action, derived from the ACTIONS label table so bindings and their descriptions stay in sync.
-- keyLabel · function · L34-L34 — Formats a bound key for display in the UI (e.g. ' ' shown as 'Space', single letters upper-cased).
-- Settings · interface · L36-L88 — The complete schema of per-browser player settings spanning graphics, post-processing, atmosphere, HUD, camera, gameplay audio/behavior and key bindings.
-- GraphicsKeys · type · L90-L90 — Lists the subset of settings fields that a quality preset (low..ultra) is allowed to override.
-- LookKeys · type · L99-L99 — Lists the shader/post-processing fields that a look preset (natural, vivid, noir, etc.) bundles together.
-- load · function · L152-L171 — Builds the initial settings: merges a saved localStorage snapshot over defaults (preserving default keys for actions added later, and un-colliding the old Tab-cycle binding), or gives weak/mobile devices a lighter first-run configuration.
-- Listener · type · L173-L173 — Callback contract for settings subscribers, receiving the new settings plus exactly which fields changed so listeners can re-apply selectively.
-- Store · class · L175-L212 — Observable singleton store that holds the current settings, persists them to localStorage, and notifies listeners of field-level changes.
-- on · method · L179-L181 — Registers a listener that will be invoked on every subsequent settings change.
-- set · method · L183-L199 — Applies a settings patch: downgrades preset/look to 'custom' when their member fields are tweaked by hand, expands a newly chosen preset or look into its bundled values, then persists and notifies listeners of only the fields that actually changed.
-- reset · method · L201-L211 — Restores factory defaults and clears the saved snapshot from localStorage, then tells listeners which fields flipped back.
+- Preset · type · L4-L4 — type Preset = 'low' | 'medium' | 'high' | 'ultra' | 'custom';
+- ShadowQ · type · L5-L5 — type ShadowQ = 'off' | 'low' | 'medium' | 'high';
+- LookPreset · type · L6-L6 — type LookPreset = 'off' | 'natural' | 'vivid' | 'aden' | 'cinematic' | 'noir' | 'custom';
+- SlotAction · type · L9-L9 — type SlotAction = `slot${(typeof SLOT_N)[number]}`;
+- Action · type · L28-L28 — type Action = keyof typeof ACTIONS;
+- keyLabel · function · L34-L34 — keyLabel = (k: string)
+- Settings · interface · L36-L88 — interface Settings
+- GraphicsKeys · type · L90-L90 — type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage';
+- LookKeys · type · L99-L99 — type LookKeys = 'bloom' | 'bloomStrength' | 'colorGrade' | 'saturation' | 'contrast' | 'vignette' | 'toneMapping' | 'exposure' | 'warmth' | 'sharpen';
+- load · function · L152-L171 — function load(): Settings
+- Listener · type · L173-L173 — type Listener = (s: Settings, changed: (keyof Settings)[]) => void;
+- Store · class · L175-L212 — class Store
+- on · method · L179-L181 — on(l: Listener)
+- set · method · L183-L199 — set(patch: Partial<Settings>)
+- reset · method · L201-L211 — reset()
 - textureQuality · function · L220-L222 — function textureQuality(s: Settings): 'off' | 'low' | 'high'

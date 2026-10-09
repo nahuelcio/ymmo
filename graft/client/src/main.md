@@ -1,25 +1,23 @@
 # client/src/main.ts
 
-Client entry point that boots the login/character-select flow, wires the websocket lifecycle (session resume, error display, automatic reconnection that reloads and re-enters the world with the same character), and swaps the menu screens for the in-game Game once 'enter' arrives.
-
-- get · method · L25-L31 — Reads a per-tab value from sessionStorage, tolerating browsers where storage access throws (private mode).
-- set · method · L32-L39 — Writes or removes a per-tab sessionStorage value, silently ignoring blocked-storage errors.
-- enterWorld · function · L42-L45 — Remembers which character is being played (so a drop can re-enter it) and tells the server to bring that character into the world.
-- reconnect · function · L52-L76 — Shows a 'connection lost' overlay that keeps probing the server and reloads the page once it's back, so the saved session resumes and the last character re-enters — unless it just re-entered, avoiding two tabs kicking each other forever.
-- knock · function · L63-L73 — Opens a probe WebSocket to the server; reloads the page when it connects, otherwise retries with a capped backoff.
-- screen · function · L81-L97 — Tears down the previous menu screen (and its 3D preview) and mounts a fresh shell with language picker, logo, and the content panel for the next screen.
-- errorLine · function · L99-L102 — Adds an error-message line to a form panel and returns the setter used to display validation/server errors there.
-- showError · function · L104-L104 — No-op placeholder for the active screen's error display until a screen installs its own.
-- get · method · L108-L114 — Reads a device-persistent value from localStorage, tolerating blocked or unavailable storage.
-- set · method · L115-L122 — Writes or removes a localStorage value (session token, remember flag), silently ignoring storage errors.
-- loginScreen · function · L125-L168 — Builds the account login/registration form with remembered username and a remember-me checkbox, submitting credentials to the server.
-- go · function · L149-L157 — Persists the typed username and remember-me choice, then sends the login-or-register message to the server.
-- charScreen · function · L170-L277 — Builds the combined character-select / character-creation screen: an editable list of saved characters (enter, delete, logout) plus a creation studio whose race/class/gender/hair pickers keep the chosen class valid for the chosen race and drive a live 3D preview and a stat-difference panel.
-- renderList · function · L177-L207 — Re-renders the saved-character list on every selection change, wiring each card's click to selection and double-click to entering the world, plus the Enter/Delete/Logout buttons underneath.
-- label · function · L220-L220 — Adds a small heading above one creation-option group in the studio.
-- pickRow · function · L236-L246 — Renders one toggle-button option group (race, class, gender, hair style), disabling choices an availability rule rejects and re-rendering on pick.
-- renderPick · function · L247-L268 — Re-renders every creation option row, hair color swatches, and the stat/skill diff, resetting the class to fighter when the chosen race doesn't allow it.
-- renderDiff · function · L280-L306 — Shows how the chosen race×gender combo's stats compare to the Human Male baseline and lists every skill the combo grants, tagged by source.
-- pct · function · L282-L282 — Converts a stat multiplier into a signed percentage delta for the diff display.
-- previewRenderer · function · L309-L349 — Runs a rotating WebGL preview of the character being created, rebuilding the rigged model whenever race, class, or look changes; returns a disposer for screen teardown.
-- boot · function · L351-L409 — Starts the client: optional gallery-only mode, model preloading, a resilient connect loop, message handlers (including re-entry after a drop), and then session resume or the login screen.
+- get · method · L25-L31 — get(k: string): string | null
+- set · method · L32-L39 — set(k: string, v: string | null)
+- enterWorld · function · L42-L45 — function enterWorld(id: number)
+- reconnect · function · L52-L76 — function reconnect()
+- knock · function · L63-L73 — knock = ()
+- screen · function · L81-L97 — function screen(): HTMLDivElement
+- errorLine · function · L99-L102 — function errorLine(box: HTMLElement)
+- showError · function · L104-L104 — showError: (m: string) => void = ()
+- get · method · L108-L114 — get(k: string): string | null
+- set · method · L115-L122 — set(k: string, v: string | null)
+- loginScreen · function · L125-L168 — function loginScreen()
+- go · function · L149-L157 — go = (register: boolean)
+- charScreen · function · L170-L277 — function charScreen(list: CharSummary[])
+- renderList · function · L177-L207 — renderList = ()
+- label · function · L220-L220 — label = (t: string)
+- pickRow · function · L236-L246 — pickRow = <T,>(host: HTMLElement, items: [T, string][], cur: T, set: (v: T) => void, enabled: (v: T) => boolean = () => true)
+- renderPick · function · L247-L268 — renderPick = ()
+- renderDiff · function · L280-L306 — function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender)
+- pct · function · L282-L282 — pct = (v: number)
+- previewRenderer · function · L309-L349 — function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassType; look: Look })
+- boot · function · L351-L409 — async function boot()

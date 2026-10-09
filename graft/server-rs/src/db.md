@@ -1,27 +1,25 @@
 # server-rs/src/db.rs
 
-SQLite persistence layer that keeps accounts, characters, sessions, inventory, and quests in the same game.db — with the same schema and scrypt password hashes as the Node server — so the existing database keeps working when switching server implementations.
-
-- Db · struct · L8-L8 — Handle struct owning the SQLite connection that all account, session, and character persistence goes through.
-- CharRow · struct · L10-L13 — Full character record (identity, position, vitals, adena, karma/PvP counters, appearance, specialization) restored from the characters table when a player loads into the game.
-- CharSummary · struct · L15-L15 — Compact per-character listing (name, race, class, level, appearance, specialization) used to populate an account's character-selection screen.
-- TOKEN_TTL · constant · L17-L17 — Session lifetime rule: login tokens stay valid for 30 days before expiring.
-- db_path · function · L19-L21 — Resolves where the SQLite file lives, defaulting to the same game.db the Node server uses so both share one database.
-- look_of · function · L23-L26 — Converts raw gender/hair columns from a row into a validated Look via the shared sanitize rule, keeping DB-appearance data consistent with game rules.
-- now_ms · function · L28-L28 — Single clock source for all DB timestamps, delegated to the world clock.
-- sha · function · L29-L29 — SHA-256 of a session token, enforcing that only token hashes (never raw tokens) are stored in the sessions table.
-- scrypt_hash · function · L32-L37 — Derives a password hash with Node's crypto.scrypt default parameters (N=16384, r=8, p=1), guaranteeing hash compatibility between the Rust and Node servers.
-- hash_pass · function · L39-L42 — Creates a credential string for a new account by scrypt-hashing the password with a random salt, stored as 'salt:hash'.
-- check_pass · function · L44-L50 — Verifies a login password against the stored salted scrypt hash using a constant-time comparison to prevent timing attacks.
-- open · function · L53-L77 — Opens or creates game.db, brings the schema up to date (tables, indexes, and additive column migrations for older databases), and purges expired login sessions at startup.
-- account · function · L79-L81 — Looks up an account's id and password hash by username, the first step of login verification.
-- insert_account · function · L83-L86 — Registers a new account with its password hash, translating the UNIQUE-name violation into a user-facing 'account name in use' error.
-- create_session · function · L88-L94 — Issues a login token: a random URL-safe value given to the client while only its SHA-256 hash is stored with a 30-day expiry.
-- resume_session · function · L96-L107 — Validates a remembered-login token and implements sliding expiry: expired sessions are deleted and rejected, valid ones get their 30-day TTL renewed.
-- delete_session · function · L109-L109 — Logs the client out by removing the stored hash of its session token.
-- list_chars · function · L111-L115 — Enumerates every character belonging to one account as lightweight summaries (ordered by id) for the character-selection screen.
-- create_char · function · L117-L135 — Enforces character-creation rules — unique name and a maximum of 7 characters per account — before inserting a level-1 character spawned in a ring around town with starting adena and class starting items.
-- delete_char · function · L137-L144 — Permanently removes a character only if it belongs to the requesting account, cascading the delete to its items and quests.
-- load_char · function · L147-L165 — Loads one account-owned character together with its inventory and quest state, silently dropping any item or quest ids that no longer exist in the current game data.
-- set_spec · function · L168-L168 — Permanently records a character's once-only class specialization, written immediately so it never waits on (or gets overwritten by) the periodic save.
-- save_char · function · L171-L181 — Atomically persists a character's full runtime state (level, xp, position, vitals, adena, karma/PvP, inventory, quests) in one transaction by rewriting the item and quest tables.
+- Db · struct · L8-L8 — pub struct Db { pub c: Connection }
+- CharRow · struct · L10-L13 — pub struct CharRow
+- CharSummary · struct · L15-L15 — pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub spec: Option<String>, pub level: i64, pub look: Look }
+- TOKEN_TTL · constant · L17-L17 — const TOKEN_TTL: f64 = 30.0 * 24.0 * 3600.0 * 1000.0;
+- db_path · function · L19-L21 — pub fn db_path() -> String
+- look_of · function · L23-L26 — fn look_of(g: String, hs: i64, hc: i64) -> Look
+- now_ms · function · L28-L28 — fn now_ms() -> f64 { crate::world::now_ms() }
+- sha · function · L29-L29 — fn sha(t: &str) -> String { hex::encode(Sha256::digest(t.as_bytes())) }
+- scrypt_hash · function · L32-L37 — fn scrypt_hash(pass: &str, salt: &[u8], len: usize) -> Vec<u8>
+- hash_pass · function · L39-L42 — pub fn hash_pass(pass: &str) -> String
+- check_pass · function · L44-L50 — pub fn check_pass(pass: &str, stored: &str) -> bool
+- open · function · L53-L77 — pub fn open() -> Db
+- account · function · L79-L81 — pub fn account(&self, user: &str) -> Option<(i64, String)>
+- insert_account · function · L83-L86 — pub fn insert_account(&self, user: &str, hash: &str) -> Result<i64, String>
+- create_session · function · L88-L94 — pub fn create_session(&self, account_id: i64) -> String
+- resume_session · function · L96-L107 — pub fn resume_session(&self, token: &str) -> Option<i64>
+- delete_session · function · L109-L109 — pub fn delete_session(&self, token: &str) { let _ = self.c.execute("DELETE FROM sessions WHERE hash = ?", [sha(token)]); }
+- list_chars · function · L111-L115 — pub fn list_chars(&self, account_id: i64) -> Vec<CharSummary>
+- create_char · function · L117-L135 — pub fn create_char(&self, account_id: i64, name: &str, race: &str, cls: &str, look: Look) -> Option<String>
+- delete_char · function · L137-L144 — pub fn delete_char(&self, account_id: i64, id: i64)
+- load_char · function · L147-L165 — pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64)>, Vec<(String, i64, bool)>)>
+- set_spec · function · L168-L168 — pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
+- save_char · function · L171-L181 — pub fn save_char(&mut self, id: i64, level: i64, xp: i64, x: f64, z: f64, hp: f64, mp: f64, cp: f64, adena: i64, karma: i64, pk: i64, pvp: i64, inv: &[InvItem], quests: &[(String, i64, bool)]) -> rusqlite::Result<()>

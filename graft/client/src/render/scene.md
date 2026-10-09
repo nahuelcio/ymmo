@@ -8,42 +8,43 @@
 - apply · function · L110-L114 — apply = (layer: number, k: number)
 - mat · function · L142-L152 — function mat(color: number, surface?: Surface | 'none'): THREE.MeshLambertMaterial
 - WorldScene · interface · L154-L166 — interface WorldScene
-- createWorldScene · function · L168-L308 — function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene
+- createWorldScene · function · L168-L310 — function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene
 - paletteAt · function · L188-L200 — paletteAt = (x: number, z: number)
-- updateSky · method · L235-L299 — updateSky(camera: THREE.Camera, far: number, dt: number)
-- follow · method · L300-L306 — follow(p)
-- chunkKey · function · L314-L314 — chunkKey = (x: number, z: number)
-- buildTerrain · function · L316-L362 — function buildTerrain(): THREE.Group
-- Inst · interface · L364-L364 — interface Inst
-- instancedSurface · function · L368-L371 — function instancedSurface(m: THREE.MeshLambertMaterial, surface: Surface): THREE.MeshLambertMaterial
-- chunkedInstances · function · L373-L394 — function chunkedInstances(geo: THREE.BufferGeometry, material: THREE.Material, items: Inst[]): THREE.Group
-- mergeStatic · function · L400-L435 — function mergeStatic(src: THREE.Group): THREE.Group
-- buildTrees · function · L437-L480 — function buildTrees(): THREE.Group
-- mat · function · L474-L474 — mat = ()
-- bark · function · L475-L475 — bark = ()
-- canopy · function · L475-L475 — canopy = (amp: number)
-- buildRocks · function · L482-L492 — function buildRocks(): THREE.Group
-- buildClouds · function · L497-L517 — function buildClouds(): THREE.Group
-- buildWater · function · L519-L525 — function buildWater(): THREE.Mesh
-- fertile · function · L528-L530 — function fertile(x: number, z: number, h: number): boolean
-- buildBushes · function · L532-L549 — function buildBushes(): THREE.Group
-- buildDetail · function · L553-L601 — function buildDetail(): THREE.Group
-- box · function · L603-L609 — function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0, surface?: Surface | 'none')
-- house · function · L611-L658 — function house(w: number, d: number, wall: number, roof: number): THREE.Group
-- win · function · L646-L652 — win = (x: number, z: number, side: boolean)
-- darken · function · L660-L660 — darken = (c: number, k = 0.72)
-- gable · function · L669-L675 — function gable(w: number, d: number, h: number, color: number, surface?: Surface | 'none'): THREE.Mesh
-- pane · function · L678-L685 — function pane(g: THREE.Group, x: number, y: number, z: number, side: boolean, w = 0.9, h = 0.9, lit = false)
-- at · function · L687-L690 — function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T
-- barrel · function · L692-L697 — function barrel(x: number, y: number, z: number): THREE.Mesh
-- tavern · function · L700-L751 — function tavern(w: number, d: number): THREE.Group
-- townHall · function · L754-L802 — function townHall(w: number, d: number): THREE.Group
-- smithy · function · L805-L848 — function smithy(w: number, d: number): THREE.Group
-- buildTown · function · L850-L970 — function buildTown(): THREE.Group
-- dressTown · function · L976-L1043 — function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number)
-- flat · function · L979-L979 — flat = (m: THREE.Mesh)
-- turned · function · L980-L980 — turned = <T extends THREE.Object3D>(o: T, ry: number)
-- lightSources · function · L1046-L1061 — function lightSources(): LightSource[]
-- buildCamps · function · L1067-L1122 — function buildCamps(): { props: THREE.Group; flames: THREE.Group }
-- y0 · function · L1070-L1070 — y0 = (x: number, z: number)
-- buildZoneProps · function · L1124-L1156 — function buildZoneProps(): THREE.Group
+- updateSky · method · L237-L301 — updateSky(camera: THREE.Camera, far: number, dt: number)
+- follow · method · L302-L308 — follow(p)
+- freeze · function · L313-L319 — function freeze(o: THREE.Object3D)
+- chunkKey · function · L325-L325 — chunkKey = (x: number, z: number)
+- buildTerrain · function · L327-L373 — function buildTerrain(): THREE.Group
+- Inst · interface · L375-L375 — interface Inst
+- instancedSurface · function · L379-L382 — function instancedSurface(m: THREE.MeshLambertMaterial, surface: Surface): THREE.MeshLambertMaterial
+- chunkedInstances · function · L384-L405 — function chunkedInstances(geo: THREE.BufferGeometry, material: THREE.Material, items: Inst[]): THREE.Group
+- mergeStatic · function · L411-L446 — function mergeStatic(src: THREE.Group): THREE.Group
+- buildTrees · function · L448-L491 — function buildTrees(): THREE.Group
+- mat · function · L485-L485 — mat = ()
+- bark · function · L486-L486 — bark = ()
+- canopy · function · L486-L486 — canopy = (amp: number)
+- buildRocks · function · L493-L503 — function buildRocks(): THREE.Group
+- buildClouds · function · L508-L528 — function buildClouds(): THREE.Group
+- buildWater · function · L530-L536 — function buildWater(): THREE.Mesh
+- fertile · function · L539-L541 — function fertile(x: number, z: number, h: number): boolean
+- buildBushes · function · L543-L560 — function buildBushes(): THREE.Group
+- buildDetail · function · L564-L612 — function buildDetail(): THREE.Group
+- box · function · L614-L620 — function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0, surface?: Surface | 'none')
+- house · function · L622-L669 — function house(w: number, d: number, wall: number, roof: number): THREE.Group
+- win · function · L657-L663 — win = (x: number, z: number, side: boolean)
+- darken · function · L671-L671 — darken = (c: number, k = 0.72)
+- gable · function · L680-L686 — function gable(w: number, d: number, h: number, color: number, surface?: Surface | 'none'): THREE.Mesh
+- pane · function · L689-L696 — function pane(g: THREE.Group, x: number, y: number, z: number, side: boolean, w = 0.9, h = 0.9, lit = false)
+- at · function · L698-L701 — function at<T extends THREE.Object3D>(o: T, x: number, y: number, z: number): T
+- barrel · function · L703-L708 — function barrel(x: number, y: number, z: number): THREE.Mesh
+- tavern · function · L711-L762 — function tavern(w: number, d: number): THREE.Group
+- townHall · function · L765-L813 — function townHall(w: number, d: number): THREE.Group
+- smithy · function · L816-L859 — function smithy(w: number, d: number): THREE.Group
+- buildTown · function · L861-L981 — function buildTown(): THREE.Group
+- dressTown · function · L987-L1054 — function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number)
+- flat · function · L990-L990 — flat = (m: THREE.Mesh)
+- turned · function · L991-L991 — turned = <T extends THREE.Object3D>(o: T, ry: number)
+- lightSources · function · L1057-L1072 — function lightSources(): LightSource[]
+- buildCamps · function · L1078-L1133 — function buildCamps(): { props: THREE.Group; flames: THREE.Group }
+- y0 · function · L1081-L1081 — y0 = (x: number, z: number)
+- buildZoneProps · function · L1135-L1167 — function buildZoneProps(): THREE.Group

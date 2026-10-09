@@ -40,9 +40,12 @@
 - orcRig · function · L735-L768 — function orcRig(id: string, skin: number, scale: number): Rig
 - undeadRig · function · L770-L811 — function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig
 - Outfit · interface · L813-L825 — interface Outfit
-- npcModel · function · L846-L877 — function npcModel(npcId: string): Rig
-- itemModel · function · L880-L939 — function itemModel(itemId: string): THREE.Group
-- lerp · function · L941-L941 — lerp = (a: number, b: number, t: number)
-- bake · function · L953-L986 — function bake(rig: Rig): Rig
-- visit · function · L955-L983 — visit = (g: THREE.Object3D)
-- animate · function · L988-L1058 — function animate(rig: Rig, s: AnimState)
+- NpcDress · interface · L850-L862 — interface NpcDress
+- qNpc · function · L893-L914 — function qNpc(n: (typeof NPCS)[number]): Rig
+- cloth · function · L896-L896 — cloth = (): QZone
+- npcModel · function · L916-L948 — function npcModel(npcId: string): Rig
+- itemModel · function · L951-L1010 — function itemModel(itemId: string): THREE.Group
+- lerp · function · L1012-L1012 — lerp = (a: number, b: number, t: number)
+- bake · function · L1024-L1057 — function bake(rig: Rig): Rig
+- visit · function · L1026-L1054 — visit = (g: THREE.Object3D)
+- animate · function · L1059-L1129 — function animate(rig: Rig, s: AnimState)
