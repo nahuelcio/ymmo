@@ -6,6 +6,7 @@ interface Fx {
   t0: number;
   dur: number;
   update: (k: number) => void;
+  dust?: boolean;
 }
 
 // Effect geometries are shared by every effect instance; only materials are per-effect.
@@ -29,9 +30,9 @@ export class FxManager {
   private list: Fx[] = [];
   constructor(private scene: THREE.Scene) {}
 
-  private add(obj: THREE.Object3D, dur: number, update: (k: number) => void) {
+  private add(obj: THREE.Object3D, dur: number, update: (k: number) => void, dust = false) {
     this.scene.add(obj);
-    this.list.push({ obj, t0: performance.now(), dur, update });
+    this.list.push({ obj, t0: performance.now(), dur, update, dust });
   }
 
   private glow(color: number, opacity = 0.9, side: THREE.Side = THREE.FrontSide) {
@@ -182,6 +183,26 @@ export class FxManager {
       }
       mat.opacity = 1 - k * k;
     });
+  }
+
+  /** A small puff of dust at the feet (rolls, footsteps). At most 8 alive at once, so fast steps stay cheap. */
+  dust(pos: THREE.Vector3, dur = 450) {
+    if (this.list.reduce((n, f) => n + (f.dust ? 1 : 0), 0) >= 8) return;
+    const g = new THREE.Group();
+    g.position.copy(pos);
+    g.position.y += 0.05;
+    const mat = new THREE.MeshBasicMaterial({ color: 0xc8b48e, transparent: true, opacity: 0.4, depthWrite: false });
+    const puffs = [0, 2.1, 4.2].map((a) => {
+      const p = new THREE.Mesh(GEO.disc, mat);
+      p.rotation.x = -Math.PI / 2;
+      p.position.set(Math.cos(a) * 0.2, 0, Math.sin(a) * 0.2);
+      g.add(p);
+      return p;
+    });
+    this.add(g, dur, (k) => {
+      for (const p of puffs) p.scale.setScalar(0.12 + out(k) * 0.4);
+      mat.opacity = 0.4 * (1 - k);
+    }, true);
   }
 
   /** Telegraphed area attack: red outline plus a disc that fills up until it lands. */

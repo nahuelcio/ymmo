@@ -155,6 +155,7 @@ export class Game {
   /** shown while the server has been silent for a while (packet loss); the game keeps waiting for it */
   private netWarn: HTMLDivElement;
   private cpuMs = 0;
+  private stepAt = 0;
   private lastRender = 0;
   private fpsFrames = 0;
   private fpsAt = 0;
@@ -937,6 +938,7 @@ export class Game {
         s.rollAt = performance.now();
       }
       this.fx.ring(s.pos.clone(), 0xcfe6ff, 1.6, 350);
+      if (settings.s.particles) this.fx.dust(s.pos.clone(), 600);
       return;
     }
     if (skill === 'escape') return this.fx.pillar(s.pos.clone(), 0x66aaff, 3000, 4);
@@ -1142,6 +1144,7 @@ export class Game {
     self.rollAt = now;
     self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
     play('dash');
+    if (settings.s.particles) this.fx.dust(self.pos.clone(), 600);
     this.dropPredictedCooldowns();
     // Keep the click-to-move. serverAction would drop it, and the walk would die on the roll.
     this.net.send({ t: 'dash', x: self.roll.fx, z: self.roll.fz, dx, dz });
@@ -1561,6 +1564,11 @@ export class Game {
       const s = c.snaps;
       let moving = (c.flags & F_MOVING) !== 0;
       if (c === self && s.length) moving = this.updateSelf(c, now, dt);
+      // footsteps: a dust puff every third of a second while running on foot
+      if (c === self && moving && !c.roll && settings.s.particles && now - this.stepAt > 330) {
+        this.stepAt = now;
+        this.fx.dust(c.pos.clone(), 420);
+      }
       else if (s.length) {
         const rt = self && (c.pos.x - self.pos.x) ** 2 + (c.pos.z - self.pos.z) ** 2 > 2300 ? rtFar : rtNear;
         let x = s[s.length - 1].x, z = s[s.length - 1].z, ry = s[s.length - 1].ry;
