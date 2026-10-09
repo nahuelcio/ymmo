@@ -1,4 +1,5 @@
 import { TOWNS } from '../terrain';
+import { ALBA_FOLK } from '../village';
 
 export interface ZoneDef {
   id: string;
@@ -98,33 +99,33 @@ export const TELEPORTS = [
   { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', x: -270, z: 103, cost: 30000 },
 ];
 
+const folk = (id: string) => ALBA_FOLK.find((n) => n.id === id)!;
+
 export const NPCS: NpcDef[] = [
-  { id: 'grocer', name: 'Lia', title: 'Almacenera', x: 10, z: -14, ry: Math.PI, kind: 'shop', color: 0x4a8a3a,
+  { id: 'grocer', name: 'Lia', title: 'Almacenera', x: folk('grocer').x, z: folk('grocer').z, ry: folk('grocer').ry, kind: 'shop', color: 0x4a8a3a,
     shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
-  // Gerald and Hilda keep their counters at the mouth of the smithy (layout.ts, house 4)
-  { id: 'weapons', name: 'Gerald', title: 'Armero', x: -26.3, z: -18.4, ry: Math.atan2(26.3, 18.4), kind: 'shop', color: 0x8a3a3a,
+  { id: 'weapons', name: 'Gerald', title: 'Armero', x: folk('weapons').x, z: folk('weapons').z, ry: folk('weapons').ry, kind: 'shop', color: 0x8a3a3a,
     shop: ['short_sword', 'apprentice_wand', 'dagger', 'broadsword', 'willow_staff', 'hand_axe', 'spear', 'iron_hammer', 'sword_of_revolution', 'staff_of_life', 'assassin_dagger', 'partisan', 'battle_axe'], greeting: 'Con una buena hoja, cualquiera se anima.' },
-  { id: 'armor', name: 'Hilda', title: 'Armadurera', x: -28.6, z: -14.6, ry: Math.atan2(28.6, 14.6), kind: 'shop', color: 0x3a5a8a,
+  { id: 'armor', name: 'Hilda', title: 'Armadurera', x: folk('armor').x, z: folk('armor').z, ry: folk('armor').ry, kind: 'shop', color: 0x3a5a8a,
     shop: ['leather_cap', 'apprentice_tunic', 'apprentice_stockings', 'short_gloves', 'leather_sandals', 'brigandine_helm', 'karmian_hat', 'brigandine_tunic', 'brigandine_gaiters', 'reinforced_gloves', 'reinforced_boots', 'karmian_tunic', 'karmian_stockings', 'ring_of_vigor', 'earring_of_focus', 'necklace_of_valor'],
     greeting: 'Antes de salir a pelear, cubrite bien. Después no me vengas llorando.' },
-  { id: 'gatekeeper', name: 'Roxxy', title: 'Guardiana del Portal', x: 12, z: 12, ry: -Math.PI / 2, kind: 'gatekeeper', color: 0x8a3a8a,
+  { id: 'gatekeeper', name: 'Roxxy', title: 'Guardiana del Portal', x: folk('gatekeeper').x, z: folk('gatekeeper').z, ry: folk('gatekeeper').ry, kind: 'gatekeeper', color: 0x8a3a8a,
     greeting: '¿A dónde te llevo? Por una módica suma, obvio.' },
-  { id: 'luigi', name: 'Luigi', title: 'Anciano del Pueblo (supuestamente)', x: -3, z: -8.5, ry: 0, kind: 'talker', color: 0x7a7468,
+  { id: 'luigi', name: 'Luigi', title: 'Anciano del Pueblo (supuestamente)', x: folk('luigi').x, z: folk('luigi').z, ry: folk('luigi').ry, kind: 'talker', color: 0x7a7468,
     greeting: '¿Eh? ¿Quién anda ahí? ¿Esto es el chat?', lines: LUIGI_LINES, look: { bald: true, beard: 0xe8e8e8, skin: 0xe0b090 } },
-  { id: 'mira', name: 'Mira', title: 'Guardia de la Aldea', x: 0, z: -24, ry: Math.atan2(0, 24), kind: 'quest', color: 0xc4a574,
+  { id: 'mira', name: 'Mira', title: 'Guardia de la Aldea', x: folk('mira').x, z: folk('mira').z, ry: folk('mira').ry, kind: 'quest', color: 0xc4a574,
     greeting: 'El camino del sur está lleno de keltirs.' },
-  { id: 'bram', name: 'Bram', title: 'Cazador', x: 22, z: -16, ry: Math.atan2(-22, 16), kind: 'quest', color: 0x6a5030,
+  { id: 'bram', name: 'Bram', title: 'Cazador', x: folk('bram').x, z: folk('bram').z, ry: folk('bram').ry, kind: 'quest', color: 0x6a5030,
     greeting: 'Los lobos se vienen hasta la empalizada.' },
-  { id: 'sella', name: 'Sella', title: 'Exploradora', x: -22, z: -16, ry: Math.atan2(22, 16), kind: 'quest', color: 0x3a6a4a,
+  { id: 'sella', name: 'Sella', title: 'Exploradora', x: folk('sella').x, z: folk('sella').z, ry: folk('sella').ry, kind: 'quest', color: 0x3a6a4a,
     greeting: 'Los goblins de las colinas están cada vez más agrandados.' },
-  { id: 'dorian', name: 'Dorian', title: 'Rastreador', x: 26, z: 8, ry: Math.atan2(-26, -8), kind: 'quest', color: 0x4a5a3a,
+  { id: 'dorian', name: 'Dorian', title: 'Rastreador', x: folk('dorian').x, z: folk('dorian').z, ry: folk('dorian').ry, kind: 'quest', color: 0x4a5a3a,
     greeting: 'Algo con escamas se está comiendo las cabras.' },
-  // the Intendenta stands by the town hall steps (house 1)
-  { id: 'vessa', name: 'Vessa', title: 'Intendenta', x: 19.3, z: 23.9, ry: Math.atan2(-19.3, -23.9), kind: 'quest', color: 0x8a6a3a,
+  { id: 'vessa', name: 'Vessa', title: 'Intendenta', x: folk('vessa').x, z: folk('vessa').z, ry: folk('vessa').ry, kind: 'quest', color: 0x8a6a3a,
     greeting: 'El cuartel no se va a vaciar solo.' },
-  { id: 'harun', name: 'Harun', title: 'Sepulturero', x: 14, z: 26, ry: Math.atan2(-14, -26), kind: 'quest', color: 0x4a4a55,
+  { id: 'harun', name: 'Harun', title: 'Sepulturero', x: folk('harun').x, z: folk('harun').z, ry: folk('harun').ry, kind: 'quest', color: 0x4a4a55,
     greeting: 'Los páramos le devuelven los huesos a los vivos.' },
-  { id: 'nira', name: 'Nira', title: 'Picapedrera', x: -14, z: 26, ry: Math.atan2(14, -26), kind: 'quest', color: 0x7a7a70,
+  { id: 'nira', name: 'Nira', title: 'Picapedrera', x: folk('nira').x, z: folk('nira').z, ry: folk('nira').ry, kind: 'quest', color: 0x7a7a70,
     greeting: 'Los gólems van dejando piedra por todo el páramo.' },
   { id: 'kael', name: 'Kael', title: 'Guardabosques', x: 108, z: 40, ry: Math.atan2(12, -15), kind: 'quest', color: 0x2f6a38,
     greeting: 'Los keltirs ancianos mandan en cada manada de esta pradera.' },

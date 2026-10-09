@@ -124,7 +124,7 @@ impl Db {
         let r = self.c.execute(
             "INSERT INTO characters (account_id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, created, gender, hair_style, hair_color)
              VALUES (?, ?, ?, ?, 1, 0, ?, ?, 99999, 99999, 99999, ?, 0, 0, 0, ?, ?, ?, ?)",
-            params![account_id, name, race, cls, data.town.x + a.cos() * 6.0, data.town.z + a.sin() * 6.0, data.c.start_adena, now_ms() as i64, look.gender(), look.hs, look.hc],
+            params![account_id, name, race, cls, data.town.x + a.cos() * 11.0, data.town.z + a.sin() * 11.0, data.c.start_adena, now_ms() as i64, look.gender(), look.hs, look.hc],
         );
         if r.is_err() { return Some("Ese nombre ya está en uso.".into()); }
         let char_id = self.c.last_insert_rowid();

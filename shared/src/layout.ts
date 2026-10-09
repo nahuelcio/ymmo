@@ -3,6 +3,7 @@
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
 import { DUSK, heightAt, inTown, mulberry32, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
+import { ALBA_STAMPS, albaCurtain } from './village';
 
 /**
  * Road segments from the village: one toward each hunting ground around it and one to the second town.
@@ -39,14 +40,9 @@ export interface TreeL { x: number; z: number; h: number; rot: number; sc: numbe
 export interface RockL { x: number; z: number; y: number; sc: number; e: [number, number, number]; s: [number, number, number]; light: number }
 /** out: part of the second town (the village's own dressing skips those) */
 export interface HouseL { x: number; z: number; rot: number; w: number; d: number; wall: number; roof: number; kind?: 'hall' | 'tavern' | 'smithy'; out?: boolean }
-/** Houses of the ring (by index) that are a landmark instead: bigger footprint, own model on the client. */
-const LANDMARKS: Record<number, Pick<HouseL, 'kind' | 'w' | 'd' | 'wall' | 'roof'> & { r: number }> = {
-  1: { kind: 'hall', r: 39, w: 13, d: 10, wall: 0xb8b2a4, roof: 0x4a5a7a },
-  2: { kind: 'tavern', r: 38.5, w: 12, d: 9, wall: 0xe0d4b8, roof: 0x8a3a2a },
-  4: { kind: 'smithy', r: 38, w: 10, d: 8, wall: 0x8a8478, roof: 0x3a3a3a },
-};
 export interface StallL { x: number; z: number; rot: number; color: number }
-export interface WallL { x: number; z: number; rot: number; tower: boolean; out?: boolean }
+/** hw/hd: half-extents of a kit wall module. Omitted, a wall is the old 7.2 m log run. */
+export interface WallL { x: number; z: number; rot: number; tower: boolean; out?: boolean; hw?: number; hd?: number }
 export interface PillarL { x: number; z: number; rot: number; out?: boolean }
 export interface TownL { houses: HouseL[]; stalls: StallL[]; walls: WallL[]; gates: PillarL[] }
 export interface ZonePropsL {
@@ -108,37 +104,30 @@ export function layoutTown(): TownL {
   town = { houses: [], stalls: [], walls: [], gates: [] };
   const roadAngles = ROADS.map(([ax, az, bx, bz]) => Math.atan2(bz - az, bx - ax));
   const angDiff = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-  const rng = mulberry32(3);
-  // houses in a ring, leaving road gaps
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + 0.1;
-    if (roadAngles.some((ra) => angDiff(a, ra) < 0.32)) continue;
-    const r = 32 + rng() * 8;
-    const w = 5 + rng() * 3, d = 5 + rng() * 2;
-    const wall = rng() < 0.5 ? 0xe0d4b8 : 0xd0c0a0, roof = rng() < 0.5 ? 0x8a3a2a : 0x4a5a7a;
-    const lm = LANDMARKS[town.houses.length]; // the rng calls above stay the same, so the other houses don't move
-    const hr = lm?.r ?? r;
-    town.houses.push({ x: TOWN.x + Math.cos(a) * hr, z: TOWN.z + Math.sin(a) * hr, rot: -a - Math.PI / 2, w: lm?.w ?? w, d: lm?.d ?? d, wall: lm?.wall ?? wall, roof: lm?.roof ?? roof, kind: lm?.kind });
-  }
-  // merchant stalls behind NPCs
+  // the village is a fixed grid of kit buildings (shared/src/village.ts), not the old ring
+  for (const s of ALBA_STAMPS)
+    town.houses.push({ x: TOWN.x + s.x, z: TOWN.z + s.z, rot: s.rot, w: s.w, d: s.d, wall: s.wall, roof: s.roof, kind: s.kind });
+  // merchant stalls: beside an Alba shop (behind it would sit inside a wall); elsewhere, behind the NPC.
+  // Step aside until the counter clears every resident, not only its owner.
   for (const n of NPCS) {
     if (n.kind === 'talker' || n.kind === 'quest') continue;
     const dirX = Math.sin(n.ry), dirZ = Math.cos(n.ry);
-    town.stalls.push({ x: n.x - dirX * 1.6, z: n.z - dirZ * 1.6, rot: n.ry, color: n.color });
+    const albaShop = n.kind === 'shop' && Math.hypot(n.x - TOWN.x, n.z - TOWN.z) < TOWN.r;
+    const at = (lx: number, lz: number) => ({ x: n.x + lx * dirZ + lz * dirX, z: n.z - lx * dirX + lz * dirZ });
+    const covers = (x: number, z: number) => NPCS.some((o) => {
+      const dx = o.x - x, dz = o.z - z;
+      const c = Math.cos(n.ry), s = Math.sin(n.ry);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      const cx = Math.max(-1.6, Math.min(1.6, lx)), cz = Math.max(-0.55, Math.min(0.55, lz));
+      const ox = lx - cx, oz = lz - cz, d2 = ox * ox + oz * oz;
+      return d2 <= 1e-8 || d2 < 0.45 * 0.45;
+    });
+    const tries: [number, number][] = albaShop ? [[2.4, 0], [-2.4, 0], [3.6, 0], [-3.6, 0], [0, -2.4]] : [[0, -1.6], [2.6, 0], [-2.6, 0], [0, -2.6]];
+    const spot = tries.map(([lx, lz]) => at(lx, lz)).find((p) => !covers(p.x, p.z)) ?? at(0, -2.6);
+    town.stalls.push({ x: spot.x, z: spot.z, rot: n.ry, color: n.color });
   }
-  // palisade
-  for (let i = 0; i < 48; i++) {
-    const a = (i / 48) * Math.PI * 2;
-    if (roadAngles.some((ra) => angDiff(a, ra) < 0.12)) continue;
-    const r = TOWN.r + 2;
-    town.walls.push({ x: TOWN.x + Math.cos(a) * r, z: TOWN.z + Math.sin(a) * r, rot: -a + Math.PI / 2, tower: i % 6 === 0 });
-  }
-  // gate pillars at road exits
-  for (const ra of roadAngles)
-    for (const off of [-0.11, 0.11]) {
-      const r = TOWN.r + 2;
-      town.gates.push({ x: TOWN.x + Math.cos(ra + off) * r, z: TOWN.z + Math.sin(ra + off) * r, rot: -ra });
-    }
+  // stone curtain: wall runs, an open gate on every road, a tower midway along each span
+  for (const w of albaCurtain().walls) town.walls.push(w);
   // the second town: a smaller ring of dark stone houses inside its own palisade, with a gate where the road
   // from the village comes in and another on the far side, toward the ruins
   const back = Math.atan2(TOWN.z - DUSK.z, TOWN.x - DUSK.x), gateAngles = [back, back + Math.PI];
