@@ -1,22 +1,23 @@
 # client/src/ui/minimap.ts
 
-- questAreas · function · L20-L27 — Resolves which hunting zones contain spawns for the mobs demanded by the player's active quests, so those zones can be highlighted with quest labels on both maps.
-- worldImage · function · L29-L53 — Pre-renders the whole game world once into a 512x512 pixel canvas — water vs. terrain coloring plus north-west-light relief shading — that both maps later crop from.
-- at · function · L34-L34 — Maps a raster pixel index to a world coordinate spanning the full map extent, used while sampling terrain during pre-rendering.
-- hAt · function · L37-L37 — Clamped lookup into the precomputed height grid so the relief shading can sample neighboring pixels without falling off the map edges.
-- css · function · L55-L55 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
-- toMap · function · L57-L57 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
-- Minimap · class · L59-L417 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
-- constructor · method · L73-L115 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
-- toggleMap · method · L117-L120 — Opens or closes the big world-map window and repaints it when shown.
-- drawBig · method · L122-L182 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
-- campIcon · method · L185-L200 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
-- drawRoute · method · L203-L236 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
-- label · method · L238-L243 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
-- arrow · method · L245-L262 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
-- update · method · L264-L416 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
-- toC · function · L289-L289 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
-- seen · function · L291-L291 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
-- rect · function · L315-L325 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
-- disc · function · L332-L340 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
-- questMob · function · L380-L380 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.
+- questAreas · function · L21-L28 — Resolves which hunting zones contain spawns for the mobs demanded by the player's active quests, so those zones can be highlighted with quest labels on both maps.
+- worldImage · function · L30-L54 — Pre-renders the whole game world once into a 512x512 pixel canvas — water vs. terrain coloring plus north-west-light relief shading — that both maps later crop from.
+- at · function · L35-L35 — Maps a raster pixel index to a world coordinate spanning the full map extent, used while sampling terrain during pre-rendering.
+- hAt · function · L38-L38 — Clamped lookup into the precomputed height grid so the relief shading can sample neighboring pixels without falling off the map edges.
+- css · function · L56-L56 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
+- toMap · function · L58-L58 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
+- Minimap · class · L60-L423 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
+- constructor · method · L74-L116 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
+- toggleMap · method · L118-L121 — Opens or closes the big world-map window and repaints it when shown.
+- drawBig · method · L123-L183 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
+- campIcon · method · L186-L201 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
+- drawRoute · method · L204-L237 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
+- label · method · L239-L244 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
+- arrow · method · L246-L263 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
+- update · method · L265-L422 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
+- toC · function · L290-L290 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
+- seen · function · L292-L292 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
+- strokeWall · function · L305-L312 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L318-L328 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
+- disc · function · L339-L347 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
+- questMob · function · L386-L386 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.

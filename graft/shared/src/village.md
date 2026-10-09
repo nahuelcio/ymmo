@@ -1,0 +1,25 @@
+# shared/src/village.ts
+
+- VPiece · type · L31-L31 — type VPiece = (typeof V_PIECES)[number];
+- Stamp · interface · L33-L45 — interface Stamp
+- face · function · L48-L48 — face = (x: number, z: number)
+- KitInst · interface · L69-L69 — interface KitInst
+- wallPiece · function · L76-L85 — function wallPiece(brick: boolean | undefined, part: 'Straight' | 'Door_Flat' | 'Window_Wide_Flat'): VPiece
+- roofPiece · function · L87-L91 — function roofPiece(w: number, d: number): VPiece
+- place · function · L93-L96 — function place(st: Stamp, piece: VPiece, lx: number, y: number, lz: number, lrot: number): KitInst
+- pushBay · function · L98-L107 — function pushBay(out: KitInst[], st: Stamp, part: 'Straight' | 'Door_Flat' | 'Window_Wide_Flat', lx: number, lz: number, lrot: number)
+- expandStamp · function · L110-L138 — function expandStamp(st: Stamp): KitInst[]
+- houseInstances · function · L140-L142 — function houseInstances(): KitInst[]
+- groundInstances · function · L160-L180 — function groundInstances(): KitInst[]
+- covered · function · L164-L172 — covered = (x: number, z: number)
+- CurtainDraw · interface · L202-L210 — interface CurtainDraw
+- CurtainWall · interface · L212-L219 — interface CurtainWall
+- albaCurtain · function · L222-L278 — function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] }
+- at · function · L229-L229 — at = (a: number)
+- wallRot · function · L231-L231 — wallRot = (a: number)
+- halfAng · function · L232-L232 — halfAng = (halfLen: number)
+- fill · function · L234-L248 — fill = (from: number, to: number)
+- spot · function · L297-L303 — function spot(id: string, lx = 0, out = 2): { x: number; z: number; ry: number }
+- distToRoad · function · L308-L315 — function distToRoad(px: number, pz: number): number
+- corners · function · L317-L323 — function corners(st: Stamp): [number, number][]
+- albaIssues · function · L326-L368 — function albaIssues(): string[]
