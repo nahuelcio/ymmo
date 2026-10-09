@@ -1,0 +1,31 @@
+# Hot reload for client and server:  npm run dev:docker  →  http://localhost:5173
+# The server restarts when server-rs changes, Vite hot-reloads the client. .env (ADMIN_PASSWORD) is read from the repo.
+services:
+  dev:
+    build: { context: ., dockerfile: Dockerfile.dev }
+    init: true
+    working_dir: /app
+    ports: ["5173:5173", "3001:3001"]
+    environment:
+      GAME_DB: /data/game.db
+      # the repo is a Windows mount: file events don't cross into the container, so both watchers poll
+      CHOKIDAR_USEPOLLING: "1"
+      CHOKIDAR_INTERVAL: "300"
+    volumes:
+      - .:/app
+      # Linux builds of the dependencies and of the server stay out of the Windows folders (and are much faster there)
+      - dev-node-modules:/app/node_modules
+      - dev-target:/app/server-rs/target
+      - dev-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        npm install --no-audit --no-fund && npm run export-data || exit 1
+        cargo watch --poll -w server-rs/src -w server-rs/Cargo.toml -w server-rs/data/game.json -x 'run --manifest-path server-rs/Cargo.toml' &
+        exec npm run dev -- --host 0.0.0.0
+
+volumes:
+  dev-node-modules:
+  dev-target:
+  dev-data:

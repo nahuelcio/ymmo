@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config client/vite.config.ts",
+    "dev:docker": "docker compose -f docker-compose.dev.yml up --build",
     "build": "vite build --config client/vite.config.ts",
     "start": "server-rs/target/release/claudi-server",
     "typecheck": "tsc --noEmit -p .",

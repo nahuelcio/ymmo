@@ -1,0 +1,5 @@
+# Dev image: Rust + Node + cargo-watch. No source inside: docker-compose.dev.yml mounts the repo.
+FROM rust:1-bookworm
+COPY --from=node:24-bookworm-slim /usr/local /usr/local
+RUN cargo install cargo-watch --locked
+WORKDIR /app

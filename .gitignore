@@ -5,3 +5,4 @@ server/data
 graft/.cache/
 graft/.graph/
 opencode.json
+.env

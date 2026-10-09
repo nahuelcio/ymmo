@@ -17,8 +17,7 @@ pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cl
 const TOKEN_TTL: f64 = 30.0 * 24.0 * 3600.0 * 1000.0;
 
 pub fn db_path() -> String {
-    // same file the Node server uses (run from the repo root)
-    std::env::var("GAME_DB").unwrap_or_else(|_| "server/data/game.db".into())
+    std::env::var("GAME_DB").unwrap_or_else(|_| "server-rs/data/game.db".into())
 }
 
 fn look_of(g: String, hs: i64, hc: i64) -> Look {
