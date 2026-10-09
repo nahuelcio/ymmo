@@ -185,10 +185,17 @@ async fn client(socket: WebSocket, app: App) {
     app.hub.lock().unwrap().sessions.insert(sid, Sess { out: out.clone(), lang: Lang::Es, account_id: 0, world: None, char_id: 0, kick: kick.clone(), admin: false });
 
     let writer = tokio::spawn(async move {
-        while let Some(m) = rx.recv().await {
-            let r = match m { Out::Text(s) => sink.send(Message::Text(s)).await, Out::Bin(b) => sink.send(Message::Binary(b)).await };
+        let msg = |m: Out| match m { Out::Text(s) => Message::Text(s), Out::Bin(b) => Message::Binary(b) };
+        // everything queued in the same tick is written together and flushed once (one syscall, fewer packets)
+        'out: while let Some(m) = rx.recv().await {
+            let mut r = sink.feed(msg(m)).await;
             pending.fetch_sub(1, Ordering::Relaxed);
-            if r.is_err() { break; }
+            while r.is_ok() {
+                let Ok(m) = rx.try_recv() else { break };
+                r = sink.feed(msg(m)).await;
+                pending.fetch_sub(1, Ordering::Relaxed);
+            }
+            if r.is_err() || sink.flush().await.is_err() { break 'out; }
         }
         let _ = sink.close().await;
     });
@@ -379,12 +386,19 @@ async fn main() {
     });
 
     let static_files = tower_http::services::ServeDir::new(&dist).fallback(tower_http::services::ServeFile::new(format!("{dist}/index.html")));
-    let router = Router::new().route("/ws", get(ws_handler)).fallback_service(static_files).with_state(app.clone());
+    // Vite fingerprints everything under /assets/, so those can be cached forever; the rest (index.html, models) revalidates
+    let cache = axum::middleware::map_response(|req_path: axum::extract::OriginalUri, mut res: axum::response::Response| async move {
+        let v = if req_path.path().starts_with("/assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
+        res.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static(v));
+        res
+    });
+    let static_router = Router::new().fallback_service(static_files).layer(cache).layer(tower_http::compression::CompressionLayer::new());
+    let router = Router::new().route("/ws", get(ws_handler)).with_state(app.clone()).merge(static_router);
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.expect("bind");
     log!("[server] Claudi MMO (Rust) listening on http://localhost:{port} (ws: /ws) · ready in {:?}", t0.elapsed());
 
     let shutdown_app = app.clone();
-    axum::serve(listener, router).with_graceful_shutdown(async move {
+    axum::serve(listener, router).tcp_nodelay(true).with_graceful_shutdown(async move {
         #[cfg(unix)]
         let term = async { tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).unwrap().recv().await; };
         #[cfg(not(unix))]

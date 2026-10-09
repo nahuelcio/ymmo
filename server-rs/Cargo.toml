@@ -7,7 +7,7 @@ description = "Claudi MMO game server (Rust port of server/src, same protocol an
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
 axum = { version = "0.7", features = ["ws"] }
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.5", features = ["fs", "compression-gzip", "compression-br"] }
 futures-util = "0.3"
 rusqlite = { version = "0.31", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
