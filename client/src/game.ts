@@ -431,27 +431,33 @@ export class Game {
     n.on('partyInvite', (m) => this.ui.dialogs.invite(m.from));
     n.on('party', (m) => this.ui.party.set(m.members));
     // moved to another world (raid instance or back): every entity we knew is gone, our id changed
-    n.on('world', (m) => {
-      for (const id of [...this.ents.keys()]) this.removeEnt(id);
-      this.setTarget(null);
-      this.predict = null;
-      this.castBar = null;
-      this.teleportPending = true;
-      this.me = m.self;
-      this.inv = m.inv;
-      this.adena = m.self.adena;
-      this.ui.dialogs.close();
-      this.ui.npc.win.hide();
-      this.ui.onMe();
-      this.ui.onInv();
-      this.ui.hud.banner(zoneName(m.self.zone, lang));
-      ambience(m.self.zone);
-    });
+    n.on('world', (m) => this.resetWorld(m));
     n.on('teleported', () => {
       this.teleportPending = true;
       this.ui.dialogs.close();
       this.ui.npc.win.hide();
     });
+  }
+
+  /**
+   * Start over from a fresh state of ourselves: after moving to another world, or after reconnecting
+   * (main.ts) without reloading the page. Every entity we knew is gone and our id may have changed.
+   */
+  resetWorld(m: { self: Extract<S2C, { t: 'enter' }>['self']; inv: Extract<S2C, { t: 'enter' }>['inv'] }) {
+    for (const id of [...this.ents.keys()]) this.removeEnt(id);
+    this.setTarget(null);
+    this.predict = null;
+    this.castBar = null;
+    this.teleportPending = true;
+    this.me = m.self;
+    this.inv = m.inv;
+    this.adena = m.self.adena;
+    this.ui.dialogs.close();
+    this.ui.npc.win.hide();
+    this.ui.onMe();
+    this.ui.onInv();
+    this.ui.hud.banner(zoneName(m.self.zone, lang));
+    ambience(m.self.zone);
   }
 
   private makeLabel(): { el: HTMLDivElement; obj: CSS2DObject } {

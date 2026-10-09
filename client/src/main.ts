@@ -44,6 +44,45 @@ function enterWorld(id: number) {
   net.send({ t: 'enter', id });
 }
 
+let game: Game | null = null;
+/** While set, we are reconnecting in place: the socket is being reopened under a running game. */
+let rejoining: { el: HTMLElement; enterTries: number } | null = null;
+
+/**
+ * The connection dropped in the middle of a game: reopen the socket, resume the session and re-enter
+ * with the same character, without reloading (the server keeps a dropped character for 30 s). A small
+ * banner shows meanwhile; if the session can't be resumed it falls back to reloading (reconnect()).
+ */
+function rejoinInPlace() {
+  const char = Number(tab.get('char'));
+  const token = store.get('session');
+  if (!game || !char || !token) return reconnect();
+  if (rejoining) return;
+  const banner = el('div', 'rejoin', document.body, t('Conexión perdida. Reconectando…', 'Connection lost. Reconnecting…'));
+  rejoining = { el: banner, enterTries: 0 };
+  let tries = 0;
+  const knock = async () => {
+    if (!rejoining) return;
+    try {
+      await net.connect();
+      net.send({ t: 'resume', token }); // answered by 'chars' (or 'resumeFail'), see boot()
+    } catch {
+      tries++;
+      banner.textContent = t(`Conexión perdida. Reintentando… (${tries})`, `Connection lost. Retrying… (${tries})`);
+      if (tries >= 20) return giveUp();
+      setTimeout(knock, Math.min(4000, 500 * tries));
+    }
+  };
+  void knock();
+}
+
+/** In-place rejoin didn't work: drop the banner and do it the old way (reload). */
+function giveUp() {
+  rejoining?.el.remove();
+  rejoining = null;
+  reconnect();
+}
+
 /**
  * The connection dropped: keep knocking until the server answers, then reload. With a saved session
  * the reload resumes it and, if we were in the world, re-enters with the same character.
@@ -374,12 +413,18 @@ async function boot() {
     }
   }
   await models;
-  net.onClose = reconnect;
+  net.onClose = () => (inGame ? rejoinInPlace() : reconnect());
   net.on('error', (m) => {
+    // rejoining from a raid: the server first has to take the old character out, then asks to retry
+    if (rejoining) {
+      if (++rejoining.enterTries > 5) return giveUp();
+      return void setTimeout(() => net.send({ t: 'enter', id: Number(tab.get('char')) }), 1500);
+    }
     if (!inGame) showError(m.msg);
   });
   net.on('chars', (m) => {
     if (m.token) store.set('session', m.token);
+    if (rejoining) return net.send({ t: 'enter', id: Number(tab.get('char')) });
     // back from a dropped connection: straight into the world with the character we were playing
     const rejoin = Number(tab.get('rejoin'));
     tab.set('rejoin', null);
@@ -390,17 +435,24 @@ async function boot() {
     charScreen(m.list);
   });
   net.on('resumeFail', () => {
+    if (rejoining) return giveUp();
     store.set('session', null);
     loginScreen();
   });
   net.on('enter', (m) => {
+    if (rejoining) {
+      rejoining.el.remove();
+      rejoining = null;
+      game?.resetWorld(m);
+      return;
+    }
     if (inGame) return;
     inGame = true;
     cleanup?.();
     cleanup = null;
     screens.innerHTML = '';
     screens.style.display = 'none';
-    const game = new Game(net, m);
+    game = new Game(net, m);
     if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
   });
   const token = store.get('session');

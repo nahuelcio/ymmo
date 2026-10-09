@@ -578,3 +578,4 @@ input { font: inherit; user-select: text; }
 .adm-spark polyline { fill: none; stroke: var(--gold); stroke-width: 1.5; }
 .adm-log { height: 220px; overflow-y: auto; background: #07080c; border: 1px solid #3a3424; border-radius: 2px; padding: 4px 6px; font: 11px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; user-select: text; }
 .netwarn { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); display: none; padding: 3px 10px; border-radius: 4px; background: rgba(60, 20, 10, 0.75); color: #ffb070; font: 12px sans-serif; pointer-events: none; z-index: 5; }
+.rejoin { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); padding: 10px 18px; border-radius: 6px; background: rgba(20, 16, 12, 0.85); border: 1px solid #a0763a; color: #ffd28a; font: 14px sans-serif; pointer-events: none; z-index: 50; }

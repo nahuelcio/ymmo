@@ -37,6 +37,7 @@ export class Net {
     this.ws.onclose = () => this.onClose?.();
     return new Promise((res, rej) => {
       this.ws.onopen = () => {
+        this.lastMsgAt = performance.now();
         this.send({ t: 'lang', lang });
         res();
       };
