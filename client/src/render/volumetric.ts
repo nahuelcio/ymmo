@@ -21,7 +21,7 @@ const shader = (compare: boolean) => ({
     lightDir: { value: new THREE.Vector3() },
     lightColor: { value: new THREE.Color() },
     maxDist: { value: 80 },
-    density: { value: 0.012 },
+    density: { value: 0.006 },
     frame: { value: 0 },
   },
   vertexShader: /* glsl */ `
@@ -104,7 +104,7 @@ export class VolumetricPass extends Pass {
     u.camPos.value.setFromMatrixPosition(this.camera.matrixWorld);
     u.lightDir.value.copy(ATMOS.lightDir);
     // the sun's own colour and strength, scaled to a gentle haze
-    u.lightColor.value.copy(this.sun.color).multiplyScalar(this.sun.intensity * 0.55 * this.strength);
+    u.lightColor.value.copy(this.sun.color).multiplyScalar(this.sun.intensity * 0.3 * this.strength);
     u.maxDist.value = Math.min(90, this.sun.shadow.camera.right);
     u.frame.value = this.frame++ % 64;
     this.quad.material = mat;
