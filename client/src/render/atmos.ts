@@ -140,7 +140,10 @@ export function waterMaterial(): THREE.ShaderMaterial {
         vec3 sky = mix(horizon, top, smoothstep(0.0, 0.6, r.y));
         vec3 c = mix(body, sky, 0.10 + 0.55 * fres);
         c += sunColor * pow(max(dot(r, sunDir), 0.0), 160.0) * 1.6;
-        // no shore foam: the baked depth is ~2.5 m per texel, far too coarse for a crisp line on a small pond
+        // soft shore foam: the depth is coarse (~2.5 m a texel), so no crisp line; a moving churn mask breaks the band up
+        float churn = 0.5 + 0.5 * sin((p.x + p.y) * 2.3 + time * 2.1) * cos(p.x * 1.9 - time * 1.7 + p.y * 2.6);
+        float foam = (1.0 - smoothstep(0.03, 0.14, d)) * smoothstep(0.35, 0.9, churn);
+        c = mix(c, mix(vec3(1.0), horizon, 0.25) * mix(0.4, 1.0, day), foam * 0.45);
         float a = mix(0.62, 0.95, smoothstep(0.0, 0.35, d));
         c = mix(c, fogColor, smoothstep(fogNear, fogFar, length(cameraPosition - vWorld)));
         gl_FragColor = vec4(c, a);
