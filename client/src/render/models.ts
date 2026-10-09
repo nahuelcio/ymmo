@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Look, type Race } from '../../../shared/src/data/classes';
+import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Gender, type Look, type Race } from '../../../shared/src/data/classes';
 import { GRADE_COLOR, ITEMS, type ItemDef } from '../../../shared/src/data/items';
 
 /** C grade and up share the top-tier look (trim, glow) */
@@ -8,7 +8,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
-import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type QAnim, type QZone } from './quaternius';
+import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
 
 /** Creatures and gear stay untextured even when they share a colour with the building palette. */
 const mat = (color: number) => sceneMat(color, 'none');
@@ -843,8 +843,79 @@ const OUTFITS: Record<string, Outfit> = {
   mael: { head: 'veil', headColor: 0xf0eee8, prop: 'staff', propColor: 0xfff0a0, robe: true, female: true },
 };
 
+/**
+ * Kit wardrobe. Only pieces that exist in client/public/q: peasant or ranger cloth,
+ * a hood, a helm, and a weapon from that set. Caps, aprons, capes, bows, shovels and pickaxes have no mesh.
+ */
+interface NpcDress {
+  g: Gender;
+  /** HAIR_STYLES index */
+  hs: number;
+  hair: number;
+  ranger?: boolean;
+  beard?: boolean;
+  hood?: number;
+  helm?: Helm;
+  pauldron?: boolean;
+  weapon?: string;
+  scale?: number;
+}
+
+const DRESS: Record<string, NpcDress> = {
+  grocer: { g: 'f', hs: 1, hair: 0x8a4a20 },
+  weapons: { g: 'm', hs: 0, hair: 0x5a3a1a, beard: true, ranger: true, weapon: 'short_sword' },
+  armor: { g: 'f', hs: 1, hair: 0xd8b060, ranger: true, helm: 'HelmD', pauldron: true, weapon: 'short_sword' },
+  gatekeeper: { g: 'f', hs: 1, hair: 0x2a1a2a, hood: 0x4a1a4a, weapon: 'willow_staff' },
+  luigi: { g: 'm', hs: 4, hair: 0xe8e8e8, beard: true, scale: 1, weapon: 'willow_staff' },
+  mira: { g: 'f', hs: 1, hair: 0xa05a2a, ranger: true, helm: 'HelmD', pauldron: true, weapon: 'spear' },
+  bram: { g: 'm', hs: 0, hair: 0x3a2a1a, beard: true, ranger: true, hood: 0x5a4a2a, weapon: 'dagger' },
+  sella: { g: 'f', hs: 1, hair: 0x1a1a1a, ranger: true, hood: 0x2a4a3a, weapon: 'dagger' },
+  dorian: { g: 'm', hs: 0, hair: 0x4a3a28, ranger: true, weapon: 'spear' },
+  vessa: { g: 'f', hs: 2, hair: 0x3a2a1a },
+  harun: { g: 'm', hs: 0, hair: 0x5a5a5a, beard: true, hood: 0x2a2a30, weapon: 'iron_hammer' },
+  nira: { g: 'f', hs: 1, hair: 0x6a3a1a, weapon: 'iron_hammer' },
+  kael: { g: 'm', hs: 0, hair: 0x3a2a1a, ranger: true, hood: 0x2f5a30 },
+  grit: { g: 'm', hs: 0, hair: 0x4a3018, beard: true, ranger: true, weapon: 'hand_axe' },
+  rusk: { g: 'm', hs: 4, hair: 0x2a2a2a, ranger: true, helm: 'HelmC', pauldron: true, weapon: 'broadsword' },
+  mael: { g: 'f', hs: 1, hair: 0xe6e6f0, hood: 0xf0eee8, weapon: 'willow_staff' },
+  dusk_weapons: { g: 'm', hs: 0, hair: 0x2a1a1a, beard: true, ranger: true, pauldron: true, weapon: 'samurai_longsword' },
+  dusk_armor: { g: 'f', hs: 1, hair: 0xc8b090, ranger: true, helm: 'HelmC', pauldron: true },
+  dusk_grocer: { g: 'f', hs: 2, hair: 0x6a3a2a },
+  dusk_gate: { g: 'm', hs: 0, hair: 0x3a2a4a, hood: 0x4a1a4a, weapon: 'staff_of_life' },
+  tobias: { g: 'm', hs: 0, hair: 0xc8c8d0, beard: true },
+  ysolde: { g: 'f', hs: 1, hair: 0x8a5a30 },
+  korgan: { g: 'm', hs: 0, hair: 0x6a4a30, beard: true, ranger: true, hood: 0x6a4a2a, weapon: 'spear' },
+  brenna: { g: 'f', hs: 0, hair: 0x3a1a1a, ranger: true, helm: 'HelmD', pauldron: true, weapon: 'broadsword' },
+  aldric: { g: 'm', hs: 0, hair: 0x4a3a28, ranger: true, hood: 0x3a4a30, weapon: 'partisan' },
+  sibila: { g: 'f', hs: 1, hair: 0xe6e6f0, hood: 0x3a2048, weapon: 'sages_staff' },
+};
+
+function qNpc(n: (typeof NPCS)[number]): Rig {
+  const d = DRESS[n.id] ?? { g: 'm' as const, hs: 0, hair: 0x5a3a1e };
+  const ranger = !!d.ranger;
+  const cloth = (): QZone => ({ ranger, dye: n.color });
+  const bald = !!n.look?.bald;
+  return qPlayer({
+    g: d.g,
+    skin: n.look?.skin ?? 0xe8b996,
+    hair: bald && n.look?.beard !== undefined ? n.look.beard : d.hair,
+    hairStyle: d.hs,
+    bald,
+    beard: n.look?.beard !== undefined || !!d.beard,
+    chest: cloth(), legs: cloth(), feet: cloth(),
+    hood: d.hood,
+    pauldron: d.pauldron,
+    hideHair: d.helm === 'HelmC',
+    scale: d.scale ?? 1.08,
+    bulk: 1,
+    helm: d.helm,
+    inHand: d.weapon ? qWeapon(d.weapon) : null,
+  });
+}
+
 export function npcModel(npcId: string): Rig {
   const n = NPCS.find((x) => x.id === npcId)!;
+  if (qReady()) return qNpc(n);
   const o = OUTFITS[n.id] ?? {};
   const talker = n.kind === 'talker';
   const fakeHelm = { id: 'npc_helm', grade: 'D', color: 0x9aa2aa } as unknown as ItemDef;
