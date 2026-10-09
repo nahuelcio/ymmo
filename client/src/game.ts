@@ -1047,6 +1047,9 @@ export class Game {
     if (self && !(self.flags & (F_DEAD | F_CASTING)) && now - self.atkAt > interval && self.pos.distanceTo(c.pos) <= MELEE_RANGE + c.radius - 0.2 && (this.isHostile(c) || this.ctrl)) {
       self.atkAt = now;
       this.predictedSwing = now;
+      // instant local cue; the real hit sound and number still come from the server's 'dmg'
+      play('hit', 0.3);
+      this.fx.burst(c.pos.clone().setY(c.pos.y + c.height * 0.55), 0xffffff, 0.22, 140);
       const dx = c.pos.x - self.pos.x, dz = c.pos.z - self.pos.z;
       self.ry = Math.atan2(dx, dz);
     }
