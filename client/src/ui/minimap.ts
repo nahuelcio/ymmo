@@ -128,6 +128,7 @@ export class Minimap {
     this.bigCanvas.addEventListener('pointerup', (e) => {
       const d = this.mapDrag;
       this.mapDrag = null;
+      if (d?.moved) this.drawBig();
       if (!d || d.moved || e.button !== 0) return;
       const [x, z] = this.worldAt(e.offsetX, e.offsetY);
       g.travel(x, z, e.ctrlKey || e.metaKey);
@@ -218,14 +219,20 @@ export class Minimap {
     if (!this.mapWin.visible) return;
     const ctx = this.bigCanvas.getContext('2d')!;
     const zoomed = this.mapZoom > 1.08;
-    if (zoomed) {
-      const key = `${this.mapZoom.toFixed(3)}:${Math.round(this.mapCx)}:${Math.round(this.mapCz)}`;
+    const dragging = !!this.mapDrag?.moved;
+    if (zoomed && !dragging) {
+      const key = `${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
       if (this.detailKey !== key) {
         this.detailKey = key;
         this.detail = this.renderWindow();
       }
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(this.detail!, 0, 0);
+    } else if (zoomed) {
+      // while panning, crop the overview so the drag stays smooth; the sharp sample lands on release
+      const src = (this.mapSpan() / (2 * WORLD_HALF)) * RES;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, 512, 512);
     } else {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(this.img, 0, 0, 512, 512);
