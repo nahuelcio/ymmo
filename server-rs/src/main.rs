@@ -212,11 +212,16 @@ async fn client(socket: WebSocket, app: App) {
             _ = kick.notified() => None,
         };
         let Some(Ok(msg)) = msg else { break };
-        let text = match msg { Message::Text(t) => t, Message::Close(_) => break, _ => continue };
+        let m = match msg {
+            Message::Text(t) => serde_json::from_str::<Value>(&t).ok(),
+            Message::Binary(b) => binary::decode_c2s(&b), // the frequent ones: move, attack, dash, pong, stop
+            Message::Close(_) => break,
+            _ => continue,
+        };
         if window.elapsed().as_secs() >= 1 { window = std::time::Instant::now(); count = 0; }
         count += 1;
         if count > 80 { continue; } // simple flood protection (per second)
-        let Ok(m) = serde_json::from_str::<Value>(&text) else { continue };
+        let Some(m) = m else { continue };
         let Some(t) = m.get("t").and_then(|v| v.as_str()) else { continue };
         handle(&app, sid, t, &m, &mut logging_in).await;
     }
@@ -393,9 +398,16 @@ async fn main() {
     });
 
     let static_files = tower_http::services::ServeDir::new(&dist).fallback(tower_http::services::ServeFile::new(format!("{dist}/index.html")));
-    // Vite fingerprints everything under /assets/, so those can be cached forever; the rest (index.html, models) revalidates
+    // Vite fingerprints everything under /assets/, so those can be cached forever. Models and audio (public/) keep
+    // their names: cached for a day, then refreshed in the background. The page itself always revalidates.
     let cache = axum::middleware::map_response(|req_path: axum::extract::OriginalUri, mut res: axum::response::Response| async move {
-        let v = if req_path.path().starts_with("/assets/") { "public, max-age=31536000, immutable" } else { "no-cache" };
+        let p = req_path.path();
+        // (a missing file falls back to index.html: that must never be cached either)
+        let html = res.headers().get(axum::http::header::CONTENT_TYPE).map_or(false, |c| c.as_bytes().starts_with(b"text/html"));
+        let page = html || p == "/" || !res.status().is_success();
+        let v = if page { "no-cache" }
+            else if p.starts_with("/assets/") { "public, max-age=31536000, immutable" }
+            else { "public, max-age=86400, stale-while-revalidate=604800" };
         res.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static(v));
         res
     });

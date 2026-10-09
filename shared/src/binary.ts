@@ -6,7 +6,7 @@
 //   u16 update count, u16 gone count, u32 server time (ms, wraps every ~49 days)
 //   update × n: u32 id, i16 x·50, i16 z·50, i16 ry·10000, u8 hp%, u16 flags   (13 bytes)
 //   gone   × m: u32 id
-import type { EntUpd, S2C } from './protocol';
+import type { C2S, EntUpd, S2C } from './protocol';
 
 export const SNAP_UPD = 1;
 const UPD_BYTES = 13;
@@ -56,6 +56,35 @@ export function decodeSnap(buf: ArrayBuffer): { upd: EntUpd[]; gone: number[]; s
     upd.push([v.getUint32(o, true), v.getInt16(o + 4, true) / 50, v.getInt16(o + 6, true) / 50, v.getInt16(o + 8, true) / 10000, v.getUint8(o + 10), v.getUint16(o + 11, true)]);
   for (let i = 0; i < m; i++, o += 4) gone.push(v.getUint32(o, true));
   return { upd, gone, st };
+}
+
+/**
+ * The frequent client messages as binary (server-rs/src/binary.rs decode_c2s turns them back into JSON):
+ *   move: u8 16, f64 x, f64 z · attack: u8 17, u32 id, u8 force · dash: u8 18, f64 x, z, dx, dz · pong: u8 19, f64 s · stop: u8 20
+ * Anything else returns null and goes as JSON.
+ */
+export function encodeC2S(m: C2S): ArrayBuffer | null {
+  const f64s = (k: number, ...v: number[]) => {
+    const d = new DataView(new ArrayBuffer(1 + v.length * 8));
+    d.setUint8(0, k);
+    v.forEach((x, i) => d.setFloat64(1 + i * 8, x, true));
+    return d.buffer;
+  };
+  switch (m.t) {
+    case 'move': return f64s(16, m.x, m.z);
+    case 'dash': return f64s(18, m.x, m.z, m.dx, m.dz);
+    case 'pong': return f64s(19, m.s);
+    case 'stop': return new Uint8Array([20]).buffer;
+    case 'attack': {
+      if (!Number.isInteger(m.id) || m.id < 0 || m.id > 0xffffffff) return null;
+      const d = new DataView(new ArrayBuffer(6));
+      d.setUint8(0, 17);
+      d.setUint32(1, m.id, true);
+      d.setUint8(5, m.force ? 1 : 0);
+      return d.buffer;
+    }
+  }
+  return null;
 }
 
 // Combat events, the other hot path (server-rs/src/binary.rs encode_event), decoded back into the JSON

@@ -1,5 +1,5 @@
 import type { C2S, S2C } from '../../shared/src/protocol';
-import { decodeEvent, decodeSnap, SNAP_UPD } from '../../shared/src/binary';
+import { decodeEvent, decodeSnap, encodeC2S, SNAP_UPD } from '../../shared/src/binary';
 import { lang } from './lang';
 
 type Handler = (m: S2C) => void;
@@ -45,7 +45,7 @@ export class Net {
   }
 
   send(m: C2S) {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
+    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(encodeC2S(m) ?? JSON.stringify(m));
   }
 
   on<T extends S2C['t']>(type: T | '*', h: (m: Extract<S2C, { t: T }>) => void): () => void {

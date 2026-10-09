@@ -6,7 +6,8 @@
 // --raid n   group the bots in parties of n and send each party into its own raid instance
 //            (0 = stay in the overworld and run around)
 import WebSocket from 'ws';
-import { decodeEvent, decodeSnap } from '../../shared/src/binary';
+import { decodeEvent, decodeSnap, encodeC2S } from '../../shared/src/binary';
+import type { C2S } from '../../shared/src/protocol';
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -37,7 +38,7 @@ const bots: Bot[] = [];
 function startBot(i: number) {
   const ws = new WebSocket(URL);
   const user = `lt${tag}${i}`;
-  const bot: Bot = { i, ws, name: `Lt${tag}${i}`, meId: 0, x: 0, z: 0, boss: null, inRaid: false, send: (m) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(m)) };
+  const bot: Bot = { i, ws, name: `Lt${tag}${i}`, meId: 0, x: 0, z: 0, boss: null, inRaid: false, send: (m) => ws.readyState === ws.OPEN && ws.send(encodeC2S(m as C2S) ?? JSON.stringify(m)) };
   bots.push(bot);
   let pingAt = 0;
   const leader = RAID > 0 && i % RAID === 0;
