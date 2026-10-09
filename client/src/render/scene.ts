@@ -223,6 +223,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   scene.add(mergeStatic(buildZoneProps()));
   const { props: campProps, flames } = buildCamps();
   scene.add(mergeStatic(campProps), flames);
+  // Static world: bake every local matrix once so the per-frame scene traversal (render + labels) skips recomposing them.
+  for (const o of scene.children) if (o !== sky && o !== clouds && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
 
   return {
     scene, terrain, sun,
@@ -305,6 +307,15 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
         for (const ch of detail.children) ch.visible = Math.abs(ch.userData.cx - p.x) < 95 && Math.abs(ch.userData.cz - p.z) < 95;
     },
   };
+}
+
+/** Compute `o`'s subtree matrices now and stop three.js recomputing them every frame (for things that never move). */
+function freeze(o: THREE.Object3D) {
+  o.traverse((x) => {
+    x.updateMatrix();
+    x.matrixAutoUpdate = false;
+  });
+  o.updateMatrixWorld(true);
 }
 
 // The world is split into square chunks so the camera frustum (and the far plane,

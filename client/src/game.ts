@@ -117,6 +117,8 @@ export function conColor(diff: number): string {
 export class Game {
   renderer: THREE.WebGLRenderer;
   labels: CSS2DRenderer;
+  /** every entity root: the nameplate layer only walks this, not the whole world */
+  private entLayer = new THREE.Group();
   camera: THREE.PerspectiveCamera;
   world: WorldScene;
   cam: CameraController;
@@ -217,7 +219,7 @@ export class Game {
     this.hoverRing.rotation.x = -Math.PI / 2;
     this.hoverRing.visible = false;
     (this.hoverRing.material as THREE.MeshBasicMaterial).opacity = 0.5;
-    this.world.scene.add(this.targetRing, this.clickMarker, this.hoverRing);
+    this.world.scene.add(this.targetRing, this.clickMarker, this.hoverRing, this.entLayer);
 
     this.ui = new UI(this);
     this.bindNet();
@@ -647,7 +649,7 @@ export class Game {
   private removeEnt(id: number) {
     const c = this.ents.get(id);
     if (!c) return;
-    this.world.scene.remove(c.root);
+    this.entLayer.remove(c.root);
     c.label.element.remove();
     // the label layer never drops elements on its own: without this an NPC that leaves view left its quest mark stuck on screen
     c.marker?.el.remove();
@@ -718,7 +720,7 @@ export class Game {
       c.atkAt = atkAt;
       if (old) c.pos.copy(old.pos);
       this.ents.set(r.id, c);
-      this.world.scene.add(c.root);
+      this.entLayer.add(c.root);
       this.hitboxes.push(c.hit);
       this.pushSnap(c, r.x, r.z, r.ry, t);
       if (!old && r.id !== this.me.id && r.k !== 'i') c.pos.set(r.x, heightAt(r.x, r.z), r.z);
@@ -1635,6 +1637,6 @@ export class Game {
     this.fx.update();
     this.ui.update(now);
     this.post.render();
-    this.labels.render(this.world.scene, this.camera);
+    this.labels.render(this.entLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works
   }
 }
