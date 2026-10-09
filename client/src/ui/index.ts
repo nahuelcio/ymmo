@@ -6,7 +6,6 @@ import { Minimap } from './minimap';
 import { SettingsPanel } from './settings';
 import { isTouchDevice, TouchControls } from './touch';
 import { AdminPanel, CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
-import { runBenchmark } from '../bench';
 import { SPEC_LEVEL } from '../../../shared/src/data/classes';
 
 export class UI {
@@ -39,7 +38,7 @@ export class UI {
     this.admin = new AdminPanel(g, this.root);
     this.settings.onBenchmark = () => {
       this.settings.win.hide();
-      void runBenchmark(g);
+      void import('../bench').then((b) => b.runBenchmark(g)); // loaded on demand
     };
     if (isTouchDevice()) {
       new TouchControls(g, this.root);

@@ -10,5 +10,9 @@ export default defineConfig({
     proxy: { '/ws': { target: `ws://127.0.0.1:${process.env.GAME_PORT ?? '3001'}`, ws: true } },
     allowedHosts: ['localhost', 'bus-sonic-screenshots-escape.trycloudflare.com', '0.0.0.0'],
   },
-  build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 1200 },
+  build: {
+    outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 1200,
+    // three.js in its own file: it rarely changes, so players keep it cached across game updates
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }] } } },
+  },
 });
