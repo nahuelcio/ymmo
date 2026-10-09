@@ -42,7 +42,7 @@ export class SettingsPanel {
       bench.title = tx('Prueba unos segundos con muchos monstruos en pantalla, de la calidad más alta a la más baja, y te propone la mejor que tu equipo sostiene.',
         'Runs for a few seconds with a crowd of monsters on screen, from the highest quality down, and proposes the best one your machine holds.');
       bench.onclick = () => this.onBenchmark?.();
-      this.select<Preset>(tx('Calidad', 'Quality'), 'preset', [['low', tx('Baja', 'Low')], ['medium', tx('Media', 'Medium')], ['high', tx('Alta', 'High')], ['ultra', 'Ultra'], ['custom', tx('Personalizada', 'Custom')]]);
+      this.select<Preset>(tx('Calidad', 'Quality'), 'preset', [['low', tx('Baja', 'Low')], ['medium', tx('Media', 'Medium')], ['high', tx('Alta', 'High')], ['ultra', 'Ultra'], ['cine', tx('Cine (GPU potente)', 'Cinematic (strong GPU)')], ['custom', tx('Personalizada', 'Custom')]]);
       this.range(tx('Escala de resolución', 'Render scale'), 'renderScale', 0.5, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       this.check(tx('Resolución dinámica (baja si el FPS cae)', 'Dynamic resolution (lowers if FPS drops)'), 'dynamicRes');
       this.select<ShadowQ>(tx('Sombras', 'Shadows'), 'shadows', [['off', tx('No', 'Off')], ['low', tx('Bajas', 'Low')], ['medium', tx('Medias', 'Medium')], ['high', tx('Altas (suaves)', 'High (soft)')]]);
@@ -58,6 +58,8 @@ export class SettingsPanel {
       this.check(tx('Agua con olas y reflejos', 'Water with ripples and reflections'), 'fancyWater');
       this.check(tx('Viento en el pasto y los árboles', 'Wind in the grass and trees'), 'wind');
       this.check(tx('Rayos de luz del sol', 'Sun light shafts'), 'godRays');
+      this.check(tx('Luz volumétrica (haces de sol entre árboles y casas, pesada)', 'Volumetric light (sunbeams through trees and houses, heavy)'), 'volumetric');
+      this.check(tx('Reflejos del mundo en el agua (pesado)', 'World reflections on water (heavy)'), 'reflections');
       this.check(tx('Luz de faroles, fogatas y la fragua', 'Light from lamps, campfires and the forge'), 'localLights');
       this.check(tx('Polvo en el aire y luciérnagas', 'Dust in the air and fireflies'), 'particles');
       this.check(tx('Sombras de borde suave', 'Soft-edged shadows'), 'softShadows');

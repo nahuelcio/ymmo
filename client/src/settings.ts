@@ -1,7 +1,7 @@
 import { t as tx } from './lang';
 // Player-side settings (graphics, post-processing, HUD, camera), saved per browser.
 
-export type Preset = 'low' | 'medium' | 'high' | 'ultra' | 'custom';
+export type Preset = 'low' | 'medium' | 'high' | 'ultra' | 'cine' | 'custom';
 export type ShadowQ = 'off' | 'low' | 'medium' | 'high';
 export type LookPreset = 'off' | 'natural' | 'vivid' | 'aden' | 'cinematic' | 'noir' | 'custom';
 
@@ -44,6 +44,8 @@ export interface Settings {
   fpsCap: number; // 0 = unlimited
   showFps: boolean;
   foliage: boolean;
+  volumetric: boolean; // sunlight scattering in the air, shadowed (render/volumetric.ts)
+  reflections: boolean; // the world mirrored in the water (render/reflect.ts)
   relief: number; // texture relief strength (render/textures.ts bumpNormal), 0 = flat
   // post-processing shaders
   look: LookPreset;
@@ -88,13 +90,15 @@ export interface Settings {
   keys: Record<Action, string>;
 }
 
-type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage';
+type GraphicsKeys = 'renderScale' | 'antialias' | 'shadows' | 'viewDistance' | 'ao' | 'fxaa' | 'foliage' | 'volumetric' | 'reflections';
 
 export const PRESETS: Record<Exclude<Preset, 'custom'>, Pick<Settings, GraphicsKeys>> = {
-  low: { renderScale: 0.75, antialias: false, shadows: 'off', viewDistance: 220, ao: false, fxaa: false, foliage: false },
-  medium: { renderScale: 1, antialias: false, shadows: 'low', viewDistance: 320, ao: false, fxaa: true, foliage: true },
-  high: { renderScale: 1, antialias: true, shadows: 'medium', viewDistance: 420, ao: false, fxaa: false, foliage: true },
-  ultra: { renderScale: 1.25, antialias: true, shadows: 'high', viewDistance: 600, ao: true, fxaa: false, foliage: true },
+  low: { renderScale: 0.75, antialias: false, shadows: 'off', viewDistance: 220, ao: false, fxaa: false, foliage: false, volumetric: false, reflections: false },
+  medium: { renderScale: 1, antialias: false, shadows: 'low', viewDistance: 320, ao: false, fxaa: true, foliage: true, volumetric: false, reflections: false },
+  high: { renderScale: 1, antialias: true, shadows: 'medium', viewDistance: 420, ao: false, fxaa: false, foliage: true, volumetric: false, reflections: false },
+  ultra: { renderScale: 1.25, antialias: true, shadows: 'high', viewDistance: 600, ao: true, fxaa: false, foliage: true, volumetric: false, reflections: false },
+  // ultra plus light you can see in the air and a mirror-like water: for strong GPUs
+  cine: { renderScale: 1.25, antialias: true, shadows: 'high', viewDistance: 600, ao: true, fxaa: false, foliage: true, volumetric: true, reflections: true },
 };
 
 type LookKeys = 'bloom' | 'bloomStrength' | 'colorGrade' | 'saturation' | 'contrast' | 'vignette' | 'toneMapping' | 'exposure' | 'warmth' | 'sharpen';

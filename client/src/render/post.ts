@@ -8,6 +8,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Settings } from '../settings';
+import { VolumetricPass } from './volumetric';
 
 /** Sharpen, white balance, saturation, contrast and vignette in one cheap full-screen pass. */
 const GradeShader = {
@@ -45,7 +46,7 @@ const GradeShader = {
     }`,
 };
 
-const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colorGrade', 'godRays', 'tiltShift'];
+const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colorGrade', 'godRays', 'tiltShift', 'volumetric', 'shadows'];
 
 /**
  * Optional post-processing. When every effect (and MSAA) is off the scene renders
@@ -59,6 +60,9 @@ export class PostFX {
   private rays: ShaderPass | null = null;
   private tilt: ShaderPass | null = null;
 
+  /** the sun, for volumetric light (it marches the sun's shadow map) */
+  sun: THREE.DirectionalLight | null = null;
+
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, private camera: THREE.Camera) {}
 
   static needsRebuild(changed: (keyof Settings)[]) {
@@ -69,11 +73,15 @@ export class PostFX {
     this.composer?.dispose();
     this.composer = null;
     this.bloom = this.grade = this.fxaa = this.rays = this.tilt = null;
-    if (!s.antialias && !s.bloom && !s.ao && !s.fxaa && !s.colorGrade && !s.godRays && !s.tiltShift) return;
+    const vol = s.volumetric && s.shadows !== 'off' && !!this.sun && this.camera instanceof THREE.PerspectiveCamera;
+    if (!s.antialias && !s.bloom && !s.ao && !s.fxaa && !s.colorGrade && !s.godRays && !s.tiltShift && !vol) return;
     const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: s.antialias ? 4 : 0 });
+    // volumetric light reads the scene's depth: keep it in a texture
+    if (vol) target.depthTexture = new THREE.DepthTexture(size.x, size.y, THREE.FloatType);
     const c = new EffectComposer(this.renderer, target);
     c.addPass(new RenderPass(this.scene, this.camera));
+    if (vol) c.addPass(new VolumetricPass(this.camera as THREE.PerspectiveCamera, this.sun!));
     if (s.ao) {
       const ao = new GTAOPass(this.scene, this.camera, size.x, size.y);
       ao.blendIntensity = 0.8;

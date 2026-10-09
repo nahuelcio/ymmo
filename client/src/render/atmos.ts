@@ -96,6 +96,8 @@ export function waterMaterial(): THREE.ShaderMaterial {
       time: { value: 0 }, depthTex: { value: depth }, worldHalf: { value: WORLD_HALF }, day: { value: 1 },
       sunDir: { value: ATMOS.lightDir }, sunColor: { value: ATMOS.lightColor }, top: { value: ATMOS.top }, horizon: { value: ATMOS.horizon },
       fogColor: { value: new THREE.Color() }, fogNear: { value: 90 }, fogFar: { value: 420 },
+      // planar reflection of the world (render/reflect.ts, Cinematic preset); off: the analytic sky
+      reflTex: { value: null as THREE.Texture | null }, reflMat: { value: new THREE.Matrix4() }, reflOn: { value: 0 },
       // textured ripples on top of the analytic ones (propTex.ts turns them on with the textures)
       ...waterRipple,
     },
@@ -110,7 +112,9 @@ export function waterMaterial(): THREE.ShaderMaterial {
       uniform float time, worldHalf, day, fogNear, fogFar;
       uniform sampler2D depthTex;
       uniform highp sampler2DArray uRippleTex;
-      uniform float uRippleLayer, uRippleOn;
+      uniform float uRippleLayer, uRippleOn, reflOn;
+      uniform sampler2D reflTex;
+      uniform mat4 reflMat;
       uniform vec3 sunDir, sunColor, top, horizon, fogColor;
       varying vec3 vWorld;
       // height of two ripple fields drifting in different directions (G channel of the ripple layer)
@@ -138,6 +142,11 @@ export function waterMaterial(): THREE.ShaderMaterial {
         float d = texture2D(depthTex, p / (2.0 * worldHalf) + 0.5).r; // 0..1 = 0..4 m of water
         vec3 body = mix(vec3(0.15, 0.50, 0.60), vec3(0.04, 0.19, 0.36), smoothstep(0.0, 0.45, d)) * mix(0.22, 1.0, day);
         vec3 sky = mix(horizon, top, smoothstep(0.0, 0.6, r.y));
+        if (reflOn > 0.5) {
+          // the mirrored world, displaced by the ripples; the mirror image already contains the sky
+          vec4 rc = reflMat * vec4(vWorld, 1.0);
+          sky = texture2D(reflTex, clamp(rc.xy / rc.w + n.xz * 0.035, 0.001, 0.999)).rgb;
+        }
         vec3 c = mix(body, sky, 0.10 + 0.55 * fres);
         c += sunColor * pow(max(dot(r, sunDir), 0.0), 160.0) * 1.6;
         // soft shore foam: the depth is coarse (~2.5 m a texel), so no crisp line; a moving churn mask breaks the band up

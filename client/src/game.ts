@@ -206,6 +206,7 @@ export class Game {
     this.cam = new CameraController(this.camera, this.renderer.domElement);
     this.fx = new FxManager(this.world.scene);
     this.post = new PostFX(this.renderer, this.world.scene, this.camera);
+    this.post.sun = this.world.sun;
     this.world.scene.add(this.motes.points);
     try {
       this.untracked = new Set(JSON.parse(localStorage.getItem(`untracked:${this.me.name}`) ?? '[]') as string[]);
@@ -1720,6 +1721,7 @@ export class Game {
     tickLod();
     this.ui.update(now);
     this.renderer.info.reset();
+    this.world.renderReflection(settings.s.reflections, this.renderer, this.camera);
     this.post.render();
     this.labels.render(this.entLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works
     // JS time spent on this frame (the GPU works on it after this returns), smoothed
