@@ -130,7 +130,8 @@ let nav: Uint8Array | null = null;
 const toCell = (v: number) => Math.max(0, Math.min(N - 1, Math.round((v + PLAYABLE_HALF) / RES)));
 const toWorld = (c: number) => c * RES - PLAYABLE_HALF;
 
-function navGrid(): Uint8Array {
+/** The walk grid, built on first use (~100 ms for the whole world): call early to build it ahead of time. */
+export function navGrid(): Uint8Array {
   if (nav) return nav;
   ensure();
   nav = new Uint8Array(N * N);

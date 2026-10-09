@@ -10,7 +10,7 @@ import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '
 import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt } from '../../shared/src/terrain';
 import { MELEE_RANGE } from '../../shared/src/formulas';
-import { dashEnd, findPath, pushOut } from '../../shared/src/collision';
+import { dashEnd, findPath, navGrid, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
@@ -207,6 +207,8 @@ export class Game {
     this.fx = new FxManager(this.world.scene);
     this.post = new PostFX(this.renderer, this.world.scene, this.camera);
     this.post.sun = this.world.sun;
+    // the path grid takes ~100 ms to build: do it while idle, not on the first click that needs it
+    (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 500)))(() => navGrid());
     this.world.scene.add(this.motes.points);
     try {
       this.untracked = new Set(JSON.parse(localStorage.getItem(`untracked:${this.me.name}`) ?? '[]') as string[]);
@@ -1564,13 +1566,14 @@ export class Game {
     for (const c of this.ents.values()) {
       const s = c.snaps;
       let moving = (c.flags & F_MOVING) !== 0;
-      if (c === self && s.length) moving = this.updateSelf(c, now, dt);
-      // footsteps: a dust puff every third of a second while running on foot
-      if (c === self && moving && !c.roll && settings.s.particles && now - this.stepAt > 330) {
-        this.stepAt = now;
-        this.fx.dust(c.pos.clone(), 420);
-      }
-      else if (s.length) {
+      if (c === self && s.length) {
+        moving = this.updateSelf(c, now, dt);
+        // footsteps: a dust puff every third of a second while running on foot
+        if (moving && !c.roll && settings.s.particles && now - this.stepAt > 330) {
+          this.stepAt = now;
+          this.fx.dust(c.pos.clone(), 420);
+        }
+      } else if (s.length) {
         const rt = self && (c.pos.x - self.pos.x) ** 2 + (c.pos.z - self.pos.z) ** 2 > 2300 ? rtFar : rtNear;
         let x = s[s.length - 1].x, z = s[s.length - 1].z, ry = s[s.length - 1].ry;
         for (let i = s.length - 1; i > 0; i--) {
