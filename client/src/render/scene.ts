@@ -7,6 +7,7 @@ import { buildVillage, vReady } from './village';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
+import { WaterReflection } from './reflect';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
 
 const SKY = 0xa9c6e0;
@@ -177,6 +178,8 @@ export interface WorldScene {
   follow(p: THREE.Vector3): void;
   /** ground textures: off, low or high (render/terrainTex.ts) */
   setTextureQuality(q: TerrainTexQuality): void;
+  /** Cinematic preset: render the world mirrored in the water for this frame (before the main render). */
+  renderReflection(on: boolean, renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
 }
 
 export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene {
@@ -206,7 +209,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     for (const zn of ZONES) {
       const w = 1 - smoothstep(zn.r * 0.6, zn.r * 1.5, Math.hypot(x - zn.x, z - zn.z));
       if (w <= 0) continue;
-      const p = SKIES[zn.id];
+      // zones without a palette of their own (the 20-50 ones) keep the town's sky
+      const p = SKIES[zn.id] as SkyPal | undefined;
+      if (!p) continue;
       tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
       tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
       tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;
@@ -229,6 +234,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   scene.add(buildBushes());
   const water = buildWater();
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
+  const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
   scene.add(water);
   const detail = buildDetail();
   scene.add(detail);
@@ -244,6 +250,10 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     scene, terrain, sun,
     detail,
     sky,
+    renderReflection(on, renderer, camera) {
+      // only the fancy water shader can show it
+      reflection.update(on && water.material === waterFancy, renderer, scene, camera, water);
+    },
     setTextureQuality: (q) => {
       terrainTex.set(q);
       setPropTextures(q, opts.maxAnisotropy ?? 1, opts.precompile);
