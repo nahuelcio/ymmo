@@ -70,6 +70,7 @@ export interface CEnt {
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
 const INTERP_BASE = 70;
+const INTERP_MAX = 200;
 // ponytail: the server reports these only as chat text, so they are recognised by wording (es/en);
 // a structured message would be sturdier but needs a protocol change.
 const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You have earned) (\d+) (?:de )?experienc/;
@@ -696,7 +697,7 @@ export class Game {
     else if (d < this.clockOff) this.clockOff = d;
     else this.clockOff += (d - this.clockOff) * 0.002; // follow slow clock drift
     this.jitter = this.jitter * 0.97 + (d - this.clockOff) * 0.03;
-    const want = Math.min(150, INTERP_BASE + this.jitter * 2);
+    const want = Math.min(INTERP_MAX, INTERP_BASE + this.jitter * 2); // bursty links get up to 200 ms of cushion
     this.interpDelay += (want - this.interpDelay) * 0.05;
     return st + this.clockOff;
   }
