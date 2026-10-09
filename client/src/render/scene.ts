@@ -10,6 +10,19 @@ import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
 
 const SKY = 0xa9c6e0;
+// Height fog: the standard fog gets a little thicker near the ground (valleys, low fields), scaled by distance
+// so nearby geometry is untouched. Patched once on three's shared chunks, so every standard material picks it up.
+const FC = THREE.ShaderChunk;
+FC.fog_pars_vertex = FC.fog_pars_vertex.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying float vFogY;');
+FC.fog_vertex = FC.fog_vertex.replace('vFogDepth = - mvPosition.z;', `vFogDepth = - mvPosition.z;
+	#ifdef USE_INSTANCING
+		vFogY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;
+	#else
+		vFogY = (modelMatrix * vec4(transformed, 1.0)).y;
+	#endif`);
+FC.fog_pars_fragment = FC.fog_pars_fragment.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying float vFogY;');
+FC.fog_fragment = FC.fog_fragment.replace('gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );',
+  'fogFactor = clamp(fogFactor * (1.0 + 0.55 * (1.0 - smoothstep(0.0, 14.0, vFogY))), 0.0, 1.0);\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );');
 const SNAP_UP = new THREE.Vector3(0, 1, 0), snapR = new THREE.Vector3(), snapU = new THREE.Vector3(), snapped = new THREE.Vector3();
 
 /** Sky palette per region: zenith, horizon (also fog), ground bounce, sun colour & strength, cloud tint. */
