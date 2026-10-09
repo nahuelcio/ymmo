@@ -1,5 +1,9 @@
 node_modules
 server-rs/target
+server-rs/data/game.db*
 client/dist
 server/data
 .git
+.claude
+.env
+graft
