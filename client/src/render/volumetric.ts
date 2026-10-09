@@ -74,7 +74,8 @@ const shader = (compare: boolean) => ({
       // Henyey-Greenstein: most of the light scatters forward, a glow around the sun
       float g = 0.55, c = dot(dir, lightDir);
       float phase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * c, 1.5) * 0.25;
-      base.rgb += lightColor * acc * (0.35 + phase);
+      // mostly the glow towards the sun; only a little haze everywhere else, or it washes the image out
+      base.rgb += lightColor * acc * (0.08 + phase);
       gl_FragColor = base;
     }`,
 });
