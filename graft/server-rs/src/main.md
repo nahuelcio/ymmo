@@ -36,6 +36,6 @@
 - hub_loop · function · L118-L172 — async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>)
 - ws_handler · function · L174-L176 — async fn ws_handler(ws: WebSocketUpgrade, State(app): State<App>) -> impl IntoResponse
 - LINKDEAD · constant · L179-L179 — const LINKDEAD: std::time::Duration = std::time::Duration::from_secs(30);
-- client · function · L181-L236 — async fn client(socket: WebSocket, app: App)
-- handle · function · L238-L356 — async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool)
-- main · function · L359-L422 — async fn main()
+- client · function · L181-L241 — async fn client(socket: WebSocket, app: App)
+- handle · function · L243-L361 — async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool)
+- main · function · L364-L434 — async fn main()

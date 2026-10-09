@@ -1,71 +1,75 @@
 # client/src/game.ts
 
-- Snap · interface · L31-L31 — interface Snap
-- CEnt · interface · L33-L66 — interface CEnt
-- Pick · type · L84-L84 — type Pick = { ent?: CEnt; point?: THREE.Vector3 };
-- decalMat · function · L88-L89 — decalMat = (color: number, opacity: number)
-- svgCursor · function · L93-L94 — svgCursor = (svg: string, x: number, y: number, fallback: string)
-- conColor · function · L107-L115 — function conColor(diff: number): string
-- Game · class · L117-L1657 — class Game
-- constructor · method · L181-L241 — constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>)
-- glow · function · L219-L219 — glow = (c: number)
-- self · method · L243-L245 — get self(): CEnt | undefined
-- resize · method · L247-L254 — private resize()
-- applySettings · method · L256-L318 — private applySettings(s: Settings, changed: (keyof Settings)[])
-- has · function · L257-L257 — has = (...k: (keyof Settings)[])
-- sys · method · L320-L322 — sys(text: string)
-- bindNet · method · L325-L455 — private bindNet()
-- count · function · L341-L341 — count = (l: InvItem[])
-- onSync · function · L350-L351 — onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void)
-- makeLabel · method · L457-L462 — private makeLabel(): { el: HTMLDivElement; obj: CSS2DObject }
-- refreshLabel · method · L464-L528 — refreshLabel(c: CEnt)
-- toggleTracked · method · L533-L542 — toggleTracked(id: string)
-- questTargets · method · L545-L552 — questTargets(): { quest: string; mobs: Set<string> }[]
-- questMarkerFor · method · L555-L559 — questMarkerFor(npcId: string): QuestMarker
-- refreshQuestMarker · method · L561-L577 — private refreshQuestMarker(c: CEnt)
-- refreshQuestMarkers · method · L579-L584 — refreshQuestMarkers()
-- addStatusIcons · method · L587-L594 — private addStatusIcons(c: CEnt)
-- addHpBar · method · L596-L603 — private addHpBar(c: CEnt)
-- updateHpBar · method · L606-L612 — private updateHpBar(c: CEnt)
-- buildEnt · method · L614-L655 — private buildEnt(r: EntAdd): CEnt
-- removeEnt · method · L657-L673 — private removeEnt(id: number)
-- serverToLocal · method · L682-L693 — private serverToLocal(st: number | undefined): number
-- pushSnap · method · L695-L713 — private pushSnap(c: CEnt, x: number, z: number, ry: number, now: number)
-- onSnap · method · L715-L761 — private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[], st?: number)
-- speech · method · L764-L778 — speech(c: CEnt, text: string)
-- floatText · method · L780-L796 — private floatText(c: CEnt, text: string, cls: string)
-- near · method · L799-L803 — near(c: CEnt): number
-- flash · method · L806-L821 — private flash(c: CEnt)
-- onDmg · method · L823-L863 — private onDmg(m: Extract<S2C, { t: 'dmg' }>)
-- onFx · method · L865-L917 — private onFx(sId: number, tId: number, skill: string)
-- chest · function · L868-L868 — chest = (e: CEnt)
-- setTarget · method · L920-L929 — setTarget(id: number | null)
-- interact · method · L931-L939 — interact(c: CEnt)
-- isHostile · method · L941-L947 — isHostile(c: CEnt): boolean
-- predictChase · method · L950-L955 — private predictChase(t: CEnt, range: number)
-- serverAction · method · L958-L971 — private serverAction(m: Parameters<Net['send']>[0])
-- travel · method · L974-L978 — travel(x: number, z: number, append: boolean)
-- walkRoute · method · L980-L984 — private walkRoute()
-- routePath · method · L987-L993 — routePath(): { x: number; z: number }[]
-- moveTo · method · L995-L1009 — moveTo(p: THREE.Vector3, marker: boolean, route = false)
-- ensureEnemyTarget · method · L1012-L1026 — private ensureEnemyTarget(): boolean
-- attackTarget · method · L1028-L1045 — attackTarget()
-- dash · method · L1048-L1087 — dash()
-- stop · method · L1090-L1095 — stop()
-- setJoystick · method · L1101-L1108 — setJoystick(dx: number, dy: number)
-- driveJoystick · method · L1111-L1123 — private driveJoystick(now: number)
-- showWho · method · L1130-L1140 — private showWho(on: boolean)
-- fillWho · method · L1142-L1157 — private fillWho(names: string[])
-- dropPredictedCooldowns · method · L1160-L1163 — private dropPredictedCooldowns(except?: string)
-- useSkill · method · L1165-L1187 — useSkill(id: string)
-- useItemById · method · L1189-L1192 — useItemById(itemId: string)
-- nextTarget · method · L1194-L1203 — nextTarget()
-- pickupNearest · method · L1205-L1212 — pickupNearest()
-- bindInput · method · L1215-L1351 — private bindInput()
-- pick · function · L1218-L1230 — pick = (e: PointerEvent | MouseEvent, groundOnly = false): Pick
-- cursorFor · function · L1231-L1236 — cursorFor = (c: CEnt | undefined)
-- typing · function · L1279-L1282 — typing = ()
-- bound · function · L1284-L1287 — bound = (e: KeyboardEvent)
-- entColor · method · L1355-L1360 — private entColor(c: CEnt): number
-- updateSelf · method · L1367-L1467 — private updateSelf(c: CEnt, now: number, dt: number): boolean
-- frame · method · L1469-L1656 — private frame()
+- Snap · interface · L32-L32 — interface Snap
+- CEnt · interface · L34-L71 — interface CEnt
+- Pick · type · L90-L90 — type Pick = { ent?: CEnt; point?: THREE.Vector3 };
+- decalMat · function · L94-L95 — decalMat = (color: number, opacity: number)
+- svgCursor · function · L99-L100 — svgCursor = (svg: string, x: number, y: number, fallback: string)
+- conColor · function · L113-L121 — function conColor(diff: number): string
+- Game · class · L123-L1730 — class Game
+- constructor · method · L187-L248 — constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>)
+- glow · function · L226-L226 — glow = (c: number)
+- self · method · L250-L252 — get self(): CEnt | undefined
+- basePixelRatio · method · L255-L257 — private basePixelRatio()
+- setResScale · method · L259-L263 — private setResScale(k: number)
+- adaptRes · method · L274-L293 — private adaptRes(now: number, ms: number)
+- resize · method · L295-L302 — private resize()
+- applySettings · method · L304-L366 — private applySettings(s: Settings, changed: (keyof Settings)[])
+- has · function · L305-L305 — has = (...k: (keyof Settings)[])
+- sys · method · L368-L370 — sys(text: string)
+- bindNet · method · L373-L488 — private bindNet()
+- count · function · L389-L389 — count = (l: InvItem[])
+- onSync · function · L398-L399 — onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void)
+- resetWorld · method · L494-L509 — resetWorld(m: { self: Extract<S2C, { t: 'enter' }>['self']; inv: Extract<S2C, { t: 'enter' }>['inv'] })
+- makeLabel · method · L511-L516 — private makeLabel(): { el: HTMLDivElement; obj: CSS2DObject }
+- refreshLabel · method · L518-L582 — refreshLabel(c: CEnt)
+- toggleTracked · method · L587-L596 — toggleTracked(id: string)
+- questTargets · method · L599-L606 — questTargets(): { quest: string; mobs: Set<string> }[]
+- questMarkerFor · method · L609-L613 — questMarkerFor(npcId: string): QuestMarker
+- refreshQuestMarker · method · L615-L631 — private refreshQuestMarker(c: CEnt)
+- refreshQuestMarkers · method · L633-L638 — refreshQuestMarkers()
+- addStatusIcons · method · L641-L648 — private addStatusIcons(c: CEnt)
+- addHpBar · method · L650-L657 — private addHpBar(c: CEnt)
+- updateHpBar · method · L660-L666 — private updateHpBar(c: CEnt)
+- buildEnt · method · L668-L710 — private buildEnt(r: EntAdd): CEnt
+- removeEnt · method · L712-L728 — private removeEnt(id: number)
+- serverToLocal · method · L737-L748 — private serverToLocal(st: number | undefined): number
+- pushSnap · method · L750-L768 — private pushSnap(c: CEnt, x: number, z: number, ry: number, now: number)
+- onSnap · method · L770-L816 — private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[], st?: number)
+- speech · method · L819-L833 — speech(c: CEnt, text: string)
+- floatText · method · L835-L851 — private floatText(c: CEnt, text: string, cls: string)
+- near · method · L854-L858 — near(c: CEnt): number
+- flash · method · L861-L876 — private flash(c: CEnt)
+- onDmg · method · L878-L923 — private onDmg(m: Extract<S2C, { t: 'dmg' }>)
+- onFx · method · L925-L978 — private onFx(sId: number, tId: number, skill: string)
+- chest · function · L928-L928 — chest = (e: CEnt)
+- setTarget · method · L981-L990 — setTarget(id: number | null)
+- interact · method · L992-L1000 — interact(c: CEnt)
+- isHostile · method · L1002-L1008 — isHostile(c: CEnt): boolean
+- predictChase · method · L1011-L1016 — private predictChase(t: CEnt, range: number)
+- serverAction · method · L1019-L1032 — private serverAction(m: Parameters<Net['send']>[0])
+- travel · method · L1035-L1039 — travel(x: number, z: number, append: boolean)
+- walkRoute · method · L1041-L1045 — private walkRoute()
+- routePath · method · L1048-L1054 — routePath(): { x: number; z: number }[]
+- moveTo · method · L1056-L1070 — moveTo(p: THREE.Vector3, marker: boolean, route = false)
+- ensureEnemyTarget · method · L1073-L1087 — private ensureEnemyTarget(): boolean
+- attackTarget · method · L1089-L1109 — attackTarget()
+- dash · method · L1112-L1152 — dash()
+- stop · method · L1155-L1160 — stop()
+- setJoystick · method · L1166-L1173 — setJoystick(dx: number, dy: number)
+- driveJoystick · method · L1176-L1188 — private driveJoystick(now: number)
+- showWho · method · L1195-L1205 — private showWho(on: boolean)
+- fillWho · method · L1207-L1222 — private fillWho(names: string[])
+- dropPredictedCooldowns · method · L1225-L1228 — private dropPredictedCooldowns(except?: string)
+- useSkill · method · L1230-L1252 — useSkill(id: string)
+- useItemById · method · L1254-L1257 — useItemById(itemId: string)
+- nextTarget · method · L1259-L1268 — nextTarget()
+- pickupNearest · method · L1270-L1277 — pickupNearest()
+- bindInput · method · L1280-L1416 — private bindInput()
+- pick · function · L1283-L1295 — pick = (e: PointerEvent | MouseEvent, groundOnly = false): Pick
+- cursorFor · function · L1296-L1301 — cursorFor = (c: CEnt | undefined)
+- typing · function · L1344-L1347 — typing = ()
+- bound · function · L1349-L1352 — bound = (e: KeyboardEvent)
+- entColor · method · L1420-L1425 — private entColor(c: CEnt): number
+- updateSelf · method · L1432-L1532 — private updateSelf(c: CEnt, now: number, dt: number): boolean
+- frame · method · L1534-L1729 — private frame()

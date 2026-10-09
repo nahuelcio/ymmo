@@ -32,20 +32,21 @@
 - cape · function · L604-L608 — function cape(torso: THREE.Object3D, color: number, len = 1.1)
 - apron · function · L609-L611 — function apron(torso: THREE.Object3D, color: number)
 - weaponKindOf · function · L613-L617 — function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind
-- playerModel · function · L619-L651 — function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig
-- it · function · L623-L623 — it = (id: string | null | undefined)
-- zone · function · L633-L633 — zone = (d: ItemDef | null): QZone
-- mobModel · function · L653-L710 — function mobModel(tplId: string): Rig
-- goblinRig · function · L712-L733 — function goblinRig(id: string, skin: number, scale: number): Rig
-- orcRig · function · L735-L768 — function orcRig(id: string, skin: number, scale: number): Rig
-- undeadRig · function · L770-L811 — function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig
-- Outfit · interface · L813-L825 — interface Outfit
-- NpcDress · interface · L850-L862 — interface NpcDress
-- qNpc · function · L893-L914 — function qNpc(n: (typeof NPCS)[number]): Rig
-- cloth · function · L896-L896 — cloth = (): QZone
-- npcModel · function · L916-L948 — function npcModel(npcId: string): Rig
-- itemModel · function · L951-L1010 — function itemModel(itemId: string): THREE.Group
-- lerp · function · L1012-L1012 — lerp = (a: number, b: number, t: number)
-- bake · function · L1024-L1057 — function bake(rig: Rig): Rig
-- visit · function · L1026-L1054 — visit = (g: THREE.Object3D)
-- animate · function · L1059-L1129 — function animate(rig: Rig, s: AnimState)
+- rimLit · function · L624-L641 — function rimLit(root: THREE.Object3D)
+- playerModel · function · L643-L675 — function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig
+- it · function · L647-L647 — it = (id: string | null | undefined)
+- zone · function · L657-L657 — zone = (d: ItemDef | null): QZone
+- mobModel · function · L677-L734 — function mobModel(tplId: string): Rig
+- goblinRig · function · L736-L757 — function goblinRig(id: string, skin: number, scale: number): Rig
+- orcRig · function · L759-L792 — function orcRig(id: string, skin: number, scale: number): Rig
+- undeadRig · function · L794-L835 — function undeadRig(id: string, color: number, scale: number, boss: boolean): Rig
+- Outfit · interface · L837-L849 — interface Outfit
+- NpcDress · interface · L874-L886 — interface NpcDress
+- qNpc · function · L917-L938 — function qNpc(n: (typeof NPCS)[number]): Rig
+- cloth · function · L920-L920 — cloth = (): QZone
+- npcModel · function · L940-L972 — function npcModel(npcId: string): Rig
+- itemModel · function · L975-L1034 — function itemModel(itemId: string): THREE.Group
+- lerp · function · L1036-L1036 — lerp = (a: number, b: number, t: number)
+- bake · function · L1048-L1081 — function bake(rig: Rig): Rig
+- visit · function · L1050-L1078 — visit = (g: THREE.Object3D)
+- animate · function · L1083-L1153 — function animate(rig: Rig, s: AnimState)

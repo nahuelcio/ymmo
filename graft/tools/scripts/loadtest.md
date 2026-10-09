@@ -1,7 +1,7 @@
 # tools/scripts/loadtest.ts
 
-- arg · function · L11-L14 — arg = (k: string, d: string)
-- Bot · interface · L24-L34 — interface Bot
-- startBot · function · L37-L127 — function startBot(i: number)
-- pct · function · L131-L134 — pct = (q: number)
-- report · function · L135-L136 — report = ()
+- arg · function · L12-L15 — arg = (k: string, d: string)
+- Bot · interface · L25-L35 — interface Bot
+- startBot · function · L38-L128 — function startBot(i: number)
+- pct · function · L132-L135 — pct = (q: number)
+- report · function · L136-L137 — report = ()
