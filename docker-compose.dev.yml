@@ -22,7 +22,8 @@ services:
       - -c
       - |
         npm install --no-audit --no-fund && npm run export-data || exit 1
-        cargo watch --poll -w server-rs/src -w server-rs/Cargo.toml -w server-rs/data/game.json -x 'run --manifest-path server-rs/Cargo.toml' &
+        # cargo watch needs a Cargo.toml in its directory; the server itself runs from /app (.env, client/dist)
+        (cd server-rs && cargo watch --poll -w src -w Cargo.toml -w data/game.json -s 'cd /app && exec cargo run --manifest-path server-rs/Cargo.toml') &
         exec npx vite --config client/vite.config.ts --host 0.0.0.0
 
 volumes:
