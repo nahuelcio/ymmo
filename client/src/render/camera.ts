@@ -5,26 +5,44 @@ import { getObstacles, type Obstacle } from '../../../shared/src/collision';
 
 /** Solid walls the camera must not clip through: boxes (houses, walls) and big circles (rocks, huts, tents). Thin trunks are skipped. */
 let walls: Obstacle[] | null = null;
-const solidAt = (x: number, z: number) => {
-  walls ??= getObstacles().filter((o) => o.k === 'b' || o.r >= 1);
-  for (const ob of walls) {
+// ponytail: obstacles are 2D, so their height is guessed from the shape (thick box = house with roof, thin box = wall or stall,
+// circle = tent/hut/boulder about as tall as it is wide). Give Obstacle a real height if a prop reads wrong.
+const topOf = (ob: Obstacle) => heightAt(ob.x, ob.z) + (ob.k === 'c' ? ob.r * 1.2 : ob.hd < 1 ? 4 : 6);
+/**
+ * Exact ground distance from (ax,az) towards the unit direction (dx,dz) to the first wall the camera arm really goes through,
+ * or Infinity. The arm starts at height y0 and climbs `rise` per metre, so an obstacle it clears over the top doesn't count.
+ */
+function wallDist(ax: number, az: number, dx: number, dz: number, len: number, y0: number, rise: number, obs?: Obstacle[]): number {
+  obs ??= walls ??= getObstacles().filter((o) => o.k === 'b' || o.r >= 1);
+  let best = Infinity;
+  for (const ob of obs) {
+    const mx = ax - ob.x, mz = az - ob.z;
+    let t0: number, t1: number;
     if (ob.k === 'c') {
-      if ((x - ob.x) ** 2 + (z - ob.z) ** 2 < ob.r * ob.r) return true;
+      const b = mx * dx + mz * dz, s = Math.sqrt(b * b - (mx * mx + mz * mz - ob.r * ob.r));
+      t0 = -b - s;
+      t1 = -b + s;
     } else {
-      const dx = x - ob.x, dz = z - ob.z;
-      if (Math.abs(dx * ob.cos - dz * ob.sin) < ob.hw && Math.abs(dx * ob.sin + dz * ob.cos) < ob.hd) return true;
+      // slab test in the box's local frame; a ray parallel to a side divides by zero, and the ±Infinity/NaN fall out below
+      const ox = mx * ob.cos - mz * ob.sin, oz = mx * ob.sin + mz * ob.cos;
+      const vx = dx * ob.cos - dz * ob.sin, vz = dx * ob.sin + dz * ob.cos;
+      const x0 = (-ob.hw - ox) / vx, x1 = (ob.hw - ox) / vx, z0 = (-ob.hd - oz) / vz, z1 = (ob.hd - oz) / vz;
+      t0 = Math.max(Math.min(x0, x1), Math.min(z0, z1));
+      t1 = Math.min(Math.max(x0, x1), Math.max(z0, z1));
     }
+    if (!(t0 <= t1 && t1 >= 0)) continue; // missed, behind the origin, or NaN
+    const t = Math.max(0, t0);
+    // the arm only climbs, so it is lowest where it enters
+    if (t < best && y0 + rise * t < topOf(ob)) best = t;
   }
-  return false;
-};
-/** Distance along the ground ray (ax,az)->(bx,bz) before the first wall, or Infinity. Sampled, ~0.5 m steps. */
-function wallDist(ax: number, az: number, bx: number, bz: number): number {
-  const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 0.5);
-  for (let i = 1; i <= n; i++) {
-    const t = i / n;
-    if (solidAt(ax + (bx - ax) * t, az + (bz - az) * t)) return (i - 1) / n * L;
-  }
-  return Infinity;
+  return best < len ? best : Infinity;
+}
+if (import.meta.env.DEV) {
+  const box: Obstacle[] = [{ k: 'b', x: 5, z: 0, hw: 1, hd: 0.1, rot: 0, cos: 1, sin: 0 }, { k: 'c', x: 0, z: 10, r: 2 }];
+  console.assert(wallDist(0, 0, 1, 0, 20, -1e9, 0, box) === 4, 'wallDist: thin box');
+  console.assert(wallDist(0, 0, 0, 1, 20, -1e9, 0, box) === 8, 'wallDist: circle');
+  console.assert(wallDist(0, 0, 1, 0, 3, -1e9, 0, box) === Infinity && wallDist(0, 0, -1, 0, 20, -1e9, 0, box) === Infinity, 'wallDist: out of reach / behind');
+  console.assert(wallDist(0, 0, 1, 0, 20, 1e9, 0, box) === Infinity, 'wallDist: over the top');
 }
 
 /** L2-style third person orbit camera: right-drag rotates, wheel zooms. */
@@ -40,9 +58,7 @@ export class CameraController {
   keys = { left: false, right: false, up: false, down: false };
   private shakeAmt = 0;
   /** distance the camera is allowed to sit from the focus; eases in fast when a wall blocks, out slowly */
-  private capD = Infinity;
-  private wallWant = Infinity;
-  private frame = 0;
+  private capD = 14;
 
   /** Short camera shake (e.g. when taking a critical hit). */
   shake(amount: number) {
@@ -131,22 +147,20 @@ export class CameraController {
     if (this.keys.right) this.yaw -= dt * 2;
     if (this.keys.up) this.pitch = Math.min(1.35, this.pitch + dt);
     if (this.keys.down) this.pitch = Math.max(0.05, this.pitch - dt);
+    const prevDist = this.dist;
     this.dist += (this.targetDist - this.dist) * Math.min(1, dt * 10);
     this.focus.lerp(p, Math.min(1, dt * 12));
     const f = this.focus;
-    // wall check every 3rd frame against the full-length line; the cached result is eased in between
-    if (this.frame++ % 3 === 0) {
-      const fx = f.x + Math.sin(this.yaw) * Math.cos(this.pitch) * this.dist;
-      const fz = f.z + Math.cos(this.yaw) * Math.cos(this.pitch) * this.dist;
-      const hit = wallDist(f.x, f.z, fx, fz);
-      this.wallWant = hit === Infinity ? Infinity : Math.max(1.2, hit - 0.5);
-    }
-    if (this.capD === Infinity) this.capD = this.dist;
-    const want = Math.min(this.dist, this.wallWant);
+    const sy = Math.sin(this.yaw), cyaw = Math.cos(this.yaw), cp = Math.cos(this.pitch);
+    // walls are 2D: the hit is a ground distance, so it is converted to a distance along the pitched camera arm
+    const hit = wallDist(f.x, f.z, sy, cyaw, cp * this.dist, f.y + 1.6, Math.tan(this.pitch));
+    const want = Math.min(this.dist, Math.max(1.2, (hit - 0.5) / cp));
+    // with nothing in the way the cap follows a manual zoom-out directly, instead of at the slow ease-out rate
+    if (want === this.dist) this.capD += Math.max(0, this.dist - prevDist);
     this.capD += (want - this.capD) * Math.min(1, dt * (want < this.capD ? 18 : 4));
     const d = Math.min(this.dist, this.capD);
-    const cx = f.x + Math.sin(this.yaw) * Math.cos(this.pitch) * d;
-    const cz = f.z + Math.cos(this.yaw) * Math.cos(this.pitch) * d;
+    const cx = f.x + sy * cp * d;
+    const cz = f.z + cyaw * cp * d;
     let cy = f.y + 1.6 + Math.sin(this.pitch) * d;
     cy = Math.max(cy, heightAt(cx, cz) + 0.8);
     this.camera.position.set(cx, cy, cz);

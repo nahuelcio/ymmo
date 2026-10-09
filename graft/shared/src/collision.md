@@ -1,24 +1,26 @@
 # shared/src/collision.ts
 
-- Obstacle · type · L7-L9 — type Obstacle = | { k: 'c'; x: number; z: number; r: number } | { k: 'b'; x: number; z: number; hw: number; hd: number; rot: number; cos: number; sin: number };
-- circle · function · L14-L14 — circle = (x: number, z: number, r: number): Obstacle
-- obb · function · L15-L16 — obb = (x: number, z: number, hw: number, hd: number, rot: number): Obstacle
-- buildObstacles · function · L18-L47 — function buildObstacles(): Obstacle[]
-- bound · function · L49-L49 — bound = (ob: Obstacle)
-- hkey · function · L55-L55 — hkey = (cx: number, cz: number)
-- ensure · function · L57-L71 — function ensure()
-- getObstacles · function · L73-L76 — function getObstacles(): Obstacle[]
-- pushOut · function · L79-L123 — function pushOut(x: number, z: number, r = WALK_RADIUS): { x: number; z: number }
-- toCell · function · L130-L130 — toCell = (v: number)
-- toWorld · function · L131-L131 — toWorld = (c: number)
-- navGrid · function · L133-L155 — function navGrid(): Uint8Array
-- blockedCell · function · L157-L157 — blockedCell = (cx: number, cz: number)
-- lineClear · function · L160-L168 — function lineClear(ax: number, az: number, bx: number, bz: number): boolean
-- nearestFree · function · L170-L179 — function nearestFree(cx: number, cz: number): [number, number] | null
-- scratch · function · L185-L191 — function scratch()
-- findPath · function · L198-L320 — function findPath(sx: number, sz: number, tx: number, tz: number): { x: number; z: number }[]
-- push · function · L219-L237 — push = (f: number, n: number)
-- pop · function · L238-L254 — pop = (): number
-- h · function · L256-L259 — h = (n: number)
-- free · function · L260-L260 — free = (cx: number, cz: number)
-- dashEnd · function · L324-L332 — function dashEnd(x: number, z: number, dx: number, dz: number, r = WALK_RADIUS): { x: number; z: number }
+Shared static-world collision and pathfinding module that keeps players and mobs out of the map's trees, rocks, town and camps and computes walkable paths, so authoritative server movement and client prediction agree exactly.
+
+- Obstacle · type · L7-L9 — Discriminated union describing every static blocker on the map as either a circle or a rotated box (with precomputed cos/sin), the single shape vocabulary shared by collision resolution and the nav grid.
+- circle · function · L14-L14 — Convenience factory that wraps a point-and-radius hitbox into a circle Obstacle for prop placement.
+- obb · function · L15-L16 — Convenience factory that wraps a rotated rectangular hitbox into an oriented-box Obstacle, baking cos/sin into the record so later collision tests skip trigonometry.
+- buildObstacles · function · L18-L47 — Gathers every static prop from the world layout (trees, rocks, town houses/walls/gates/fountain, zone props, bandit camps) into the single obstacle list the collision and nav systems consume.
+- bound · function · L49-L49 — Computes a conservative world-space bounding radius for any obstacle (circle radius or box diagonal) used for coarse spatial-hash seeding and nav rasterization bounds.
+- hkey · function · L55-L55 — Packs two grid-cell coordinates into one unique numeric Map key for the spatial hash.
+- ensure · function · L57-L71 — Lazily builds the obstacle list and the 8-unit spatial hash on the first collision query, seeding each obstacle into every cell its inflated bounding radius overlaps.
+- getObstacles · function · L73-L76 — Grants systems (e.g. renderers) access to the full static obstacle list, building it on first use.
+- pushOut · function · L79-L123 — The core movement rule: resolves a walking body out of any overlapping static obstacle using up to three passes over its spatial-hash cell, which makes bodies slide naturally along walls.
+- toCell · function · L130-L130 — Converts a world coordinate to a nav grid cell index, clamped to the grid bounds.
+- toWorld · function · L131-L131 — Converts a nav cell index back to its world-space coordinate.
+- navGrid · function · L134-L156 — Rasterizes all obstacles into a walkable/blocked bitmap, inflating each obstacle by the walker radius so any grid path is automatically safe for a body of default size.
+- blockedCell · function · L158-L158 — Single source of truth for "can a walker occupy this cell": false when the cell is off-grid or flagged blocked.
+- lineClear · function · L161-L169 — Reports whether a walker can move in a straight line between two points by sampling the segment every half cell and checking each nav cell — used to skip A* and to simplify paths.
+- nearestFree · function · L171-L180 — Finds the closest walkable nav cell to a requested one via an expanding ring scan, so paths requested from or toward a spot inside an obstacle degrade gracefully instead of failing.
+- scratch · function · L186-L192 — Lazily allocates one set of typed-array buffers reused by every A* search, eliminating per-query allocation and GC pressure.
+- findPath · function · L199-L321 — Produces walk waypoints from a start to a target around static obstacles — straight line when clear, otherwise A* over the nav grid plus string-pulling simplification, falling back to the closest reachable point when the goal is walled off.
+- push · function · L220-L238 — Binary min-heap insert ordered by A* f-score (heap doubles when full) that keeps the open set cheap to extend.
+- pop · function · L239-L255 — Removes and returns the lowest-f-score node from the binary heap via sift-down, implementing the A* "expand best node" step.
+- h · function · L257-L260 — Octile-distance heuristic that estimates remaining cost on the 8-connected grid so A* stays admissible and fast.
+- free · function · L261-L261 — Checks that a cell is in bounds and not marked blocked, guarding neighbor expansion.
+- dashEnd · function · L325-L333 — Simulates the full length of a dodge roll by stepping in 0.5m increments and stopping early when collision resolution blocks movement, exported so client prediction matches the server exactly.

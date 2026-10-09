@@ -142,6 +142,8 @@ export class PostFX {
   /** Where the sun is on screen (uv, may be off screen) and how strong its shafts are this frame. */
   setSun(u: number, v: number, strength: number) {
     if (!this.rays) return;
+    // sun out of view or down: skip the whole full-screen pass, not just its taps
+    this.rays.enabled = strength > 0.001;
     this.rays.uniforms.sunPos.value.set(u, v);
     this.rays.uniforms.strength.value = strength;
   }
