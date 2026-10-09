@@ -1,6 +1,6 @@
 # shared/src/i18n/index.ts
 
-The localization hub that lets the game present every entity, quest, and NPC text in English while the underlying data is natively Argentine Spanish, with Spanish as the universal fallback when no English string exists.
+Bilingual (Spanish/English) facade that resolves every kind of game-data label — items, mobs, skills, races/classes/specs, quests, NPCs, zones, camps, statuses — for UI display, always falling back to the Spanish source data when an English entry is missing.
 
 - Lang · type · L14-L14 — Identifies which of the two supported UI languages (Argentine Spanish or English) all text lookups should resolve to.
 - isLang · function · L19-L19 — Type guard that validates untrusted values (e.g. a saved preference or URL param) as one of the two supported language ids before use.
@@ -13,9 +13,9 @@ The localization hub that lets the game present every entity, quest, and NPC tex
 - skillDesc · function · L36-L36 — Localized skill description that explains a skill's effect.
 - raceName · function · L37-L37 — Localized playable race name shown during character creation and on character sheets.
 - raceDesc · function · L38-L38 — Localized description of a race's traits for character creation.
-- specName · function · L39-L39 — specName = (s: Spec, l: Lang)
-- specDesc · function · L40-L40 — specDesc = (s: Spec, l: Lang)
-- className · function · L42-L42 — Localized playable class name shown in character creation and class UI.
+- specName · function · L39-L39 — Localized display name of a class specialization, pulling the English name from the EN dictionary or falling back to the Spanish spec definition.
+- specDesc · function · L40-L40 — Localized description text of a class specialization, pulling the English description from the EN dictionary or falling back to the Spanish spec definition.
+- className · function · L42-L42 — Picks the class name shown on the character: the specialization's name once a spec has been chosen, otherwise the base class name in the reader's language.
 - genderName · function · L43-L43 — Localized gender label shown during character creation.
 - genderDesc · function · L44-L44 — Localized description accompanying a gender choice in character creation.
 - hairStyle · function · L45-L45 — Localized label for a hairstyle option in the character creator.
@@ -25,7 +25,7 @@ The localization hub that lets the game present every entity, quest, and NPC tex
 - teleportName · function · L49-L49 — Localized name of a teleport destination as shown on the travel menu.
 - npcText · function · L51-L54 — Localized NPC dialogue title or greeting shown when interacting with an NPC.
 - npcLines · function · L55-L58 — Localized list of an NPC's dialogue lines, falling back to the greeting when the NPC has no dedicated line list.
-- zoneName · function · L61-L69 — Translates zone names that arrive as raw Spanish text (from the terrain, raid, and world data) into the reader's language, special-casing the town, raids, and the wilds and keeping Spanish as the last resort.
+- zoneName · function · L61-L69 — Translates zone names, which arrive as raw Spanish text from the data layer, into the reader's language by matching against the town, dusk, raid, and world-zone definitions with a Spanish passthrough fallback.
 - questField · function · L71-L73 — Localized quest text field (name, story, offer, busy, ready, or done) used wherever quest dialogue is rendered.
 - questName · function · L74-L74 — Localized quest title looked up by quest id for quest logs and trackers.
 - tr · function · L77-L77 — Lets callers inline ad-hoc Spanish/English string pairs without registering them in the dictionaries.

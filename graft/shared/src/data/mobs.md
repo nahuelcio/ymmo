@@ -1,6 +1,6 @@
 # shared/src/data/mobs.ts
 
-The game's monster bestiary: a catalog of every mob's stats, combat behaviors (aggression, on-hit statuses, telegraphed specials, elite/boss/raid phases) and loot, published as the MOBS id-lookup map.
+This is the game's monster catalog: it defines the MobDef/MobPhase schemas plus the full level-ordered list of mob definitions (stats, aggression, on-hit statuses, telegraphed specials, boss flags, adena ranges and drop tables) used to spawn, balance, and loot combat encounters across zones.
 
 - MobShape · type · L3-L3 — Enumerates the body-model archetypes (beast, goblin, orc, etc.) so the client can pick which 3D shape to render each mob with.
 - Drop · interface · L5-L5 — Represents one entry in a mob's loot table — which item may drop, with what probability, and the optional stack-size range.

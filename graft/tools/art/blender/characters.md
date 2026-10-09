@@ -1,0 +1,15 @@
+# tools/art/blender/characters.py
+
+- import_gltf · function · L55-L62 — def import_gltf(path)
+- activate · function · L65-L69 — def activate(o)
+- attach · function · L72-L80 — def attach(o, arm, bone, mw=None)
+- material · function · L83-L90 — def material(name, color=(1, 1, 1))
+- strip_maps · function · L93-L105 — def strip_maps(m)
+- base_tex · function · L108-L113 — def base_tex(m)
+- neutralise · function · L116-L125 — def neutralise(img, size, target=0.88, mask_lum=0.3)
+- dominant_groups · function · L128-L134 — def dominant_groups(obj)
+- build · function · L139-L332 — def build(g)
+- hair_mat · function · L168-L181 — def hair_mat(m)
+- front_y · function · L258-L260 — def front_y(z, x=0.0)
+- render_preview · function · L337-L368 — def render_preview(path, arms)
+- main · function · L371-L382 — def main()

@@ -1,5 +1,5 @@
 # shared/src/i18n/en.ts
 
-The English localization dictionary that supplies display names, descriptions, quest dialogue, and NPC/zone/race/status labels for every game entity, so the UI can render all game data (which is authored in Argentine Spanish) in English.
+Holds the complete English localization of the game's display text — item names/descriptions, mob names, skill names/effects, and quest story/offer/status dialogue — so English players see translated strings instead of the Argentine Spanish source data, with a small Object.fromEntries helper at lines 111-112 that mass-generates the tiered abyssal/ashforged/dragon gear names.
 
 _No extracted symbols in this file._

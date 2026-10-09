@@ -1,6 +1,6 @@
 # client/src/main.ts
 
-Client entry point that wires the whole browser experience: login, character select/creation with a live 3D preview, session resume after drops, and the hand-off into the in-world Game.
+Client entry point that boots the login/character-select flow, wires the websocket lifecycle (session resume, error display, automatic reconnection that reloads and re-enters the world with the same character), and swaps the menu screens for the in-game Game once 'enter' arrives.
 
 - get · method · L24-L30 — Reads a per-tab value from sessionStorage, tolerating browsers where storage access throws (private mode).
 - set · method · L31-L38 — Writes or removes a per-tab sessionStorage value, silently ignoring blocked-storage errors.
@@ -14,8 +14,8 @@ Client entry point that wires the whole browser experience: login, character sel
 - set · method · L114-L121 — Writes or removes a localStorage value (session token, remember flag), silently ignoring storage errors.
 - loginScreen · function · L124-L167 — Builds the account login/registration form with remembered username and a remember-me checkbox, submitting credentials to the server.
 - go · function · L148-L156 — Persists the typed username and remember-me choice, then sends the login-or-register message to the server.
-- charScreen · function · L169-L276 — Presents the player's characters to enter/delete/logout plus a creation studio with race/class/gender/hair options, stat-and-skill diff, and a live 3D preview.
-- renderList · function · L176-L206 — Renders the selectable character cards and the action row: enter the world with the selection, delete a character after confirmation, or log out.
+- charScreen · function · L169-L276 — Builds the combined character-select / character-creation screen: an editable list of saved characters (enter, delete, logout) plus a creation studio whose race/class/gender/hair pickers keep the chosen class valid for the chosen race and drive a live 3D preview and a stat-difference panel.
+- renderList · function · L176-L206 — Re-renders the saved-character list on every selection change, wiring each card's click to selection and double-click to entering the world, plus the Enter/Delete/Logout buttons underneath.
 - label · function · L219-L219 — Adds a small heading above one creation-option group in the studio.
 - pickRow · function · L235-L245 — Renders one toggle-button option group (race, class, gender, hair style), disabling choices an availability rule rejects and re-rendering on pick.
 - renderPick · function · L246-L267 — Re-renders every creation option row, hair color swatches, and the stat/skill diff, resetting the class to fighter when the chosen race doesn't allow it.

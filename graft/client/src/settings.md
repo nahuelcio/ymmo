@@ -17,3 +17,4 @@ Central player-settings module that defines quality/look presets, all tunable gr
 - on · method · L177-L179 — Registers a listener that will be invoked on every subsequent settings change.
 - set · method · L181-L197 — Applies a settings patch: downgrades preset/look to 'custom' when their member fields are tweaked by hand, expands a newly chosen preset or look into its bundled values, then persists and notifies listeners of only the fields that actually changed.
 - reset · method · L199-L209 — Restores factory defaults and clears the saved snapshot from localStorage, then tells listeners which fields flipped back.
+- textureQuality · function · L218-L220 — function textureQuality(s: Settings): 'off' | 'low' | 'high'

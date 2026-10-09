@@ -37,4 +37,17 @@
 - death · method · L493-L495 — death()
 - invite · method · L497-L502 — invite(from: string)
 - confirm · method · L504-L506 — confirm(text: string, ok: () => void)
-- createHelp · function · L509-L548 — function createHelp(root: HTMLElement): Win
+- AdminState · type · L509-L509 — type AdminState = Extract<S2C, { t: 'admin'; ok: true }>;
+- AdminPanel · class · L513-L662 — class AdminPanel
+- constructor · method · L529-L537 — constructor(private g: Game, root: HTMLElement)
+- poll · method · L539-L541 — private poll(extra: { pass?: string; kick?: number; announce?: string } = {})
+- set · method · L543-L547 — set(m: Extract<S2C, { t: 'admin' }>)
+- login · method · L549-L571 — private login()
+- build · method · L573-L606 — private build()
+- render · method · L608-L653 — private render(m: AdminState)
+- cls · function · L609-L609 — cls = (v: number)
+- ms · function · L610-L610 — ms = (v: number)
+- world · function · L611-L611 — world = (id: number)
+- stat · function · L614-L614 — stat = (k: string, v: string, c = '')
+- drawLogs · method · L655-L661 — private drawLogs()
+- createHelp · function · L664-L703 — function createHelp(root: HTMLElement): Win

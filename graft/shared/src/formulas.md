@@ -1,5 +1,5 @@
 # shared/src/formulas.ts
 
-Central balance-math module for the game: derives character and monster stats from level/race/class/gear/buffs and defines the combat resolution, hit chance, and XP progression formulas.
+Client-side stub that declares the shared melee attack range (2.2 units) and points engineers to server-rs/src/formulas.rs as the authoritative source for all stats and combat math.
 
 _No extracted symbols in this file._

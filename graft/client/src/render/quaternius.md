@@ -21,8 +21,8 @@
 - zone · function · L259-L260 — zone = (z: QZone, hands?: number)
 - kit · function · L261-L261 — kit = (z: QZone)
 - hair · function · L268-L268 — hair = (p: Prim): [number, number, boolean]
-- animateQ · function · L313-L329 — function animateQ(q: QAnim, s: AnimState)
-- mountQuaterniusPreview · function · L332-L424 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L350-L358 — resize = ()
-- build · function · L381-L393 — build = ()
-- btn · function · L394-L400 — btn = (label: string, fn: () => void)
+- animateQ · function · L313-L330 — function animateQ(q: QAnim, s: AnimState)
+- mountQuaterniusPreview · function · L333-L425 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L351-L359 — resize = ()
+- build · function · L382-L394 — build = ()
+- btn · function · L395-L401 — btn = (label: string, fn: () => void)

@@ -1,4 +1,4 @@
-# shared/src/status.ts · [[entity-flag-bitmask]] [[shared-cross-process-contract]] [[status-effect-registry]]
+# shared/src/status.ts
 
 Defines the shared catalog of status effects (stun, slow, bleed, poison) — their client-facing flag bits, icons, and server-side application parameters — so the server ticks effects while clients render them purely from entity flag bits.
 

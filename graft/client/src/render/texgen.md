@@ -1,0 +1,31 @@
+# client/src/render/texgen.ts
+
+- TerrainLayer · type · L11-L11 — type TerrainLayer = (typeof TERRAIN_LAYERS)[number];
+- PropLayer · type · L12-L12 — type PropLayer = (typeof PROP_LAYERS)[number];
+- LayerName · type · L13-L13 — type LayerName = TerrainLayer | PropLayer;
+- hash · function · L15-L20 — function hash(ix: number, iy: number, seed: number): number
+- Noise2 · type · L22-L22 — type Noise2 = (u: number, v: number) => number;
+- makeNoise · function · L27-L40 — function makeNoise(px: number, py: number, seed: number): Noise2
+- makeFbm · function · L43-L58 — function makeFbm(p: number, oct: number, seed: number, ridge = false): Noise2
+- Cell · interface · L62-L62 — interface Cell
+- Worley · type · L63-L63 — type Worley = (u: number, v: number) => Cell;
+- makeWorley · function · L66-L99 — function makeWorley(n: number, seed: number): Worley
+- clamp01 · function · L101-L101 — clamp01 = (v: number)
+- sstep · function · L102-L105 — sstep = (a: number, b: number, x: number)
+- frac · function · L106-L106 — frac = (x: number)
+- Out · type · L112-L112 — type Out = [number, number, number];
+- Painter · type · L113-L113 — type Painter = (u: number, v: number, out: Out) => void;
+- grass · method · L116-L127 — grass()
+- dirt · method · L128-L137 — dirt()
+- rock · method · L138-L148 — rock()
+- sand · method · L149-L158 — sand()
+- snow · method · L159-L167 — snow()
+- cobble · method · L168-L179 — cobble()
+- wood · method · L180-L195 — wood()
+- stone · method · L196-L210 — stone()
+- roof · method · L211-L226 — roof()
+- bark · method · L227-L238 — bark()
+- leaves · method · L239-L249 — leaves()
+- ripple · method · L250-L258 — ripple()
+- plaster · method · L259-L269 — plaster()
+- paintLayers · function · L273-L292 — function paintLayers(layers: readonly LayerName[], size: number): Uint8Array<ArrayBuffer>
