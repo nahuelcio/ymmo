@@ -1150,7 +1150,7 @@ export class Game {
   }
 
   useSkill(id: string) {
-    if (SKILLS[id]?.target === 'enemy' && !this.ensureEnemyTarget()) return this.sys(tx('No hay enemigos cerca.', 'No enemy nearby.'));
+    // Do not hunt for a mob here. A skill uses the target already selected; otherwise the server asks for one.
     // prediction: start the cooldown sweep right away when the skill is obviously usable
     const def = SKILLS[id], now = performance.now();
     this.dropPredictedCooldowns(id);

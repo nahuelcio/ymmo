@@ -421,7 +421,8 @@ impl World {
         }
         let dur = jround(def.cast * p.stats.cast_mul);
         p.casting = Some((def.id.clone(), target, now + dur));
-        p.intent = if def.target == "enemy" && p.cls == "fighter" { Some(Intent::Attack { id: target, force }) } else { None };
+        // A skill is one action. Leaving an attack intent here made fighters keep swinging after it.
+        p.intent = None;
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(x, z, json!({ "t": "cast", "s": pid, "tg": target, "skill": def.id, "dur": dur }));
     }
