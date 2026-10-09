@@ -175,6 +175,9 @@ async fn ws_handler(ws: WebSocketUpgrade, State(app): State<App>) -> impl IntoRe
     ws.max_message_size(16 * 1024).on_upgrade(move |socket| client(socket, app))
 }
 
+/** How long a character whose connection dropped stays in the world waiting for its player. */
+const LINKDEAD: std::time::Duration = std::time::Duration::from_secs(30);
+
 async fn client(socket: WebSocket, app: App) {
     let sid = NEXT_SID.fetch_add(1, Ordering::Relaxed);
     let (mut sink, mut stream) = socket.split();
@@ -218,7 +221,11 @@ async fn client(socket: WebSocket, app: App) {
         handle(&app, sid, t, &m, &mut logging_in).await;
     }
 
-    // socket closed: save the character in whatever world it's in
+    // Socket closed. A dropped connection (bad wifi, a phone switching networks) leaves the character in the
+    // world for a while: the client reconnects and re-enters, which takes it over (see "enter") without a
+    // logout in between. Only once nobody came back is it saved and removed.
+    let in_world = app.hub.lock().unwrap().sessions.get(&sid).map_or(false, |s| s.world.is_some());
+    if in_world { tokio::time::sleep(LINKDEAD).await; }
     {
         let hub = &mut *app.hub.lock().unwrap();
         if let Some(s) = hub.sessions.remove(&sid) {

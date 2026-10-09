@@ -8,12 +8,15 @@ export class Net {
   private ws!: WebSocket;
   private handlers = new Map<string, Handler[]>();
   onClose: (() => void) | null = null;
+  /** performance.now() of the last message from the server: a long silence means the link is stalling */
+  lastMsgAt = performance.now();
 
   connect(): Promise<void> {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     this.ws = new WebSocket(`${proto}://${location.host}/ws`);
     this.ws.binaryType = 'arraybuffer';
     this.ws.onmessage = (ev) => {
+      this.lastMsgAt = performance.now();
       let m: S2C;
       if (typeof ev.data === 'string') m = JSON.parse(ev.data) as S2C;
       else {

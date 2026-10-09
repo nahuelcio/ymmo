@@ -577,3 +577,4 @@ input { font: inherit; user-select: text; }
 .adm-bad { color: #ff8a7a; }
 .adm-spark polyline { fill: none; stroke: var(--gold); stroke-width: 1.5; }
 .adm-log { height: 220px; overflow-y: auto; background: #07080c; border: 1px solid #3a3424; border-radius: 2px; padding: 4px 6px; font: 11px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; user-select: text; }
+.netwarn { position: absolute; left: 50%; top: 22px; transform: translateX(-50%); display: none; padding: 3px 10px; border-radius: 4px; background: rgba(60, 20, 10, 0.75); color: #ffb070; font: 12px sans-serif; pointer-events: none; z-index: 5; }

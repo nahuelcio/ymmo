@@ -146,6 +146,9 @@ export class Game {
   private hoverRing: THREE.Mesh;
   private post: PostFX;
   private fpsEl: HTMLDivElement;
+  /** shown while the server has been silent for a while (packet loss); the game keeps waiting for it */
+  private netWarn: HTMLDivElement;
+  private cpuMs = 0;
   private lastRender = 0;
   private fpsFrames = 0;
   private fpsAt = 0;
@@ -207,6 +210,11 @@ export class Game {
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';
     host.appendChild(this.fpsEl);
+    this.netWarn = document.createElement('div');
+    this.netWarn.className = 'netwarn';
+    this.netWarn.textContent = tx('Conexión inestable…', 'Unstable connection…');
+    host.appendChild(this.netWarn);
+    this.renderer.info.autoReset = false; // count every pass of a frame (post-processing renders several times)
 
     const glow = (c: number) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 40), glow(0xff4444));
@@ -1465,7 +1473,11 @@ export class Game {
     this.lastRender = now;
     this.fpsFrames++;
     if (now - this.fpsAt >= 500) {
-      if (settings.s.showFps) this.fpsEl.textContent = `${Math.round((this.fpsFrames * 1000) / (now - this.fpsAt))} FPS${this.rtt ? ` · ${this.rtt} ms` : ''}`;
+      if (settings.s.showFps) {
+        const r = this.renderer.info.render;
+        this.fpsEl.textContent = `${Math.round((this.fpsFrames * 1000) / (now - this.fpsAt))} FPS · CPU ${this.cpuMs.toFixed(1)} ms · ${r.calls} draws · ${Math.round(r.triangles / 1000)}k tris${this.rtt ? ` · ${this.rtt} ms` : ''}`;
+      }
+      this.netWarn.style.display = now - this.net.lastMsgAt > 2500 ? 'block' : 'none';
       this.fpsFrames = 0;
       this.fpsAt = now;
     }
@@ -1636,7 +1648,10 @@ export class Game {
     }
     this.fx.update();
     this.ui.update(now);
+    this.renderer.info.reset();
     this.post.render();
     this.labels.render(this.entLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works
+    // JS time spent on this frame (the GPU works on it after this returns), smoothed
+    this.cpuMs += (performance.now() - now - this.cpuMs) * 0.1;
   }
 }
