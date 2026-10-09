@@ -55,6 +55,8 @@ export interface CEnt {
   radius: number;
   /** hit reaction: time + direction away from the attacker */
   hitAt: number;
+  /** hit-stop: until then this rig keeps its pose (its position still updates) */
+  hitStop?: number;
   hitDx: number;
   hitDz: number;
   /** dodge roll animation: start time and (own character only) the predicted path */
@@ -157,7 +159,6 @@ export class Game {
   private fpsFrames = 0;
   private fpsAt = 0;
   /** hit-stop: entity animation freezes until this time */
-  private freezeUntil = 0;
   private lastPointer: { x: number; y: number } | null = null;
   private frustum = new THREE.Frustum();
   private projView = new THREE.Matrix4();
@@ -894,8 +895,13 @@ export class Game {
     play(sfx, vol);
     this.flash(t);
     // hit-stop: freeze the action for a beat on big hits that involve you
-    if (m.crit && (mine || byMe)) this.freezeUntil = performance.now() + 75;
     const src = this.ents.get(m.s);
+    // hit-stop on the two rigs involved (not the world): a short pause in their pose sells a big hit
+    if (m.crit && (mine || byMe)) {
+      const until = performance.now() + 50;
+      t.hitStop = until;
+      if (src) src.hitStop = until;
+    }
     if (src && src !== t) {
       const dx = t.pos.x - src.pos.x, dz = t.pos.z - src.pos.z, d = Math.hypot(dx, dz) || 1;
       t.hitAt = performance.now();
@@ -1549,10 +1555,8 @@ export class Game {
     this.camera.updateMatrixWorld();
     this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
     this.driveJoystick(now);
-    const frozen = now < this.freezeUntil;
     this.plates.length = 0;
     for (const c of this.ents.values()) {
-      if (frozen) break;
       const s = c.snaps;
       let moving = (c.flags & F_MOVING) !== 0;
       if (c === self && s.length) moving = this.updateSelf(c, now, dt);
@@ -1623,7 +1627,7 @@ export class Game {
       // far rigs are tiny on screen: skip their (per-bone) animation
       if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
       if (c.rig && onScreen && dSelf < 60) {
-        animate(c.rig, {
+        if (now >= (c.hitStop ?? 0)) animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
           atkAge: now - c.atkAt,
