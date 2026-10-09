@@ -423,11 +423,11 @@ impl World {
         let (sx, sz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         let end = dash_end(sx, sz, dx, dz, radius);
         self.set_pos(pid, end.x, end.z);
+        let keep_move = self.pl(pid).unwrap().intent.is_some();
         let e = self.ents.get_mut(&pid).unwrap();
         e.c.ry = dx.atan2(dz);
-        e.c.moving = false;
+        if !keep_move { e.c.moving = false; }
         let p = e.player_mut().unwrap();
-        p.intent = None;
         p.casting = None;
         p.dodge_until = now + DODGE_MS;
         p.cooldowns.insert("dash".into(), now + DASH_CD);

@@ -32,6 +32,12 @@ impl World {
             return;
         }
 
+        // The roll already moved the body. Resume the same intent once it ends.
+        if self.pl(pid).unwrap().dodge_until > now {
+            self.ents.get_mut(&pid).unwrap().c.moving = false;
+            return;
+        }
+
         let p = self.pl(pid).unwrap();
         if let Some((_, _, end)) = p.casting {
             if now >= end { self.finish_cast(pid, now); }

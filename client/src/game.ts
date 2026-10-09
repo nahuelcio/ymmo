@@ -1069,8 +1069,8 @@ export class Game {
     self.roll = { fx: self.pos.x, fz: self.pos.z, tx: end.x, tz: end.z, ry: Math.atan2(dx, dz), at: now };
     play('dash');
     this.dropPredictedCooldowns();
-    // send our start point and direction so the server rolls along exactly the same path
-    this.serverAction({ t: 'dash', x: self.roll.fx, z: self.roll.fz, dx, dz });
+    // Keep the click-to-move. serverAction would drop it, and the walk would die on the roll.
+    this.net.send({ t: 'dash', x: self.roll.fx, z: self.roll.fz, dx, dz });
   }
 
   /** Stand still: drop the current move and stop attacking (the target stays selected). */
@@ -1373,6 +1373,13 @@ export class Game {
         return false;
       }
       c.roll = undefined;
+      const pr = this.predict;
+      if (pr) {
+        pr.arrivedAt = 0;
+        const goal = pr.chase ? this.ents.get(pr.chase.id) : undefined;
+        const gx = goal?.pos.x ?? pr.x, gz = goal?.pos.z ?? pr.z;
+        pr.path = findPath(c.pos.x, c.pos.z, gx, gz);
+      }
     }
     const s = c.snaps;
     const srv = s[s.length - 1];
