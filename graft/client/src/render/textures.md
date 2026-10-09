@@ -12,8 +12,9 @@
 - paintFresh · function · L129-L137 — function paintFresh(layers: readonly LayerName[], size: number): Promise<Uint8Array<ArrayBuffer>>
 - toArrayTexture · function · L139-L151 — function toArrayTexture(data: Uint8Array<ArrayBuffer>, size: number, depth: number, anisotropy: number): THREE.DataArrayTexture
 - layerMeans · function · L154-L162 — function layerMeans(data: Uint8Array, size: number, depth: number): number[]
-- getTextureSet · function · L167-L183 — function getTextureSet(quality: TextureQuality, maxAnisotropy = 1): Promise<TextureSet>
-- disposeTextureSets · function · L185-L192 — async function disposeTextureSets()
-- textureSetBytes · function · L195-L199 — function textureSetBytes(quality: TextureQuality): number
-- layerBytes · function · L197-L197 — layerBytes = (n: number)
-- previewLayer · function · L202-L217 — function previewLayer(tex: THREE.DataArrayTexture, layer: number, channel: 0 | 1 = 0, tiles = 2): HTMLCanvasElement
+- bumpNormal · function · L168-L175 — bumpNormal = (h: string) => /* glsl */
+- getTextureSet · function · L182-L198 — function getTextureSet(quality: TextureQuality, maxAnisotropy = 1): Promise<TextureSet>
+- disposeTextureSets · function · L200-L207 — async function disposeTextureSets()
+- textureSetBytes · function · L210-L214 — function textureSetBytes(quality: TextureQuality): number
+- layerBytes · function · L212-L212 — layerBytes = (n: number)
+- previewLayer · function · L217-L232 — function previewLayer(tex: THREE.DataArrayTexture, layer: number, channel: 0 | 1 = 0, tiles = 2): HTMLCanvasElement

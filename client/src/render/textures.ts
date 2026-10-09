@@ -161,6 +161,21 @@ function layerMeans(data: Uint8Array, size: number, depth: number): number[] {
   return out;
 }
 
+/**
+ * Fragment snippet for after <normal_fragment_maps>: tilts `normal` by the slope of the height `h`
+ * (a float in world units), taken from screen derivatives, so the G channel doubles as a normal map.
+ */
+export const bumpNormal = (h: string) => /* glsl */ `
+{
+  vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+  vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+  float det = dot(sx, r1) * faceDirection;
+  normal = normalize(abs(det) * normal - sign(det) * uRelief * (dFdx(${h}) * r1 + dFdy(${h}) * r2));
+}
+`;
+/** Strength of that relief (the 'relief' setting; 0 = flat). Shaders declare `uniform float uRelief`. */
+export const relief = { value: 0.4 };
+
 const cache = new Map<TextureQuality, Promise<TextureSet>>();
 
 /** Build (or return the cached) texture set for a quality level. */

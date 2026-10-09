@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
+import { bumpNormal, relief } from './textures';
 import { albaCurtain, BELL_TOWER, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
 
 /**
@@ -53,11 +54,59 @@ function rememberTex(map: THREE.Texture | null) {
   if (file && !kitTex.has(file)) kitTex.set(file, map);
 }
 
-function lambert(map: THREE.Texture | null, color = 0xffffff): THREE.MeshLambertMaterial {
-  const key = `${texKey(map)}|${color}`;
+/**
+ * The kit ships albedo maps only, so their brightness doubles as the height for the 'relief' setting
+ * (pale stones stand proud of the dark joints).
+ */
+function kitRelief(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
+  shader.uniforms.uRelief = relief;
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nuniform float uRelief;')
+    .replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+       #ifdef USE_MAP
+         float kitBump = dot(sampledDiffuseColor.rgb, vec3(0.3, 0.6, 0.1)) * 0.4;
+         ${bumpNormal('kitBump')}
+       #endif`,
+    );
+}
+
+/** World metres covered by one repeat of the plaza paving. */
+const FLOOR_TILE = 3;
+
+/**
+ * Paving: mapped in world space, turned off the grid, so the 2 m pieces leave no seams between them.
+ * ponytail: the repeat is hidden by a brightness wash (the same map, huge and blurred; 0.2 is its
+ * eyeballed mean). If the pattern still reads as tiled, upgrade to stochastic (hex) tiling.
+ */
+function kitFloor(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
+  shader.vertexShader = shader.vertexShader.replace(
+    '#include <uv_vertex>',
+    `#include <uv_vertex>
+     #ifdef USE_INSTANCING
+       vMapUv = mat2(0.8, -0.6, 0.6, 0.8) * (modelMatrix * instanceMatrix * vec4(position, 1.0)).xz / ${FLOOR_TILE.toFixed(1)};
+     #endif`,
+  );
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <map_fragment>',
+    `#include <map_fragment>
+     diffuseColor.rgb *= 1.0 + (dot(texture2D(map, vMapUv * 0.13, 3.0).rgb, vec3(0.3, 0.6, 0.1)) - 0.2) * 3.0;`,
+  );
+}
+
+function lambert(map: THREE.Texture | null, color = 0xffffff, floor = false): THREE.MeshLambertMaterial {
+  const key = `${texKey(map)}|${color}|${floor}`;
   let m = matCache.get(key);
   if (m) return m;
   matCache.set(key, (m = new THREE.MeshLambertMaterial({ map, color, side: THREE.DoubleSide })));
+  if (map) {
+    m.customProgramCacheKey = () => (floor ? 'kit-floor' : 'kit');
+    m.onBeforeCompile = (shader) => {
+      kitRelief(shader);
+      if (floor) kitFloor(shader);
+    };
+  }
   return m;
 }
 
@@ -95,6 +144,7 @@ function curtainLambert(map: THREE.Texture): THREE.MeshLambertMaterial {
   const mat = new THREE.MeshLambertMaterial({ map, color: 0xffffff, side: THREE.DoubleSide });
   mat.customProgramCacheKey = () => 'curtain-box';
   mat.onBeforeCompile = (shader) => {
+    kitRelief(shader);
     shader.vertexShader = shader.vertexShader.replace(
       '#include <uv_vertex>',
       `#include <uv_vertex>
@@ -224,7 +274,7 @@ export function buildVillage(): THREE.Group {
   const up = new THREE.Vector3(0, 1, 0);
   for (const b of buckets.values()) {
     const prim = prims.get(b.piece)![b.prim];
-    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map), b.list.length);
+    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, 0xffffff, b.piece === 'Floor_UnevenBrick'), b.list.length);
     b.list.forEach((it, i) => {
       q.setFromAxisAngle(up, it.rot);
       pos.set(it.x, TOWN_HEIGHT + it.y, it.z);

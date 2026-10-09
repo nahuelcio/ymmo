@@ -20,6 +20,7 @@ import { glyph } from './ui/common';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
 import { lightSources } from './render/scene';
 import { PostFX } from './render/post';
+import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
 import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
@@ -295,6 +296,7 @@ export class Game {
     else this.post.tune(s);
     if (has('autoLoot')) this.net.send({ t: 'autoLoot', on: s.autoLoot });
     if (has('foliage')) this.world.detail.visible = s.foliage;
+    if (has('relief')) relief.value = s.relief;
     if (has('showFps')) this.fpsEl.style.display = s.showFps ? 'block' : 'none';
     // HUD
     const root = document.documentElement.style;

@@ -66,6 +66,13 @@ export class Minimap {
   private viewR = 110;
   private mapWin: Win;
   private bigCanvas: HTMLCanvasElement;
+  /** World-map zoom (1 = whole frontier). Wheel zooms; drag pans. */
+  private mapZoom = 1;
+  private mapCx = 0;
+  private mapCz = 0;
+  private mapDrag: { x: number; y: number; cx: number; cz: number; moved: boolean } | null = null;
+  private detail: HTMLCanvasElement | null = null;
+  private detailKey = '';
   private lastDraw = 0;
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
@@ -100,19 +107,106 @@ export class Minimap {
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = 512;
-    // click the map to walk there; Ctrl+click adds a stop (Shift is the roll key); right click clears the route
-    this.bigCanvas.onclick = (e) => {
-      const k = (2 * WORLD_HALF) / this.bigCanvas.clientWidth;
-      g.travel(e.offsetX * k - WORLD_HALF, e.offsetY * k - WORLD_HALF, e.ctrlKey || e.metaKey);
+    // click walks there; a drag pans once zoomed in; Ctrl+click adds a stop; right click clears the route
+    this.bigCanvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      this.bigCanvas.setPointerCapture(e.pointerId);
+      this.mapDrag = { x: e.offsetX, y: e.offsetY, cx: this.mapCx, cz: this.mapCz, moved: false };
+    });
+    this.bigCanvas.addEventListener('pointermove', (e) => {
+      const d = this.mapDrag;
+      if (!d) return;
+      const dx = e.offsetX - d.x, dy = e.offsetY - d.y;
+      if (dx * dx + dy * dy > 16) d.moved = true;
+      if (!d.moved || this.mapZoom <= 1) return;
+      const span = this.mapSpan();
+      const w = this.bigCanvas.clientWidth || 512;
+      this.mapCx = this.clampMap(d.cx - (dx / w) * span);
+      this.mapCz = this.clampMap(d.cz - (dy / w) * span);
+      this.drawBig();
+    });
+    this.bigCanvas.addEventListener('pointerup', (e) => {
+      const d = this.mapDrag;
+      this.mapDrag = null;
+      if (!d || d.moved || e.button !== 0) return;
+      const [x, z] = this.worldAt(e.offsetX, e.offsetY);
+      g.travel(x, z, e.ctrlKey || e.metaKey);
       this.routeAt = 0;
-    };
+    });
+    this.bigCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const [wx, wz] = this.worldAt(e.offsetX, e.offsetY);
+      const next = Math.min(8, Math.max(1, this.mapZoom * (e.deltaY < 0 ? 1.28 : 1 / 1.28)));
+      this.mapZoom = next;
+      const span = this.mapSpan();
+      const w = this.bigCanvas.clientWidth || 512;
+      const h = this.bigCanvas.clientHeight || 512;
+      this.mapCx = next <= 1 ? 0 : this.clampMap(wx - (e.offsetX / w - 0.5) * span);
+      this.mapCz = next <= 1 ? 0 : this.clampMap(wz - (e.offsetY / h - 0.5) * span);
+      this.drawBig();
+    }, { passive: false });
     this.bigCanvas.oncontextmenu = (e) => {
       e.preventDefault();
       g.stop();
       this.routeAt = 0;
     };
-    el('div', 'hint', this.mapWin.body, tx('Click: caminar hasta ahí · Ctrl+click: agregar una parada · Click derecho: cancelar la ruta',
-      'Click: walk there · Ctrl+click: add a stop · Right click: cancel the route'));
+    el('div', 'hint', this.mapWin.body, tx(
+      'Rueda: acercar · Arrastrar: mover · Click: caminar · Ctrl+click: parada · Click derecho: cancelar',
+      'Wheel: zoom · Drag: pan · Click: walk · Ctrl+click: add a stop · Right click: cancel'));
+  }
+
+  /** World units across the world-map window. */
+  private mapSpan() {
+    return (2 * WORLD_HALF) / this.mapZoom;
+  }
+
+  private clampMap(v: number) {
+    const limit = WORLD_HALF - this.mapSpan() / 2;
+    if (limit <= 0) return 0;
+    return Math.min(limit, Math.max(-limit, v));
+  }
+
+  /** Canvas CSS pixel → world XZ for the current pan and zoom. */
+  private worldAt(px: number, py: number): [number, number] {
+    const span = this.mapSpan();
+    const w = this.bigCanvas.clientWidth || 512;
+    const h = this.bigCanvas.clientHeight || 512;
+    return [this.mapCx - span / 2 + (px / w) * span, this.mapCz - span / 2 + (py / h) * span];
+  }
+
+  /** World XZ → big-canvas pixel. */
+  private toBig(x: number, z: number): [number, number] {
+    const span = this.mapSpan();
+    const S = 512;
+    return [((x - (this.mapCx - span / 2)) / span) * S, ((z - (this.mapCz - span / 2)) / span) * S];
+  }
+
+  /** Re-sample the height field for the visible window so zoom shows real terrain, not a stretched bitmap. */
+  private renderWindow(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = c.height = RES;
+    const ctx = c.getContext('2d')!;
+    const img = ctx.createImageData(RES, RES);
+    const span = this.mapSpan();
+    const x0 = this.mapCx - span / 2, z0 = this.mapCz - span / 2;
+    const at = (i: number) => x0 + (i / RES) * span;
+    const hs = new Float32Array(RES * RES);
+    for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) hs[j * RES + i] = heightAt(at(i), at(j));
+    const hAt = (i: number, j: number) => hs[Math.min(RES - 1, Math.max(0, j)) * RES + Math.min(RES - 1, Math.max(0, i))];
+    for (let j = 0; j < RES; j++)
+      for (let i = 0; i < RES; i++) {
+        const h = hs[j * RES + i];
+        const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(at(i), at(j), h);
+        const slope = hAt(i + 1, j) - hAt(i - 1, j) + hAt(i, j + 1) - hAt(i, j - 1);
+        const shade = h < WATER_LEVEL ? 1 : (0.9 + Math.min(0.25, h / 140)) * Math.min(1.3, Math.max(0.62, 1 - slope * 0.11));
+        const o = (j * RES + i) * 4;
+        img.data[o] = Math.min(255, r * 255 * shade);
+        img.data[o + 1] = Math.min(255, g * 255 * shade);
+        img.data[o + 2] = Math.min(255, b * 255 * shade);
+        img.data[o + 3] = 255;
+      }
+    ctx.putImageData(img, 0, 0);
+    return c;
   }
 
   toggleMap() {
@@ -123,36 +217,50 @@ export class Minimap {
   private drawBig() {
     if (!this.mapWin.visible) return;
     const ctx = this.bigCanvas.getContext('2d')!;
-    const S = 512 / RES;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.img, 0, 0, 512, 512);
+    const zoomed = this.mapZoom > 1.08;
+    if (zoomed) {
+      const key = `${this.mapZoom.toFixed(3)}:${Math.round(this.mapCx)}:${Math.round(this.mapCz)}`;
+      if (this.detailKey !== key) {
+        this.detailKey = key;
+        this.detail = this.renderWindow();
+      }
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(this.detail!, 0, 0);
+    } else {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(this.img, 0, 0, 512, 512);
+    }
+    const pxPer = 512 / this.mapSpan();
+    if (zoomed) this.drawStructures(ctx, pxPer);
     ctx.font = 'bold 12px Tahoma, sans-serif';
     ctx.textAlign = 'center';
     for (const z of ZONES) {
+      const [x, y] = this.toBig(z.x, z.z);
       ctx.strokeStyle = 'rgba(255,220,140,0.6)';
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.arc(toMap(z.x) * S, toMap(z.z) * S, (z.r / (2 * WORLD_HALF)) * 512, 0, Math.PI * 2);
+      ctx.arc(x, y, z.r * pxPer, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, toMap(z.x) * S, toMap(z.z) * S);
+      if (x > -80 && y > -20 && x < 592 && y < 532) this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, x, y);
     }
     ctx.fillStyle = '#ffd966';
     for (const t of TOWNS) {
+      const [x, y] = this.toBig(t.x, t.z);
       ctx.beginPath();
-      ctx.arc(toMap(t.x) * S, toMap(t.z) * S, 6, 0, Math.PI * 2);
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
       ctx.fill();
-      this.label(ctx, zoneName(t.name, lang), toMap(t.x) * S, toMap(t.z) * S - 12);
+      this.label(ctx, zoneName(t.name, lang), x, y - 12);
     }
     // hostile camps
     for (const c of CAMPS) {
-      const x = toMap(c.x) * S, y = toMap(c.z) * S;
+      const [x, y] = this.toBig(c.x, c.z);
       this.campIcon(ctx, x, y, 9);
       this.label(ctx, `${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12);
     }
     // quest hunting areas
     for (const { zone, quests } of questAreas(this.g.questTargets())) {
-      const x = toMap(zone.x) * S, y = toMap(zone.z) * S, r = (zone.r * 0.85 / (2 * WORLD_HALF)) * 512;
+      const [x, y] = this.toBig(zone.x, zone.z), r = zone.r * 0.85 * pxPer;
       ctx.fillStyle = 'rgba(255, 210, 0, 0.18)';
       ctx.strokeStyle = 'rgba(255, 210, 0, 0.9)';
       ctx.lineWidth = 2;
@@ -163,14 +271,14 @@ export class Minimap {
       ctx.lineWidth = 1;
       quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
     }
-    this.drawRoute(ctx, (x, z) => [toMap(x) * S, toMap(z) * S]);
+    this.drawRoute(ctx, (x, z) => this.toBig(x, z));
     // other players, as far as the server tells us about them (those in view): the party in green, with names
     const partyIds = new Set(this.g.ui.partyIds());
     ctx.font = 'bold 11px Tahoma, sans-serif';
     ctx.strokeStyle = '#000';
     for (const c of this.g.ents.values()) {
       if (c.rec.k !== 'p' || c.id === this.g.me.id) continue;
-      const x = toMap(c.pos.x) * S, y = toMap(c.pos.z) * S, mate = partyIds.has(c.id);
+      const [x, y] = this.toBig(c.pos.x, c.pos.z), mate = partyIds.has(c.id);
       ctx.fillStyle = mate ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
       ctx.beginPath();
       ctx.arc(x, y, mate ? 4.5 : 3, 0, Math.PI * 2);
@@ -179,7 +287,73 @@ export class Minimap {
       if (mate) this.label(ctx, c.rec.n, x, y - 8);
     }
     const self = this.g.self;
-    if (self) this.arrow(ctx, toMap(self.pos.x) * S, toMap(self.pos.z) * S, self.ry, 7);
+    if (self) {
+      const [x, y] = this.toBig(self.pos.x, self.pos.z);
+      this.arrow(ctx, x, y, self.ry, 7);
+    }
+  }
+
+  /** Houses, walls and trees, drawn as shapes so they stay sharp once the map is zoomed in. */
+  private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number) {
+    const seen = (x: number, y: number, m = 8) => x > -m && y > -m && x < 512 + m && y < 512 + m;
+    if (this.mapZoom >= 2.2) {
+      ctx.fillStyle = 'rgba(20, 58, 26, 0.85)';
+      for (const t of layoutTrees()) {
+        const [x, y] = this.toBig(t.x, t.z);
+        if (!seen(x, y)) continue;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(0.8, 1.15 * t.sc * pxPer), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    const town = layoutTown();
+    ctx.strokeStyle = '#4a321c';
+    ctx.lineWidth = Math.max(1.2, 0.85 * pxPer);
+    ctx.beginPath();
+    const strokeWall = (w: { x: number; z: number; rot: number; hw?: number }) => {
+      const [x, y] = this.toBig(w.x, w.z);
+      if (!seen(x, y, 16)) return;
+      const hw = (w.hw ?? 3.6) * pxPer;
+      const dx = Math.cos(w.rot) * hw, dy = -Math.sin(w.rot) * hw;
+      ctx.moveTo(x - dx, y - dy);
+      ctx.lineTo(x + dx, y + dy);
+    };
+    for (const w of town.walls) if (!w.tower) strokeWall(w);
+    for (const c of layoutCamps()) for (const w of c.walls) strokeWall(w);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(20, 14, 10, 0.9)';
+    const rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string) => {
+      const [cx, cy] = this.toBig(x, z);
+      if (!seen(cx, cy, 20)) return;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-rot);
+      ctx.fillStyle = fill;
+      ctx.fillRect((-rw / 2) * pxPer, (-rd / 2) * pxPer, rw * pxPer, rd * pxPer);
+      ctx.strokeRect((-rw / 2) * pxPer, (-rd / 2) * pxPer, rw * pxPer, rd * pxPer);
+      ctx.restore();
+    };
+    for (const w of town.walls) if (w.tower) {
+      const rw = w.hw != null ? w.hw * 2 : 2.8;
+      const rd = w.hd != null ? w.hd * 2 : rw;
+      rect(w.x, w.z, rw, rd, w.rot, w.out ? '#8a3a2a' : '#9a9488');
+    }
+    for (const h of town.houses) {
+      rect(h.x, h.z, h.w + 1, h.d + 1.2, h.rot, css(h.roof));
+      rect(h.x, h.z, h.w + 1, 0.01, h.rot, '#000');
+    }
+    for (const st of town.stalls) rect(st.x, st.z, 3.4, 1.8, st.rot, css(st.color));
+    rect(TOWN.x + BELL_TOWER.x, TOWN.z + BELL_TOWER.z, BELL_TOWER.hw * 2, BELL_TOWER.hd * 2, BELL_TOWER.rot, '#5a5a62');
+    for (const c of layoutCamps()) for (const t of c.tents) {
+      const [cx, cy] = this.toBig(t.x, t.z);
+      if (!seen(cx, cy, 12)) continue;
+      ctx.fillStyle = '#7a6040';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2.3 * pxPer, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   }
 
   /** Crossed swords on a red disc. */

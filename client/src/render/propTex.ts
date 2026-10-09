@@ -7,7 +7,7 @@
 // Every surfaced material carries the shader from the start, compiled out (no PROP_TEX define) until
 // a texture set is ready; switching quality only flips defines, after compiling the new variants.
 import * as THREE from 'three';
-import { getTextureSet, PROP_LAYERS, TERRAIN_LAYERS, type TextureQuality } from './textures';
+import { bumpNormal, getTextureSet, PROP_LAYERS, relief, TERRAIN_LAYERS, type TextureQuality } from './textures';
 
 export type Surface = 'wood' | 'stone' | 'roof' | 'plaster' | 'bark' | 'leaves' | 'rock';
 export type PropTexQuality = 'off' | TextureQuality;
@@ -44,6 +44,7 @@ const shared = {
   uPropTex: { value: null as THREE.DataArrayTexture | null },
   uPropTerrainTex: { value: null as THREE.DataArrayTexture | null },
   uPropStrength: { value: 0 },
+  uRelief: relief,
   uPropMean: { value: PROP_LAYERS.map(() => 0.45) },
   uPropTerrainMean: { value: TERRAIN_LAYERS.map(() => 0.45) },
 };
@@ -99,6 +100,7 @@ uniform float uPropMean[${PROP_LAYERS.length}];
 #define PROP_MEAN uPropMean
 #endif
 uniform float uPropStrength;
+uniform float uRelief;
 varying vec3 vPropWorld;
 varying vec3 vPropNormal;
 
@@ -111,6 +113,7 @@ vec4 propPlane(vec2 uv) { return texture(PROP_SAMPLER, vec3(uv * PROP_SCALE, PRO
 // PROP_SIDES_ONLY (roof tiles) ignores the top plane so the tile rows stay horizontal on the slopes.
 const FRAG_MAIN = /* glsl */ `
 #ifdef PROP_TEX
+float propBump = 0.0;
 {
   vec3 n = normalize(vPropNormal), p = vPropWorld, a = abs(n);
 #ifdef PROP_VERTICAL_GRAIN
@@ -133,7 +136,16 @@ const FRAG_MAIN = /* glsl */ `
   vec3 detail = lum * (vec3(1.0) + (t.b - 0.5) * vec3(0.08, 0.05, -0.05));
   float k = uPropStrength * (1.0 - smoothstep(70.0, 180.0, length(vViewPosition)));
   diffuseColor.rgb *= mix(vec3(1.0), detail, k);
+  propBump = t.g * k * (0.01 / PROP_SCALE); // relief depth in world units, ~1% of the tile
 }
+#endif
+`;
+
+// Relief only in high quality: the low path picks one plane per fragment, and the jump between
+// planes would show up as a hard line in the derivatives.
+const FRAG_BUMP = /* glsl */ `
+#ifdef PROP_TEX_HQ
+${bumpNormal('propBump')}
 #endif
 `;
 
@@ -157,7 +169,8 @@ export function addSurface(m: THREE.MeshLambertMaterial, surface: Surface): THRE
       .replace('#include <project_vertex>', `${VERT_MAIN}\n#include <project_vertex>`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAG_DECL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`);
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${FRAG_BUMP}`);
   };
   // the defines tell the quality variants apart; this marks the injected code (plus whatever came before)
   m.customProgramCacheKey = () => `${prevKey}|prop-tex`;

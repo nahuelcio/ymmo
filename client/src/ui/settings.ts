@@ -48,6 +48,7 @@ export class SettingsPanel {
       this.range(tx('Distancia de visión', 'View distance'), 'viewDistance', 150, 700, 10, (v) => `${v} m`);
       this.check('Antialiasing (MSAA)', 'antialias');
       this.check(tx('Pasto y flores', 'Grass and flowers'), 'foliage');
+      this.range(tx('Relieve de las texturas', 'Texture relief'), 'relief', 0, 2, 0.1, (v) => `${Math.round(v * 100)}%`);
       this.select<number>(tx('Límite de FPS', 'FPS cap'), 'fpsCap', [[0, tx('Sin límite', 'Unlimited')], [30, '30'], [60, '60'], [120, '120'], [144, '144']]);
       this.check(tx('Mostrar FPS', 'Show FPS'), 'showFps');
     } else if (this.tab === 'atmos') {

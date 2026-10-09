@@ -43,6 +43,7 @@ export interface Settings {
   fpsCap: number; // 0 = unlimited
   showFps: boolean;
   foliage: boolean;
+  relief: number; // texture relief strength (render/textures.ts bumpNormal), 0 = flat
   // post-processing shaders
   look: LookPreset;
   toneMapping: boolean; // ACES filmic
@@ -118,6 +119,7 @@ export const DEFAULTS: Settings = {
   ...PRESETS.high,
   fpsCap: 0,
   showFps: false,
+  relief: 0.4,
   look: 'natural',
   ...LOOKS.natural.v,
   dayNight: true,

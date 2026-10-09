@@ -4,7 +4,7 @@
 // groundLayers in scene.ts); the fragment shader blends the layers by weight + texel height so the
 // edges between grass, dirt and rock come out ragged instead of a soft fade.
 import * as THREE from 'three';
-import { getTextureSet, TERRAIN_LAYERS, type TextureQuality, type TextureSet } from './textures';
+import { bumpNormal, getTextureSet, relief, TERRAIN_LAYERS, type TextureQuality, type TextureSet } from './textures';
 
 export type TerrainTexQuality = 'off' | TextureQuality;
 
@@ -30,6 +30,7 @@ vTexNormal = normalize(mat3(modelMatrix) * objectNormal);
 const FRAG_DECL = /* glsl */ `
 uniform highp sampler2DArray uTerrainTex;
 uniform float uTexStrength;
+uniform float uRelief;
 uniform float uTexContrast;
 uniform float uTexScale[6];
 uniform float uTexMean[6];
@@ -67,6 +68,7 @@ vec4 terrainRock(vec3 wp, vec3 n) {
 `;
 
 const FRAG_MAIN = /* glsl */ `
+float texBump;
 {
   vec2 p = vTexWorld.xz;
   vec4 s0 = terrainSample(p, 0);
@@ -97,12 +99,15 @@ const FRAG_MAIN = /* glsl */ `
   lum = 1.0 + (lum - 1.0) * uTexContrast;
   vec3 detail = lum * (vec3(1.0) + (tint - 0.5) * vec3(0.12, 0.07, -0.08));
   diffuseColor.rgb *= mix(vec3(1.0), detail, k);
+  // relief depth in world units, bumped into the normal after <normal_fragment_maps>
+  texBump = (b0 * s0.g + b1 * s1.g + b2 * s2.g + b3 * s3.g + b4 * s4.g + b5 * s5.g) / bs * k * 0.06;
 }
 `;
 
 interface TexUniforms {
   uTerrainTex: { value: THREE.DataArrayTexture | null };
   uTexStrength: { value: number };
+  uRelief: { value: number };
   uTexContrast: { value: number };
   uTexScale: { value: number[] };
   uTexMean: { value: number[] };
@@ -120,7 +125,8 @@ function texturedMaterial(set: TextureSet, quality: TextureQuality, uniforms: Te
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERT_MAIN}`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\n${FRAG_DECL}`)
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`);
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${bumpNormal('texBump')}`);
   };
   m.customProgramCacheKey = () => 'terrain-tex'; // the defines already tell low and high apart
   return m;
@@ -152,6 +158,7 @@ export class TerrainTextures {
     return {
       uTerrainTex: { value: null },
       uTexStrength: { value: 0 },
+      uRelief: relief,
       /** how strongly the texture's brightness pattern shows (1 = as painted) */
       uTexContrast: { value: 1.5 },
       uTexScale: { value: TERRAIN_LAYERS.map((l) => 1 / TILE_SIZE[l]) },
