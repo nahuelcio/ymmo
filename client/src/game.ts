@@ -14,7 +14,7 @@ import { dashEnd, findPath, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
@@ -673,6 +673,7 @@ export class Game {
     else if (r.k === 'n') rig = npcModel(r.npc);
     if (rig) {
       model = rig.root;
+      rimLit(rig.root);
       height = rig.height;
       radius = Math.max(0.45, rig.radius);
     } else {

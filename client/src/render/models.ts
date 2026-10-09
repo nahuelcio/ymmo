@@ -616,6 +616,30 @@ function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind {
   return wt === 'dagger' ? 'sword' : wt ?? (cls === 'mystic' ? 'staff' : 'sword'); // no procedural dagger: a sword stands in
 }
 
+/**
+ * Subtle fresnel rim on a character's surfaces: edges facing away from the camera brighten a little,
+ * which separates the figure from the ground and sky. Patched once per material (shared ones included).
+ */
+const rimDone = new WeakSet<THREE.Material>();
+export function rimLit(root: THREE.Object3D) {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (rimDone.has(m) || !(m instanceof THREE.MeshLambertMaterial || m instanceof THREE.MeshStandardMaterial)) continue;
+      rimDone.add(m);
+      const prev = m.onBeforeCompile;
+      m.onBeforeCompile = (sh, r) => {
+        prev?.(sh, r);
+        if (!sh.fragmentShader.includes('#include <opaque_fragment>')) return;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', /* glsl */ `
+          outgoingLight += vec3(0.85, 0.92, 1.0) * pow(1.0 - saturate(dot(normal, geometryViewDir)), 3.0) * 0.22;
+          #include <opaque_fragment>`);
+      };
+      m.needsUpdate = true;
+    }
+  });
+}
+
 export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig {
   const r = RACES[race];
   const female = look.g === 'f';
