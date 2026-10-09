@@ -1,0 +1,344 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 1200,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 800,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 1
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 234,
+      "normalized": false,
+      "byteOffset": 2400,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 91,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 2
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 91,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 3
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 800,
+      "max": [
+        31895,
+        32739,
+        30227
+      ],
+      "min": [
+        -32767,
+        -32739,
+        -29251
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 4
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5123,
+      "count": 800,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 5
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 91,
+      "max": [
+        32767,
+        29971,
+        27391
+      ],
+      "min": [
+        -31979,
+        -31495,
+        -30227
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 6
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 1,
+      "byteOffset": 0,
+      "byteLength": 2868,
+      "target": 34963,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": 496,
+          "mode": "TRIANGLES",
+          "byteStride": 2,
+          "count": 1434
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 2868,
+      "byteLength": 3200,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 496,
+          "byteLength": 1684,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 800
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 6068,
+      "byteLength": 364,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 2180,
+          "byteLength": 230,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 91
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 6432,
+      "byteLength": 728,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 2412,
+          "byteLength": 669,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 91
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 7160,
+      "byteLength": 6400,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 3084,
+          "byteLength": 4881,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 800
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 13560,
+      "byteLength": 3200,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 7968,
+          "byteLength": 885,
+          "mode": "ATTRIBUTES",
+          "byteStride": 4,
+          "count": 800
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 16760,
+      "byteLength": 728,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 8856,
+          "byteLength": 619,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 91
+        }
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 1,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "Bush_Leaves.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "Flowers.webp"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "Bush_Flowers.bin",
+      "byteLength": 9476
+    },
+    {
+      "byteLength": 17488,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "fallback": true
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "name": "Bush_Leaves",
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.45,
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "Flowers",
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.45,
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Plane.003",
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "POSITION": 5,
+            "TEXCOORD_0": 6
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 0
+        },
+        {
+          "attributes": {
+            "NORMAL": 3,
+            "TEXCOORD_0": 4,
+            "POSITION": 7
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 2
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Bush_Flowers",
+      "translation": [
+        0.006433566225815215,
+        0.17459873593667058,
+        0.02251763617878514
+      ],
+      "rotation": [
+        0.7904141507544785,
+        0.2095493038931922,
+        -0.4027346346708753,
+        0.41126557504926603
+      ],
+      "scale": [
+        0.5583834682544241,
+        0.5583834779523137,
+        0.5583834759774141
+      ],
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0,
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ]
+}
