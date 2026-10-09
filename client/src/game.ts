@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyLod, tickLod, type LodState } from './render/lod';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
@@ -34,6 +35,8 @@ export interface CEnt {
   id: number;
   rec: EntAdd;
   rig: Rig | null;
+  /** level of detail by distance (render/lod.ts) */
+  lod?: LodState;
   root: THREE.Group;
   model: THREE.Object3D;
   /** the model's own size (mobs and races differ): squash effects multiply it instead of replacing it */
@@ -1569,6 +1572,8 @@ export class Game {
       this.sphere.radius = Math.max(c.height, c.radius) + 2; // margin so shadows don't pop
       const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
       c.root.visible = onScreen;
+      // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
+      if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);
       // far rigs are tiny on screen: skip their (per-bone) animation
       if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
       if (c.rig && onScreen && dSelf < 60) {
@@ -1653,6 +1658,7 @@ export class Game {
       (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
     }
     this.fx.update();
+    tickLod();
     this.ui.update(now);
     this.renderer.info.reset();
     this.post.render();
