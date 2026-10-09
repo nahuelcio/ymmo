@@ -1,6 +1,6 @@
 # Windows entry. Linux and macOS: ./scripts/hot.sh
 $ErrorActionPreference = 'Stop'
-Set-Location (Split-Path $PSScriptRoot -Parent)
+Set-Location (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
 
 $running = docker inspect -f '{{.State.Running}}' claudi-mmo-50 2>$null
 if ($running -ne 'true') {
