@@ -1,13 +1,13 @@
 // Regenerates client/public/v from the Quaternius Medieval Village MegaKit (CC0).
-// Usage: npx tsx scripts/v-assets.ts [pack dir]
+// Usage: npx tsx tools/scripts/v-assets.ts [pack dir]
 // Keeps only BaseColor (1024px WebP) and meshopt-compresses the curated piece list.
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { V_PIECES } from '../shared/src/village';
+import { V_PIECES } from '../../shared/src/village';
 
 const SRC = process.argv[2];
-if (!SRC) throw new Error('pass the MegaKit directory: npx tsx scripts/v-assets.ts <pack dir>');
+if (!SRC) throw new Error('pass the MegaKit directory: npx tsx tools/scripts/v-assets.ts <pack dir>');
 const GLTF = path.join(SRC, 'glTF');
 const TEXDIR = path.join(SRC, 'Textures');
 if (!fs.existsSync(GLTF)) throw new Error(`glTF folder not found: ${GLTF}`);
