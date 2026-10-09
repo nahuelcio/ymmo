@@ -12,6 +12,8 @@ export interface ItemDef {
   /** cosmetic: picks the model and the tooltip label, combat only reads the stats */
   weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger';
   pAtk?: number; mAtk?: number; pDef?: number; mDef?: number; hp?: number; mp?: number;
+  /** cooldown reduction for skills, as a fraction: 0.1 = 10% shorter (capped at 50% in total) */
+  cdr?: number;
   price: number;
   stack?: boolean;
   use?: { hp?: number; mp?: number; escape?: boolean; cd: number };
@@ -98,6 +100,10 @@ const list: ItemDef[] = [
   { id: 'ring_of_the_wastes', name: 'Anillo del Páramo', type: 'armor', slot: 'ring', grade: 'C', mDef: 6, hp: 40, price: 9000, icon: '💍', color: 0x8a6ab0 },
   { id: 'earring_of_binding', name: 'Pendiente del Sello', type: 'armor', slot: 'earring', grade: 'C', mDef: 7, mp: 60, price: 9000, icon: '✨', color: 0x7a4ab0 },
   { id: 'necklace_of_the_ascended', name: 'Collar del Ascendido', type: 'armor', slot: 'amulet', grade: 'C', mDef: 9, hp: 60, mp: 40, price: 12000, icon: '📿', color: 0x8a2aaa },
+  // Cooldown reduction: shorter skill recharge times
+  { id: 'ring_of_swiftness', name: 'Anillo de Presteza', type: 'armor', slot: 'ring', grade: 'D', mDef: 2, cdr: 0.05, price: 4000, icon: '💍', color: 0x60d0c0, desc: 'Recarga de habilidades -5%.' },
+  { id: 'earring_of_clarity', name: 'Pendiente de la Claridad', type: 'armor', slot: 'earring', grade: 'C', mDef: 5, mp: 40, cdr: 0.08, price: 9500, icon: '✨', color: 0x80c8ff, desc: 'Recarga de habilidades -8%.' },
+  { id: 'amulet_of_haste', name: 'Amuleto de Celeridad', type: 'armor', slot: 'amulet', grade: 'C', mDef: 6, hp: 50, cdr: 0.1, price: 13000, icon: '📿', color: 0xe0c060, desc: 'Recarga de habilidades -10%.' },
   // Consumables
   { id: 'lesser_healing_potion', name: 'Poción de Curación Menor', type: 'consumable', stack: true, price: 15, use: { hp: 60, cd: 5000 }, icon: '🧪', color: 0xd04040, desc: 'Recupera 60 de HP.' },
   { id: 'healing_potion', name: 'Poción de Curación', type: 'consumable', stack: true, price: 60, use: { hp: 160, cd: 5000 }, icon: '🧪', color: 0xff3030, desc: 'Recupera 160 de HP.' },

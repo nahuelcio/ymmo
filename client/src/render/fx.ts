@@ -19,6 +19,7 @@ const GEO = {
   disc: new THREE.CircleGeometry(1, 40),
   edge: new THREE.RingGeometry(0.96, 1, 64),
   arc: new THREE.RingGeometry(0.72, 1, 20, 1, -Math.PI * 0.42, Math.PI * 0.84),
+  dome: new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
 };
 
 /** fast start, soft landing: expansions read as an impact instead of a slow inflate */
@@ -161,27 +162,97 @@ export class FxManager {
     });
   }
 
-  /** Twinkling motes spiralling up around a character. */
-  sparkles(pos: THREE.Vector3, color: number, dur = 900) {
+  /** Motes around a point. spin = how fast they circle, rise/fall = how they drift up or drip down, r = max radius. */
+  motes(pos: THREE.Vector3, color: number, dur = 900, o: { n?: number; r?: number; spin?: number; rise?: number; fall?: number; size?: number } = {}) {
+    const { n = 14, r = 0.9, spin = 4, rise = 2.2, fall = 0, size = 1 } = o;
     const g = new THREE.Group();
     g.position.copy(pos);
     const mat = this.glow(color);
     const parts: THREE.Mesh[] = [];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < n; i++) {
       const p = new THREE.Mesh(GEO.spark, mat);
-      const a = (i / 14) * Math.PI * 2;
-      p.userData = { a, r: 0.45 + Math.random() * 0.45, s: 0.5 + Math.random(), i };
+      p.userData = { a: (i / n) * Math.PI * 2, r: r * (0.5 + Math.random() * 0.5), s: 0.5 + Math.random(), i };
       parts.push(p);
       g.add(p);
     }
     this.add(g, dur, (k) => {
       for (const p of parts) {
         const { a, r, s, i } = p.userData as { a: number; r: number; s: number; i: number };
-        p.position.set(Math.cos(a + k * 4) * r * (1 - k * 0.3), k * 2.2 * s, Math.sin(a + k * 4) * r * (1 - k * 0.3));
-        p.scale.setScalar((0.7 + 0.5 * Math.sin(k * 30 + i * 2)) * (0.6 + s * 0.5));
+        p.position.set(Math.cos(a + k * spin) * r * (1 - k * 0.3), k * rise * s - fall * k * k, Math.sin(a + k * spin) * r * (1 - k * 0.3));
+        p.scale.setScalar((0.7 + 0.5 * Math.sin(k * 30 + i * 2)) * (0.6 + s * 0.5) * size);
         p.rotation.y += 0.2;
       }
       mat.opacity = 1 - k * k;
+    });
+  }
+
+  /** Twinkling motes spiralling up around a character. */
+  sparkles(pos: THREE.Vector3, color: number, dur = 900) {
+    this.motes(pos, color, dur);
+  }
+
+  /** Chunks blasted outwards and thrown up, then pulled down by gravity. */
+  shards(pos: THREE.Vector3, color: number, n = 10, spread = 1.5, dur = 700) {
+    const g = new THREE.Group();
+    g.position.copy(pos);
+    const mat = this.glow(color);
+    const parts = Array.from({ length: n }, () => {
+      const p = new THREE.Mesh(GEO.spark, mat);
+      const v = new THREE.Vector3().randomDirection().multiplyScalar(spread * (0.5 + Math.random() * 0.5));
+      v.y = Math.abs(v.y) + spread * 0.6;
+      p.userData.v = v;
+      g.add(p);
+      return p;
+    });
+    this.add(g, dur, (k) => {
+      for (const p of parts) {
+        const v = p.userData.v as THREE.Vector3;
+        p.position.set(v.x * k, v.y * k - 1.5 * k * k, v.z * k);
+        p.scale.setScalar(2.2 * (1 - k * 0.6));
+        p.rotation.x += 0.3;
+        p.rotation.z += 0.2;
+      }
+      mat.opacity = 1 - k * k;
+    });
+  }
+
+  /** A translucent hemisphere that swells over a spot, like a ward or a shield. */
+  dome(pos: THREE.Vector3, color: number, r = 1.5, dur = 800) {
+    const g = new THREE.Group();
+    g.position.copy(pos);
+    const shell = new THREE.Mesh(GEO.dome, this.glow(color, 0.3, THREE.DoubleSide));
+    const rim = new THREE.Mesh(GEO.edge, this.glow(color, 0.8));
+    rim.rotation.x = -Math.PI / 2;
+    g.add(shell, rim);
+    const sm = shell.material as THREE.MeshBasicMaterial, rm = rim.material as THREE.MeshBasicMaterial;
+    this.add(g, dur, (k) => {
+      g.scale.setScalar(r * (0.3 + out(k) * 0.7));
+      sm.opacity = 0.3 * (1 - k);
+      rm.opacity = 0.8 * (1 - k);
+    });
+  }
+
+  /** A jagged arc of light that crackles between two points while it lasts. */
+  bolt(from: THREE.Vector3, to: THREE.Vector3, color: number, dur = 250) {
+    const N = 9;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const mk = (c: number) => new THREE.LineBasicMaterial({ color: c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    const outer = new THREE.Line(geo, mk(color)), core = new THREE.Line(geo, mk(0xffffff));
+    const g = new THREE.Group();
+    g.add(outer, core);
+    const v = new THREE.Vector3();
+    this.add(g, dur, (k) => {
+      const j = Math.sin(k * Math.PI) * 0.35; // pinned at both ends, crackling in between
+      for (let i = 0; i < N; i++) {
+        v.lerpVectors(from, to, i / (N - 1));
+        const w = i && i < N - 1 ? j : 0;
+        pos.setXYZ(i, v.x + (Math.random() - 0.5) * w, v.y + (Math.random() - 0.5) * w, v.z + (Math.random() - 0.5) * w);
+      }
+      pos.needsUpdate = true;
+      (outer.material as THREE.LineBasicMaterial).opacity = 1 - k;
+      (core.material as THREE.LineBasicMaterial).opacity = 1 - k;
     });
   }
 
@@ -230,7 +301,8 @@ export class FxManager {
       if (k >= 1) {
         this.scene.remove(f.obj);
         f.obj.traverse((o) => {
-          if (o instanceof THREE.Mesh) (o.material as THREE.Material).dispose();
+          if (o instanceof THREE.Mesh || o instanceof THREE.Line) (o.material as THREE.Material).dispose();
+          if (o instanceof THREE.Line) o.geometry.dispose(); // bolts own their geometry; shared GEO is only on meshes
         });
         return false;
       }

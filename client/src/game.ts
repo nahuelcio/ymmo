@@ -14,6 +14,7 @@ import { dashEnd, findPath, navGrid, pushOut } from '../../shared/src/collision'
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
+import { SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -948,6 +949,9 @@ export class Game {
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
     if (!def || !t) return;
+    const vfx = SKILL_VFX[skill];
+    if (vfx) return vfx({ f: this.fx, s, t, color: def.color, aoe: def.aoe ?? 6 });
+    // fallback for a skill without its own signature (skill-fx.ts): generic by kind
     switch (def.kind) {
       case 'magic':
         this.fx.projectile(chest(s), () => chest(t), def.color, 280, 0.3);
@@ -1234,8 +1238,10 @@ export class Game {
     // prediction: start the cooldown sweep right away when the skill is obviously usable
     const def = SKILLS[id], now = performance.now();
     this.dropPredictedCooldowns(id);
-    if (def && (this.cooldowns.get(id)?.end ?? 0) <= now && this.me.mp >= def.mp && !this.castBar && this.self && !(this.self.flags & F_DEAD))
-      this.cooldowns.set(id, { end: now + def.cooldown + (def.cast ?? 0), dur: def.cooldown + (def.cast ?? 0), predicted: true });
+    if (def && (this.cooldowns.get(id)?.end ?? 0) <= now && this.me.mp >= def.mp && !this.castBar && this.self && !(this.self.flags & F_DEAD)) {
+      const cd = Math.round(def.cooldown * (1 - this.me.cdr / 100)); // same cut the server applies (formulas.rs cdr)
+      this.cooldowns.set(id, { end: now + cd + (def.cast ?? 0), dur: cd + (def.cast ?? 0), predicted: true });
+    }
     // the server didn't take it (out of range, no target...): drop the guess
     setTimeout(() => {
       if (this.cooldowns.get(id)?.predicted) this.cooldowns.delete(id);

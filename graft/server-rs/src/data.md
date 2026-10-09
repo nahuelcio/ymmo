@@ -6,47 +6,47 @@ This module is the server's typed view of the shared game database (items, mobs,
 - Town · struct · L27-L27 — Defines the safe town's circular location and its bilingual display name.
 - Named · struct · L31-L31 — Names a shared region (used for the wild area) in both languages.
 - ItemUse · struct · L35-L35 — Describes a consumable item's on-use effects (HP/MP restore, escape scroll) and its cooldown.
-- ItemDef · struct · L39-L58 — Defines one item type — combat stats, price, stackability, usable effects, enchant slot, and craft recipe — so shops, inventory, and enchanting all evaluate against a single authoritative definition.
-- Recipe · struct · L61-L61 — The crafting cost of an item: the required material list plus the adena fee.
-- EnchantCfg · struct · L65-L65 — Rules of the enchantment system — weapon/armor success rates, safe enchant level, step, cap, and whether a failed enchant destroys the item.
-- StatusApply · struct · L69-L69 — Describes a status/ailment to inflict, with duration, trigger chance, and optional damage-over-time.
-- Special · struct · L73-L73 — Describes a mob special attack: radius, windup, damage multiplier, cadence, targeting mode, and optional stun.
-- MobCount · struct · L76-L76 — Pairs a mob type with how many of it spawn (used for zones, camps, and boss-phase adds).
-- MobPhase · struct · L80-L80 — Defines a boss fight phase trigger with optional adds, haste buff, special attack, and a spoken line.
-- Drop · struct · L84-L84 — One loot-table entry: the item, its drop chance, and the quantity range.
-- MobDef · struct · L88-L108 — Complete monster template: combat stats, aggression, respawn, boss flags, on-hit status/special/phases, and adena/drop rewards.
-- BuffMods · struct · L112-L119 — The set of optional stat modifiers a buff can grant.
-- BuffDef · struct · L122-L122 — A buff's duration together with the stat mods it applies.
-- SkillDef · struct · L126-L146 — Skill card defining who can learn it (class/spec/race/gender + level requirement) and how it behaves in combat (kind, target, power, MP/cast/cooldown, AoE, buffs, status).
-- Objective · enum · L150-L153 — What a quest requires: either killing N of a mob or collecting N of an item.
-- count · function · L155-L155 — Extracts the required quantity from either objective variant so quest-progress code needn't match on the enum.
-- QuestDef · struct · L160-L160 — One quest: the giving NPC, minimum level gate, objective, and XP/adena rewards.
-- NpcDef · struct · L164-L179 — World NPC record: placement/heading plus interaction services (shop and craft item lists) and localized greeting/dialogue text.
-- ZoneDef · struct · L183-L183 — A hunting zone: a circular area plus which mobs spawn inside it.
-- Teleport · struct · L187-L187 — A fast-travel destination with coordinates and its adena cost.
-- CampChest · struct · L190-L190 — The treasure chest found at a camp: adena range and loot table.
-- CampDef · struct · L194-L194 — An outdoor camp: location, leader NPC, its mob spawns with respawn timer, and chest loot.
-- StatMods · struct · L198-L201 — A complete set of stat modifiers, used for race and gender base bonuses.
-- RaceDef · struct · L204-L204 — One playable race: its allowed classes and its stat modifiers.
-- GenderDef · struct · L207-L207 — One gender's stat modifiers.
-- StartItem · struct · L210-L210 — An item granted at character creation, with count and whether it is auto-equipped.
-- ClassDef · struct · L214-L214 — One playable class: HP/MP growth curve, CP ratio, attack interval, and starting gear.
-- SpecDef · struct · L218-L218 — Specialization entry tying a spec id to its base class, used for class/spec-gated lookups like skill availability.
-- StatusDef · struct · L221-L221 — Maps a status id to the bitmask flag used to encode active statuses.
-- Pos · struct · L224-L224 — A 2D world coordinate (x,z), e.g. a raid's entry point.
-- RaidDef · struct · L228-L228 — Raid instance configuration: boss mob, entry point, player/level gates, optional entry quest, and how long the raid stays open after the kill.
-- ObstacleDef · enum · L232-L237 — A collision obstacle in the world, either a circle or a rotated box.
-- Raw · struct · L240-L261 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
-- Data · struct · L263-L288 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
-- item · function · L291-L291 — O(1) item-catalog lookup by id.
-- skill · function · L292-L292 — Skill lookup by id via the id→index map, preserving data order.
-- quest · function · L293-L293 — Finds a quest by its id.
-- quest_by_npc · function · L294-L294 — Finds the quest offered by a given NPC.
-- camp · function · L295-L295 — Finds a camp by its id.
-- npc · function · L296-L296 — Finds an NPC by its id.
-- status_flag · function · L297-L297 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
-- spec · function · L299-L299 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
-- skill_available · function · L301-L303 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
-- skills_for · function · L306-L310 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
-- DATA · constant · L313-L313 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
-- d · function · L315-L343 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.
+- ItemDef · struct · L39-L59 — Defines one item type — combat stats, price, stackability, usable effects, enchant slot, and craft recipe — so shops, inventory, and enchanting all evaluate against a single authoritative definition.
+- Recipe · struct · L62-L62 — The crafting cost of an item: the required material list plus the adena fee.
+- EnchantCfg · struct · L66-L66 — Rules of the enchantment system — weapon/armor success rates, safe enchant level, step, cap, and whether a failed enchant destroys the item.
+- StatusApply · struct · L70-L70 — Describes a status/ailment to inflict, with duration, trigger chance, and optional damage-over-time.
+- Special · struct · L74-L74 — Describes a mob special attack: radius, windup, damage multiplier, cadence, targeting mode, and optional stun.
+- MobCount · struct · L77-L77 — Pairs a mob type with how many of it spawn (used for zones, camps, and boss-phase adds).
+- MobPhase · struct · L81-L81 — Defines a boss fight phase trigger with optional adds, haste buff, special attack, and a spoken line.
+- Drop · struct · L85-L85 — One loot-table entry: the item, its drop chance, and the quantity range.
+- MobDef · struct · L89-L109 — Complete monster template: combat stats, aggression, respawn, boss flags, on-hit status/special/phases, and adena/drop rewards.
+- BuffMods · struct · L113-L120 — The set of optional stat modifiers a buff can grant.
+- BuffDef · struct · L123-L123 — A buff's duration together with the stat mods it applies.
+- SkillDef · struct · L127-L147 — Skill card defining who can learn it (class/spec/race/gender + level requirement) and how it behaves in combat (kind, target, power, MP/cast/cooldown, AoE, buffs, status).
+- Objective · enum · L151-L154 — What a quest requires: either killing N of a mob or collecting N of an item.
+- count · function · L156-L156 — Extracts the required quantity from either objective variant so quest-progress code needn't match on the enum.
+- QuestDef · struct · L161-L161 — One quest: the giving NPC, minimum level gate, objective, and XP/adena rewards.
+- NpcDef · struct · L165-L180 — World NPC record: placement/heading plus interaction services (shop and craft item lists) and localized greeting/dialogue text.
+- ZoneDef · struct · L184-L184 — A hunting zone: a circular area plus which mobs spawn inside it.
+- Teleport · struct · L188-L188 — A fast-travel destination with coordinates and its adena cost.
+- CampChest · struct · L191-L191 — The treasure chest found at a camp: adena range and loot table.
+- CampDef · struct · L195-L195 — An outdoor camp: location, leader NPC, its mob spawns with respawn timer, and chest loot.
+- StatMods · struct · L199-L202 — A complete set of stat modifiers, used for race and gender base bonuses.
+- RaceDef · struct · L205-L205 — One playable race: its allowed classes and its stat modifiers.
+- GenderDef · struct · L208-L208 — One gender's stat modifiers.
+- StartItem · struct · L211-L211 — An item granted at character creation, with count and whether it is auto-equipped.
+- ClassDef · struct · L215-L215 — One playable class: HP/MP growth curve, CP ratio, attack interval, and starting gear.
+- SpecDef · struct · L219-L219 — Specialization entry tying a spec id to its base class, used for class/spec-gated lookups like skill availability.
+- StatusDef · struct · L222-L222 — Maps a status id to the bitmask flag used to encode active statuses.
+- Pos · struct · L225-L225 — A 2D world coordinate (x,z), e.g. a raid's entry point.
+- RaidDef · struct · L229-L229 — Raid instance configuration: boss mob, entry point, player/level gates, optional entry quest, and how long the raid stays open after the kill.
+- ObstacleDef · enum · L233-L238 — A collision obstacle in the world, either a circle or a rotated box.
+- Raw · struct · L241-L262 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
+- Data · struct · L264-L289 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
+- item · function · L292-L292 — O(1) item-catalog lookup by id.
+- skill · function · L293-L293 — Skill lookup by id via the id→index map, preserving data order.
+- quest · function · L294-L294 — Finds a quest by its id.
+- quest_by_npc · function · L295-L295 — Finds the quest offered by a given NPC.
+- camp · function · L296-L296 — Finds a camp by its id.
+- npc · function · L297-L297 — Finds an NPC by its id.
+- status_flag · function · L298-L298 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
+- spec · function · L300-L300 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
+- skill_available · function · L302-L304 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
+- skills_for · function · L307-L311 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
+- DATA · constant · L314-L314 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
+- d · function · L316-L344 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.

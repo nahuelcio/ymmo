@@ -22,4 +22,4 @@ The server's combat system (Rust port of combat.ts): PvP opt-in rules, attack re
 - respawn_player · function · L360-L369 — Revives a dead player by clearing the death state (dead flag, buffs, intents) and restoring full HP/MP/CP so they return to play, typically at the town/spawn point.
 - request_skill · function · L371-L393 — Entry point when a player tries to cast a skill: validates cooldown, resource cost, and target/range legality before spending the resources and applying the skill's damage or status effect.
 - process_skill_intent · function · L395-L428 — Advances a player's queued skill each tick — keeping them moving into range and validating target/cooldown/cast-time gates — until the skill is ready to fire.
-- finish_cast · function · L430-L520 — Executes a completed skill cast, dispatching by skill type (damage, heal, buff/status, AoE) while spending mana, applying cooldowns, and notifying nearby clients.
+- finish_cast · function · L430-L521 — Executes a completed skill cast, dispatching by skill type (damage, heal, buff/status, AoE) while spending mana, applying cooldowns, and notifying nearby clients.

@@ -1,4 +1,5 @@
 //! Stats and combat math: the only copy, the client shows what the server sends.
+use crate::admin::bal;
 use crate::data::{d, BuffMods, ItemDef, MobDef, StatMods};
 use rand::Rng;
 
@@ -9,6 +10,8 @@ pub struct Stats {
     pub accuracy: f64, pub evasion: f64, pub crit: f64,
     pub atk_interval: f64, pub cast_mul: f64, pub speed: f64,
     pub hp_regen: f64, pub mp_regen: f64, pub cp_regen: f64,
+    /** skill cooldown reduction, a fraction (0.1 = 10% shorter) */
+    pub cdr: f64,
 }
 
 pub const BASE_SPEED: f64 = 6.0;
@@ -44,21 +47,24 @@ pub fn enchant_chance(e: i64) -> f64 {
 pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats {
     let r = stat_mods(race, gender);
     let c = &d().classes[cls];
+    let cb = |f: &str, v: f64| bal(&format!("class.{cls}.{f}"), v);
     let ench = &d().enchant;
     let lm = level_mod(level);
-    let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0);
+    let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     for &(it, e) in equipped {
+        let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
         if it.kind == "weapon" {
             let k = 1.0 + ench.weapon * e as f64;
-            w_p = it.p_atk.unwrap_or(0.0) * k + 4.0;
-            w_m = it.m_atk.unwrap_or(0.0) * k + 4.0;
+            w_p = ib("pAtk", it.p_atk) * k + 4.0;
+            w_m = ib("mAtk", it.m_atk) * k + 4.0;
         } else {
             let k = 1.0 + ench.armor * e as f64;
-            arm_p += it.p_def.unwrap_or(0.0) * k;
-            arm_m += it.m_def.unwrap_or(0.0) * k;
+            arm_p += ib("pDef", it.p_def) * k;
+            arm_m += ib("mDef", it.m_def) * k;
         }
-        hp_bonus += it.hp.unwrap_or(0.0);
-        mp_bonus += it.mp.unwrap_or(0.0);
+        hp_bonus += ib("hp", it.hp);
+        mp_bonus += ib("mp", it.mp);
+        cdr_sum += ib("cdr", it.cdr);
     }
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     for b in buffs {
@@ -70,8 +76,8 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         ba *= b.atk_spd.unwrap_or(1.0);
     }
     let lvl = (level - 1) as f64;
-    let max_hp = jround((c.base_hp + c.hp_lvl * lvl) * r.hp + hp_bonus);
-    let max_mp = jround((c.base_mp + c.mp_lvl * lvl) * r.mp + mp_bonus);
+    let max_hp = jround((cb("baseHp", c.base_hp) + cb("hpLvl", c.hp_lvl) * lvl) * r.hp + hp_bonus);
+    let max_mp = jround((cb("baseMp", c.base_mp) + cb("mpLvl", c.mp_lvl) * lvl) * r.mp + mp_bonus);
     let max_cp = jround(max_hp * c.cp_ratio);
     let mystic = cls == "mystic";
     Stats {
@@ -89,15 +95,19 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         hp_regen: max_hp * 0.008 + 0.5,
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
         cp_regen: max_cp * 0.03,
+        cdr: cdr_sum.min(0.5), // ponytail: flat cap, half of every skill's recharge at most
     }
 }
 
+/** a mob's multiplier from game.json (1.0 when unset), or the panel's value for it */
+fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
+
 pub fn mob_stats(m: &MobDef) -> Stats {
     let l = m.level as f64;
-    let def = jround((30.0 + 3.0 * l) * m.def_mult.unwrap_or(1.0));
+    let def = jround((30.0 + 3.0 * l) * mob_mult(m, "defMult", m.def_mult));
     Stats {
-        max_hp: jround((50.0 + 15.0 * l + 1.5 * l * l) * m.hp_mult.unwrap_or(1.0)),
-        p_atk: jround((4.0 + 3.0 * l) * m.atk_mult.unwrap_or(1.0)),
+        max_hp: jround((50.0 + 15.0 * l + 1.5 * l * l) * mob_mult(m, "hpMult", m.hp_mult)),
+        p_atk: jround((4.0 + 3.0 * l) * mob_mult(m, "atkMult", m.atk_mult)),
         p_def: def,
         m_def: def,
         accuracy: 80.0 + l,
@@ -125,7 +135,7 @@ pub fn xp_to_next(level: i64) -> i64 {
     jround(80.0 * (level as f64).powf(2.2)) as i64
 }
 
-pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * m.hp_mult.unwrap_or(1.0).powf(0.85)) }
+pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * mob_mult(m, "hpMult", m.hp_mult).powf(0.85)) }
 
 pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64 {
     let diff = player_lvl - mob_lvl;
@@ -189,5 +199,14 @@ mod tests {
         let sword = &d().items["broadsword"];
         let at = |e| compute_stats("human", "fighter", 10, &[(sword, e)], &[], "m").p_atk;
         assert!(at(0) < at(3) && at(3) < at(10));
+    }
+
+    #[test]
+    fn cdr_sums_and_caps() {
+        let ring = &d().items["ring_of_swiftness"];
+        let amulet = &d().items["amulet_of_haste"];
+        let cdr = |eq: &[(&ItemDef, i64)]| compute_stats("human", "mystic", 10, eq, &[], "m").cdr;
+        assert!((cdr(&[(ring, 0), (amulet, 0)]) - 0.15).abs() < 1e-9);
+        assert!((cdr(&[(ring, 0); 11]) - 0.5).abs() < 1e-9, "55% of raw cdr must cap at 50%");
     }
 }

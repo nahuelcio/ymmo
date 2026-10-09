@@ -1,15 +1,28 @@
 # server-rs/src/admin.rs
 
-- LOG_CAP · constant · L14-L14 — const LOG_CAP: usize = 500;
-- LOGS · constant · L16-L16 — static LOGS: Mutex<(u64, VecDeque<(u64, f64, bool, String)>)> = Mutex::new((0, VecDeque::new()));
-- CFG · constant · L18-L18 — static CFG: OnceLock<(Option<String>, Instant)> = OnceLock::new();
-- LAST_FAIL · constant · L19-L19 — static LAST_FAIL: AtomicU64 = AtomicU64::new(0);
-- log · function · L22-L29 — pub fn log(err: bool, line: String)
-- log · function · L31-L31 — macro_rules! log { ($($a:tt)*) => { $crate::admin::log(false, format!($($a)*)) } }
-- elog · function · L32-L32 — macro_rules! elog { ($($a:tt)*) => { $crate::admin::log(true, format!($($a)*)) } }
-- init · function · L34-L38 — pub fn init()
-- ct_eq · function · L41-L43 — fn ct_eq(a: &[u8], b: &[u8]) -> bool
-- rss · function · L46-L49 — fn rss() -> Option<u64>
-- handle · function · L52-L98 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
-- tests · module · L101-L115 — mod tests
-- log_ring_and_password_compare · function · L105-L114 — fn log_ring_and_password_compare()
+- LOG_CAP · constant · L15-L15 — const LOG_CAP: usize = 500;
+- LOGS · constant · L17-L17 — static LOGS: Mutex<(u64, VecDeque<(u64, f64, bool, String)>)> = Mutex::new((0, VecDeque::new()));
+- CFG · constant · L19-L19 — static CFG: OnceLock<(Option<String>, Instant)> = OnceLock::new();
+- LAST_FAIL · constant · L20-L20 — static LAST_FAIL: AtomicU64 = AtomicU64::new(0);
+- log · function · L23-L30 — pub fn log(err: bool, line: String)
+- log · function · L32-L32 — macro_rules! log { ($($a:tt)*) => { $crate::admin::log(false, format!($($a)*)) } }
+- elog · function · L33-L33 — macro_rules! elog { ($($a:tt)*) => { $crate::admin::log(true, format!($($a)*)) } }
+- CASTS · constant · L36-L36 — static CASTS: OnceLock<RwLock<HashMap<String, f64>>> = OnceLock::new();
+- casts · function · L38-L38 — fn casts() -> &'static RwLock<HashMap<String, f64>> { CASTS.get_or_init(|| RwLock::new(HashMap::new())) }
+- cast_ms · function · L41-L41 — pub fn cast_ms(skill: &str) -> Option<f64> { casts().read().unwrap().get(skill).copied() }
+- BALANCE · constant · L44-L44 — static BALANCE: OnceLock<RwLock<HashMap<String, f64>>> = OnceLock::new();
+- balance · function · L46-L46 — fn balance() -> &'static RwLock<HashMap<String, f64>> { BALANCE.get_or_init(|| RwLock::new(HashMap::new())) }
+- bal · function · L49-L49 — pub fn bal(key: &str, base: f64) -> f64 { balance().read().unwrap().get(key).copied().unwrap_or(base) }
+- tuned_skill · function · L52-L58 — pub fn tuned_skill(s: &SkillDef) -> SkillDef
+- Tunable · struct · L61-L61 — pub struct Tunable { pub key: String, pub label: String, pub base: f64, pub min: f64, pub max: f64 }
+- tunables · function · L64-L94 — pub fn tunables() -> Vec<Tunable>
+- valid_balance · function · L97-L99 — pub fn valid_balance(key: &str, value: Option<f64>) -> bool
+- init · function · L101-L108 — pub fn init()
+- set_balance · function · L111-L120 — fn set_balance(app: &App, key: &str, value: Option<f64>) -> bool
+- set_cast · function · L123-L133 — fn set_cast(app: &App, skill: &str, ms: Option<f64>) -> bool
+- ct_eq · function · L136-L138 — fn ct_eq(a: &[u8], b: &[u8]) -> bool
+- rss · function · L141-L144 — fn rss() -> Option<u64>
+- handle · function · L147-L203 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
+- tests · module · L206-L231 — mod tests
+- log_ring_and_password_compare · function · L210-L219 — fn log_ring_and_password_compare()
+- balance_fallback_and_whitelist · function · L222-L230 — fn balance_fallback_and_whitelist()

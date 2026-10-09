@@ -23,7 +23,48 @@ function audio(): AudioContext | null {
   noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noise.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  preloadSamples(ctx);
   return ctx;
+}
+
+// Real recordings for combat cues (CC0, see public/audio/CREDITS.txt). An effect with no decoded sample yet falls back to its synth recipe below.
+// paths under /audio/ (see public/audio/CREDITS.txt)
+const SAMPLES: Partial<Record<Sfx, string[]>> = {
+  hit: ['combat/hit1.wav', 'combat/hit2.wav', 'combat/hit3.wav', 'combat/hit4.wav', 'combat/hit5.wav'],
+  crit: ['combat/crit1.wav', 'combat/crit2.wav', 'combat/crit3.wav', 'combat/crit4.wav', 'combat/crit5.wav', 'combat/clash1.wav', 'combat/clash2.wav', 'combat/clash3.wav', 'combat/clash4.wav', 'combat/clash5.wav'],
+  miss: ['combat/miss1.wav', 'combat/miss2.wav', 'combat/miss3.wav', 'combat/miss4.wav'],
+  magic: ['combat/spell-fire1.wav', 'combat/spell-fire2.wav', 'combat/spell-fire3.wav', 'combat/spell-fire4.wav', 'combat/spell-fire5.wav', 'combat/spell-ice1.wav', 'combat/spell-ice2.wav', 'combat/spell-ice3.wav', 'combat/spell-ice4.wav', 'combat/spell-ice5.wav', 'combat/spell-lightning1.wav', 'combat/spell-lightning2.wav', 'combat/spell-lightning3.wav', 'combat/spell-lightning4.wav', 'combat/spell-lightning5.wav'],
+  cast: ['combat/spell-water1.wav', 'combat/spell-water2.wav', 'combat/spell-water3.wav', 'combat/spell-water4.wav', 'combat/spell-water5.wav'],
+  hurt: ['combat/hurt1.wav', 'combat/hurt2.wav'],
+  death: ['combat/death1.wav', 'combat/death2.wav'],
+  slam: ['combat/slam1.wav', 'combat/slam2.wav'],
+  dot: ['combat/dot1.wav', 'combat/dot2.wav', 'combat/dot3.wav'],
+};
+// Per-effect loudness and length for the samples above: gain scales them, max (seconds) cuts them with a short fade.
+// Starting points, not measured: tune these by ear.
+const TUNE: Partial<Record<Sfx, { gain: number; max: number }>> = {
+  hit: { gain: 0.8, max: 0.5 },
+  crit: { gain: 1, max: 0.8 },
+  miss: { gain: 0.5, max: 0.45 },
+  hurt: { gain: 0.8, max: 0.5 },
+  death: { gain: 0.9, max: 0.9 },
+  magic: { gain: 0.6, max: 1.2 },
+  cast: { gain: 0.5, max: 0.9 },
+  heal: { gain: 0.6, max: 1.2 },
+  slam: { gain: 1, max: 0.8 },
+  dot: { gain: 0.4, max: 0.3 },
+};
+const decoded = new Map<string, AudioBuffer>();
+
+function preloadSamples(c: AudioContext) {
+  const files = new Set(Object.values(SAMPLES).flatMap((l) => l ?? []));
+  for (const f of files) {
+    fetch(`/audio/${f}`)
+      .then((r) => r.arrayBuffer())
+      .then((b) => c.decodeAudioData(b))
+      .then((buf) => decoded.set(f, buf))
+      .catch(() => {}); // no sample: the synth recipe still plays
+  }
 }
 
 // browsers only allow audio after a user gesture
@@ -98,6 +139,19 @@ export function play(name: Sfx, gain = 1) {
   out.connect(master);
   const t = c.currentTime + 0.005;
   const r = 0.94 + Math.random() * 0.12; // a little pitch variety
+  const ready = (SAMPLES[name] ?? []).filter((f) => decoded.has(f));
+  if (ready.length) {
+    const src = c.createBufferSource();
+    const tune = TUNE[name] ?? { gain: 1, max: 1 };
+    const g = c.createGain();
+    src.buffer = decoded.get(ready[Math.floor(Math.random() * ready.length)])!;
+    src.playbackRate.value = r;
+    g.gain.setValueAtTime(tune.gain, t + tune.max - 0.08);
+    g.gain.linearRampToValueAtTime(0, t + tune.max);
+    src.connect(g).connect(out);
+    src.start(t, 0, tune.max);
+    return;
+  }
   switch (name) {
     case 'hit':
       hiss(t, 0.09, 0.5, 2200 * r, 600, 1.2, out);

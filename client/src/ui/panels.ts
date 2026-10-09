@@ -67,7 +67,7 @@ export class InventoryPanel {
     const m = this.g.me;
     const row = (k: string, v: number) => `<span class="stat-k">${k}</span><span class="stat-v">${v}</span>`;
     this.stats.innerHTML = `<div class="ds-name">${esc(m.name)}</div><div class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang, m.spec)}</div>
-      <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}</div>`;
+      <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}${m.cdr ? row(tx('Recarga %', 'CDR %'), -m.cdr) : ''}</div>`;
   }
 
   /** The stat a character cares about for this piece, to tell upgrades apart. */
@@ -525,6 +525,20 @@ export class AdminPanel {
   private logBox!: HTMLElement;
   private filter!: HTMLInputElement;
   private onlyErr!: HTMLInputElement;
+  private castTable!: HTMLElement;
+  /** skill id → the "now" cell, so the poll updates values without rebuilding the inputs */
+  private castNow = new Map<string, HTMLElement>();
+  private balTable!: HTMLElement;
+  private balFilter!: HTMLInputElement;
+  private exportBox!: HTMLTextAreaElement;
+  private balance: AdminState['balance'] = [];
+  /** balance key → the "now" cell and its row, same idea as castNow */
+  private balNow = new Map<string, HTMLElement>();
+  private balKind!: HTMLSelectElement;
+  private balChanged!: HTMLInputElement;
+  /** keys whose current value differs from the base, from the last poll */
+  private changed = new Set<string>();
+  private balRows: { key: string; kind: string; text: string; tr: HTMLElement }[] = [];
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('admin', 'Admin', 340, 50, 620, root);
@@ -536,7 +550,7 @@ export class AdminPanel {
     };
   }
 
-  private poll(extra: { pass?: string; kick?: number; announce?: string } = {}) {
+  private poll(extra: { pass?: string; kick?: number; announce?: string; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } } = {}) {
     this.g.net.send({ t: 'admin', since: this.since, ...extra });
   }
 
@@ -572,8 +586,24 @@ export class AdminPanel {
 
   private build() {
     this.mode = 'panel';
-    const b = this.win.body;
-    b.innerHTML = '';
+    const body = this.win.body;
+    body.innerHTML = '';
+    // two pages: the live status, and the balance tuner (long, with filters, so it gets its own tab)
+    const tabs = el('div', 'adm-tabs', body);
+    const pState = el('div', '', body);
+    const pBal = el('div', '', body);
+    const btnState = el('button', 'btn small', tabs, tx('Estado', 'Status'));
+    const btnBal = el('button', 'btn small', tabs, 'Balance');
+    const show = (onBal: boolean) => {
+      pState.hidden = onBal;
+      pBal.hidden = !onBal;
+      btnState.classList.toggle('active', !onBal);
+      btnBal.classList.toggle('active', onBal);
+    };
+    btnState.onclick = () => show(false);
+    btnBal.onclick = () => show(true);
+    show(false);
+    const b = pState;
     this.stats = el('div', 'stat-grid', b);
     el('div', 'section', b, tx('Mundos', 'Worlds'));
     this.worlds = el('table', 'adm-table', b);
@@ -590,6 +620,37 @@ export class AdminPanel {
       e.preventDefault();
       this.poll({ announce: text.value });
       text.value = '';
+    };
+    el('div', 'section', pBal, tx('Tiempos de cast (ms)', 'Cast times (ms)'));
+    this.castTable = el('table', 'adm-table', pBal);
+    el('div', 'section', pBal, tx('Balance', 'Balance'));
+    const balRow = el('div', 'adm-row', pBal);
+    this.balFilter = el('input', 'chat-input', balRow);
+    this.balFilter.type = 'search';
+    this.balFilter.placeholder = this.balFilter.ariaLabel = tx('Buscar (ej. power_strike, mob.)', 'Search (e.g. power_strike, mob.)');
+    this.balFilter.oninput = () => this.applyBalFilter();
+    this.balKind = el('select', 'chat-input', balRow);
+    this.balKind.ariaLabel = tx('Categoría', 'Category');
+    for (const [v, l] of [['', tx('Todo', 'All')], ['skill', tx('Habilidades', 'Skills')], ['item', 'Items'], ['mob', tx('Monstruos', 'Monsters')], ['class', tx('Clases', 'Classes')]]) {
+      el('option', '', this.balKind, l).value = v;
+    }
+    this.balKind.onchange = () => this.applyBalFilter();
+    const chg = el('label', '', balRow);
+    this.balChanged = el('input', '', chg);
+    this.balChanged.type = 'checkbox';
+    this.balChanged.onchange = () => this.applyBalFilter();
+    chg.append(tx(' Solo cambiados', ' Changed only'));
+    el('button', 'btn small', balRow, tx('Exportar cambios', 'Export changes')).onclick = () => this.exportBalance();
+    this.balTable = el('table', 'adm-table', pBal);
+    this.balNow.clear();
+    this.balRows = [];
+    const expRow = el('div', 'adm-row', pBal);
+    this.exportBox = el('textarea', 'adm-log', expRow);
+    this.exportBox.readOnly = true;
+    this.exportBox.ariaLabel = tx('Cambios exportados en JSON', 'Exported changes as JSON');
+    el('button', 'btn small', expRow, tx('Copiar', 'Copy')).onclick = async (e) => {
+      try { await navigator.clipboard.writeText(this.exportBox.value); (e.target as HTMLElement).textContent = tx('Copiado', 'Copied'); }
+      catch { this.exportBox.select(); }
     };
     el('div', 'section', b, 'Logs');
     const row = el('div', 'adm-row', b);
@@ -645,11 +706,97 @@ export class AdminPanel {
       }
     }
 
+    // rows are built once: the poll only refreshes "now", so a half-typed value survives
+    if (!this.castNow.size && m.casts.length) this.buildCasts(m.casts);
+    for (const c of m.casts) {
+      const now = this.castNow.get(c.id);
+      if (now) now.textContent = `${c.cast} ms`;
+    }
+
+    this.balance = m.balance;
+    this.changed = new Set(m.balance.filter((e) => e.current !== e.base).map((e) => e.key));
+    if (!this.balNow.size && m.balance.length) this.buildBalance(m.balance);
+    for (const e of m.balance) {
+      const now = this.balNow.get(e.key);
+      if (now) now.textContent = String(e.current);
+    }
+    this.applyBalFilter();
+
     this.since = m.seq;
     if (m.logs.length) {
       this.logs = this.logs.concat(m.logs).slice(-1000);
       this.drawLogs();
     }
+  }
+
+  private buildCasts(casts: AdminState['casts']) {
+    const t = this.castTable;
+    t.innerHTML = `<tr><th>${tx('Habilidad', 'Skill')}</th><th>${tx('Base', 'Base')}</th><th>${tx('Ahora', 'Now')}</th><th>${tx('Nuevo (ms)', 'New (ms)')}</th><th></th></tr>`;
+    for (const c of casts) {
+      const tr = el('tr', '', t);
+      el('td', '', tr, c.name);
+      el('td', '', tr, `${c.base} ms`);
+      this.castNow.set(c.id, el('td', '', tr));
+      const input = el('input', 'chat-input', el('td', '', tr));
+      input.type = 'number';
+      input.min = '100';
+      input.max = '10000';
+      input.step = '50';
+      input.ariaLabel = `${c.name} ${tx('nuevo tiempo de cast en ms', 'new cast time in ms')}`;
+      const cell = el('td', '', tr);
+      el('button', 'btn small', cell, tx('Aplicar', 'Apply')).onclick = () => {
+        const v = Number(input.value);
+        if (v >= 100 && v <= 10000) this.poll({ setCast: { skill: c.id, ms: v } });
+        input.value = '';
+      };
+      el('button', 'btn small', cell, tx('Base', 'Base')).onclick = () => this.poll({ setCast: { skill: c.id, ms: null } });
+    }
+  }
+
+  private buildBalance(list: AdminState['balance']) {
+    const t = this.balTable;
+    t.innerHTML = `<tr><th>${tx('Valor', 'Value')}</th><th>${tx('Base', 'Base')}</th><th>${tx('Ahora', 'Now')}</th><th>${tx('Nuevo', 'New')}</th><th></th></tr>`;
+    for (const e of list) {
+      const tr = el('tr', '', t);
+      el('td', '', tr, e.label).title = e.key;
+      el('td', '', tr, String(e.base));
+      this.balNow.set(e.key, el('td', '', tr));
+      const input = el('input', 'chat-input', el('td', '', tr));
+      input.type = 'number';
+      input.min = String(e.min);
+      input.max = String(e.max);
+      input.step = 'any';
+      input.ariaLabel = `${e.key} ${tx('nuevo valor', 'new value')}`;
+      const cell = el('td', '', tr);
+      el('button', 'btn small', cell, tx('Aplicar', 'Apply')).onclick = () => {
+        const v = Number(input.value);
+        if (input.value !== '' && v >= e.min && v <= e.max) { this.poll({ setBalance: { key: e.key, value: v } }); input.value = ''; }
+      };
+      el('button', 'btn small', cell, tx('Base', 'Base')).onclick = () => this.poll({ setBalance: { key: e.key, value: null } });
+      this.balRows.push({ key: e.key, kind: e.key.split('.')[0], text: `${e.key} ${e.label}`.toLowerCase(), tr });
+    }
+  }
+
+  /** shows the balance rows matching the search, category and "changed only" controls */
+  private applyBalFilter() {
+    if (!this.balFilter) return;
+    const q = this.balFilter.value.trim().toLowerCase(), kind = this.balKind.value, only = this.balChanged.checked;
+    for (const r of this.balRows) {
+      r.tr.hidden = !((!kind || r.kind === kind) && r.text.includes(q) && (!only || this.changed.has(r.key)));
+    }
+  }
+
+  /** only the values that differ from the base, nested like game.json: { skills: { power_strike: { power: 2 } } } */
+  private exportBalance() {
+    const groups: Record<string, string> = { skill: 'skills', item: 'items', mob: 'mobs', class: 'classes' };
+    const out: Record<string, Record<string, Record<string, number>>> = {};
+    for (const e of this.balance) {
+      if (e.current === e.base) continue;
+      const [kind, id, field] = e.key.split('.');
+      const g = (out[groups[kind]] ??= {});
+      (g[id] ??= {})[field] = e.current;
+    }
+    this.exportBox.value = JSON.stringify(out, null, 2);
   }
 
   private drawLogs() {

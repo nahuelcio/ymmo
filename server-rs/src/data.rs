@@ -49,6 +49,7 @@ pub struct ItemDef {
     pub m_def: Option<f64>,
     pub hp: Option<f64>,
     pub mp: Option<f64>,
+    pub cdr: Option<f64>,
     pub price: i64,
     pub stack: Option<bool>,
     #[serde(rename = "use")]

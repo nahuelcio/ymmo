@@ -393,7 +393,7 @@ impl World {
     }
 
     pub fn process_skill_intent(&mut self, pid: u32, skill: &str, target: u32, force: bool, dt: f64, now: f64) {
-        let def = d().skill(skill).unwrap();
+        let def = &crate::admin::tuned_skill(d().skill(skill).unwrap());
         let bad = match self.ents.get(&target) {
             None => true,
             Some(t) => t.c.dead || !t.is_fighter() || (def.target == "enemy" && self.can_attack(pid, target, force, now).is_some()),
@@ -419,7 +419,7 @@ impl World {
             p.intent = None;
             return;
         }
-        let dur = jround(def.cast * p.stats.cast_mul);
+        let dur = jround(crate::admin::cast_ms(&def.id).unwrap_or(def.cast) * p.stats.cast_mul);
         p.casting = Some((def.id.clone(), target, now + dur));
         // A skill is one action. Leaving an attack intent here made fighters keep swinging after it.
         p.intent = None;
@@ -429,13 +429,14 @@ impl World {
 
     pub fn finish_cast(&mut self, pid: u32, now: f64) {
         let Some((skill, target, _)) = self.pl_mut(pid).unwrap().casting.take() else { return };
-        let def = d().skill(&skill).unwrap();
+        let def = &crate::admin::tuned_skill(d().skill(&skill).unwrap());
         {
             let p = self.pl_mut(pid).unwrap();
             if p.mp < def.mp { return; }
             p.mp -= def.mp;
-            p.cooldowns.insert(def.id.clone(), now + def.cooldown);
-            p.send(json!({ "t": "cd", "key": def.id, "ms": def.cooldown }));
+            let cd = (def.cooldown * (1.0 - p.stats.cdr)).round();
+            p.cooldowns.insert(def.id.clone(), now + cd);
+            p.send(json!({ "t": "cd", "key": def.id, "ms": cd }));
         }
         match self.ents.get(&target) { Some(t) if !t.c.dead && t.is_fighter() => {}, _ => return }
         let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };

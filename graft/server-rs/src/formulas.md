@@ -1,27 +1,29 @@
 # server-rs/src/formulas.rs
 
-- Stats · struct · L6-L12 — Derived combat-stat block for a player or mob (hp/mp/cp pools, attack, defense, accuracy, regen, speed) that every other system reads instead of recomputing.
-- BASE_SPEED · constant · L14-L14 — Baseline movement speed every character starts from before race and buff multipliers are applied.
-- MELEE_RANGE · constant · L15-L15 — Distance within which a melee attacker is considered in range to land a hit.
-- PARTY_BONUS · constant · L16-L16 — Experience multiplier lookup by party size, rewarding groups up to 1.8x with ten members.
-- MAX_PARTY · constant · L17-L17 — Hard cap of 9 members per party, bounding the PARTY_BONUS lookup.
-- PVP_FLAG_MS · constant · L18-L18 — How long a player stays flagged for PvP after an aggressive act (30 seconds).
-- KARMA_PER_PK · constant · L19-L19 — Karma penalty added per player-killed-player, the driver of karma/penalty rules.
-- jround · function · L22-L22 — Half-up rounding that exactly matches JavaScript's Math.round so client display always equals server-computed values.
-- level_mod · function · L24-L24 — Global +10%-per-level scaling factor applied to attack and defense formulas so higher levels always hit harder.
-- stat_mods · function · L26-L35 — Fuses race and gender modifiers into one StatMods, multiplying the percentage stats and adding the flat ones.
-- enchant_chance · function · L38-L41 — Probability that enchanting succeeds: guaranteed below the safe point, then decaying by a fixed step per level above it.
-- compute_stats · function · L44-L93 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats
-- mob_stats · function · L95-L108 — Derives a mob's combat stats purely from its level, scaled by hp/atk/def multipliers that make elite variants stronger.
-- rnd · function · L110-L110 — Uniform [0,1) random source all combat rolls go through.
-- rand_range · function · L111-L111 — Uniform random float in [a, b] used for damage variance rolls.
-- hit_chance · function · L113-L113 — Chance an attack lands, rising with accuracy over evasion around a baseline and clamped to a fair 60-98% window.
-- phys_damage · function · L115-L117 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
-- magic_damage · function · L119-L121 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
-- xp_to_next · function · L123-L126 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
-- mob_xp · function · L128-L128 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
-- level_penalty · function · L130-L133 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
-- tests · module · L136-L193 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
-- balance_table · function · L141-L155 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
-- data_refs · function · L159-L182 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
-- enchant · function · L185-L192 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
+- Stats · struct · L7-L15 — Derived combat-stat block for a player or mob (hp/mp/cp pools, attack, defense, accuracy, regen, speed) that every other system reads instead of recomputing.
+- BASE_SPEED · constant · L17-L17 — Baseline movement speed every character starts from before race and buff multipliers are applied.
+- MELEE_RANGE · constant · L18-L18 — Distance within which a melee attacker is considered in range to land a hit.
+- PARTY_BONUS · constant · L19-L19 — Experience multiplier lookup by party size, rewarding groups up to 1.8x with ten members.
+- MAX_PARTY · constant · L20-L20 — Hard cap of 9 members per party, bounding the PARTY_BONUS lookup.
+- PVP_FLAG_MS · constant · L21-L21 — How long a player stays flagged for PvP after an aggressive act (30 seconds).
+- KARMA_PER_PK · constant · L22-L22 — Karma penalty added per player-killed-player, the driver of karma/penalty rules.
+- jround · function · L25-L25 — Half-up rounding that exactly matches JavaScript's Math.round so client display always equals server-computed values.
+- level_mod · function · L27-L27 — Global +10%-per-level scaling factor applied to attack and defense formulas so higher levels always hit harder.
+- stat_mods · function · L29-L38 — Fuses race and gender modifiers into one StatMods, multiplying the percentage stats and adding the flat ones.
+- enchant_chance · function · L41-L44 — Probability that enchanting succeeds: guaranteed below the safe point, then decaying by a fixed step per level above it.
+- compute_stats · function · L47-L100 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats
+- mob_mult · function · L103-L103 — fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
+- mob_stats · function · L105-L118 — Derives a mob's combat stats purely from its level, scaled by hp/atk/def multipliers that make elite variants stronger.
+- rnd · function · L120-L120 — Uniform [0,1) random source all combat rolls go through.
+- rand_range · function · L121-L121 — Uniform random float in [a, b] used for damage variance rolls.
+- hit_chance · function · L123-L123 — Chance an attack lands, rising with accuracy over evasion around a baseline and clamped to a fair 60-98% window.
+- phys_damage · function · L125-L127 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
+- magic_damage · function · L129-L131 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
+- xp_to_next · function · L133-L136 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
+- mob_xp · function · L138-L138 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
+- level_penalty · function · L140-L143 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
+- tests · module · L146-L212 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
+- balance_table · function · L151-L165 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
+- data_refs · function · L169-L192 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
+- enchant · function · L195-L202 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
+- cdr_sums_and_caps · function · L205-L211 — fn cdr_sums_and_caps()

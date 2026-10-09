@@ -69,7 +69,7 @@ export function itemTip(itemId: string, count = 1, ench = 0): string {
   lines.push(`<div class="tt-title">${ench ? `+${ench} ` : ''}${esc(itemName(itemId, lang))}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
   const st = (k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef') => enchanted(d, k, ench);
   if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}</span>`);
-  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
   if (d.desc) lines.push(esc(itemDesc(itemId, lang) ?? ""));
   if (d.type !== 'currency') lines.push(`<span class="tt-dim">${tx(`Valor: ${d.price} de adena`, `Value: ${d.price} adena`)}</span>`);
   return lines.join('<br>');

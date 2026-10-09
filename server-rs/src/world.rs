@@ -518,7 +518,7 @@ impl World {
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
             "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit,
-            "atkSpd": jround(60000.0 / s.atk_interval), "speed": jround(s.speed * 20.0),
+            "atkSpd": jround(60000.0 / s.atk_interval), "speed": jround(s.speed * 20.0), "cdr": (s.cdr * 100.0).round(),
             "adena": p.adena, "karma": p.karma, "pk": p.pk, "pvp": p.pvp, "flagged": p.pvp_until > self.now, "pvpOn": p.pvp_on,
             "skills": skills, "buffs": buffs,
             "zone": match self.raid { Some(r) => r.name.clone(), None => zone_at(e.c.x, e.c.z) },

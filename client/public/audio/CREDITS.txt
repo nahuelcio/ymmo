@@ -1,5 +1,10 @@
-All files are CC0 (public domain), from OpenGameArt.org.
+Music: CC0 (public domain), from OpenGameArt.org. Each sound effect below names its own license (CC0 or CC-BY 3.0, which needs the credit kept).
 
 exploration.ogg  "Exploration Theme" by Cleyton Kauffman   https://opengameart.org/content/exploration-theme
 forest.mp3       "Forest Ambience" by TinyWorlds           https://opengameart.org/content/forest-ambience
 dungeon.ogg      "Loopable Dungeon Ambience" by JaggedStone https://opengameart.org/content/loopable-dungeon-ambience
+
+Combat sound effects (from OpenGameArt.org, licenses as noted):
+  combat/hit*.wav, combat/crit*.wav, combat/hurt*.wav, combat/death*.wav   "Medieval sound effects - Weapon impacts" by Ben Jaszczak & Brian Nelson   https://opengameart.org/node/146863
+  combat/clash*.wav, combat/miss*.wav, combat/slam*.wav, combat/dot*.wav   "Fantasy Sound Effects (Tinysized SFX)" by Jan Schupke              https://opengameart.org/content/fantasy-sound-effects-tinysized-sfx
+  combat/spell-*.wav                                "Basic Spell Impacts" by lentikula (fire, ice, lightning, water), CC0    https://lentikula.itch.io/freecc0-basic-spell-impacts-sfx

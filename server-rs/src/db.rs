@@ -66,7 +66,9 @@ impl Db {
              CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, account_id INTEGER NOT NULL, expires INTEGER NOT NULL);
              CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, char_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, slot TEXT);
              CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
-             CREATE TABLE IF NOT EXISTS quests (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id));",
+             CREATE TABLE IF NOT EXISTS quests (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id));
+             CREATE TABLE IF NOT EXISTS skill_cast (skill TEXT PRIMARY KEY, ms REAL NOT NULL);
+             CREATE TABLE IF NOT EXISTS balance (key TEXT PRIMARY KEY, value REAL NOT NULL);",
         ).expect("schema");
         for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0", "spec TEXT"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
@@ -165,6 +167,34 @@ impl Db {
     }
 
     /** the specialization is picked once and for good: written right away, not with the periodic save */
+    /** admin tuning: cast-time overrides in ms, by skill id */
+    pub fn cast_overrides(&self) -> Vec<(String, f64)> {
+        let mut st = self.c.prepare_cached("SELECT skill, ms FROM skill_cast").unwrap();
+        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
+    /** None clears the override, back to the skill's base cast time */
+    pub fn set_cast(&self, skill: &str, ms: Option<f64>) {
+        let _ = match ms {
+            Some(ms) => self.c.execute("INSERT OR REPLACE INTO skill_cast (skill, ms) VALUES (?, ?)", params![skill, ms]),
+            None => self.c.execute("DELETE FROM skill_cast WHERE skill = ?", [skill]),
+        };
+    }
+
+    /** admin tuning: balance overrides by key (see admin::tunables) */
+    pub fn balance_overrides(&self) -> Vec<(String, f64)> {
+        let mut st = self.c.prepare_cached("SELECT key, value FROM balance").unwrap();
+        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
+    /** None clears the override, back to the game.json value */
+    pub fn set_balance(&self, key: &str, value: Option<f64>) {
+        let _ = match value {
+            Some(v) => self.c.execute("INSERT OR REPLACE INTO balance (key, value) VALUES (?, ?)", params![key, v]),
+            None => self.c.execute("DELETE FROM balance WHERE key = ?", [key]),
+        };
+    }
+
     pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
 
     #[allow(clippy::too_many_arguments)]
