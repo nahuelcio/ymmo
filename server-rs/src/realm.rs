@@ -53,7 +53,7 @@ impl World {
             let quests = p.quests.clone();
             self.db.save_char(id, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, &inv, &quests)
         };
-        if let Err(e) = r { eprintln!("[world] save failed: {e}"); }
+        if let Err(e) = r { elog!("[world] save failed: {e}"); }
     }
 
     /** Socket gone (or moving worlds): save and drop the character. Returns who it was. */

@@ -61,7 +61,8 @@ export class Chat {
         let text = this.input.value.trim();
         if (text) {
           if (this.tab.id === 'party' && !/^[!#"/]/.test(text)) text = `#${text}`;
-          this.g.net.send({ t: 'chat', text });
+          if (text === '/admin') this.g.ui.admin.win.toggle();
+          else this.g.net.send({ t: 'chat', text });
         }
         this.input.value = '';
         this.input.blur();

@@ -2,6 +2,8 @@
 //!
 //! Threads: the async hub (sockets, login, character screen, routing) on tokio, the overworld on its
 //! own thread, and one thread per raid instance. Worlds own their state; sockets talk to them by channel.
+#[macro_use]
+mod admin;
 mod ai;
 mod binary;
 mod chat;
@@ -53,13 +55,16 @@ struct Sess {
     char_id: i64,
     /** close this socket (duplicate login) */
     kick: Arc<Notify>,
+    /** gave the admin password on this socket (/admin) */
+    admin: bool,
 }
 
 struct Hub {
     sessions: HashMap<u64, Sess>,
     worlds: HashMap<u32, Sender<WorldCmd>>,
     next_world: u32,
-    perf: HashMap<u32, (f64, usize)>,
+    /** per world: (smoothed tick ms, players, worst tick ms, entities) */
+    perf: HashMap<u32, (f64, usize, f64, usize)>,
 }
 
 type Shared = Arc<Mutex<Hub>>;
@@ -101,7 +106,7 @@ fn spawn_world(app: &App, raid: Option<(&'static data::RaidDef, usize)>) -> u32 
     drop(hub);
     let hub_tx = app.hub_tx.clone();
     std::thread::Builder::new().name(format!("world-{id}")).spawn(move || run_world(id, raid, rx, hub_tx)).expect("world thread");
-    if let Some((r, n)) = raid { println!("[raid {id}] {} opened for {n}", r.id); }
+    if let Some((r, n)) = raid { log!("[raid {id}] {} opened for {n}", r.id); }
     id
 }
 
@@ -147,7 +152,7 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
                 hub.worlds.remove(&world);
                 hub.perf.remove(&world);
                 if world == MAIN_WORLD { continue; }
-                println!("[raid {world}] closed");
+                log!("[raid {world}] closed");
                 // anyone still inside (crash) goes back to their last save
                 let stuck: Vec<u64> = hub.sessions.iter().filter(|(_, s)| s.world == Some(world)).map(|(k, _)| *k).collect();
                 for sid in stuck {
@@ -157,10 +162,10 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
                     to_world(hub, MAIN_WORLD, WorldCmd::Join { member: m, kind: "world", at: None });
                 }
             }
-            HubMsg::Perf { world, tick, players } => {
+            HubMsg::Perf { world, tick, players, max, ents } => {
                 let mut hub = app.hub.lock().unwrap();
-                hub.perf.insert(world, (tick, players));
-                if tick > 10.0 { eprintln!("[perf] world {world}: tick {tick:.1} ms with {players} players"); }
+                hub.perf.insert(world, (tick, players, max, ents));
+                if tick > 10.0 { elog!("[perf] world {world}: tick {tick:.1} ms with {players} players"); }
             }
         }
     }
@@ -177,7 +182,7 @@ async fn client(socket: WebSocket, app: App) {
     let pending = Arc::new(AtomicUsize::new(0));
     let out = Outbox { tx, pending: pending.clone() };
     let kick = Arc::new(Notify::new());
-    app.hub.lock().unwrap().sessions.insert(sid, Sess { out: out.clone(), lang: Lang::Es, account_id: 0, world: None, char_id: 0, kick: kick.clone() });
+    app.hub.lock().unwrap().sessions.insert(sid, Sess { out: out.clone(), lang: Lang::Es, account_id: 0, world: None, char_id: 0, kick: kick.clone(), admin: false });
 
     let writer = tokio::spawn(async move {
         while let Some(m) = rx.recv().await {
@@ -230,6 +235,7 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
         }
         return;
     }
+    if t == "admin" { return admin::handle(app, sid, &out, m); }
     if let Some(w) = world {
         let hub = app.hub.lock().unwrap();
         to_world(&hub, w, WorldCmd::Msg { sid, msg: m.clone() });
@@ -273,7 +279,7 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
                     send(&out, msg);
                 }
                 Ok(Err(e)) => send(&out, json!({ "t": "error", "msg": db_msg(lang, &e) })),
-                Err(e) => eprintln!("login failed: {e}"),
+                Err(e) => elog!("login failed: {e}"),
             }
         }
         "resume" => {
@@ -288,7 +294,7 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
         }
         "logout" => {
             app.db.lock().unwrap().delete_session(&s("token"));
-            if let Some(s) = app.hub.lock().unwrap().sessions.get_mut(&sid) { s.account_id = 0; }
+            if let Some(s) = app.hub.lock().unwrap().sessions.get_mut(&sid) { s.account_id = 0; s.admin = false; }
         }
         "createChar" => {
             if account == 0 { return; }
@@ -338,6 +344,13 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
 #[tokio::main]
 async fn main() {
     let t0 = std::time::Instant::now();
+    // .env fills in whatever the environment doesn't set. ponytail: plain KEY=VALUE lines only (no escapes, no `export`).
+    for l in std::fs::read_to_string(".env").unwrap_or_default().lines() {
+        let Some((k, v)) = l.split_once('=') else { continue };
+        let k = k.trim();
+        if !k.is_empty() && !k.starts_with('#') && std::env::var_os(k).is_none() { std::env::set_var(k, v.trim().trim_matches('"')); }
+    }
+    admin::init();
     collision::warm();
     let port: u16 = std::env::var("GAME_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3001);
     let dist = std::env::var("CLIENT_DIST").unwrap_or_else(|_| "client/dist".into());
@@ -357,10 +370,10 @@ async fn main() {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(every)).await;
             let hub = perf_app.hub.lock().unwrap();
-            let main = hub.perf.get(&MAIN_WORLD).copied().unwrap_or((0.0, 0));
-            let raids: Vec<String> = hub.perf.iter().filter(|(k, _)| **k != MAIN_WORLD).map(|(_, (t, n))| format!(" [{n}p {t:.2}ms]")).collect();
+            let main = hub.perf.get(&MAIN_WORLD).copied().unwrap_or((0.0, 0, 0.0, 0));
+            let raids: Vec<String> = hub.perf.iter().filter(|(k, _)| **k != MAIN_WORLD).map(|(_, (t, n, ..))| format!(" [{n}p {t:.2}ms]")).collect();
             if std::env::var("PERF_LOG").is_ok() || main.0 > 10.0 {
-                println!("[perf] tick {:.2} ms · {} conns · {} raids{}", main.0, hub.sessions.len(), raids.len(), raids.join(""));
+                log!("[perf] tick {:.2} ms · {} conns · {} raids{}", main.0, hub.sessions.len(), raids.len(), raids.join(""));
             }
         }
     });
@@ -368,7 +381,7 @@ async fn main() {
     let static_files = tower_http::services::ServeDir::new(&dist).fallback(tower_http::services::ServeFile::new(format!("{dist}/index.html")));
     let router = Router::new().route("/ws", get(ws_handler)).fallback_service(static_files).with_state(app.clone());
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.expect("bind");
-    println!("[server] Claudi MMO (Rust) listening on http://localhost:{port} (ws: /ws) · ready in {:?}", t0.elapsed());
+    log!("[server] Claudi MMO (Rust) listening on http://localhost:{port} (ws: /ws) · ready in {:?}", t0.elapsed());
 
     let shutdown_app = app.clone();
     axum::serve(listener, router).with_graceful_shutdown(async move {

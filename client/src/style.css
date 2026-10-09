@@ -566,3 +566,14 @@ input { font: inherit; user-select: text; }
   width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--border); background: rgba(12, 14, 22, 0.85); color: var(--gold); font-size: 20px; line-height: 1; padding: 0; }
 .touch .status { left: 46px; }
 .hud-focus .menu, .hud-focus .chat, .hud-focus .quest-tracker, .hud-focus .party, .hud-focus .status, .hud-focus .buffs { display: none !important; }
+
+/* ---------- admin window (/admin) ---------- */
+.adm-row { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.adm-row .chat-input { flex: 1; min-width: 0; margin-top: 0; }
+.adm-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.adm-table th { color: var(--dim); font-weight: 400; text-align: left; }
+.adm-table th, .adm-table td { padding: 2px 8px 2px 0; white-space: nowrap; }
+.adm-warn { color: #ffcf5a; }
+.adm-bad { color: #ff8a7a; }
+.adm-spark polyline { fill: none; stroke: var(--gold); stroke-width: 1.5; }
+.adm-log { height: 220px; overflow-y: auto; background: #07080c; border: 1px solid #3a3424; border-radius: 2px; padding: 4px 6px; font: 11px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; user-select: text; }

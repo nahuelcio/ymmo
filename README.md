@@ -26,7 +26,9 @@ npm run build:rs   # cliente + export-data + binario Rust
 npm start          # http://localhost:3001  (puerto configurable con GAME_PORT)
 ```
 
-La base de datos queda en `server/data/game.db` (la crea el server si no existe).
+La base de datos queda en `server-rs/data/game.db` (la crea el server si no existe).
+
+Panel de admin: poné `ADMIN_PASSWORD=<8+ caracteres>` en un `.env` (o en el entorno) y escribí `/admin` en el chat del juego (rendimiento por mundo, jugadores, logs, kick y anuncios). Sin esa variable el panel queda desactivado.
 
 ## Contenido
 

@@ -50,6 +50,8 @@ export type C2S =
   | { t: 'lang'; lang: 'es' | 'en' }
   | { t: 'login'; user: string; pass: string; register: boolean; remember?: boolean }
   | { t: 'resume'; token: string }
+  /** admin window (/admin): asks for the server state; pass logs this socket in, kick/announce are the actions */
+  | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
@@ -92,6 +94,9 @@ export type S2C =
   | { t: 'error'; msg: string }
   | { t: 'chars'; list: CharSummary[]; token?: string }
   | { t: 'resumeFail' }
+  /** admin window: ok is false until this socket gave the admin password */
+  | { t: 'admin'; ok: false }
+  | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number }[]; logs: { t: number; err: boolean; line: string }[] }
   | { t: 'enter'; self: SelfState; inv: InvItem[] }
   /** moved to another world (raid instance or back): forget every entity and start over */
   | { t: 'world'; self: SelfState; inv: InvItem[] }

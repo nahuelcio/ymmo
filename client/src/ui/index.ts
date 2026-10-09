@@ -5,7 +5,7 @@ import { Hud } from './hud';
 import { Minimap } from './minimap';
 import { SettingsPanel } from './settings';
 import { isTouchDevice, TouchControls } from './touch';
-import { CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
+import { AdminPanel, CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
 import { runBenchmark } from '../bench';
 import { SPEC_LEVEL } from '../../../shared/src/data/classes';
 
@@ -21,6 +21,7 @@ export class UI {
   dialogs: Dialogs;
   help: Win;
   settings: SettingsPanel;
+  admin: AdminPanel;
 
   constructor(private g: Game) {
     this.root = document.getElementById('ui')!;
@@ -35,6 +36,7 @@ export class UI {
     this.dialogs = new Dialogs(g, this.root);
     this.help = createHelp(this.root);
     this.settings = new SettingsPanel(this.root);
+    this.admin = new AdminPanel(g, this.root);
     this.settings.onBenchmark = () => {
       this.settings.win.hide();
       void runBenchmark(g);

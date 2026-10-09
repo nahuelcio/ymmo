@@ -223,7 +223,7 @@ impl World {
             return self.sys(pid, "No podés elegir esa especialización.", "You cannot choose that specialization.");
         };
         if let Err(e) = self.db.set_spec(p.char_id, &def.id) {
-            eprintln!("[world] set_spec failed: {e}");
+            elog!("[world] set_spec failed: {e}");
             return self.sys(pid, "No se pudo guardar. Probá de nuevo.", "Could not save. Try again.");
         }
         let (lvl, race, g, cls) = (p.level, p.race.clone(), p.look.gender(), p.cls.clone());

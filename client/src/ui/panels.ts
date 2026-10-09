@@ -506,6 +506,161 @@ export class Dialogs {
   }
 }
 
+type AdminState = Extract<S2C, { t: 'admin'; ok: true }>;
+const WARN_MS = 10; // same threshold as the server's [perf] warning
+
+/** Server admin window (/admin in the chat): tick cost per world, players, logs. Polls only while it is open. */
+export class AdminPanel {
+  win: Win;
+  private mode: 'none' | 'login' | 'panel' = 'none';
+  private since = 0;
+  private logs: AdminState['logs'] = [];
+  private hist = new Map<number, number[]>();
+  private timer = 0;
+  private playersKey = '';
+  private loginMsg!: HTMLElement;
+  private stats!: HTMLElement;
+  private worlds!: HTMLElement;
+  private players!: HTMLElement;
+  private logBox!: HTMLElement;
+  private filter!: HTMLInputElement;
+  private onlyErr!: HTMLInputElement;
+
+  constructor(private g: Game, root: HTMLElement) {
+    this.win = new Win('admin', 'Admin', 340, 50, 620, root);
+    this.win.onShow = () => {
+      if (this.mode === 'none') this.win.body.textContent = tx('Esperando al servidor… Si esto no cambia, este servidor no tiene el panel de admin.', 'Waiting for the server… If this stays, this server has no admin panel.');
+      this.poll();
+      clearInterval(this.timer);
+      this.timer = window.setInterval(() => (this.win.visible ? this.poll() : clearInterval(this.timer)), 2000);
+    };
+  }
+
+  private poll(extra: { pass?: string; kick?: number; announce?: string } = {}) {
+    this.g.net.send({ t: 'admin', since: this.since, ...extra });
+  }
+
+  set(m: Extract<S2C, { t: 'admin' }>) {
+    if (!m.ok) return this.login();
+    if (this.mode !== 'panel') this.build();
+    this.render(m);
+  }
+
+  private login() {
+    if (this.mode === 'login') return;
+    this.mode = 'login';
+    const b = this.win.body;
+    b.innerHTML = '';
+    const f = el('form', 'adm-row', b);
+    const pass = el('input', 'chat-input', f);
+    pass.type = 'password';
+    pass.autocomplete = 'off';
+    pass.required = true;
+    pass.placeholder = pass.ariaLabel = tx('Contraseña de admin', 'Admin password');
+    el('button', 'btn', f, tx('Entrar', 'Log in'));
+    this.loginMsg = el('div', 'adm-bad', b);
+    this.loginMsg.setAttribute('role', 'alert');
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      this.poll({ pass: pass.value });
+      pass.value = '';
+      // still on this form after the reply: it was refused
+      setTimeout(() => this.mode === 'login' && (this.loginMsg.textContent = tx('Contraseña incorrecta (o el panel está desactivado).', 'Wrong password (or the panel is disabled).')), 1500);
+    };
+    pass.focus();
+  }
+
+  private build() {
+    this.mode = 'panel';
+    const b = this.win.body;
+    b.innerHTML = '';
+    this.stats = el('div', 'stat-grid', b);
+    el('div', 'section', b, tx('Mundos', 'Worlds'));
+    this.worlds = el('table', 'adm-table', b);
+    el('div', 'section', b, tx('Jugadores', 'Players'));
+    this.players = el('table', 'adm-table', b);
+    el('div', 'section', b, tx('Anuncio a todos', 'Announce to everyone'));
+    const ann = el('form', 'adm-row', b);
+    const text = el('input', 'chat-input', ann);
+    text.maxLength = 200;
+    text.required = true;
+    text.ariaLabel = tx('Texto del anuncio', 'Announcement text');
+    el('button', 'btn', ann, tx('Enviar', 'Send'));
+    ann.onsubmit = (e) => {
+      e.preventDefault();
+      this.poll({ announce: text.value });
+      text.value = '';
+    };
+    el('div', 'section', b, 'Logs');
+    const row = el('div', 'adm-row', b);
+    this.filter = el('input', 'chat-input', row);
+    this.filter.type = 'search';
+    this.filter.placeholder = this.filter.ariaLabel = tx('Filtrar logs', 'Filter logs');
+    const lbl = el('label', '', row);
+    this.onlyErr = el('input', '', lbl);
+    this.onlyErr.type = 'checkbox';
+    lbl.append(tx(' Solo errores', ' Errors only'));
+    this.filter.oninput = this.onlyErr.onchange = () => this.drawLogs();
+    this.logBox = el('div', 'adm-log', b);
+    this.logBox.tabIndex = 0;
+  }
+
+  private render(m: AdminState) {
+    const cls = (v: number) => (v > m.tickMs ? 'adm-bad' : v > WARN_MS ? 'adm-warn' : '');
+    const ms = (v: number) => `<td class="${cls(v)}">${v.toFixed(2)} ms</td>`;
+    const world = (id: number) => (id === 0 ? tx('Mundo principal', 'Overworld') : `Raid #${id}`);
+    const up = m.uptime >= 3600 ? `${Math.floor(m.uptime / 3600)} h ${Math.floor((m.uptime % 3600) / 60)} m` : `${Math.floor(m.uptime / 60)} m ${m.uptime % 60} s`;
+    const worst = Math.max(0, ...m.worlds.map((w) => w.max));
+    const stat = (k: string, v: string, c = '') => `<span class="stat-k">${k}</span><span class="stat-v ${c}">${v}</span>`;
+    this.stats.innerHTML = stat('Uptime', up) + stat(tx('Conexiones', 'Connections'), `${m.conns} (${m.players.length} ${tx('jugando', 'in game')})`)
+      + stat(tx('Peor tick', 'Worst tick'), `${worst.toFixed(1)} / ${m.tickMs} ms`, cls(worst)) + stat(tx('Memoria', 'Memory'), m.rss == null ? '—' : `${(m.rss / 1048576).toFixed(0)} MB`);
+
+    for (const id of this.hist.keys()) if (!m.worlds.some((w) => w.id === id)) this.hist.delete(id);
+    this.worlds.innerHTML = `<tr><th>${tx('Mundo', 'World')}</th><th>${tx('Jugadores', 'Players')}</th><th>${tx('Entidades', 'Entities')}</th><th>${tx('Tick medio', 'Avg tick')}</th><th>${tx('Peor tick', 'Worst tick')}</th><th>${tx('Carga', 'Load')}</th><th>${tx('Historial', 'History')}</th></tr>`
+      + m.worlds.sort((a, b) => a.id - b.id).map((w) => {
+        const h = this.hist.get(w.id) ?? [];
+        this.hist.set(w.id, h);
+        h.push(w.tick);
+        if (h.length > 60) h.shift();
+        const top = Math.max(WARN_MS, ...h);
+        const pts = h.map((v, i) => `${i * 2},${(17 - (v / top) * 16).toFixed(1)}`).join(' ');
+        return `<tr><td>${world(w.id)}</td><td>${w.players}</td><td>${w.ents}</td>${ms(w.tick)}${ms(w.max)}<td class="${cls(w.tick)}">${((w.tick / m.tickMs) * 100).toFixed(1)} %</td>`
+          + `<td><svg class="adm-spark" width="120" height="18" role="img" aria-label="${tx('Tick medio reciente, máximo', 'Recent average tick, peak')} ${top.toFixed(1)} ms"><polyline points="${pts}"/></svg></td></tr>`;
+      }).join('');
+
+    // only rebuild the players table when it changed, so a focused Kick button survives the poll
+    const key = JSON.stringify(m.players);
+    if (key !== this.playersKey) {
+      this.playersKey = key;
+      this.players.innerHTML = `<tr><th>${tx('Nombre', 'Name')}</th><th>${tx('Nivel', 'Level')}</th><th>${tx('Mundo', 'World')}</th><th>${tx('Cola de salida', 'Send queue')}</th><th></th></tr>`;
+      for (const p of m.players.sort((a, b) => a.name.localeCompare(b.name))) {
+        const tr = el('tr', '', this.players);
+        el('td', '', tr, p.name || '?');
+        el('td', '', tr, String(p.level));
+        el('td', '', tr, world(p.world));
+        el('td', p.queue > 50 ? 'adm-warn' : '', tr, String(p.queue));
+        const kick = el('button', 'btn small danger', el('td', '', tr), 'Kick');
+        kick.ariaLabel = `Kick ${p.name}`;
+        kick.onclick = () => this.poll({ kick: p.sid });
+      }
+    }
+
+    this.since = m.seq;
+    if (m.logs.length) {
+      this.logs = this.logs.concat(m.logs).slice(-1000);
+      this.drawLogs();
+    }
+  }
+
+  private drawLogs() {
+    const box = this.logBox, q = this.filter.value.toLowerCase();
+    const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+    box.innerHTML = this.logs.filter((l) => (!this.onlyErr.checked || l.err) && l.line.toLowerCase().includes(q))
+      .map((l) => `<div${l.err ? ' class="adm-bad"' : ''}>${new Date(l.t).toLocaleTimeString(fmtLoc)}  ${esc(l.line)}</div>`).join('');
+    if (atEnd) box.scrollTop = box.scrollHeight;
+  }
+}
+
 export function createHelp(root: HTMLElement): Win {
   const w = new Win('help', tx('Cómo jugar', 'How to play'), 380, 80, 420, root);
   w.body.innerHTML = lang === 'en' ? HELP_EN : `

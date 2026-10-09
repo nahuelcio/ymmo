@@ -408,6 +408,7 @@ export class Game {
     });
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
+    n.on('admin', (m) => this.ui.admin.set(m));
     n.on('quests', (m) => {
       this.quests = m.list;
       this.questsDone = new Set(m.done);
