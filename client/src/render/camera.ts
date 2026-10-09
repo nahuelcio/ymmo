@@ -1,6 +1,31 @@
 import * as THREE from 'three';
 import { heightAt } from '../../../shared/src/terrain';
 import { settings } from '../settings';
+import { getObstacles, type Obstacle } from '../../../shared/src/collision';
+
+/** Solid walls the camera must not clip through: boxes (houses, walls) and big circles (rocks, huts, tents). Thin trunks are skipped. */
+let walls: Obstacle[] | null = null;
+const solidAt = (x: number, z: number) => {
+  walls ??= getObstacles().filter((o) => o.k === 'b' || o.r >= 1);
+  for (const ob of walls) {
+    if (ob.k === 'c') {
+      if ((x - ob.x) ** 2 + (z - ob.z) ** 2 < ob.r * ob.r) return true;
+    } else {
+      const dx = x - ob.x, dz = z - ob.z;
+      if (Math.abs(dx * ob.cos - dz * ob.sin) < ob.hw && Math.abs(dx * ob.sin + dz * ob.cos) < ob.hd) return true;
+    }
+  }
+  return false;
+};
+/** Distance along the ground ray (ax,az)->(bx,bz) before the first wall, or Infinity. Sampled, ~0.5 m steps. */
+function wallDist(ax: number, az: number, bx: number, bz: number): number {
+  const L = Math.hypot(bx - ax, bz - az), n = Math.ceil(L / 0.5);
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    if (solidAt(ax + (bx - ax) * t, az + (bz - az) * t)) return (i - 1) / n * L;
+  }
+  return Infinity;
+}
 
 /** L2-style third person orbit camera: right-drag rotates, wheel zooms. */
 export class CameraController {
@@ -14,6 +39,10 @@ export class CameraController {
   private lastY = 0;
   keys = { left: false, right: false, up: false, down: false };
   private shakeAmt = 0;
+  /** distance the camera is allowed to sit from the focus; eases in fast when a wall blocks, out slowly */
+  private capD = Infinity;
+  private wallWant = Infinity;
+  private frame = 0;
 
   /** Short camera shake (e.g. when taking a critical hit). */
   shake(amount: number) {
@@ -105,9 +134,20 @@ export class CameraController {
     this.dist += (this.targetDist - this.dist) * Math.min(1, dt * 10);
     this.focus.lerp(p, Math.min(1, dt * 12));
     const f = this.focus;
-    const cx = f.x + Math.sin(this.yaw) * Math.cos(this.pitch) * this.dist;
-    const cz = f.z + Math.cos(this.yaw) * Math.cos(this.pitch) * this.dist;
-    let cy = f.y + 1.6 + Math.sin(this.pitch) * this.dist;
+    // wall check every 3rd frame against the full-length line; the cached result is eased in between
+    if (this.frame++ % 3 === 0) {
+      const fx = f.x + Math.sin(this.yaw) * Math.cos(this.pitch) * this.dist;
+      const fz = f.z + Math.cos(this.yaw) * Math.cos(this.pitch) * this.dist;
+      const hit = wallDist(f.x, f.z, fx, fz);
+      this.wallWant = hit === Infinity ? Infinity : Math.max(1.2, hit - 0.5);
+    }
+    if (this.capD === Infinity) this.capD = this.dist;
+    const want = Math.min(this.dist, this.wallWant);
+    this.capD += (want - this.capD) * Math.min(1, dt * (want < this.capD ? 18 : 4));
+    const d = Math.min(this.dist, this.capD);
+    const cx = f.x + Math.sin(this.yaw) * Math.cos(this.pitch) * d;
+    const cz = f.z + Math.cos(this.yaw) * Math.cos(this.pitch) * d;
+    let cy = f.y + 1.6 + Math.sin(this.pitch) * d;
     cy = Math.max(cy, heightAt(cx, cz) + 0.8);
     this.camera.position.set(cx, cy, cz);
     if (this.shakeAmt > 0.001) {
