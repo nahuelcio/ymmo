@@ -10,6 +10,7 @@ import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
 
 const SKY = 0xa9c6e0;
+const SNAP_UP = new THREE.Vector3(0, 1, 0), snapR = new THREE.Vector3(), snapU = new THREE.Vector3(), snapped = new THREE.Vector3();
 
 /** Sky palette per region: zenith, horizon (also fog), ground bounce, sun colour & strength, cloud tint. */
 interface SkyPal { top: number; horizon: number; ground: number; sun: number; sunI: number; hemi: number; cloud: number }
@@ -300,7 +301,17 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       CLOUD_MAT.emissive.copy(CLOUD_MAT.color).multiplyScalar(0.45 * (0.12 + 0.88 * day));
     },
     follow(p) {
-      sun.position.copy(p).addScaledVector(ATMOS.lightDir, 150);
+      // snap to whole shadow texels in light space: the map then moves in steps, so edges don't shimmer while walking
+      const L = ATMOS.lightDir;
+      const texel = (sun.shadow.camera.right * 2) / sun.shadow.mapSize.x;
+      if (texel > 0) {
+        snapR.crossVectors(SNAP_UP, L).normalize();
+        snapU.crossVectors(L, snapR);
+        const dr = Math.round(p.dot(snapR) / texel) * texel - p.dot(snapR);
+        const du = Math.round(p.dot(snapU) / texel) * texel - p.dot(snapU);
+        p = snapped.copy(p).addScaledVector(snapR, dr).addScaledVector(snapU, du);
+      }
+      sun.position.copy(p).addScaledVector(L, 150);
       sun.target.position.copy(p);
       // grass and flowers only around the player
       if (detail.visible)
