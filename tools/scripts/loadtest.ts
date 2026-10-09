@@ -6,7 +6,7 @@
 // --raid n   group the bots in parties of n and send each party into its own raid instance
 //            (0 = stay in the overworld and run around)
 import WebSocket from 'ws';
-import { decodeSnap } from '../shared/src/binary';
+import { decodeSnap } from '../../shared/src/binary';
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);

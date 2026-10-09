@@ -2,18 +2,18 @@
 // client keep one source of truth. English names are resolved here, so Rust needs no overlay logic.
 //   npm run export-data   (also run by `npm run build:rs`)
 import { writeFileSync } from 'node:fs';
-import { ENCHANT, ITEMS } from '../shared/src/data/items';
-import { MOBS } from '../shared/src/data/mobs';
-import { SKILLS } from '../shared/src/data/skills';
-import { QUEST_LIST } from '../shared/src/data/quests';
-import { NPCS, TELEPORTS, ZONES } from '../shared/src/data/world';
-import { CAMPS } from '../shared/src/data/camps';
-import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../shared/src/data/classes';
-import { RAIDS } from '../shared/src/data/raids';
-import { STATUSES } from '../shared/src/status';
-import { getObstacles, WALK_RADIUS } from '../shared/src/collision';
-import { PLAYABLE_HALF, TOWN, TOWNS } from '../shared/src/terrain';
-import { campName, itemName, mobName, npcLines, npcText, questField, skillName, specName, teleportName, zoneName } from '../shared/src/i18n';
+import { ENCHANT, ITEMS } from '../../shared/src/data/items';
+import { MOBS } from '../../shared/src/data/mobs';
+import { SKILLS } from '../../shared/src/data/skills';
+import { QUEST_LIST } from '../../shared/src/data/quests';
+import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
+import { CAMPS } from '../../shared/src/data/camps';
+import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
+import { RAIDS } from '../../shared/src/data/raids';
+import { STATUSES } from '../../shared/src/status';
+import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
+import { PLAYABLE_HALF, TOWN, TOWNS } from '../../shared/src/terrain';
+import { campName, itemName, mobName, npcLines, npcText, questField, skillName, specName, teleportName, zoneName } from '../../shared/src/i18n';
 
 const out = {
   constants: { PLAYABLE_HALF, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
@@ -42,6 +42,6 @@ const out = {
   obstacles: getObstacles().map((o) => (o.k === 'c' ? { k: 'c', x: o.x, z: o.z, r: o.r } : { k: 'b', x: o.x, z: o.z, hw: o.hw, hd: o.hd, cos: o.cos, sin: o.sin })),
 };
 
-const path = new URL('../server-rs/data/game.json', import.meta.url);
+const path = new URL('../../server-rs/data/game.json', import.meta.url);
 writeFileSync(path, JSON.stringify(out));
 console.log(`[export-data] ${out.items.length} items, ${out.mobs.length} mobs, ${out.skills.length} skills, ${out.quests.length} quests, ${out.obstacles.length} obstacles -> server-rs/data/game.json`);
