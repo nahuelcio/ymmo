@@ -632,7 +632,8 @@ export function rimLit(root: THREE.Object3D) {
         prev?.(sh, r);
         if (!sh.fragmentShader.includes('#include <opaque_fragment>')) return;
         sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', /* glsl */ `
-          outgoingLight += vec3(0.85, 0.92, 1.0) * pow(1.0 - saturate(dot(normal, geometryViewDir)), 3.0) * 0.22;
+          // relative to the light already on the surface: brightens lit edges, never glows in the dark
+          outgoingLight *= 1.0 + pow(1.0 - saturate(dot(normal, geometryViewDir)), 3.0) * 0.35;
           #include <opaque_fragment>`);
       };
       m.needsUpdate = true;
