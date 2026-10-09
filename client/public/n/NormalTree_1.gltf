@@ -1,0 +1,333 @@
+{
+  "asset": {
+    "generator": "glTF-Transform v4.5.1",
+    "version": "2.0"
+  },
+  "accessors": [
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 14376,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 2905,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 1
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2905,
+      "normalized": false,
+      "byteOffset": 0,
+      "bufferView": 2
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 11184,
+      "normalized": false,
+      "byteOffset": 28752,
+      "bufferView": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5120,
+      "count": 7456,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 3
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 2905,
+      "max": [
+        14753,
+        26363,
+        7112
+      ],
+      "min": [
+        -14761,
+        -32767,
+        -5248
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 4
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5122,
+      "count": 7456,
+      "max": [
+        19330,
+        32767,
+        13093
+      ],
+      "min": [
+        -19330,
+        -4892,
+        -13093
+      ],
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 5
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5123,
+      "count": 7456,
+      "normalized": true,
+      "byteOffset": 0,
+      "bufferView": 6
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 1,
+      "byteOffset": 0,
+      "byteLength": 51120,
+      "target": 34963,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 0,
+          "byteLength": 9242,
+          "mode": "TRIANGLES",
+          "byteStride": 2,
+          "count": 25560
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 51120,
+      "byteLength": 11620,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 9244,
+          "byteLength": 5936,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 2905
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 62740,
+      "byteLength": 23240,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 15180,
+          "byteLength": 17336,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 2905
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 85980,
+      "byteLength": 29824,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 32516,
+          "byteLength": 15165,
+          "mode": "ATTRIBUTES",
+          "filter": "OCTAHEDRAL",
+          "byteStride": 4,
+          "count": 7456
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 115804,
+      "byteLength": 23240,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 47684,
+          "byteLength": 12767,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 2905
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 139044,
+      "byteLength": 59648,
+      "target": 34962,
+      "byteStride": 8,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 60452,
+          "byteLength": 45394,
+          "mode": "ATTRIBUTES",
+          "byteStride": 8,
+          "count": 7456
+        }
+      }
+    },
+    {
+      "buffer": 1,
+      "byteOffset": 198692,
+      "byteLength": 29824,
+      "target": 34962,
+      "byteStride": 4,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "buffer": 0,
+          "byteOffset": 105848,
+          "byteLength": 7957,
+          "mode": "ATTRIBUTES",
+          "byteStride": 4,
+          "count": 7456
+        }
+      }
+    }
+  ],
+  "samplers": [
+    {
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 1,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/webp",
+      "uri": "NormalTree_Bark.webp"
+    },
+    {
+      "mimeType": "image/webp",
+      "uri": "NormalTree_Leaves.webp"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "NormalTree_1.bin",
+      "byteLength": 113808
+    },
+    {
+      "byteLength": 228516,
+      "extensions": {
+        "EXT_meshopt_compression": {
+          "fallback": true
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "name": "NormalTree_Bark",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "NormalTree_Leaves",
+      "alphaMode": "MASK",
+      "alphaCutoff": 0.45,
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "POSITION": 5
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 0
+        },
+        {
+          "attributes": {
+            "NORMAL": 4,
+            "POSITION": 6,
+            "TEXCOORD_0": 7
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 3
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "NormalTree_1",
+      "translation": [
+        -0.10530596971511841,
+        3.4234414594247937,
+        -0.1263675093650818
+      ],
+      "scale": [
+        3.433310459367931,
+        3.433310459367931,
+        3.433310459367931
+      ],
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0,
+  "extensionsUsed": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ],
+  "extensionsRequired": [
+    "EXT_meshopt_compression",
+    "KHR_mesh_quantization"
+  ]
+}

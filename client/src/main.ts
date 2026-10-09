@@ -10,6 +10,7 @@ import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
 import { loadQ, mountQuaterniusPreview } from './render/quaternius';
 import { loadV } from './render/village';
+import { loadNature } from './render/nature';
 import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
@@ -399,6 +400,7 @@ async function boot() {
   const models = Promise.all([
     loadQ().catch((err) => console.warn('quaternius', err)),
     loadV().catch((err) => console.warn('village', err)),
+    loadNature().catch((err) => console.warn('nature', err)),
   ]);
   for (let attempt = 1; ; attempt++) {
     try {

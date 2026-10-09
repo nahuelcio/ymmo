@@ -4,6 +4,7 @@ import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT,
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
+import { buildNatureBushes, buildNatureDetail, buildNatureRocks, buildNatureTown, buildNatureTrees, natureReady } from './nature';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
@@ -229,16 +230,17 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const terrain = buildTerrain();
   const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1, opts.precompile);
   scene.add(terrain);
-  scene.add(buildTrees());
-  scene.add(buildRocks());
-  scene.add(buildBushes());
+  scene.add(natureReady() ? buildNatureTrees() : buildTrees());
+  scene.add(natureReady() ? buildNatureRocks() : buildRocks());
+  scene.add(natureReady() ? buildNatureBushes() : buildBushes());
   const water = buildWater();
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
   const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
   scene.add(water);
-  const detail = buildDetail();
+  const detail = natureReady() ? buildNatureDetail() : buildDetail();
   scene.add(detail);
   scene.add(mergeStatic(buildTown()));
+  if (natureReady()) scene.add(buildNatureTown());
   scene.add(buildVillage());
   scene.add(mergeStatic(buildZoneProps()));
   const { props: campProps, flames } = buildCamps();
@@ -1043,7 +1045,7 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
     const f = h.d / 2;
     const bx = h.w / 2 + 1.7;
     yard.add(flat(box(2.4, 0.22, 3, 0x4e3a24, bx, 0.11, 0)));
-    for (let k = 0; k < 6; k++) {
+    if (!natureReady()) for (let k = 0; k < 6; k++) {
       const crop = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 0), mat(k % 3 ? 0x4f8a3a : 0xc86a3a));
       crop.position.set(bx - 0.6 + (k % 2) * 1.2, 0.36, -1 + (k >> 1));
       yard.add(crop);
@@ -1074,7 +1076,7 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
   }
 
   // bushes along the inside of the curtain, open at each road
-  for (let i = 0; i < 70; i++) {
+  if (!natureReady()) for (let i = 0; i < 70; i++) {
     const a = (i / 70) * Math.PI * 2 + rng() * 0.05;
     if (roads.some((r) => Math.abs(Math.atan2(Math.sin(a - r), Math.cos(a - r))) < 0.22)) continue;
     const r = TOWN.r - 1.2 - rng() * 0.7, sc = 0.8 + rng() * 0.6;
