@@ -5,6 +5,7 @@ import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
 import { buildNatureBushes, buildNatureDetail, buildNatureRocks, buildNatureTown, buildNatureTrees, natureReady } from './nature';
+import { setCharAniso } from './quaternius';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
@@ -247,6 +248,10 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   // Static world: bake every local matrix once so the per-frame scene traversal (render + labels) skips recomposing them.
   for (const o of scene.children) if (o !== sky && o !== clouds && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
 
+  // Sharpen GLTF colour maps (nature, village kit); character atlases live outside this scene.
+  const aniso = Math.min(4, opts.maxAnisotropy ?? 1);
+  if (aniso > 1) console.debug(`[tex] aniso ${aniso}x: ${sharpenMaps(scene, aniso)} world maps, ${setCharAniso(aniso)} character maps`);
+
   return {
     scene, terrain, sun,
     detail,
@@ -258,6 +263,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     setTextureQuality: (q) => {
       terrainTex.set(q);
       setPropTextures(q, opts.maxAnisotropy ?? 1, opts.precompile);
+      // a quality swap re-creates materials: raise anisotropy on the new maps too
+      if (aniso > 1) { sharpenMaps(scene, aniso); setCharAniso(aniso); }
     },
     updateSky(camera: THREE.Camera, far: number, dt: number) {
       terrainTex.update(dt);
@@ -354,6 +361,29 @@ function freeze(o: THREE.Object3D) {
     x.matrixAutoUpdate = false;
   });
   o.updateMatrixWorld(true);
+}
+
+/**
+ * Raise anisotropy on every colour map under `o`. GLTF albedo maps ship at 1 and smear into mud at
+ * grazing angles (the town paving, distant walls); the terrain array texture already gets the max.
+ * Materials are shared, so this touches a handful of textures. Measured on this repo's dev machine
+ * (bench, 48 mobs): 8x halves the frame rate on its GPU, 4x holds — hence the cap.
+ */
+function sharpenMaps(o: THREE.Object3D, n: number): number {
+  let raised = 0;
+  o.traverse((x) => {
+    const mat = (x as THREE.Mesh).material;
+    if (!mat) return;
+    for (const m of Array.isArray(mat) ? mat : [mat]) {
+      const map = (m as THREE.MeshLambertMaterial).map;
+      if (map && map.anisotropy < n) {
+        map.anisotropy = n;
+        map.needsUpdate = true; // sampler state is read on upload
+        raised++;
+      }
+    }
+  });
+  return raised;
 }
 
 // The world is split into square chunks so the camera frustum (and the far plane,

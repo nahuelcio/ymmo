@@ -165,6 +165,26 @@ export function loadQ(): Promise<void> {
   })());
 }
 
+/**
+ * Raise anisotropy on the character atlas textures — the GLTFs ship them at 1, so hair and cloth
+ * smear when seen at a grazing angle. Textures are shared across every rig built from `prims`, so
+ * this is a handful of uploads. Returns how many maps were raised.
+ */
+export function setCharAniso(n: number): number {
+  if (n <= 1) return 0;
+  let raised = 0;
+  for (const list of prims.values()) {
+    for (const p of list) {
+      if (p.tex && p.tex.anisotropy < n) {
+        p.tex.anisotropy = n;
+        p.tex.needsUpdate = true; // sampler state is read on upload
+        raised++;
+      }
+    }
+  }
+  return raised;
+}
+
 const LUM = new THREE.Vector3(0.3, 0.59, 0.11);
 const crestMats = new Map<number, THREE.MeshLambertMaterial>();
 const matCache = new Map<string, THREE.MeshLambertMaterial>();
