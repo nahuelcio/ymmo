@@ -166,23 +166,24 @@ export function loadQ(): Promise<void> {
 }
 
 /**
- * Raise anisotropy on the character atlas textures — the GLTFs ship them at 1, so hair and cloth
- * smear when seen at a grazing angle. Textures are shared across every rig built from `prims`, so
- * this is a handful of uploads. Returns how many maps were raised.
+ * Set anisotropy on the character atlas textures to exactly `n` (raising or lowering: the setting
+ * is user-configurable) — the GLTFs ship them at 1, so hair and cloth smear when seen at a grazing
+ * angle. Textures are shared across every rig built from `prims`, so this is a handful of uploads.
+ * Returns how many maps changed.
  */
 export function setCharAniso(n: number): number {
-  if (n <= 1) return 0;
-  let raised = 0;
+  if (n <= 1) n = 1;
+  let changed = 0;
   for (const list of prims.values()) {
     for (const p of list) {
-      if (p.tex && p.tex.anisotropy < n) {
+      if (p.tex && p.tex.anisotropy !== n) {
         p.tex.anisotropy = n;
         p.tex.needsUpdate = true; // sampler state is read on upload
-        raised++;
+        changed++;
       }
     }
   }
-  return raised;
+  return changed;
 }
 
 const LUM = new THREE.Vector3(0.3, 0.59, 0.11);

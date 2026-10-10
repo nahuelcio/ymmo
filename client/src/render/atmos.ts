@@ -225,6 +225,10 @@ export class LocalLights {
   private static readonly SIZE = 4;
   private near: (LightSource | null)[] = new Array(LocalLights.SIZE).fill(null);
   private nearD = new Float64Array(LocalLights.SIZE);
+  /** what each pool slot is currently shining on, and its 0..1 fade (crossfade instead of a pop when the ranking changes) */
+  private slotSrc: (LightSource | null)[] = new Array(LocalLights.SIZE).fill(null);
+  private fade = new Float64Array(LocalLights.SIZE);
+  private lastT = 0;
 
   constructor(private scene: THREE.Scene, private sources: LightSource[]) {}
 
@@ -237,6 +241,8 @@ export class LocalLights {
     }
     if (!on) return;
     const night = 1 - ATMOS.day;
+    const dt = Math.min(0.1, Math.max(0, t - this.lastT));
+    this.lastT = t;
     // nearest SIZE sources within 60 m, by insertion into fixed slots: no per-frame arrays to collect
     const near = this.near, nd = this.nearD;
     near.fill(null);
@@ -250,13 +256,19 @@ export class LocalLights {
       near[j] = s;
     }
     this.pool.forEach((l, i) => {
-      const s = near[i];
-      if (!s) return void (l.intensity = 0);
+      const want = near[i];
+      // a dark slot may pick up its new source: position and colour move while invisible
+      if (this.slotSrc[i] !== want && this.fade[i] <= 0) this.slotSrc[i] = want;
+      const s = this.slotSrc[i];
+      const goal = s && want === s ? 1 : 0; // fade out when another slot's source took this rank
+      const speed = dt * 2.5; // ~0.4 s for a full fade
+      this.fade[i] = goal > this.fade[i] ? Math.min(this.fade[i] + speed, goal) : Math.max(this.fade[i] - speed, goal);
+      if (!s || this.fade[i] <= 0) return void (l.intensity = 0);
       l.position.set(s.x, s.y, s.z);
       l.color.set(s.fire ? 0xff8a3a : 0xffc878);
       const flicker = s.fire ? 0.88 + 0.12 * Math.sin(t * 11 + i * 2.1) * Math.sin(t * 5.3 + i) : 1;
       // modest: a light sits close to walls and the ground, and bloom multiplies whatever blows out
-      l.intensity = (s.fire ? 26 * (0.4 + 0.6 * night) : 16 * night) * flicker;
+      l.intensity = (s.fire ? 26 * (0.4 + 0.6 * night) : 16 * night) * flicker * this.fade[i];
     });
   }
 }

@@ -180,6 +180,8 @@ export interface WorldScene {
   follow(p: THREE.Vector3): void;
   /** ground textures: off, low or high (render/terrainTex.ts) */
   setTextureQuality(q: TerrainTexQuality): void;
+  /** sampler anisotropy for the GLTF colour maps (setting textureAniso) */
+  setAniso(n: number): void;
   /** Cinematic preset: render the world mirrored in the water for this frame (before the main render). */
   renderReflection(on: boolean, renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
 }
@@ -248,9 +250,11 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   // Static world: bake every local matrix once so the per-frame scene traversal (render + labels) skips recomposing them.
   for (const o of scene.children) if (o !== sky && o !== clouds && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
 
-  // Sharpen GLTF colour maps (nature, village kit); character atlases live outside this scene.
-  const aniso = Math.min(4, opts.maxAnisotropy ?? 1);
-  if (aniso > 1) console.debug(`[tex] aniso ${aniso}x: ${sharpenMaps(scene, aniso)} world maps, ${setCharAniso(aniso)} character maps`);
+  // Sampler anisotropy for the GLTF colour maps (nature, village kit, characters): user setting,
+  // capped by the GPU's max. three.js clamps per-texture at upload too; this keeps it explicit.
+  const setAniso = (n: number): number => sharpenMaps(scene, n) + setCharAniso(n);
+  const aniso = setAniso(Math.min(settings.s.textureAniso, opts.maxAnisotropy ?? settings.s.textureAniso));
+  if (aniso > 0) console.debug(`[tex] aniso ${settings.s.textureAniso}x: ${aniso} maps sharpened`);
 
   return {
     scene, terrain, sun,
@@ -263,8 +267,14 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     setTextureQuality: (q) => {
       terrainTex.set(q);
       setPropTextures(q, opts.maxAnisotropy ?? 1, opts.precompile);
-      // a quality swap re-creates materials: raise anisotropy on the new maps too
-      if (aniso > 1) { sharpenMaps(scene, aniso); setCharAniso(aniso); }
+      // a quality swap re-creates materials: apply the current aniso setting to the new maps too
+      setAniso(Math.min(settings.s.textureAniso, opts.maxAnisotropy ?? settings.s.textureAniso));
+    },
+
+    setAniso: (n) => {
+      const v = Math.min(n, opts.maxAnisotropy ?? n);
+      const changed = setAniso(v);
+      if (changed) console.debug(`[tex] aniso -> ${v}x (${changed} maps re-sampled)`);
     },
     updateSky(camera: THREE.Camera, far: number, dt: number) {
       terrainTex.update(dt);
@@ -364,26 +374,27 @@ function freeze(o: THREE.Object3D) {
 }
 
 /**
- * Raise anisotropy on every colour map under `o`. GLTF albedo maps ship at 1 and smear into mud at
- * grazing angles (the town paving, distant walls); the terrain array texture already gets the max.
- * Materials are shared, so this touches a handful of textures. Measured on this repo's dev machine
- * (bench, 48 mobs): 8x halves the frame rate on its GPU, 4x holds — hence the cap.
+ * Set anisotropy on every colour map under `o` to exactly `n` (raising or lowering; the setting is
+ * user-configurable). GLTF albedo maps ship at 1 and smear into mud at grazing angles (the town
+ * paving, distant walls); the terrain array texture already gets the max. Materials are shared, so
+ * this touches a handful of textures. Measured on this repo's dev machine (bench, 48 mobs): 8x
+ * halves the frame rate on its GPU, 4x holds — hence the default.
  */
 function sharpenMaps(o: THREE.Object3D, n: number): number {
-  let raised = 0;
+  let changed = 0;
   o.traverse((x) => {
     const mat = (x as THREE.Mesh).material;
     if (!mat) return;
     for (const m of Array.isArray(mat) ? mat : [mat]) {
       const map = (m as THREE.MeshLambertMaterial).map;
-      if (map && map.anisotropy < n) {
+      if (map && map.anisotropy !== n) {
         map.anisotropy = n;
         map.needsUpdate = true; // sampler state is read on upload
-        raised++;
+        changed++;
       }
     }
   });
-  return raised;
+  return changed;
 }
 
 // The world is split into square chunks so the camera frustum (and the far plane,

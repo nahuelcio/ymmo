@@ -47,6 +47,7 @@ export interface Settings {
   volumetric: boolean; // sunlight scattering in the air, shadowed (render/volumetric.ts)
   reflections: boolean; // the world mirrored in the water (render/reflect.ts)
   relief: number; // texture relief strength (render/textures.ts bumpNormal), 0 = flat
+  textureAniso: 1 | 2 | 4 | 8; // sampler anisotropy for GLTF colour maps (world props + characters); 8 can cost half the FPS on weak GPUs
   // post-processing shaders
   look: LookPreset;
   toneMapping: boolean; // ACES filmic
@@ -126,6 +127,7 @@ export const DEFAULTS: Settings = {
   dynamicRes: true,
   showFps: false,
   relief: 0.4,
+  textureAniso: 4,
   look: 'natural',
   ...LOOKS.natural.v,
   dayNight: true,

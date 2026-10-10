@@ -308,6 +308,7 @@ export class Game {
   private applySettings(s: Settings, changed: (keyof Settings)[]) {
     const has = (...k: (keyof Settings)[]) => k.some((x) => changed.includes(x));
     if (has('preset')) this.world.setTextureQuality(textureQuality(s));
+    if (has('textureAniso')) this.world.setAniso(s.textureAniso);
     if (has('renderScale', 'dynamicRes')) {
       if (!s.dynamicRes) this.resScale = 1;
       this.setResScale(this.resScale);
