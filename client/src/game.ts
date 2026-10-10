@@ -160,6 +160,7 @@ export class Game {
   private lastRender = 0;
   private fpsFrames = 0;
   private fpsAt = 0;
+  private frameNo = 0;
   /** hit-stop: entity animation freezes until this time */
   private lastPointer: { x: number; y: number } | null = null;
   private frustum = new THREE.Frustum();
@@ -334,6 +335,7 @@ export class Game {
       sun.shadow.mapSize.set(size, size);
       sun.shadow.map?.dispose();
       sun.shadow.map = null;
+      this.renderer.shadowMap.needsUpdate = true; // new map is blank until rendered
     }
     if (has('viewDistance')) {
       const fog = this.world.scene.fog as THREE.Fog;
@@ -1730,6 +1732,9 @@ export class Game {
     tickLod();
     this.ui.update(now);
     this.renderer.info.reset();
+    // ponytail: sun shadows re-render every other frame (half the shadow cost). Ceiling: moving characters' shadows lag one frame.
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = (this.frameNo++ & 1) === 0;
     this.world.renderReflection(settings.s.reflections, this.renderer, this.camera);
     this.post.render();
     this.labels.render(this.entLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works

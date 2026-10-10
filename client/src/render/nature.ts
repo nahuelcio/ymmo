@@ -46,6 +46,7 @@ export const natureReady = () => ready;
 
 const CHUNK = 200;
 const DETAIL_CHUNK = 40;
+const DETAIL_PER_CELL = 360;
 /** Pack bushes are about twice the old icosahedron clusters. */
 const BUSH_FIT = 0.55;
 
@@ -188,11 +189,10 @@ function chunked(items: Item[], chunk: number): THREE.Group {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.computeBoundingSphere();
-    if (chunk === DETAIL_CHUNK) {
-      const [ix, iz] = k.split('|')[0].split(',').map(Number);
-      mesh.userData.cx = (ix + 0.5) * chunk;
-      mesh.userData.cz = (iz + 0.5) * chunk;
-    }
+    // every chunk size gets its center so follow() can hide the far ones
+    const [ix, iz] = k.split('|')[0].split(',').map(Number);
+    mesh.userData.cx = (ix + 0.5) * chunk;
+    mesh.userData.cz = (iz + 0.5) * chunk;
     g.add(mesh);
   }
   return g;
@@ -262,7 +262,8 @@ export function buildNatureDetail(): THREE.Group {
   for (let cx = 0; cx < n; cx++)
     for (let cz = 0; cz < n; cz++) {
       const x0 = -WORLD_HALF * 0.86 + cx * DETAIL_CHUNK, z0 = -WORLD_HALF * 0.86 + cz * DETAIL_CHUNK;
-      for (let i = 0; i < 520; i++) {
+      // ponytail: fewer candidates per cell (was 520) cuts blade count ~30%; the look changes slightly, the cost ceiling is this constant
+      for (let i = 0; i < DETAIL_PER_CELL; i++) {
         const x = x0 + rng() * DETAIL_CHUNK, z = z0 + rng() * DETAIL_CHUNK, h = heightAt(x, z);
         const r1 = rng(), r2 = rng(), r3 = rng();
         if (!fertile(x, z, h)) continue;

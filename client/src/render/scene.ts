@@ -230,9 +230,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const terrain = buildTerrain();
   const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1, opts.precompile);
   scene.add(terrain);
-  scene.add(natureReady() ? buildNatureTrees() : buildTrees());
-  scene.add(natureReady() ? buildNatureRocks() : buildRocks());
-  scene.add(natureReady() ? buildNatureBushes() : buildBushes());
+  const forest = [natureReady() ? buildNatureTrees() : buildTrees(), natureReady() ? buildNatureRocks() : buildRocks(), natureReady() ? buildNatureBushes() : buildBushes()];
+  scene.add(...forest);
   const water = buildWater();
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
   const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
@@ -341,6 +340,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // grass and flowers only around the player
       if (detail.visible)
         for (const ch of detail.children) ch.visible = Math.abs(ch.userData.cx - p.x) < 95 && Math.abs(ch.userData.cz - p.z) < 95;
+      // fog hides everything past its far end: skip whole forest chunks beyond it (150 covers a chunk's half-diagonal plus the camera's offset)
+      const reach = (scene.fog as THREE.Fog).far + 150;
+      for (const g of forest) for (const ch of g.children) if (ch.userData.cx !== undefined) ch.visible = Math.hypot(ch.userData.cx - p.x, ch.userData.cz - p.z) < reach;
     },
   };
 }
