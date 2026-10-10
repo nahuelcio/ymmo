@@ -137,6 +137,8 @@ export function play(name: Sfx, gain = 1) {
   const out = c.createGain();
   out.gain.value = vol;
   out.connect(master);
+  // every effect gets its own output node: unplug it once the sound is over, or each one stays wired to the master
+  const unplug = (ms: number) => setTimeout(() => out.disconnect(), ms);
   const t = c.currentTime + 0.005;
   const r = 0.94 + Math.random() * 0.12; // a little pitch variety
   const ready = (SAMPLES[name] ?? []).filter((f) => decoded.has(f));
@@ -150,8 +152,10 @@ export function play(name: Sfx, gain = 1) {
     g.gain.linearRampToValueAtTime(0, t + tune.max);
     src.connect(g).connect(out);
     src.start(t, 0, tune.max);
+    src.onended = () => out.disconnect();
     return;
   }
+  unplug(4000); // longer than any synthesized effect
   switch (name) {
     case 'hit':
       hiss(t, 0.09, 0.5, 2200 * r, 600, 1.2, out);

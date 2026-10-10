@@ -325,7 +325,14 @@ export function animateQ(q: QAnim, s: AnimState) {
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
   const k = Math.min(1, dt * 14);
-  for (const n in q.acts) q.acts[n].setEffectiveWeight((q.w[n] += ((n === cur ? 1 : 0) - q.w[n]) * k));
+  for (const n in q.acts) {
+    // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
+    // where an asymptotic fade kept all of them sampled for most of a minute after every switch
+    let w = q.w[n] + ((n === cur ? 1 : 0) - q.w[n]) * k;
+    if (w < 0.003) w = 0;
+    else if (w > 0.997) w = 1;
+    q.acts[n].setEffectiveWeight((q.w[n] = w));
+  }
   q.mixer.update(dt);
 }
 

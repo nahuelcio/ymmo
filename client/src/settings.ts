@@ -122,7 +122,8 @@ export const LOOKS: Record<Exclude<LookPreset, 'custom'>, { name: string; desc: 
 export const DEFAULTS: Settings = {
   preset: 'high',
   ...PRESETS.high,
-  fpsCap: 0,
+  // 60 by default: on a 120-165 Hz screen an uncapped game runs the CPU and GPU flat out for frames nobody needs
+  fpsCap: 60,
   dynamicRes: true,
   showFps: false,
   relief: 0.4,
@@ -162,6 +163,9 @@ function load(): Settings {
       const saved = JSON.parse(raw) as Partial<Settings>;
       // actions added after these settings were saved keep their default key
       const keys = { ...DEFAULT_KEYS, ...saved.keys };
+      // 'unlimited' used to be the default, so saved settings still carry it: move them to the new 60 once
+      if (saved.fpsCap === 0 && !localStorage.getItem('fpsCap60')) saved.fpsCap = 60;
+      localStorage.setItem('fpsCap60', '1');
       // Tab used to cycle targets; it now shows the player list, unless the player rebound things since
       if (!saved.keys?.players && keys.nextTarget === keys.players) keys.nextTarget = DEFAULT_KEYS.nextTarget;
       return { ...DEFAULTS, ...saved, keys };

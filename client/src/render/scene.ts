@@ -187,6 +187,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, 90, 420);
+  /** where follow() last culled the chunks, and with which view distance / foliage setting */
+  const lastCull = new THREE.Vector3(Infinity, 0, 0);
+  let lastReach = 0, lastDetail = false;
 
   const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 1.6);
   scene.add(hemi);
@@ -337,6 +340,12 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       }
       sun.position.copy(p).addScaledVector(L, 150);
       sun.target.position.copy(p);
+      // chunk visibility only changes after a few steps (or a new view distance): don't re-check every frame
+      const reachNow = (scene.fog as THREE.Fog).far;
+      if (lastCull.distanceToSquared(p) < 4 && lastReach === reachNow && lastDetail === detail.visible) return;
+      lastCull.copy(p);
+      lastReach = reachNow;
+      lastDetail = detail.visible;
       // grass and flowers only around the player
       if (detail.visible)
         for (const ch of detail.children) ch.visible = Math.abs(ch.userData.cx - p.x) < 95 && Math.abs(ch.userData.cz - p.z) < 95;
@@ -354,6 +363,8 @@ function freeze(o: THREE.Object3D) {
     x.matrixAutoUpdate = false;
   });
   o.updateMatrixWorld(true);
+  // and keep the per-frame matrix pass out of the whole subtree: thousands of nodes walked for nothing otherwise
+  o.matrixWorldAutoUpdate = false;
 }
 
 // The world is split into square chunks so the camera frustum (and the far plane,

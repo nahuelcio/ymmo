@@ -70,7 +70,10 @@ export class PostFX {
   }
 
   rebuild(s: Settings) {
-    this.composer?.dispose();
+    // EffectComposer.dispose() only frees its own two buffers: each pass (bloom, AO, volumetric) holds full-screen
+    // render targets of its own, which leaked on every graphics change
+    for (const p of this.composer?.passes ?? []) p.dispose();
+    this.composer?.dispose(); // its render targets take their depth textures with them
     this.composer = null;
     this.bloom = this.grade = this.fxaa = this.rays = this.tilt = null;
     const vol = s.volumetric && s.shadows !== 'off' && !!this.sun && this.camera instanceof THREE.PerspectiveCamera;

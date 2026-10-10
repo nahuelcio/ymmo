@@ -45,6 +45,8 @@ export interface CEnt {
   hit: THREE.Mesh;
   label: CSS2DObject;
   labelEl: HTMLDivElement;
+  /** follows the entity in the label layer and carries its nameplate, quest mark, speech and damage numbers */
+  tag: THREE.Object3D;
   snaps: Snap[];
   pos: THREE.Vector3;
   ry: number;
@@ -80,7 +82,17 @@ const GAIN = /^(?:Juntaste|You picked up) (\d+) (?:de )?adena\.$|^(?:Ganaste|You
 const NOT_READY = /todavía no está lista\.$|is not ready yet\.$|Ya estás lanzando una habilidad\.$|You are already casting\.$/;
 /** the server's answer to /who, which the player list (hold Tab) asks for and shows instead of the chat */
 const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
-const FLASH_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
+/**
+ * The hit flash, one material per shader variant (skinned and/or with shape keys): a single shared one made the
+ * renderer switch programs on every draw while a character flashed.
+ */
+const FLASH_MATS = new Map<string, THREE.MeshBasicMaterial>();
+const flashMat = (o: THREE.Mesh) => {
+  const k = `|${!!o.geometry.morphAttributes.position}`;
+  let m = FLASH_MATS.get(k);
+  if (!m) FLASH_MATS.set(k, (m = new THREE.MeshBasicMaterial({ color: 0xffffff })));
+  return m;
+};
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
 /** Local prediction is discarded beyond this much disagreement with the server. */
@@ -96,6 +108,9 @@ const decalMat = (color: number, opacity: number) =>
   new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
 const NPC_DECAL = decalMat(0xffc94a, 0.75);
 const PLAYER_DECAL = decalMat(0x5aa8ff, 0.45);
+
+/** hitboxes are never drawn: one material for all of them */
+const HIT_MAT = new THREE.MeshBasicMaterial({ visible: false });
 
 const svgCursor = (svg: string, x: number, y: number, fallback: string) =>
   `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${x} ${y}, ${fallback}`;
@@ -126,6 +141,11 @@ export class Game {
   labels: CSS2DRenderer;
   /** every entity root: the nameplate layer only walks this, not the whole world */
   private entLayer = new THREE.Group();
+  /**
+   * Nameplates and other floating HTML, one small anchor per entity. Kept out of the entities' own trees so
+   * the label renderer walks a few nodes per entity instead of every bone, and doesn't redo their matrices.
+   */
+  private labelLayer = new THREE.Group();
   camera: THREE.PerspectiveCamera;
   world: WorldScene;
   cam: CameraController;
@@ -158,6 +178,8 @@ export class Game {
   private cpuMs = 0;
   private stepAt = 0;
   private lastRender = 0;
+  /** the page has the keyboard focus (frames drop to 30 fps while it doesn't) */
+  private focused = document.hasFocus();
   private fpsFrames = 0;
   private fpsAt = 0;
   private frameNo = 0;
@@ -244,6 +266,8 @@ export class Game {
     this.bindNet();
     this.bindInput();
     addEventListener('resize', () => this.resize());
+    addEventListener('focus', () => (this.focused = true));
+    addEventListener('blur', () => (this.focused = false));
     this.applySettings(settings.s, Object.keys(settings.s) as (keyof Settings)[]);
     settings.on((s, changed) => this.applySettings(s, changed));
     this.ui.onMe();
@@ -626,7 +650,7 @@ export class Game {
       wrap.appendChild(el);
       const obj = new CSS2DObject(wrap);
       obj.position.y = c.height + 1.05;
-      c.root.add(obj);
+      c.tag.add(obj);
       c.marker = { obj, el };
     }
     const m = this.questMarkerFor(c.rec.npc);
@@ -691,7 +715,7 @@ export class Game {
     root.add(model);
     // generous hitbox: easier to click moving targets
     const hitR = radius * 1.25 + 0.2, hitH = height + 0.4;
-    const hit = new THREE.Mesh(new THREE.CylinderGeometry(hitR, hitR, hitH, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    const hit = new THREE.Mesh(new THREE.CylinderGeometry(hitR, hitR, hitH, 8), HIT_MAT);
     hit.position.y = hitH / 2;
     if (r.k === 'n' || (r.k === 'p' && r.id !== this.me.id)) {
       const decal = new THREE.Mesh(DECAL_GEO, r.k === 'n' ? NPC_DECAL : PLAYER_DECAL);
@@ -704,9 +728,10 @@ export class Game {
     root.add(hit);
     const { el, obj } = this.makeLabel();
     obj.position.y = height + 0.35;
-    root.add(obj);
+    const tag = new THREE.Object3D();
+    tag.add(obj);
     const c: CEnt = {
-      id: r.id, rec: r, rig, root, model, hit, label: obj, labelEl: el, snaps: [], pos: new THREE.Vector3(r.x, heightAt(r.x, r.z), r.z),
+      id: r.id, rec: r, rig, root, model, hit, label: obj, labelEl: el, tag, snaps: [], pos: new THREE.Vector3(r.x, heightAt(r.x, r.z), r.z),
       size: model.scale.x, ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
     };
     this.refreshLabel(c);
@@ -718,6 +743,7 @@ export class Game {
     const c = this.ents.get(id);
     if (!c) return;
     this.entLayer.remove(c.root);
+    this.labelLayer.remove(c.tag);
     c.label.element.remove();
     // the label layer never drops elements on its own: without this an NPC that leaves view left its quest mark stuck on screen
     c.marker?.el.remove();
@@ -789,6 +815,7 @@ export class Game {
       if (old) c.pos.copy(old.pos);
       this.ents.set(r.id, c);
       this.entLayer.add(c.root);
+      this.labelLayer.add(c.tag);
       this.hitboxes.push(c.hit);
       this.pushSnap(c, r.x, r.z, r.ry, t);
       if (!old && r.id !== this.me.id && r.k !== 'i') c.pos.set(r.x, heightAt(r.x, r.z), r.z);
@@ -828,10 +855,10 @@ export class Game {
     el.textContent = text;
     const obj = new CSS2DObject(el);
     obj.position.set(0, c.height + 1.35, 0);
-    c.root.add(obj);
+    c.tag.add(obj);
     c.bubble = el;
     setTimeout(() => {
-      c.root.remove(obj);
+      c.tag.remove(obj);
       el.remove();
       if (c.bubble === el) c.bubble = null;
     }, 6000);
@@ -848,9 +875,9 @@ export class Game {
     num.style.setProperty('--dx', `${Math.round((Math.random() - 0.5) * 70)}px`);
     const obj = new CSS2DObject(el);
     obj.position.set((Math.random() - 0.5) * 0.6, c.height + 0.2, 0);
-    c.root.add(obj);
+    c.tag.add(obj);
     setTimeout(() => {
-      c.root.remove(obj);
+      c.tag.remove(obj);
       el.remove();
     }, 1250);
   }
@@ -870,7 +897,7 @@ export class Game {
     });
     for (const m of meshes) {
       m.userData.flashing = m.material;
-      m.material = FLASH_MAT;
+      m.material = flashMat(m);
     }
     setTimeout(() => {
       for (const m of meshes) {
@@ -1297,7 +1324,8 @@ export class Game {
         const hits = this.raycaster.intersectObjects(this.hitboxes, false);
         for (const h of hits) {
           const c = this.ents.get(h.object.userData.entId as number);
-          if (c && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
+          // off-screen entities keep a stale hitbox (their matrices freeze while hidden)
+          if (c && c.root.visible && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
         }
       }
       const t = this.raycaster.intersectObject(this.world.terrain, true)[0];
@@ -1543,9 +1571,15 @@ export class Game {
 
   private frame() {
     const now = performance.now();
-    const cap = settings.s.fpsCap;
-    if (cap && now - this.lastRender < 1000 / cap - 1.5) return;
-    this.lastRender = now;
+    // in the background (another window focused) 30 fps is plenty: the game keeps running, the fans don't
+    const cap = this.focused ? settings.s.fpsCap : Math.min(settings.s.fpsCap || 30, 30);
+    // Frames are paced against a running schedule, not the last frame: on a 144 Hz screen "at least 16.7 ms
+    // since the last one" only ever passes every third tick (20.8 ms), so a 60 cap ran at 48.
+    if (cap) {
+      const step = 1000 / cap;
+      if (now - this.lastRender < step - 1) return;
+      this.lastRender = Math.max(this.lastRender + step, now - step);
+    } else this.lastRender = now;
     this.fpsFrames++;
     if (now - this.fpsAt >= 500) {
       if (settings.s.showFps) {
@@ -1643,11 +1677,17 @@ export class Game {
       this.sphere.radius = Math.max(c.height, c.radius) + 2; // margin so shadows don't pop
       const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
       c.root.visible = onScreen;
+      // hidden entities skip the per-frame matrix update of their whole tree (bones included)
+      c.root.matrixWorldAutoUpdate = onScreen;
+      c.tag.position.copy(c.pos);
+      c.tag.visible = onScreen;
       // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
       if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);
       // far rigs are tiny on screen: skip their (per-bone) animation
       if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
-      if (c.rig && onScreen && dSelf < 60) {
+      // farther rigs animate on fewer frames (every 2nd past 20 m, every 3rd past 40 m): small on screen, same motion
+      const stride = c === self || dSelf < 20 ? 1 : dSelf < 40 ? 2 : 3;
+      if (c.rig && onScreen && dSelf < 60 && (this.frameNo + c.id) % stride === 0) {
         if (now >= (c.hitStop ?? 0)) animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
@@ -1737,7 +1777,7 @@ export class Game {
     this.renderer.shadowMap.needsUpdate = (this.frameNo++ & 1) === 0;
     this.world.renderReflection(settings.s.reflections, this.renderer, this.camera);
     this.post.render();
-    this.labels.render(this.entLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works
+    this.labels.render(this.labelLayer as unknown as THREE.Scene, this.camera); // only walks children, any Object3D works
     // JS time spent on this frame (the GPU works on it after this returns), smoothed
     this.cpuMs += (performance.now() - now - this.cpuMs) * 0.1;
   }
