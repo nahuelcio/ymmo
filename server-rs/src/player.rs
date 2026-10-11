@@ -1,6 +1,7 @@
 //! Per-tick player update: regen, buffs, escape, casting, intents (port of server/src/systems/player.ts).
 use crate::ent::*;
 use crate::formulas::MELEE_RANGE;
+use crate::data::d;
 use crate::world::World;
 
 impl World {
@@ -10,7 +11,8 @@ impl World {
         let stunned = e.c.has("stun", now);
         let p = e.player_mut().unwrap();
         let s = p.stats.clone();
-        let regen = if now - p.last_combat < 5000.0 { 0.6 } else { 1.5 };
+        // sitting down out of combat recovers much faster (as in L2)
+        let regen = if now - p.last_combat < 5000.0 { 0.6 } else if p.sitting.is_some() { 1.5 * 2.5 } else { 1.5 };
         p.hp = (p.hp + s.hp_regen * dt * regen).min(s.max_hp);
         p.mp = (p.mp + s.mp_regen * dt * regen).min(s.max_mp);
         p.cp = (p.cp + s.cp_regen * dt).min(s.max_cp);
@@ -43,8 +45,9 @@ impl World {
             if now >= end { self.finish_cast(pid, now); }
             return;
         }
+        if self.tick_gather(pid, now) { return; }
 
-        let Some(it) = p.intent.clone() else {
+        let Some(it) = self.pl(pid).unwrap().intent.clone() else {
             self.ents.get_mut(&pid).unwrap().c.moving = false;
             return;
         };
@@ -69,6 +72,9 @@ impl World {
                 } else {
                     self.ents.get_mut(&pid).unwrap().c.moving = false;
                     self.face(pid, id);
+                    // no fighting while swimming
+                    let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+                    if d().is_deep(px, pz) { return; }
                     let p = self.pl_mut(pid).unwrap();
                     if now >= p.next_attack {
                         p.next_attack = now + s.atk_interval;
@@ -91,6 +97,7 @@ impl World {
                     self.pickup(pid, id, now);
                 }
             }
+            Intent::Interact { node } => self.process_interact(pid, node, speed, dt, now),
             Intent::Talk { id } => {
                 let Some(kind) = self.ents.get(&id).and_then(|e| if let Kind::Npc(n) = &e.k { Some(n.def.kind.clone()) } else { None }) else {
                     self.pl_mut(pid).unwrap().intent = None;

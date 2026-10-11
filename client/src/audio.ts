@@ -5,7 +5,9 @@ import { RAIDS } from '../../shared/src/data/raids';
 
 export type Sfx =
   | 'hit' | 'crit' | 'miss' | 'hurt' | 'cast' | 'magic' | 'heal' | 'buff' | 'levelUp' | 'death'
-  | 'coin' | 'pickup' | 'click' | 'warn' | 'slam' | 'dash' | 'stun' | 'dot';
+  | 'coin' | 'pickup' | 'click' | 'warn' | 'slam' | 'dash' | 'stun' | 'dot'
+  // world interactions (shared/src/nodes.ts)
+  | 'chop' | 'mine' | 'rustle' | 'treeFall' | 'splash';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -212,6 +214,26 @@ export function play(name: Sfx, gain = 1) {
     case 'slam':
       tone('sine', 90, 30, t, 0.45, 0.9, out);
       hiss(t, 0.35, 0.6, 900, 80, 0.8, out, 'lowpass');
+      break;
+    case 'chop': // axe into wood: a dull knock with a woody crack
+      tone('triangle', 180 * r, 90, t, 0.12, 0.6, out);
+      hiss(t, 0.08, 0.45, 1600 * r, 500, 2, out);
+      break;
+    case 'mine': // pick on stone: a bright clink
+      tone('square', 1900 * r, 1500, t, 0.07, 0.12, out);
+      tone('triangle', 3200 * r, 2600, t, 0.12, 0.08, out);
+      hiss(t, 0.06, 0.35, 4000, 2000, 1.5, out);
+      break;
+    case 'rustle': // leaves
+      hiss(t, 0.35, 0.25, 2500 * r, 5000, 0.7, out);
+      break;
+    case 'treeFall': // creak, then the crash
+      tone('sawtooth', 70 * r, 45, t, 0.6, 0.15, out);
+      hiss(t + 0.55, 0.6, 0.6, 1200, 120, 0.6, out, 'lowpass');
+      tone('sine', 70, 30, t + 0.55, 0.5, 0.8, out);
+      break;
+    case 'splash':
+      hiss(t, 0.3, 0.3, 900 * r, 2400, 0.9, out);
       break;
     case 'dash':
       hiss(t, 0.25, 0.35, 400, 2500, 1.5, out);

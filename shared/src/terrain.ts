@@ -67,5 +67,11 @@ export function mulberry32(seed: number): () => number {
 }
 
 export const PLAYABLE_HALF = WORLD_HALF * 0.86;
-/** Ponds fill the terrain's hollows up to this height (visual only: shallow, wadeable). */
+/** Ponds fill the terrain's hollows up to this height. Shallow edges are waded, deeper water is swum. */
 export const WATER_LEVEL = -7;
+/** Where a swimmer's feet hang: the water reaches the chest and the head stays out. */
+export const SWIM_Y = WATER_LEVEL - 1.35;
+/** Deep enough to swim: the ground is below a swimmer's feet. */
+export const isDeep = (x: number, z: number) => heightAt(x, z) < SWIM_Y;
+/** Height a character stands (or floats) at: the ground, or the swimming line over deep water. */
+export const bodyY = (x: number, z: number) => Math.max(heightAt(x, z), SWIM_Y);

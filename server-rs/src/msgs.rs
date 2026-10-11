@@ -1,5 +1,6 @@
 //! Client messages inside a world (port of World.handle / handleMsg).
 use crate::ent::*;
+use crate::data::d;
 use crate::world::{now_ms, World};
 use serde_json::Value;
 
@@ -26,6 +27,10 @@ impl World {
     fn handle_msg(&mut self, pid: u32, t: &str, m: &Value, now: f64) {
         if !self.ents.contains_key(&pid) { return; }
         let dead = self.ents[&pid].c.dead;
+        // doing anything else gets a sitting player up and drops a gather in progress
+        if matches!(t, "move" | "attack" | "skill" | "pickup" | "talk" | "dash" | "use" | "respawn") { self.idle_interrupt(pid); }
+        let swimming = { let c = &self.ents[&pid].c; d().is_deep(c.x, c.z) };
+        if swimming && matches!(t, "attack" | "skill") { return self.sys(pid, "No podés pelear nadando.", "You cannot fight while swimming."); }
         match t {
             "move" => {
                 let (x, z) = (num(m, "x"), num(m, "z"));
@@ -98,6 +103,8 @@ impl World {
             "pvpMode" => self.set_pvp_mode(pid, truthy(m, "on")),
             "autoLoot" => self.pl_mut(pid).unwrap().auto_loot = truthy(m, "on"),
             "dash" => self.dash(pid, num(m, "x"), num(m, "z"), num(m, "dx"), num(m, "dz"), now),
+            "interact" => if let Some(n) = id(m, "node") { self.request_interact(pid, n, now) },
+            "sit" => if !dead { self.toggle_sit(pid) },
             _ => {}
         }
     }

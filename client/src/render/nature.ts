@@ -3,9 +3,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { heightAt, inTown, mulberry32, TOWN, TOWN_HEIGHT, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
-import { layoutRocks, layoutTown, layoutTrees, nearCamp, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
+import { heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
+import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
 
 const PIECES = [
   'PineTree_1', 'PineTree_2', 'PineTree_3',
@@ -44,21 +45,18 @@ let loading: Promise<void> | null = null;
 
 export const natureReady = () => ready;
 
+/** The instances that draw each world node (shared/src/nodes.ts), so render/nodes.ts can fell, empty or restore it. */
+export const nodeInstances = new Map<number, { mesh: THREE.InstancedMesh; i: number }[]>();
+
 const CHUNK = 200;
 const DETAIL_CHUNK = 40;
 const DETAIL_PER_CELL = 360;
 /** Pack bushes are about twice the old icosahedron clusters. */
 const BUSH_FIT = 0.55;
 
-function hash(x: number, z: number): number {
-  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
-  return s - Math.floor(s);
-}
+const hash = spotHash;
 function pick<T>(list: readonly T[], u: number): T {
   return list[Math.min(list.length - 1, Math.floor(u * list.length))];
-}
-function fertile(x: number, z: number, h: number): boolean {
-  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
 }
 
 function fileOf(map: THREE.Texture): string {
@@ -166,7 +164,7 @@ export function loadNature(): Promise<void> {
   })());
 }
 
-interface Item { m: THREE.Matrix4; x: number; z: number; piece: string; prim: number; c?: THREE.Color }
+interface Item { m: THREE.Matrix4; x: number; z: number; piece: string; prim: number; c?: THREE.Color; node?: number }
 
 function chunked(items: Item[], chunk: number): THREE.Group {
   const g = new THREE.Group();
@@ -185,6 +183,11 @@ function chunked(items: Item[], chunk: number): THREE.Group {
     list.forEach((it, i) => {
       mesh.setMatrixAt(i, it.m);
       if (tinted) mesh.setColorAt(i, it.c ?? WHITE);
+      if (it.node !== undefined) {
+        let l = nodeInstances.get(it.node);
+        if (!l) nodeInstances.set(it.node, (l = []));
+        l.push({ mesh, i });
+      }
     });
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -203,54 +206,49 @@ const DRY = new THREE.Color(1, 0.92, 0.5);
 const PARCHED = new THREE.Color(1, 0.98, 0.75);
 const up = new THREE.Vector3(0, 1, 0);
 
-function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color): Item[] {
+function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number): Item[] {
   const mm = m.clone();
   const n = prims.get(piece)?.length ?? 0;
   const out: Item[] = [];
-  for (let prim = 0; prim < n; prim++) out.push({ m: mm, x, z, piece, prim, c });
+  for (let prim = 0; prim < n; prim++) out.push({ m: mm, x, z, piece, prim, c, node });
   return out;
 }
 
 export function buildNatureTrees(): THREE.Group {
   const items: Item[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  for (const t of layoutTrees()) {
+  layoutTrees().forEach((t, treeIdx) => {
     const u = hash(t.x, t.z);
     const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : u < 0.3 ? pick(AUTUMN, u / 0.3) : pick(GREENS, (u - 0.3) / 0.7);
     const m = new THREE.Matrix4().compose(p.set(t.x, t.h - 0.1, t.z), q.setFromAxisAngle(up, t.rot), s.set(t.sc, t.sc, t.sc));
-    items.push(...spawn(piece, m, t.x, t.z));
-  }
+    items.push(...spawn(piece, m, t.x, t.z, undefined, NODE_BASE.tree + treeIdx));
+  });
   return chunked(items, CHUNK);
 }
 
 export function buildNatureRocks(): THREE.Group {
   const items: Item[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
-  for (const r of layoutRocks()) {
+  layoutRocks().forEach((r, rockIdx) => {
     const piece = pick(ROCKS, hash(r.x, r.z));
     const m = new THREE.Matrix4().compose(p.set(r.x, r.y, r.z), q.setFromEuler(e.set(r.e[0], r.e[1], r.e[2])), s.set(r.s[0], r.s[1], r.s[2]));
-    items.push(...spawn(piece, m, r.x, r.z));
-  }
+    const id = NODE_BASE.rock + rockIdx;
+    items.push(...spawn(piece, m, r.x, r.z, undefined, nodeById(id) ? id : undefined));
+  });
   return chunked(items, CHUNK);
 }
 
 const ROCKS = ['Rock_1', 'Rock_2', 'Rock_3'] as const;
 
 export function buildNatureBushes(): THREE.Group {
-  const rng = mulberry32(21);
   const items: Item[] = [];
   const q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3();
-  for (let i = 0, n = 0; i < 4000 && n < 1400; i++) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.9, z = (rng() * 2 - 1) * WORLD_HALF * 0.9, h = heightAt(x, z);
-    if (!fertile(x, z, h) || zoneOf(x, z)?.id === 'wastes') continue;
-    const sc = (0.7 + rng() * 0.8) * BUSH_FIT;
-    rng(); // the old blob's vertical squash; kept so later samples stay put
-    const u = hash(x, z);
-    const piece = u < 0.18 ? pick(BUSH_FLOWERS, u / 0.18) : pick(BUSHES, (u - 0.18) / 0.82);
-    const m = new THREE.Matrix4().compose(p.set(x, h - 0.1, z), q.setFromAxisAngle(up, rng() * 6.3), sv.set(sc, sc, sc));
-    items.push(...spawn(piece, m, x, z));
-    n++;
-  }
+  layoutBushes().forEach((b, bushIdx) => {
+    const piece = b.u < 0.18 ? pick(BUSH_FLOWERS, b.u / 0.18) : pick(BUSHES, (b.u - 0.18) / 0.82);
+    const sc = b.sc * BUSH_FIT;
+    const m = new THREE.Matrix4().compose(p.set(b.x, b.h - 0.1, b.z), q.setFromAxisAngle(up, b.rot), sv.set(sc, sc, sc));
+    items.push(...spawn(piece, m, b.x, b.z, undefined, b.fruit ? NODE_BASE.bush + bushIdx : undefined));
+  });
   return chunked(items, CHUNK);
 }
 

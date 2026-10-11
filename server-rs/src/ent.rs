@@ -15,6 +15,10 @@ pub const F_COMBAT: u16 = 8;
 pub const F_PURPLE: u16 = 16;
 pub const F_RED: u16 = 32;
 pub const F_PVP: u16 = 64;
+/** sitting on a seat or the ground (shared/src/protocol.ts) */
+pub const F_SITTING: u16 = 2048;
+/** felling, mining or picking a world node */
+pub const F_GATHER: u16 = 4096;
 pub const SLOW_MUL: f64 = 0.6;
 
 pub enum Out { Text(String), Bin(Vec<u8>) }
@@ -89,6 +93,8 @@ pub enum Intent {
     Skill { skill: String, target: u32, force: bool },
     Pickup { id: u32 },
     Talk { id: u32 },
+    /** walk to a world node (shared/src/nodes.ts) and use it */
+    Interact { node: u32 },
 }
 
 pub struct Buff { pub id: String, pub until: f64, pub mods: BuffMods }
@@ -128,6 +134,10 @@ pub struct Player {
     pub party: Option<u32>,
     pub pending_invite: Option<(u32, f64)>,
     pub talking_to: Option<u32>,
+    /** sitting: the seat node, or 0 on the ground */
+    pub sitting: Option<u32>,
+    /** working a node: (node, started, ends) */
+    pub gather: Option<(u32, f64, f64)>,
     pub quests: Vec<(String, i64, bool)>,
     pub quest_ready_told: HashSet<String>,
     pub known: HashMap<u32, [f64; 6]>,
@@ -252,6 +262,7 @@ impl Ent {
                 let nc = p.name_color(now);
                 base | if p.casting.is_some() { F_CASTING } else { 0 } | if now - p.last_combat < 4000.0 { F_COMBAT } else { 0 }
                     | if nc == 1 { F_PURPLE } else if nc == 2 { F_RED } else { 0 } | if p.pvp_on { F_PVP } else { 0 }
+                    | if p.sitting.is_some() { F_SITTING } else { 0 } | if p.gather.is_some() { F_GATHER } else { 0 }
             }
             Kind::Mob(m) => base | if m.target.is_some() { F_COMBAT } else { 0 },
             _ => base,

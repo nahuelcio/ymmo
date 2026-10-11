@@ -320,7 +320,8 @@ export function qPlayer(o: QOpts): Rig {
     a.setEffectiveWeight((w[name] = name === 'Idle_Loop' ? 1 : 0));
     a.play();
   }
-  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01']) acts[n].timeScale = 0; // driven by the entity's own clock
+  // driven by the entity's own clock (swing, death, sitting down and getting up)
+  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
   return {
@@ -336,10 +337,27 @@ export function animateQ(q: QAnim, s: AnimState) {
   q.t = s.t;
   const atk = q.armed ? 'Sword_Attack' : 'Punch_Jab';
   let cur = 'Idle_Loop';
+  /** play a one-shot clip at ms into it, held on its last frame */
+  const at = (name: string, ms: number) => {
+    if (!q.acts[name]) return false;
+    q.acts[name].time = Math.min(ms / 1000, clips[name].duration - 0.02);
+    cur = name;
+    return true;
+  };
+  const sitAge = s.sitAge ?? -1, standAge = s.standAge ?? Infinity;
   if (s.deadAge >= 0) {
     cur = 'Death01';
     q.acts.Death01.time = Math.min(s.deadAge / 1000, clips.Death01.duration - 0.02);
-  } else if (s.casting) cur = 'Spell_Simple_Idle_Loop';
+  } else if (s.gather && s.gather.anim !== 'pick') {
+    // felling and mining: the weapon swing, once per stroke
+    cur = 'Sword_Attack';
+    q.acts.Sword_Attack.time = ((s.gather.age % s.gather.swingMs) / s.gather.swingMs) * (clips.Sword_Attack.duration - 0.02);
+  } else if (s.gather && q.acts.Fixing_Kneeling) cur = 'Fixing_Kneeling';
+  else if (sitAge >= 0) {
+    if (sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = q.acts.Sitting_Idle_Loop ? 'Sitting_Idle_Loop' : 'Idle_Loop';
+  } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
+  else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
+  else if (s.casting) cur = 'Spell_Simple_Idle_Loop';
   else if (s.atkAge < ATK_MS) {
     cur = atk;
     q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);

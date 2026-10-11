@@ -135,9 +135,10 @@ try {
   `);
   await sleep(5000); // let the world finish streaming in
   if (SHOT) {
-    // a look at the game after a little play (nameplates, effects): proof the optimizations didn't break the picture
-    void page(`window.soak({ minutes: 1, every: 1000 }); return 1;`);
-    await sleep(20000);
+    // a look at the game: after --eval set a scene up, or after a little play (nameplates, effects)
+    if (EVAL) console.log(JSON.stringify(await page(EVAL), null, 1));
+    else void page(`window.soak({ minutes: 1, every: 1000 }); return 1;`);
+    await sleep(EVAL ? 800 : 20000);
     const r = (await send('Page.captureScreenshot', { format: 'png' })) as { result?: { data?: string } };
     writeFileSync(SHOT, Buffer.from(r.result!.data!, 'base64'));
   } else if (EVAL) console.log(JSON.stringify(await page(EVAL), null, 1));

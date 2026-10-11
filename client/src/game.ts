@@ -7,8 +7,11 @@ import { MOBS } from '../../shared/src/data/mobs';
 import { itemName, mobName, npcText, zoneName } from '../../shared/src/i18n';
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
-import { F_CASTING, F_DEAD, F_MOVING, F_PVP, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
-import { heightAt } from '../../shared/src/terrain';
+import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
+import { heightAt, isDeep, WATER_LEVEL } from '../../shared/src/terrain';
+import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, type NodeDef } from '../../shared/src/nodes';
+import { layoutRocks, layoutTrees } from '../../shared/src/layout';
+import { NodeVisuals } from './render/nodes';
 import { MELEE_RANGE } from '../../shared/src/formulas';
 import { dashEnd, findPath, navGrid, pushOut } from '../../shared/src/collision';
 import type { Net } from './net';
@@ -71,6 +74,13 @@ export interface CEnt {
   bubble?: HTMLDivElement | null;
   /** quest giver's floating ! / ? */
   marker?: { obj: CSS2DObject; el: HTMLDivElement };
+  /** when it sat down / got up (F_SITTING edges), for the sit-down and get-up clips */
+  sitAt?: number;
+  standAt?: number;
+  /** the node it is working (from the server's 'gather') and how many strokes were already shown */
+  gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
+  /** last ripple while swimming */
+  splashAt?: number;
 }
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
@@ -100,7 +110,27 @@ const PREDICT_MAX_ERR = 4;
 /** Dodge roll animation length. */
 const ROLL_MS = 280;
 
-type Pick = { ent?: CEnt; point?: THREE.Vector3 };
+type Pick = { ent?: CEnt; node?: NodeDef; point?: THREE.Vector3 };
+
+/** Where a swimmer's root goes: the swim clips are authored around the surface (head out treading water, back awash swimming). */
+const SWIM_BODY_Y = WATER_LEVEL - 0.05;
+/** How far sitting on the ground lowers the body (the sitting clip is made for a chair). */
+const SIT_GROUND_DROP = 0.42;
+/** What the cast bar says while working a node. */
+const GATHER_LABEL: Record<'chop' | 'mine' | 'pick', () => string> = {
+  chop: () => tx('Talando…', 'Chopping…'),
+  mine: () => tx('Picando…', 'Mining…'),
+  pick: () => tx('Recolectando…', 'Picking…'),
+};
+/** How tall each kind of node stands, for picking it with the cursor. */
+const nodeHeight = (n: NodeDef) => (n.kind === 'tree' ? 5 * layoutTrees()[nodeIndex(n)].sc : n.kind === 'rock' ? layoutRocks()[nodeIndex(n)].s[1] * 1.6 : 1.1);
+/** Cursor and hover hint for each kind of node. */
+const NODE_HINT: Record<NodeDef['kind'], { cursor: () => string; label: () => string }> = {
+  tree: { cursor: () => CURSORS.chop, label: () => tx('Talar (requiere un hacha)', 'Fell (needs an axe)') },
+  rock: { cursor: () => CURSORS.mine, label: () => tx('Picar (requiere un pico o un martillo)', 'Mine (needs a pickaxe or a hammer)') },
+  bush: { cursor: () => 'grab', label: () => tx('Recolectar bayas', 'Pick berries') },
+  seat: { cursor: () => 'pointer', label: () => tx('Sentarse', 'Sit down') },
+};
 
 // Shared ground decals marking NPCs (gold) and other players (blue).
 const DECAL_GEO = new THREE.RingGeometry(0.78, 0.92, 32).rotateX(-Math.PI / 2);
@@ -123,6 +153,12 @@ const CURSORS = {
     3, 4, 'pointer'),
   pickup: 'grab',
   select: 'pointer',
+  chop: svgCursor(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M6 26 L18 8" stroke="#7a4a22" stroke-width="3.5" stroke-linecap="round"/><path d="M14 4 C20 2 26 6 25 12 L19 11 L16 7 Z" fill="#c8d0d8" stroke="#2a2a2a" stroke-width="1.3"/></svg>',
+    4, 24, 'pointer'),
+  mine: svgCursor(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><path d="M8 26 L18 10" stroke="#7a4a22" stroke-width="3.5" stroke-linecap="round"/><path d="M5 9 C11 3 21 3 26 9 L23 10 C19 7 13 7 8 11 Z" fill="#9aa2aa" stroke="#2a2a2a" stroke-width="1.3"/></svg>',
+    6, 24, 'pointer'),
   move: 'default',
 };
 
@@ -195,6 +231,10 @@ export class Game {
   /** Set while the benchmark runs: called every frame with its real duration (bench.ts). */
   benchHook: ((frameMs: number, tSec: number) => void) | null = null;
   private motes = new Motes();
+  /** felled trees, mined rocks, picked bushes (render/nodes.ts) */
+  nodes!: NodeVisuals;
+  /** the world node under the cursor */
+  private hoverNode: NodeDef | null = null;
   private lights!: LocalLights;
   private sunScreen = new THREE.Vector3();
   /** Destinations picked on the world map, walked in order; route[0] is where we are heading now. */
@@ -240,6 +280,7 @@ export class Game {
       /* ignore */
     }
     this.lights = new LocalLights(this.world.scene, lightSources());
+    this.nodes = new NodeVisuals(this.world.scene);
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';
     host.appendChild(this.fpsEl);
@@ -510,6 +551,23 @@ export class Game {
     n.on('party', (m) => this.ui.party.set(m.members));
     // moved to another world (raid instance or back): every entity we knew is gone, our id changed
     n.on('world', (m) => this.resetWorld(m));
+    // world nodes: spent ones on entering, then every change (render/nodes.ts)
+    n.on('nodes', (m) => {
+      for (const [id] of m.gone) this.nodes.setGone(id, true);
+    });
+    n.on('node', (m) => {
+      const nd = nodeById(m.id), self = this.self;
+      const near = !!nd && !!self && Math.hypot(nd.x - self.pos.x, nd.z - self.pos.z) < 80;
+      this.nodes.setGone(m.id, m.ms > 0, near);
+      if (nd && near && m.ms > 0) play(nd.kind === 'tree' ? 'treeFall' : nd.kind === 'rock' ? 'mine' : 'rustle', Math.max(0.2, 1 - Math.hypot(nd.x - self!.pos.x, nd.z - self!.pos.z) / 80));
+    });
+    n.on('gather', (m) => {
+      const c = this.ents.get(m.s), nd = nodeById(m.node);
+      if (!c || !nd || nd.kind === 'seat') return;
+      const g = GATHER[nd.kind];
+      c.gather = { node: nd, at: performance.now(), swingMs: g.swingMs, anim: g.anim, strokes: 0 };
+      if (m.s === this.me.id) this.castBar = { end: performance.now() + m.ms, dur: m.ms, name: GATHER_LABEL[g.anim]() };
+    });
     n.on('teleported', () => {
       this.teleportPending = true;
       this.ui.dialogs.close();
@@ -831,6 +889,13 @@ export class Game {
       if (f & STUN && !(c.flags & STUN)) play('stun', c.id === this.me.id ? 1 : this.near(c) * 0.6);
       if (c.id === this.me.id && (c.flags & STATUS_MASK) !== (f & STATUS_MASK)) this.ui.hud.setStatuses(f);
       if (c.id === this.me.id && (c.flags & F_CASTING) && !(f & F_CASTING)) this.dropPredictedCooldowns();
+      // sitting down / getting up: timestamps drive the sit and get-up clips
+      if (f & F_SITTING && !(c.flags & F_SITTING)) c.sitAt = performance.now();
+      if (!(f & F_SITTING) && c.flags & F_SITTING) c.standAt = performance.now();
+      if (!(f & F_GATHER) && c.flags & F_GATHER) {
+        c.gather = undefined;
+        if (c.id === this.me.id && this.castBar && Object.values(GATHER_LABEL).some((l) => l() === this.castBar!.name)) this.castBar = null;
+      }
       const hpChanged = c.hp !== hp;
       c.hp = hp;
       c.flags = f;
@@ -1033,6 +1098,44 @@ export class Game {
       return this.serverAction({ t: 'talk', id: r.id });
     }
     this.setTarget(r.id);
+  }
+
+  /**
+   * The world node under the cursor: the nearest one (along the ray) whose upright axis passes close to it.
+   * No raycast against the thousands of tree instances: candidates come from the spatial hash around the
+   * ground point, which covers a canopy hiding the ground behind it.
+   */
+  private pickNode(ray: THREE.Ray, ground: THREE.Vector3): NodeDef | null {
+    let best: NodeDef | null = null, bestT = Infinity;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), onRay = new THREE.Vector3();
+    for (const n of nodesNear(ground.x, ground.z, 9)) {
+      if (n.kind !== 'seat' && this.nodes.isGone(n.id)) continue;
+      const y = heightAt(n.x, n.z);
+      a.set(n.x, y, n.z);
+      b.set(n.x, y + nodeHeight(n), n.z);
+      const r = n.kind === 'tree' ? Math.max(0.6, n.r + 0.35) : n.kind === 'rock' ? n.r + 0.25 : 0.65;
+      if (ray.distanceSqToSegment(a, b, onRay) > r * r) continue;
+      const t = onRay.distanceTo(ray.origin);
+      if (t < bestT) (bestT = t), (best = n);
+    }
+    return best;
+  }
+
+  /** Fell, mine, pick or sit: the server walks there and does it; we walk there right away too. */
+  useNode(n: NodeDef) {
+    const self = this.self;
+    if (!self || self.flags & F_DEAD) return;
+    this.route.length = 0;
+    this.holdMove = false;
+    this.dropPredictedCooldowns();
+    this.net.send({ t: 'interact', node: n.id });
+    const reach = reachOf(n), dx = self.pos.x - n.x, dz = self.pos.z - n.z, d = Math.hypot(dx, dz) || 1;
+    if (d <= reach) return void (this.predict = null);
+    // stop at the edge of reach on our side of it, like the server does
+    const k = n.kind === 'seat' ? 0 : reach * 0.9;
+    const path = findPath(self.pos.x, self.pos.z, n.x + (dx / d) * k, n.z + (dz / d) * k);
+    const end = path[path.length - 1];
+    this.predict = { x: end.x, z: end.z, arrivedAt: 0, path };
   }
 
   isHostile(c: CEnt): boolean {
@@ -1330,6 +1433,10 @@ export class Game {
         }
       }
       const t = this.raycaster.intersectObject(this.world.terrain, true)[0];
+      if (!groundOnly && t) {
+        const node = this.pickNode(this.raycaster.ray, t.point);
+        if (node) return { node, point: t.point };
+      }
       return t ? { point: t.point } : {};
     };
     const cursorFor = (c: CEnt | undefined) => {
@@ -1344,6 +1451,7 @@ export class Game {
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
       if (r.ent) this.interact(r.ent);
+      else if (r.node) this.useNode(r.node);
       else if (r.point) {
         this.moveTo(r.point, true);
         this.holdMove = true;
@@ -1358,6 +1466,7 @@ export class Game {
         (document.activeElement as HTMLElement | null)?.blur();
         const r = pick(e);
         if (r.ent) this.interact(r.ent);
+        else if (r.node) this.useNode(r.node);
         else if (r.point) this.moveTo(r.point, true);
       }
     });
@@ -1375,9 +1484,11 @@ export class Game {
         return;
       }
       if (e.buttons) return;
-      const ent = pick(e).ent;
+      const r = pick(e), ent = r.ent;
       this.hoverId = ent?.id ?? null;
-      el.style.cursor = cursorFor(ent);
+      this.hoverNode = ent ? null : r.node ?? null;
+      el.style.cursor = this.hoverNode ? NODE_HINT[this.hoverNode.kind].cursor() : cursorFor(ent);
+      el.title = this.hoverNode ? NODE_HINT[this.hoverNode.kind].label() : '';
     });
 
     const typing = () => {
@@ -1612,7 +1723,7 @@ export class Game {
       if (c === self && s.length) {
         moving = this.updateSelf(c, now, dt);
         // footsteps: a dust puff every third of a second while running on foot
-        if (moving && !c.roll && settings.s.particles && now - this.stepAt > 330) {
+        if (moving && !c.roll && settings.s.particles && now - this.stepAt > 330 && !isDeep(c.pos.x, c.pos.z)) {
           this.stepAt = now;
           this.fx.dust(c.pos.clone(), 420);
         }
@@ -1642,6 +1753,12 @@ export class Game {
         c.ry += d * Math.min(1, dt * 14);
       }
       c.root.position.copy(c.pos);
+      // in deep water the body floats at the swimming line; sitting on the ground sinks the hips to it
+      const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
+      const sitting = (c.flags & F_SITTING) !== 0;
+      if (swimming) c.root.position.y = SWIM_BODY_Y + Math.sin(tSec * 2 + c.id) * 0.05;
+      else if (sitting && !nodesNear(c.pos.x, c.pos.z, 0.6).some((n) => n.kind === 'seat'))
+        c.root.position.y -= SIT_GROUND_DROP * Math.min(1, (now - (c.sitAt ?? 0)) / 900);
       c.model.rotation.y = c.ry;
       if (c.rig) {
         const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;
@@ -1680,7 +1797,8 @@ export class Game {
       c.root.visible = onScreen;
       // hidden entities skip the per-frame matrix update of their whole tree (bones included)
       c.root.matrixWorldAutoUpdate = onScreen;
-      c.tag.position.copy(c.pos);
+      c.tag.position.copy(c.root.position); // the body's height: floating when swimming
+      if (sitting) c.tag.position.y -= 0.55; // the plate drops with the seated body
       c.tag.visible = onScreen;
       // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
       if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);
@@ -1696,10 +1814,36 @@ export class Game {
           casting: (c.flags & F_CASTING) !== 0,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
+          swimming,
+          sitAge: sitting ? now - (c.sitAt ?? now - 5000) : -1,
+          standAge: c.standAt ? now - c.standAt : Infinity,
+          gather: c.gather && c.flags & F_GATHER ? { anim: c.gather.anim, age: now - c.gather.at, swingMs: c.gather.swingMs } : null,
         });
       } else if (!c.rig) {
         c.model.rotation.y = tSec * 1.5;
         c.model.position.y = 0.1 + Math.sin(tSec * 3 + c.id) * 0.05;
+      }
+      if (onScreen && dSelf < 50) {
+        // every stroke on a tree or a rock: chips fly and it sounds, at the moment the blow lands
+        const g = c.gather;
+        if (g && c.flags & F_GATHER) {
+          const hit = Math.floor((now - g.at - g.swingMs * 0.45) / g.swingMs) + 1;
+          if (hit > g.strokes) {
+            g.strokes = hit;
+            const at = new THREE.Vector3(g.node.x, heightAt(g.node.x, g.node.z) + (g.node.kind === 'tree' ? 1 : 0.4), g.node.z);
+            if (g.anim === 'pick') play('rustle', this.near(c) * 0.6);
+            else {
+              this.fx.shards(at, g.anim === 'chop' ? 0x8a5a2a : 0xb0b0b0, 7, 0.9, 500);
+              play(g.anim === 'chop' ? 'chop' : 'mine', this.near(c) * 0.8);
+            }
+          }
+        }
+        // ripples behind a swimmer
+        if (swimming && moving && now - (c.splashAt ?? 0) > 520) {
+          c.splashAt = now;
+          this.fx.ring(new THREE.Vector3(c.pos.x, WATER_LEVEL - 0.08, c.pos.z), 0xdfefff, 1.1, 700);
+          if (c === self) play('splash', 0.25);
+        }
       }
       if (self) {
         const d = dSelf;
@@ -1734,7 +1878,7 @@ export class Game {
       else if (now - this.routeMovedAt > 1500) this.route.length = 0;
     }
     if (self) {
-      this.cam.update(dt, self.pos);
+      this.cam.update(dt, self.root.position); // follows the body (it floats over deep water)
       this.world.updateSky(this.camera, this.camera.far, dt);
       this.world.follow(self.pos);
       tickWind(dt);
@@ -1762,6 +1906,13 @@ export class Game {
       this.hoverRing.position.y += 0.1;
       this.hoverRing.scale.setScalar(Math.max(0.7, h.radius * 1.4));
       (this.hoverRing.material as THREE.MeshBasicMaterial).color.set(this.entColor(h));
+    } else if (this.hoverNode) {
+      // a world node under the cursor gets the same ring, in gold
+      const n = this.hoverNode;
+      this.hoverRing.visible = true;
+      this.hoverRing.position.set(n.x, heightAt(n.x, n.z) + 0.1, n.z);
+      this.hoverRing.scale.setScalar(Math.max(0.7, (n.r + 0.3) * 1.4));
+      (this.hoverRing.material as THREE.MeshBasicMaterial).color.set(0xffd966);
     } else this.hoverRing.visible = false;
     if (this.clickMarker.visible) {
       const k = (now - this.clickAt) / 400;
@@ -1770,6 +1921,7 @@ export class Game {
       (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
     }
     this.fx.update();
+    this.nodes.update();
     tickLod();
     this.ui.update(now);
     this.renderer.info.reset();

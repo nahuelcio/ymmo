@@ -13,6 +13,7 @@ mod data;
 mod db;
 mod ent;
 mod formulas;
+mod gather;
 mod i18n;
 mod inventory;
 mod msgs;

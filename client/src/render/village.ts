@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
 import { bumpNormal, relief } from './textures';
+import { plazaBenches } from '../../../shared/src/layout';
 import { albaCurtain, BELL_TOWER, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
 
 /**
@@ -293,16 +294,15 @@ export function buildVillage(): THREE.Group {
     g.add(t);
   }
   if (benchGeo) {
-    const n = 6;
-    const mesh = new THREE.InstancedMesh(benchGeo, lambert(null, benchColor), n);
+    // the ring the coloured planters used to occupy, backs to the bell tower (shared: they are seats too)
+    const benches = plazaBenches();
+    const mesh = new THREE.InstancedMesh(benchGeo, lambert(null, benchColor), benches.length);
     const benchScale = new THREE.Vector3(BENCH_SCALE, BENCH_SCALE, BENCH_SCALE);
-    for (let i = 0; i < n; i++) {
-      // The ring the coloured planters used to occupy. Backs face the bell tower.
-      const a = (i / n) * Math.PI * 2 + 0.5;
-      q.setFromAxisAngle(up, Math.atan2(-Math.cos(a), -Math.sin(a)));
-      pos.set(TOWN.x + Math.cos(a) * 9.5, TOWN_HEIGHT + 0.02, TOWN.z + Math.sin(a) * 9.5);
+    benches.forEach((b, i) => {
+      q.setFromAxisAngle(up, Math.atan2(-Math.cos(b.a), -Math.sin(b.a)));
+      pos.set(b.x, TOWN_HEIGHT + 0.02, b.z);
       mesh.setMatrixAt(i, m4.compose(pos, q, benchScale));
-    }
+    });
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.computeBoundingSphere();

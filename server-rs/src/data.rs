@@ -56,6 +56,8 @@ pub struct ItemDef {
     pub use_: Option<ItemUse>,
     pub enchant: Option<String>,
     pub craft: Option<Recipe>,
+    /** sword, axe, pickaxe...: decides which gathering tool a weapon is */
+    pub weapon_type: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -237,6 +239,31 @@ pub enum ObstacleDef {
     Box { x: f64, z: f64, hw: f64, hd: f64, cos: f64, sin: f64 },
 }
 
+/** One possible yield of a gather (shared/src/nodes.ts Yield). */
+#[derive(Deserialize, Clone, Debug)]
+pub struct Yield { pub item: String, pub min: i64, pub max: i64, pub chance: f64, pub zones: Option<Vec<String>> }
+
+/** How a kind of node is worked (shared/src/nodes.ts GatherDef). */
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GatherDef { pub tools: Option<Vec<String>>, pub swing_ms: f64, pub swings: f64, pub respawn_ms: f64, pub yields: Vec<Yield> }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct GatherDefs { pub tree: GatherDef, pub rock: GatherDef, pub bush: GatherDef }
+
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeKind { Tree, Rock, Bush, Seat }
+
+/** A world node: [id, x, z, r, ry, seatY, zone] in the export. The kind comes from the id (shared NODE_BASE). */
+#[derive(Deserialize, Clone, Debug)]
+pub struct NodeRaw(pub u32, pub f64, pub f64, pub f64, pub f64, pub f64, pub String);
+
+#[derive(Clone, Debug)]
+pub struct NodeDef { pub kind: NodeKind, pub x: f64, pub z: f64, pub r: f64, pub ry: f64, pub zone: String }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct WaterRaw { pub cell: f64, pub half: f64, pub runs: Vec<(usize, usize, usize)> }
+
 #[derive(Deserialize)]
 struct Raw {
     constants: Constants,
@@ -259,6 +286,9 @@ struct Raw {
     statuses: Vec<StatusDef>,
     raids: Vec<RaidDef>,
     obstacles: Vec<ObstacleDef>,
+    nodes: Vec<NodeRaw>,
+    gather: GatherDefs,
+    water: WaterRaw,
 }
 
 pub struct Data {
@@ -286,6 +316,13 @@ pub struct Data {
     pub statuses: Vec<StatusDef>,
     pub raids: HashMap<String, RaidDef>,
     pub obstacles: Vec<ObstacleDef>,
+    pub nodes: HashMap<u32, NodeDef>,
+    pub gather: GatherDefs,
+    /** deep water on a grid (cell m, from -half): true where a character swims */
+    water: Vec<bool>,
+    water_cell: f64,
+    water_half: f64,
+    water_n: usize,
 }
 
 impl Data {
@@ -298,6 +335,17 @@ impl Data {
     pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
 
     pub fn spec(&self, id: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.id == id) }
+
+    /** Deep water at (x, z): swimming there (shared/src/terrain.ts isDeep). */
+    pub fn is_deep(&self, x: f64, z: f64) -> bool {
+        let (c, r) = (((x + self.water_half) / self.water_cell).floor(), ((z + self.water_half) / self.water_cell).floor());
+        if c < 0.0 || r < 0.0 || c as usize >= self.water_n || r as usize >= self.water_n { return false; }
+        self.water[r as usize * self.water_n + c as usize]
+    }
+
+    pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef> {
+        match kind { NodeKind::Tree => Some(&self.gather.tree), NodeKind::Rock => Some(&self.gather.rock), NodeKind::Bush => Some(&self.gather.bush), NodeKind::Seat => None }
+    }
 
     pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool {
         s.cls.as_deref().map_or(true, |c| c == cls) && s.spec.as_deref().map_or(true, |x| Some(x) == spec) && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
@@ -317,6 +365,9 @@ pub fn d() -> &'static Data {
     DATA.get_or_init(|| {
         let raw: Raw = serde_json::from_str(include_str!("../data/game.json")).expect("server-rs/data/game.json: run `npm run export-data`");
         let skill_by_id = raw.skills.iter().enumerate().map(|(i, s)| (s.id.clone(), i)).collect();
+        let water_n = (raw.water.half * 2.0 / raw.water.cell).round() as usize;
+        let mut water = vec![false; water_n * water_n];
+        for &(row, a, b) in &raw.water.runs { for c in a..=b { water[row * water_n + c] = true; } }
         Data {
             c: raw.constants,
             town: raw.town,
@@ -339,6 +390,15 @@ pub fn d() -> &'static Data {
             statuses: raw.statuses,
             raids: raw.raids.into_iter().map(|r| (r.id.clone(), r)).collect(),
             obstacles: raw.obstacles,
+            nodes: raw.nodes.into_iter().filter_map(|NodeRaw(id, x, z, r, ry, _seat_y, zone)| {
+                let kind = match id / 100000 { 1 => NodeKind::Tree, 2 => NodeKind::Rock, 3 => NodeKind::Bush, 4 => NodeKind::Seat, _ => return None };
+                Some((id, NodeDef { kind, x, z, r, ry, zone }))
+            }).collect(),
+            gather: raw.gather,
+            water_n: water_n,
+            water_cell: raw.water.cell,
+            water_half: raw.water.half,
+            water,
         }
     })
 }

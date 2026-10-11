@@ -103,9 +103,10 @@ const folk = (id: string) => ALBA_FOLK.find((n) => n.id === id)!;
 
 export const NPCS: NpcDef[] = [
   { id: 'grocer', name: 'Lia', title: 'Almacenera', x: folk('grocer').x, z: folk('grocer').z, ry: folk('grocer').ry, kind: 'shop', color: 0x4a8a3a,
-    shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
+    shop: ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'], craft: ['healing_potion'], greeting: '¡Pociones y pergaminos! Todo lo que un aventurero necesita.' },
   { id: 'weapons', name: 'Gerald', title: 'Armero', x: folk('weapons').x, z: folk('weapons').z, ry: folk('weapons').ry, kind: 'shop', color: 0x8a3a3a,
-    shop: ['short_sword', 'apprentice_wand', 'dagger', 'broadsword', 'willow_staff', 'hand_axe', 'spear', 'iron_hammer', 'sword_of_revolution', 'staff_of_life', 'assassin_dagger', 'partisan', 'battle_axe'], greeting: 'Con una buena hoja, cualquiera se anima.' },
+    shop: ['woodcutter_axe', 'miner_pickaxe', 'short_sword', 'apprentice_wand', 'dagger', 'broadsword', 'willow_staff', 'hand_axe', 'spear', 'iron_hammer', 'sword_of_revolution', 'staff_of_life', 'assassin_dagger', 'partisan', 'battle_axe'],
+    craft: ['willow_staff', 'hand_axe', 'iron_hammer', 'battle_axe', 'war_hammer'], greeting: 'Con una buena hoja, cualquiera se anima.' },
   { id: 'armor', name: 'Hilda', title: 'Armadurera', x: folk('armor').x, z: folk('armor').z, ry: folk('armor').ry, kind: 'shop', color: 0x3a5a8a,
     shop: ['leather_cap', 'apprentice_tunic', 'apprentice_stockings', 'short_gloves', 'leather_sandals', 'brigandine_helm', 'karmian_hat', 'brigandine_tunic', 'brigandine_gaiters', 'reinforced_gloves', 'reinforced_boots', 'karmian_tunic', 'karmian_stockings', 'ring_of_vigor', 'earring_of_focus', 'necklace_of_valor'],
     greeting: 'Antes de salir a pelear, cubrite bien. Después no me vengas llorando.' },

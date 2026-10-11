@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
-import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
+import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
 import { buildNatureBushes, buildNatureDetail, buildNatureRocks, buildNatureTown, buildNatureTrees, natureReady } from './nature';
 import { setCharAniso } from './quaternius';
@@ -1082,8 +1082,7 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
   const roads = ROADS.map(([ax, az, bx, bz]) => Math.atan2(bz - az, bx - ax));
 
   // Box benches only if the kit bench did not load. Backs face the bell tower.
-  if (!vReady()) for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + 0.5;
+  if (!vReady()) for (const { a } of plazaBenches()) {
     const bench = new THREE.Group();
     bench.add(box(2.2, 0.12, 0.6, 0x7a5a3a, 0, 0.5, 0));
     bench.add(box(2.2, 0.45, 0.1, 0x7a5a3a, 0, 0.9, -0.28));

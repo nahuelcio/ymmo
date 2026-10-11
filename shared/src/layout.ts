@@ -81,6 +81,67 @@ export function layoutTrees(): TreeL[] {
   return trees;
 }
 
+/** Ground where grass and bushes grow: dry land off the roads, out of towns and camps, below the bare peaks. */
+export function fertile(x: number, z: number, h: number): boolean {
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
+}
+
+/** A stable pseudo-random value in [0, 1) for a spot (picks models and variants without an rng). */
+export function spotHash(x: number, z: number): number {
+  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+/**
+ * u: spotHash of the spot (under 0.18 a flowering bush); sc: the size before the client fits the model;
+ * fruit: carries berries that can be picked (shared/src/nodes.ts).
+ */
+export interface BushL { x: number; z: number; h: number; sc: number; rot: number; u: number; fruit: boolean }
+
+let bushes: BushL[] | null = null;
+export function layoutBushes(): BushL[] {
+  if (bushes) return bushes;
+  bushes = [];
+  // the exact rng sequence the client drew these with before they were shared: change nothing here
+  const rng = mulberry32(21);
+  for (let i = 0, n = 0; i < 4000 && n < 1400; i++) {
+    const x = (rng() * 2 - 1) * WORLD_HALF * 0.9, z = (rng() * 2 - 1) * WORLD_HALF * 0.9, h = heightAt(x, z);
+    if (!fertile(x, z, h) || zoneOf(x, z)?.id === 'wastes') continue;
+    const sc = 0.7 + rng() * 0.8;
+    rng(); // the old blob's vertical squash; kept so later samples stay put
+    const u = spotHash(x, z);
+    const rot = rng() * 6.3;
+    // a third of the plain (non-flowering) bushes bear fruit
+    bushes.push({ x, z, h, sc, rot, u, fruit: u >= 0.18 && spotHash(x + 0.37, z - 0.71) < 0.35 });
+    n++;
+  }
+  return bushes;
+}
+
+/** The village plaza's benches, on the ring around the bell tower, their backs to it. a: angle on the ring. */
+export function plazaBenches(): { x: number; z: number; a: number }[] {
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = (i / 6) * Math.PI * 2 + 0.5;
+    return { x: TOWN.x + Math.cos(a) * 9.5, z: TOWN.z + Math.sin(a) * 9.5, a };
+  });
+}
+
+/** A place to sit: where the body goes, which way it faces, and how high the seat is above the ground. */
+export interface SeatL { x: number; z: number; ry: number; y: number }
+
+let seats: SeatL[] | null = null;
+export function layoutSeats(): SeatL[] {
+  if (seats) return seats;
+  seats = [];
+  for (const b of plazaBenches()) {
+    // facing away from the tower; two places along the bench
+    const ry = Math.atan2(Math.cos(b.a), Math.sin(b.a));
+    const along = { x: Math.cos(ry), z: -Math.sin(ry) };
+    for (const s of [-0.5, 0.5]) seats.push({ x: b.x + along.x * s, z: b.z + along.z * s, ry, y: 0.5 });
+  }
+  return seats;
+}
+
 let rocks: RockL[] | null = null;
 export function layoutRocks(): RockL[] {
   if (rocks) return rocks;
