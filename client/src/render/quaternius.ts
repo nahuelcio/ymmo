@@ -50,7 +50,9 @@ export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: bo
  * turned to stand upright in a hanging hand; everything else is laid along +Z like weaponMesh(), hammers and axes with the head turned to strike downwards.
  */
 const WEAPONS = ['short_sword', 'broadsword', 'sword_of_revolution', 'samurai_longsword', 'apprentice_wand', 'willow_staff', 'staff_of_life', 'sages_staff', 'iron_hammer', 'war_hammer',
-  'dagger', 'assassin_dagger', 'hand_axe', 'battle_axe', 'spear', 'partisan'];
+  'dagger', 'assassin_dagger', 'hand_axe', 'battle_axe', 'spear', 'partisan',
+  // gathering tools, from the Fantasy Props MegaKit (tools/art/blender/tools_props.py)
+  'woodcutter_axe', 'miner_pickaxe'];
 const PROPS = [...Object.keys(HELMS), ...WEAPONS, 'mohawk'];
 const props: Record<string, THREE.Object3D> = {};
 let joints: string[] = [];
@@ -116,8 +118,9 @@ export function loadQ(): Promise<void> {
       }
       o.traverse((m) => {
         if (!(m instanceof THREE.Mesh)) return;
-        const { color, emissive, emissiveIntensity } = m.material as THREE.MeshStandardMaterial;
-        m.material = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity, side: THREE.DoubleSide }); // no env map here: metal would render black
+        const { color, emissive, emissiveIntensity, map } = m.material as THREE.MeshStandardMaterial;
+        // no env map here: metal would render black; the kit tools keep their texture (the hand-made props have none)
+        m.material = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity, map, side: THREE.DoubleSide });
         m.castShadow = true;
       });
     });
