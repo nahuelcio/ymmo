@@ -29,6 +29,21 @@ const UP = new THREE.Vector3(0, 0.1, 0);
 /** Tiny effect system: projectiles with trails, bursts with sparks, slashes, rings and pillars of light. */
 export class FxManager {
   private list: Fx[] = [];
+  /**
+   * Finished effects hand their materials back here instead of disposing them: a fresh material costs the
+   * renderer a shader lookup on its first draw, and fights spawn several effects a second. Keyed by the
+   * settings that pick the shader (side, blending); colour and opacity are set on every reuse.
+   */
+  private pool = new Map<string, THREE.MeshBasicMaterial[]>();
+
+  private basic(color: number, opacity: number, side: THREE.Side, blending: THREE.Blending): THREE.MeshBasicMaterial {
+    const key = `|${blending}`;
+    const m = this.pool.get(key)?.pop() ?? new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, side, blending });
+    m.userData.pool = key;
+    m.color.set(color);
+    m.opacity = opacity;
+    return m;
+  }
   constructor(private scene: THREE.Scene) {}
 
   private add(obj: THREE.Object3D, dur: number, update: (k: number) => void, dust = false) {
@@ -37,7 +52,7 @@ export class FxManager {
   }
 
   private glow(color: number, opacity = 0.9, side: THREE.Side = THREE.FrontSide) {
-    return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side });
+    return this.basic(color, opacity, side, THREE.AdditiveBlending);
   }
 
   /** A glowing bolt with a white core and a fading trail. */
@@ -262,7 +277,7 @@ export class FxManager {
     const g = new THREE.Group();
     g.position.copy(pos);
     g.position.y += 0.05;
-    const mat = new THREE.MeshBasicMaterial({ color: 0xc8b48e, transparent: true, opacity: 0.4, depthWrite: false });
+    const mat = this.basic(0xc8b48e, 0.4, THREE.FrontSide, THREE.NormalBlending);
     const puffs = [0, 2.1, 4.2].map((a) => {
       const p = new THREE.Mesh(GEO.disc, mat);
       p.rotation.x = -Math.PI / 2;
@@ -280,8 +295,8 @@ export class FxManager {
   telegraph(x: number, z: number, r: number, ms: number) {
     const g = new THREE.Group();
     g.position.set(x, heightAt(x, z) + 0.15, z);
-    const edgeMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.9, depthWrite: false });
-    const fillMat = new THREE.MeshBasicMaterial({ color: 0xff3a20, transparent: true, opacity: 0.28, depthWrite: false });
+    const edgeMat = this.basic(0xff2a1a, 0.9, THREE.FrontSide, THREE.NormalBlending);
+    const fillMat = this.basic(0xff3a20, 0.28, THREE.FrontSide, THREE.NormalBlending);
     const edge = new THREE.Mesh(GEO.edge, edgeMat);
     edge.rotation.x = -Math.PI / 2;
     edge.scale.setScalar(r);
@@ -300,10 +315,18 @@ export class FxManager {
       const k = (now - f.t0) / f.dur;
       if (k >= 1) {
         this.scene.remove(f.obj);
+        const mats = new Set<THREE.Material>();
         f.obj.traverse((o) => {
-          if (o instanceof THREE.Mesh || o instanceof THREE.Line) (o.material as THREE.Material).dispose();
+          if (o instanceof THREE.Mesh || o instanceof THREE.Line) mats.add(o.material as THREE.Material);
           if (o instanceof THREE.Line) o.geometry.dispose(); // bolts own their geometry; shared GEO is only on meshes
         });
+        for (const m of mats) {
+          const key = m.userData.pool as string | undefined, free = key !== undefined ? this.pool.get(key) ?? [] : null;
+          if (free && free.length < 64) {
+            this.pool.set(key!, free);
+            free.push(m as THREE.MeshBasicMaterial);
+          } else m.dispose();
+        }
         return false;
       }
       f.update(k);

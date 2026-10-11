@@ -455,7 +455,10 @@ async function boot() {
     screens.innerHTML = '';
     screens.style.display = 'none';
     game = new Game(net, m);
-    if (import.meta.env.DEV) (window as unknown as { game: Game }).game = game;
+    if (import.meta.env.DEV) {
+      (window as unknown as { game: Game }).game = game;
+      void import('./soak').then(({ soak }) => ((window as unknown as { soak: (o?: object) => unknown }).soak = (o) => soak(game!, o)));
+    }
   });
   const token = store.get('session');
   if (token) net.send({ t: 'resume', token });
