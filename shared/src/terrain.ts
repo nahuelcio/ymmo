@@ -71,7 +71,13 @@ export const PLAYABLE_HALF = WORLD_HALF * 0.86;
 export const WATER_LEVEL = -7;
 /** Where a swimmer's feet hang: the water reaches the chest and the head stays out. */
 export const SWIM_Y = WATER_LEVEL - 1.35;
+/** Swimming speed, as a share of walking speed (the server applies it; the client predicts with it). */
+export const SWIM_SPEED = 0.55;
 /** Deep enough to swim: the ground is below a swimmer's feet. */
 export const isDeep = (x: number, z: number) => heightAt(x, z) < SWIM_Y;
+/** The server only has deep water on a 2 m grid (export-data): sampling the same cells keeps prediction in step. */
+export const WATER_CELL = 2;
+export const isDeepCell = (x: number, z: number) =>
+  isDeep((Math.floor((x + WORLD_HALF) / WATER_CELL) + 0.5) * WATER_CELL - WORLD_HALF, (Math.floor((z + WORLD_HALF) / WATER_CELL) + 0.5) * WATER_CELL - WORLD_HALF);
 /** Height a character stands (or floats) at: the ground, or the swimming line over deep water. */
 export const bodyY = (x: number, z: number) => Math.max(heightAt(x, z), SWIM_Y);

@@ -8,7 +8,7 @@ import { itemName, mobName, npcText, zoneName } from '../../shared/src/i18n';
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
-import { heightAt, isDeep, WATER_LEVEL } from '../../shared/src/terrain';
+import { heightAt, isDeep, isDeepCell, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
 import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
@@ -22,6 +22,7 @@ import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig }
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
+import { hideTip, showTipAt } from './ui/dom';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
 import { lightSources } from './render/scene';
 import { PostFX } from './render/post';
@@ -235,6 +236,8 @@ export class Game {
   nodes!: NodeVisuals;
   /** the world node under the cursor */
   private hoverNode: NodeDef | null = null;
+  /** the node hint tooltip is up (ours to hide) */
+  private nodeTip = false;
   private lights!: LocalLights;
   private sunScreen = new THREE.Vector3();
   /** Destinations picked on the world map, walked in order; route[0] is where we are heading now. */
@@ -1446,7 +1449,14 @@ export class Game {
       return CURSORS.select;
     };
     // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
+    const dropNodeTip = () => {
+      if (!this.nodeTip) return;
+      hideTip();
+      this.nodeTip = false;
+    };
+    el.addEventListener('pointerleave', dropNodeTip);
     el.addEventListener('pointerdown', (e) => {
+      dropNodeTip();
       if (e.button !== 0 || e.pointerType === 'touch') return; // touch acts on tap (pointerup)
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
@@ -1483,12 +1493,16 @@ export class Game {
         }
         return;
       }
-      if (e.buttons) return;
+      if (e.buttons) return dropNodeTip(); // dragging the camera
       const r = pick(e), ent = r.ent;
       this.hoverId = ent?.id ?? null;
       this.hoverNode = ent ? null : r.node ?? null;
       el.style.cursor = this.hoverNode ? NODE_HINT[this.hoverNode.kind].cursor() : cursorFor(ent);
-      el.title = this.hoverNode ? NODE_HINT[this.hoverNode.kind].label() : '';
+      // not a title attribute: on the full-screen canvas it would turn into a tooltip that never goes away (ui/dom.ts)
+      if (this.hoverNode) {
+        showTipAt(NODE_HINT[this.hoverNode.kind].label(), e.clientX, e.clientY);
+        this.nodeTip = true;
+      } else dropNodeTip();
     });
 
     const typing = () => {
@@ -1642,7 +1656,8 @@ export class Game {
       const wp = pr.path[0];
       const dx = wp.x - c.pos.x, dz = wp.z - c.pos.z;
       const d = Math.hypot(dx, dz);
-      const step = (this.me.speed / 20) * dt;
+      // swimming is slower: predict it with the server's own water cells, or it pulls us back every few metres
+      const step = (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1);
       let moving = false;
       if (d > 0.05) {
         const k = Math.min(1, step / d);

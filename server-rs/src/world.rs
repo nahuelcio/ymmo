@@ -255,7 +255,7 @@ impl World {
         let (dx, dz) = (wx - e.c.x, wz - e.c.z);
         let wd = { let h = dx.hypot(dz); if h == 0.0 { 1e-4 } else { h } };
         // swimming is slower (deep water, shared/src/terrain.ts isDeep)
-        let swim = if d().is_deep(e.c.x, e.c.z) { 0.55 } else { 1.0 };
+        let swim = if d().is_deep(e.c.x, e.c.z) { d().c.swim_speed } else { 1.0 };
         let step = (speed * swim * e.c.speed_mul(now) * dt).min((wd - wstop).max(0.0));
         e.c.ry = dx.atan2(dz);
         let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, e.c.radius);

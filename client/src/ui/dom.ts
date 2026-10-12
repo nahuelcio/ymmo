@@ -49,6 +49,18 @@ export function hideTip() {
   if (tipEl) tipEl.style.display = 'none';
 }
 
+/**
+ * The tooltip at a point, shown and hidden by the caller: for hints over the 3D world, where the canvas
+ * is one element under the whole screen (a 	itle on it would stick for good, see below).
+ */
+export function showTipAt(text: string, x: number, y: number) {
+  const t = tipBox();
+  if (t.textContent !== text) t.textContent = text;
+  t.style.display = 'block';
+  t.style.left = `px`;
+  t.style.top = `px`;
+}
+
 // Native `title` tooltips take about a second to show up. Any element that has one gets the same
 // instant tooltip instead: the text moves to data-tip (and aria-label) the first time it is hovered.
 let tipOwner: HTMLElement | null = null;
