@@ -9,7 +9,7 @@ import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { heightAt, isDeep, isDeepCell, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
-import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, type NodeDef } from '../../shared/src/nodes';
+import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
 import { MELEE_RANGE } from '../../shared/src/formulas';
@@ -78,6 +78,8 @@ export interface CEnt {
   /** when it sat down / got up (F_SITTING edges), for the sit-down and get-up clips */
   sitAt?: number;
   standAt?: number;
+  /** sat on the ground (not a seat): the body is lowered to it, and raised back while getting up */
+  groundSit?: boolean;
   /** the node it is working (from the server's 'gather') and how many strokes were already shown */
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
@@ -115,6 +117,8 @@ type Pick = { ent?: CEnt; node?: NodeDef; point?: THREE.Vector3 };
 
 /** Where a swimmer's root goes: the swim clips are authored around the surface (head out treading water, back awash swimming). */
 const SWIM_BODY_Y = WATER_LEVEL - 0.05;
+/** Got up since it last sat down (the server may not have said so yet, for our own character). */
+const isStanding = (c: CEnt) => c.standAt !== undefined && c.standAt > (c.sitAt ?? -Infinity);
 /** How far sitting on the ground lowers the body (the sitting clip is made for a chair). */
 const SIT_GROUND_DROP = 0.42;
 /** What the cast bar says while working a node. */
@@ -893,8 +897,14 @@ export class Game {
       if (c.id === this.me.id && (c.flags & STATUS_MASK) !== (f & STATUS_MASK)) this.ui.hud.setStatuses(f);
       if (c.id === this.me.id && (c.flags & F_CASTING) && !(f & F_CASTING)) this.dropPredictedCooldowns();
       // sitting down / getting up: timestamps drive the sit and get-up clips
-      if (f & F_SITTING && !(c.flags & F_SITTING)) c.sitAt = performance.now();
-      if (!(f & F_SITTING) && c.flags & F_SITTING) c.standAt = performance.now();
+      if (f & F_SITTING && !(c.flags & F_SITTING)) {
+        c.sitAt = performance.now();
+        c.groundSit = !nodesNear(c.pos.x, c.pos.z, 0.6).some((n) => n.kind === 'seat');
+        // the walk to the seat is over: left in place it would read as a request to get up again
+        if (c.id === this.me.id) this.predict = null;
+      }
+      // our own get-up already started on the click (updateSelf): don't restart it when the server agrees
+      if (!(f & F_SITTING) && c.flags & F_SITTING && !isStanding(c)) c.standAt = performance.now();
       if (!(f & F_GATHER) && c.flags & F_GATHER) {
         c.gather = undefined;
         if (c.id === this.me.id && this.castBar && Object.values(GATHER_LABEL).some((l) => l() === this.castBar!.name)) this.castBar = null;
@@ -1594,6 +1604,9 @@ export class Game {
    * Returns whether the character is moving (for animation).
    */
   private updateSelf(c: CEnt, now: number, dt: number): boolean {
+    // asked to do something while sitting: the get-up plays first (the server waits as long before moving us)
+    if (c.flags & F_SITTING && this.predict && !isStanding(c)) c.standAt = now;
+    if (!c.roll && isStanding(c) && now - c.standAt! < STAND_UP_MS) return false; // a dodge roll goes at once
     if (c.roll) {
       const k = (now - c.roll.at) / ROLL_MS;
       if (k < 1) {
@@ -1770,10 +1783,13 @@ export class Game {
       c.root.position.copy(c.pos);
       // in deep water the body floats at the swimming line; sitting on the ground sinks the hips to it
       const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
-      const sitting = (c.flags & F_SITTING) !== 0;
+      const sitting = (c.flags & F_SITTING) !== 0 && !isStanding(c);
       if (swimming) c.root.position.y = SWIM_BODY_Y + Math.sin(tSec * 2 + c.id) * 0.05;
-      else if (sitting && !nodesNear(c.pos.x, c.pos.z, 0.6).some((n) => n.kind === 'seat'))
-        c.root.position.y -= SIT_GROUND_DROP * Math.min(1, (now - (c.sitAt ?? 0)) / 900);
+      else if (c.groundSit) {
+        // eased down while sitting, raised back up along with the get-up clip
+        const k = sitting ? Math.min(1, (now - (c.sitAt ?? 0)) / 900) : Math.max(0, 1 - (now - (c.standAt ?? 0)) / STAND_UP_MS);
+        if (k > 0) c.root.position.y -= SIT_GROUND_DROP * k;
+      }
       c.model.rotation.y = c.ry;
       if (c.rig) {
         const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;

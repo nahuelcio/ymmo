@@ -8,6 +8,8 @@ use std::sync::OnceLock;
 pub struct Constants {
     #[serde(rename = "PLAYABLE_HALF")]
     pub playable_half: f64,
+    #[serde(rename = "STAND_UP_MS")]
+    pub stand_up_ms: f64,
     #[serde(rename = "SWIM_SPEED")]
     pub swim_speed: f64,
     #[serde(rename = "WALK_RADIUS")]

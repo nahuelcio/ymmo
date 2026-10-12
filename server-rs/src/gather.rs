@@ -145,7 +145,10 @@ impl World {
     }
 
     pub fn stand_up(&mut self, pid: u32) {
-        let Some(s) = self.pl_mut(pid).and_then(|p| p.sitting.take()) else { return };
+        let until = self.now + d().c.stand_up_ms;
+        let Some(p) = self.pl_mut(pid) else { return };
+        let Some(s) = p.sitting.take() else { return };
+        p.stand_until = until; // the get-up clip plays before anything else happens
         if s != 0 && self.seats.get(&s) == Some(&pid) { self.seats.remove(&s); }
     }
 

@@ -106,5 +106,8 @@ export function nodesNear(x: number, z: number, r: number): NodeDef[] {
   return out.sort((a, b) => a.d - b.d).map((o) => o.n);
 }
 
+/** Getting up from a seat (or the ground) takes this long before the character can move: the get-up clip. */
+export const STAND_UP_MS = 1000;
+
 /** How far from a node's centre a character can use it. */
 export const reachOf = (n: NodeDef) => (n.kind === 'seat' ? 0.3 : n.r + 0.9);

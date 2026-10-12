@@ -136,6 +136,8 @@ pub struct Player {
     pub talking_to: Option<u32>,
     /** sitting: the seat node, or 0 on the ground */
     pub sitting: Option<u32>,
+    /** getting up until then (ms): no moving or acting before the get-up clip ends */
+    pub stand_until: f64,
     /** working a node: (node, started, ends) */
     pub gather: Option<(u32, f64, f64)>,
     pub quests: Vec<(String, i64, bool)>,

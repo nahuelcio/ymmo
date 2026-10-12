@@ -13,7 +13,7 @@ import { RAIDS } from '../../shared/src/data/raids';
 import { STATUSES } from '../../shared/src/status';
 import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
 import { isDeep, PLAYABLE_HALF, SWIM_SPEED, TOWN, TOWNS, WATER_CELL, WORLD_HALF } from '../../shared/src/terrain';
-import { allNodes, GATHER } from '../../shared/src/nodes';
+import { allNodes, GATHER, STAND_UP_MS } from '../../shared/src/nodes';
 import { campName, itemName, mobName, npcLines, npcText, questField, skillName, specName, teleportName, zoneName } from '../../shared/src/i18n';
 
 /** Deep water on the WATER_CELL grid, as runs per row: [row, firstCol, lastCol] (the server has no terrain function). */
@@ -31,7 +31,7 @@ function waterRuns(): [number, number, number][] {
 }
 
 const out = {
-  constants: { PLAYABLE_HALF, SWIM_SPEED, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
+  constants: { PLAYABLE_HALF, SWIM_SPEED, STAND_UP_MS, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
   town: { ...TOWN, nameEn: zoneName(TOWN.name, 'en') },
   towns: TOWNS.map((t) => ({ ...t, nameEn: zoneName(t.name, 'en') })),
   wild: { name: 'Tierras Salvajes', nameEn: zoneName('Tierras Salvajes', 'en') },

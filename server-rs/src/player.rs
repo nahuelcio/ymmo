@@ -46,6 +46,11 @@ impl World {
             return;
         }
         if self.tick_gather(pid, now) { return; }
+        // getting up: whatever was asked for (walk, attack, talk) starts once the get-up clip is over
+        if now < self.pl(pid).unwrap().stand_until {
+            self.ents.get_mut(&pid).unwrap().c.moving = false;
+            return;
+        }
 
         let Some(it) = self.pl(pid).unwrap().intent.clone() else {
             self.ents.get_mut(&pid).unwrap().c.moving = false;
