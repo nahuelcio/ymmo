@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Clouds, cloudShadow } from './clouds';
 import { duskLanterns } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
@@ -203,8 +204,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   sky.renderOrder = -1;
   sky.frustumCulled = false;
   scene.add(sky);
-  const clouds = buildClouds();
-  scene.add(clouds);
+  const clouds = new Clouds();
+  scene.add(clouds.mesh);
+  const cloudLit = new THREE.Color(), cloudShade = new THREE.Color(), cloudRim = new THREE.Color();
   const pal = { ...SKIES.town };
   const cur = { top: new THREE.Color(pal.top), horizon: new THREE.Color(pal.horizon), ground: new THREE.Color(pal.ground), sun: new THREE.Color(pal.sun), cloud: new THREE.Color(pal.cloud), sunI: pal.sunI, hemi: pal.hemi };
   const tgt = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), cloud: new THREE.Color(), sunI: 0, hemi: 0 };
@@ -252,7 +254,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const { props: campProps, flames } = buildCamps();
   scene.add(mergeStatic(campProps), flames);
   // Static world: bake every local matrix once so the per-frame scene traversal (render + labels) skips recomposing them.
-  for (const o of scene.children) if (o !== sky && o !== clouds && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
+  for (const o of scene.children) if (o !== sky && o !== clouds.mesh && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
 
   // Sampler anisotropy for the GLTF colour maps (nature, village kit, characters): user setting,
   // capped by the GPU's max. three.js clamps per-texture at upload too; this keeps it explicit.
@@ -285,13 +287,6 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       updatePropTextures(dt);
       sky.position.copy(camera.position);
       sky.scale.setScalar(far * 0.92);
-      clouds.position.set(camera.position.x, 0, camera.position.z);
-      const drift = (performance.now() / 1000) * 1.5;
-      clouds.children.forEach((c, i) => {
-        const u = c.userData as { x: number; z: number };
-        c.position.x = ((u.x + drift + 600) % 1200) - 600;
-        c.position.z = u.z + Math.sin(drift * 0.01 + i) * 4;
-      });
       // ease the sky towards the current region's palette
       paletteAt(camera.position.x, camera.position.z);
       const k = Math.min(1, dt * 0.8);
@@ -342,8 +337,11 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // campfires flicker
       const ft = performance.now() / 1000;
       flames.children.forEach((f, i) => f.scale.set(1, 0.8 + Math.sin(ft * 13 + i * 1.7) * 0.15 + Math.sin(ft * 7.3 + i) * 0.1, 1));
-      CLOUD_MAT.color.copy(cur.cloud).lerp(tmp.set(0xff9a60), dusk * 0.5);
-      CLOUD_MAT.emissive.copy(CLOUD_MAT.color).multiplyScalar(0.45 * (0.12 + 0.88 * day));
+      // clouds: white tops by day, gold at the ends of the day, slate blue in the moonlight; bellies take the sky's tint
+      cloudLit.copy(cur.cloud).lerp(tmp.set(0xffb070), dusk * 0.8).multiplyScalar(0.2 + 0.58 * Math.max(day, dusk * 0.95)).lerp(tmp.set(0x3e4866), (1 - day) * (1 - dusk) * 0.75);
+      cloudShade.copy(cloudLit).multiplyScalar(0.5).lerp(A.top, 0.25);
+      cloudRim.copy(up ? u.sunColor.value : tmp.set(0x8fa6e8)).multiplyScalar(up ? 1 : 0.35);
+      clouds.update(camera.position, A.lightDir, cloudLit, cloudShade, cloudRim, A.horizon, day);
     },
     follow(p) {
       // snap to whole shadow texels in light space: the map then moves in steps, so edges don't shimmer while walking
@@ -420,6 +418,7 @@ function buildTerrain(): THREE.Group {
   g.name = 'terrain';
   const n = Math.round((WORLD_HALF * 2) / CHUNK), seg = Math.round(250 / n);
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  mat.onBeforeCompile = cloudShadow;
   const c = new THREE.Color();
   for (let cx = 0; cx < n; cx++)
     for (let cz = 0; cz < n; cz++) {
@@ -591,31 +590,6 @@ function buildRocks(): THREE.Group {
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
   return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'rock'), items);
-}
-
-const CLOUD_MAT = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, fog: false, emissive: 0x606060 });
-
-/** Low-poly cloud puffs high above, drifting with the wind. */
-function buildClouds(): THREE.Group {
-  const g = new THREE.Group();
-  const rng = mulberry32(31);
-  const puff = mergeGeometries([
-    new THREE.IcosahedronGeometry(9, 0),
-    new THREE.IcosahedronGeometry(7, 0).translate(10, -1.5, 2),
-    new THREE.IcosahedronGeometry(6.5, 0).translate(-9, -2, -1),
-    new THREE.IcosahedronGeometry(5, 0).translate(3, 3.5, -3),
-  ])!;
-  for (let i = 0; i < 34; i++) {
-    const m = new THREE.Mesh(puff, CLOUD_MAT);
-    const x = (rng() * 2 - 1) * 600, z = (rng() * 2 - 1) * 600;
-    m.userData = { x, z };
-    m.position.set(x, 110 + rng() * 40, z);
-    m.scale.set(1.6 + rng() * 1.8, 0.7 + rng() * 0.4, 1.3 + rng() * 1.2);
-    m.rotation.y = rng() * 6;
-    m.frustumCulled = false;
-    g.add(m);
-  }
-  return g;
 }
 
 function buildWater(): THREE.Mesh {

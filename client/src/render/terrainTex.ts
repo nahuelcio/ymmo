@@ -4,6 +4,7 @@
 // groundLayers in scene.ts); the fragment shader blends the layers by weight + texel height so the
 // edges between grass, dirt and rock come out ragged instead of a soft fade.
 import * as THREE from 'three';
+import { cloudShadow } from './clouds';
 import { bumpNormal, getTextureSet, relief, TERRAIN_LAYERS, type TextureQuality, type TextureSet } from './textures';
 
 export type TerrainTexQuality = 'off' | TextureQuality;
@@ -127,6 +128,7 @@ function texturedMaterial(set: TextureSet, quality: TextureQuality, uniforms: Te
       .replace('#include <common>', `#include <common>\n${FRAG_DECL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_MAIN}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${bumpNormal('texBump')}`);
+    cloudShadow(sh);
   };
   m.customProgramCacheKey = () => 'terrain-tex'; // the defines already tell low and high apart
   return m;

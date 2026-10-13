@@ -115,7 +115,9 @@ const FRAG = /* glsl */ `
     #include <colorspace_fragment>
   }`;
 
-/** The atlas: drawn into a canvas as the cells arrive, so effects work (blank) before it loads. */
+/** The atlas: drawn into a canvas as the cells arrive, so effects work (blank) before it loads. Shared (clouds use it too). */
+let atlas: THREE.Texture | null = null;
+export const particleAtlas = () => (atlas ??= makeAtlas());
 function makeAtlas(): THREE.Texture {
   const c = document.createElement('canvas');
   c.width = c.height = 512;
@@ -320,7 +322,7 @@ class Pool {
 export class Particles {
   private glow: Pool;
   private solid: Pool;
-  private atlas = makeAtlas();
+  private atlas = particleAtlas();
 
   constructor(scene: THREE.Scene) {
     this.glow = new Pool(scene, this.atlas, false);
@@ -350,6 +352,5 @@ export class Particles {
   dispose() {
     this.glow.dispose();
     this.solid.dispose();
-    this.atlas.dispose();
   }
 }

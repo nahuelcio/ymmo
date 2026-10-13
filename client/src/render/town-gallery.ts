@@ -11,7 +11,7 @@ import { loadV } from './village';
 /**
  * Dev view (?town=dusk or ?town=alba): the real world scene around a town, with an orbiting camera.
  * No server needed. ?hour=0..24 fixes the time of day (21 = night), ?ry=<radians> stops the orbit there,
- * ?dist and ?pitch (radians) frame it, ?at=x,z looks at another point.
+ * ?dist and ?pitch (radians) frame it, ?at=x,z looks at another point, ?ty=<height> raises it (the sky).
  */
 export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   host.innerHTML = '';
@@ -39,7 +39,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   fx.onLight = (at, color, power, range, ms) => lights.flash(at, color, power, range, ms);
   fx.hearth(new THREE.Vector3(BRAZIER_FIRE.x, BRAZIER_FIRE.y, BRAZIER_FIRE.z), 1.1);
   const [ax, az] = (p.get('at') ?? `${town.x},${town.z}`).split(',').map(Number);
-  const target = new THREE.Vector3(ax, TOWN_HEIGHT + 2, az);
+  const target = new THREE.Vector3(ax, Number(p.get('ty')) || TOWN_HEIGHT + 2, az);
   const dist = Number(p.get('dist')) || town.r * 2.1, pitch = Number(p.get('pitch')) || 0.55;
   const fixed = p.get('ry');
   const resize = () => {
