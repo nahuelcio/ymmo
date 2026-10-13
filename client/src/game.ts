@@ -42,6 +42,8 @@ export interface CEnt {
   rig: Rig | null;
   /** level of detail by distance (render/lod.ts) */
   lod?: LodState;
+  /** where the model stood (root position, model offset, scale and heading) at its last matrix update */
+  mwAt?: number[];
   root: THREE.Group;
   model: THREE.Object3D;
   /** the model's own size (mobs and races differ): squash effects multiply it instead of replacing it */
@@ -99,6 +101,8 @@ const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
  * The hit flash, one material per shader variant (skinned and/or with shape keys): a single shared one made the
  * renderer switch programs on every draw while a character flashed.
  */
+/** scratch for the per-frame "did this rig move" check (game.ts frame) */
+const MW_TMP: number[] = [];
 const FLASH_MATS = new Map<string, THREE.MeshBasicMaterial>();
 const flashMat = (o: THREE.Mesh) => {
   const k = `|${!!o.geometry.morphAttributes.position}`;
@@ -771,6 +775,13 @@ export class Game {
     if (rig) {
       model = rig.root;
       rimLit(rig.root);
+      // a skeleton whose bones kept last frame's matrices (frame(): still and not animated) keeps its bone texture too
+      const skels = new Set<THREE.Skeleton>();
+      rig.root.traverse((o) => o instanceof THREE.SkinnedMesh && skels.add(o.skeleton));
+      for (const sk of skels) {
+        const update = sk.update.bind(sk);
+        sk.update = () => root.matrixWorldAutoUpdate && update();
+      }
       height = rig.height;
       radius = Math.max(0.45, rig.radius);
     } else {
@@ -1827,7 +1838,7 @@ export class Game {
       const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
       c.root.visible = onScreen;
       // hidden entities skip the per-frame matrix update of their whole tree (bones included)
-      c.root.matrixWorldAutoUpdate = onScreen;
+      c.root.matrixWorldAutoUpdate = onScreen; // narrowed below, once we know whether it animates this frame
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming
       if (sitting) c.tag.position.y -= 0.55; // the plate drops with the seated body
       c.tag.visible = onScreen;
@@ -1837,7 +1848,18 @@ export class Game {
       if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
       // farther rigs animate on fewer frames (every 2nd past 20 m, every 3rd past 40 m): small on screen, same motion
       const stride = c === self || dSelf < 20 ? 1 : dSelf < 40 ? 2 : 3;
-      if (c.rig && onScreen && dSelf < 60 && (this.frameNo + c.id) % stride === 0) {
+      const animNow = c.rig !== null && onScreen && dSelf < 60 && (this.frameNo + c.id) % stride === 0;
+      if (onScreen && c.rig && c !== self) {
+        // A rig neither animated nor moved this frame keeps last frame's matrices: recomputing every bone
+        // of every idle mob in view was a fifth of the frame once mobs had skeletons.
+        const r = c.root.position, m = c.model.position, at = (c.mwAt ??= []);
+        const cur = MW_TMP;
+        (cur[0] = r.x), (cur[1] = r.y), (cur[2] = r.z), (cur[3] = m.x), (cur[4] = m.y), (cur[5] = m.z), (cur[6] = c.model.scale.y), (cur[7] = c.ry);
+        let still = at.length === 8;
+        for (let i = 0; i < 8; i++) if (at[i] !== cur[i]) (still = false), (at[i] = cur[i]);
+        c.root.matrixWorldAutoUpdate = animNow || !still;
+      }
+      if (animNow && c.rig) {
         if (now >= (c.hitStop ?? 0)) animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
