@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import './assets'; // first: versions every public file request
 import './style.css';
 import * as THREE from 'three';
 import {

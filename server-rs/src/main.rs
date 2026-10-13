@@ -400,14 +400,15 @@ async fn main() {
 
     let static_files = tower_http::services::ServeDir::new(&dist).fallback(tower_http::services::ServeFile::new(format!("{dist}/index.html")));
     // Vite fingerprints everything under /assets/, so those can be cached forever. Models and audio (public/) keep
-    // their names: cached for a day, then refreshed in the background. The page itself always revalidates.
+    // their names, but the client asks for them with ?v=<content hash> (client/src/assets.ts): those URLs never change
+    // either. Without it (an old client): cached for a day, then refreshed in the background. The page always revalidates.
     let cache = axum::middleware::map_response(|req_path: axum::extract::OriginalUri, mut res: axum::response::Response| async move {
         let p = req_path.path();
         // (a missing file falls back to index.html: that must never be cached either)
         let html = res.headers().get(axum::http::header::CONTENT_TYPE).map_or(false, |c| c.as_bytes().starts_with(b"text/html"));
         let page = html || p == "/" || !res.status().is_success();
         let v = if page { "no-cache" }
-            else if p.starts_with("/assets/") { "public, max-age=31536000, immutable" }
+            else if p.starts_with("/assets/") || req_path.query().map_or(false, |q| q.split('&').any(|kv| kv.starts_with("v="))) { "public, max-age=31536000, immutable" }
             else { "public, max-age=86400, stale-while-revalidate=604800" };
         res.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static(v));
         res

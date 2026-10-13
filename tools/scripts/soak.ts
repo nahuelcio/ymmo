@@ -28,6 +28,8 @@ const PROFILE = +arg('profile', '0');
 /** --eval "<js body>": run it in the page once in the world (window.game is there) and print what it returns */
 /** --shot file.png: play for 20 s and save a screenshot instead */
 const SHOT = arg('shot', '');
+/** --snaps dir: an --eval script may call 'await window.__snap(name)' to save dir/name.png at that moment */
+const SNAPS = arg('snaps', '');
 const EVAL =((e) => (e.startsWith('@') ? readFileSync(e.slice(1), 'utf8') : e))(arg('eval', '')); // @file reads it from a file
 const PORT = 9333;
 const CHROME = arg('chrome', [
@@ -70,6 +72,12 @@ ws.on('message', (d) => {
   if (m.method === 'Runtime.consoleAPICalled') {
     const text = m.params.args.map((a: { value?: unknown }) => a.value).join(' ');
     if (text.startsWith('[soak]')) console.log(text);
+    // window.__snap(name) from an --eval script: save a screenshot now, then let the script go on
+    if (text.startsWith('[snap] ') && SNAPS) void (async () => {
+      const r = (await send('Page.captureScreenshot', { format: 'png' })) as { result?: { data?: string } };
+      writeFileSync(join(SNAPS, `${text.slice(7)}.png`), Buffer.from(r.result!.data!, 'base64'));
+      await send('Runtime.evaluate', { expression: 'window.__snapDone?.()' });
+    })();
   }
 });
 const send = (method: string, params: object = {}) =>
@@ -131,9 +139,12 @@ try {
     (btn('Crear') || btn('Create')).click();
     await wait(() => btn('Entrar al mundo') && !btn('Entrar al mundo').disabled);
     btn('Entrar al mundo').click();
-    await wait(() => window.soak && window.game?.self, 30000);
+    // in the world: the game canvas is up (window.game and soak exist in dev builds only)
+    await wait(() => document.querySelector('#game canvas'), 30000);
+    if (document.querySelector('script[src*="/@vite/client"]')) await wait(() => window.soak && window.game?.self, 30000);
   `);
   await sleep(5000); // let the world finish streaming in
+  if (SNAPS) await page(`window.__snap = (n) => new Promise((r) => { window.__snapDone = r; console.log('[snap] ' + n); }); return 1;`);
   if (SHOT) {
     // a look at the game: after --eval set a scene up, or after a little play (nameplates, effects)
     if (EVAL) console.log(JSON.stringify(await page(EVAL), null, 1));

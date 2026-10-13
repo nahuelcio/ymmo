@@ -1,5 +1,6 @@
 // Procedural sound effects (Web Audio, no asset files). Each effect is a tiny
 // recipe of oscillators / filtered noise with short envelopes.
+import { versioned } from './assets';
 import { settings } from './settings';
 import { RAIDS } from '../../shared/src/data/raids';
 
@@ -61,7 +62,7 @@ const decoded = new Map<string, AudioBuffer>();
 function preloadSamples(c: AudioContext) {
   const files = new Set(Object.values(SAMPLES).flatMap((l) => l ?? []));
   for (const f of files) {
-    fetch(`/audio/${f}`)
+    fetch(versioned(`/audio/${f}`))
       .then((r) => r.arrayBuffer())
       .then((b) => c.decodeAudioData(b))
       .then((buf) => decoded.set(f, buf))
@@ -77,7 +78,7 @@ addEventListener('keydown', () => (void audio()?.resume(), syncLoops()), { captu
 // ponytail: <audio loop> leaves a small gap at the seam (worst on the mp3) and cuts hard between
 // worlds; decode into AudioBuffers and crossfade through gain nodes if that gets noticeable.
 function loop(file: string, gain: number, dungeon: boolean) {
-  const el = new Audio(`/audio/${file}`);
+  const el = new Audio(versioned(`/audio/${file}`));
   el.loop = true;
   el.preload = 'none';
   return { el, gain, dungeon };

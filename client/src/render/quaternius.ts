@@ -245,7 +245,12 @@ export interface QOpts {
   inHand?: THREE.Object3D | null;
 }
 
-export interface QAnim { mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean }
+export interface QAnim {
+  mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean;
+  /** knees and ankles with their straight rest pose, and how far a floor sit has straightened them (0..1) */
+  legs: { bone: THREE.Object3D; rest: THREE.Quaternion }[];
+  floor: number;
+}
 
 /** Hangs `o` from a bone keeping the orientation it was modelled in (bones have arbitrary axes). */
 function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number) {
@@ -329,7 +334,8 @@ export function qPlayer(o: QOpts): Rig {
   body.scale.set(o.bulk, 1, o.bulk);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand },
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0,
+      legs: ['calf_l', 'calf_r', 'foot_l', 'foot_r'].map((n) => ({ bone: byName[n], rest: byName[n].quaternion.clone() })) },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
 }
@@ -357,7 +363,7 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts.Sword_Attack.time = ((s.gather.age % s.gather.swingMs) / s.gather.swingMs) * (clips.Sword_Attack.duration - 0.02);
   } else if (s.gather && q.acts.Fixing_Kneeling) cur = 'Fixing_Kneeling';
   else if (sitAge >= 0) {
-    if (sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = q.acts.Sitting_Idle_Loop ? 'Sitting_Idle_Loop' : 'Idle_Loop';
+    if (!clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
   else if (s.casting) cur = 'Spell_Simple_Idle_Loop';
@@ -366,6 +372,8 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
+  // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
+  if (!q.acts[cur]) cur = s.moving && !s.swimming ? 'Jog_Fwd_Loop' : 'Idle_Loop';
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) {
     // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
@@ -376,6 +384,12 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts[n].setEffectiveWeight((q.w[n] = w));
   }
   q.mixer.update(dt);
+  // Sitting on the floor: there is no floor-sit clip, so the chair sit is lowered to the ground (game.ts) and its
+  // knees straightened back toward the bind pose: legs out in front instead of shins sunk into the ground.
+  const floor = s.floorSit && (cur === 'Sitting_Enter' || cur === 'Sitting_Idle_Loop') ? 1 : 0;
+  q.floor += (floor - q.floor) * Math.min(1, dt * 8);
+  if (q.floor < 0.01) q.floor = 0;
+  if (q.floor > 0) for (const l of q.legs) l.bone.quaternion.slerp(l.rest, q.floor);
 }
 
 /** Dev gallery (?q=1): every race and gender in each gear tier, with the animation states. No server needed. */

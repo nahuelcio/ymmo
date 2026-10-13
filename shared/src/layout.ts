@@ -126,6 +126,9 @@ export function plazaBenches(): { x: number; z: number; a: number }[] {
   });
 }
 
+/** How far behind the feet the sitting clip lowers the hips (measured on the Sitting_Idle_Loop pelvis). */
+export const SEAT_FRONT = 0.3;
+
 /** A place to sit: where the body goes, which way it faces, and how high the seat is above the ground. */
 export interface SeatL { x: number; z: number; ry: number; y: number }
 
@@ -134,10 +137,11 @@ export function layoutSeats(): SeatL[] {
   if (seats) return seats;
   seats = [];
   for (const b of plazaBenches()) {
-    // facing away from the tower; two places along the bench
+    // facing away from the tower; two places along the bench. The sitting clip keeps the feet where the body stands
+    // and lowers the hips SEAT_FRONT behind them, so the body stands that far in front of the seat's middle.
     const ry = Math.atan2(Math.cos(b.a), Math.sin(b.a));
-    const along = { x: Math.cos(ry), z: -Math.sin(ry) };
-    for (const s of [-0.5, 0.5]) seats.push({ x: b.x + along.x * s, z: b.z + along.z * s, ry, y: 0.5 });
+    const along = { x: Math.cos(ry), z: -Math.sin(ry) }, front = { x: Math.sin(ry) * SEAT_FRONT, z: Math.cos(ry) * SEAT_FRONT };
+    for (const s of [-0.5, 0.5]) seats.push({ x: b.x + along.x * s + front.x, z: b.z + along.z * s + front.z, ry, y: 0.5 });
   }
   return seats;
 }

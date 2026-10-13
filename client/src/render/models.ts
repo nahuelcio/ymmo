@@ -46,6 +46,8 @@ export interface AnimState {
   standAge?: number;
   /** in deep water */
   swimming?: boolean;
+  /** sitting on the ground rather than a seat (straightens the legs) */
+  floorSit?: boolean;
   /** working a world node: how it moves, ms since it began and the length of one stroke */
   gather?: { anim: 'chop' | 'mine' | 'pick'; age: number; swingMs: number } | null;
 }
