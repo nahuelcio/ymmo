@@ -10,6 +10,7 @@ import { className, genderDesc, genderName, hairStyle, LANGS, raceDesc, raceName
 import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
 import { loadQ, mountQuaterniusPreview } from './render/quaternius';
+import { loadMobs, mountMobPreview } from './render/mobs';
 import { loadV } from './render/village';
 import { loadNature } from './render/nature';
 import type { CharSummary } from '../../shared/src/protocol';
@@ -390,6 +391,11 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 }
 
 async function boot() {
+  // ?mobs=1: mob gallery only (no server needed)
+  if (new URLSearchParams(location.search).has('mobs')) {
+    cleanup = await mountMobPreview(document.body);
+    return;
+  }
   // ?q=1: character gallery only (no server needed)
   if (new URLSearchParams(location.search).has('q')) {
     cleanup = await mountQuaterniusPreview(document.body);
@@ -400,6 +406,7 @@ async function boot() {
   // character models download while we connect; without them players fall back to the procedural rig
   const models = Promise.all([
     loadQ().catch((err) => console.warn('quaternius', err)),
+    loadMobs().catch((err) => console.warn('mobs', err)),
     loadV().catch((err) => console.warn('village', err)),
     loadNature().catch((err) => console.warn('nature', err)),
   ]);

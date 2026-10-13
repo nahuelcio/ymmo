@@ -1,0 +1,5 @@
+Mob models, all CC0 1.0 (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+wolf.glb, fox.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
+skeleton_*.glb: KayKit Character Pack: Skeletons 1.1 by Kay Lousberg (kaylousberg.com)
+skeleton_anims.glb: KayKit Character Animations 1.1 by Kay Lousberg (kaylousberg.com)
+Regenerate with tools/scripts/m-assets.mjs.

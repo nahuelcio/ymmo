@@ -9,6 +9,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
+import { realMob } from './mobs';
 
 /** Creatures and gear stay untextured even when they share a colour with the building palette. */
 const mat = (color: number) => sceneMat(color, 'none');
@@ -29,6 +30,8 @@ export interface Rig {
   radius: number;
   /** skinned Quaternius character: clip-driven instead of per-limb */
   q?: QAnim;
+  /** any other clip-driven model (render/mobs.ts) */
+  anim?: (s: AnimState) => void;
   /** frees what is per-entity (shared geometries and materials stay) */
   dispose?: () => void;
 }
@@ -247,7 +250,7 @@ function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin
 }
 
 /** The weapon as held: C-grade blades glow. */
-function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
+export function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
   const w = weaponMesh(kind, color);
   if (w && topTier(grade)) w.traverse((m) => m instanceof THREE.Mesh && m.position.z > 0.3 && (m.material = glow(color)));
   return w;
@@ -685,6 +688,8 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
 }
 
 export function mobModel(tplId: string): Rig {
+  const real = realMob(tplId);
+  if (real) return real;
   const t = MOBS[tplId];
   const c = t.color;
   let rig: Rig;
@@ -1093,6 +1098,10 @@ export function bake(rig: Rig): Rig {
 export function animate(rig: Rig, s: AnimState) {
   if (rig.q) {
     animateQ(rig.q, s);
+    return;
+  }
+  if (rig.anim) {
+    rig.anim(s);
     return;
   }
   const dance = !!s.dancing && s.deadAge < 0;

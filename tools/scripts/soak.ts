@@ -23,7 +23,7 @@ const URL = arg('url', 'http://localhost:5173');
 const MINUTES = +arg('minutes', '5');
 const EVERY = +arg('every', '15');
 const OUT = arg('out', '');
-/** --profile N: instead of sampling, record a CPU profile for N seconds of play and list the hottest functions */
+/** --profile N: instead of sampling, record a CPU profile for N seconds of play and list the hottest functions (with --eval: after it, standing still) */
 const PROFILE = +arg('profile', '0');
 /** --eval "<js body>": run it in the page once in the world (window.game is there) and print what it returns */
 /** --shot file.png: play for 20 s and save a screenshot instead */
@@ -99,7 +99,8 @@ interface ProfNode { id: number; hitCount: number; callFrame: { functionName: st
 async function profile(secs: number) {
   await send('Profiler.enable');
   await send('Profiler.setSamplingInterval', { interval: 200 });
-  void page(`window.soak({ minutes: ${secs / 60 + 1}, every: 1000 }); return 1;`);
+  // after an --eval set the scene up: profile it standing there, else while the soak plays
+  if (!EVAL) void page(`window.soak({ minutes: ${secs / 60 + 1}, every: 1000 }); return 1;`);
   await sleep(3000);
   await send('Profiler.start');
   await sleep(secs * 1000);
@@ -152,6 +153,9 @@ try {
     await sleep(EVAL ? 800 : 20000);
     const r = (await send('Page.captureScreenshot', { format: 'png' })) as { result?: { data?: string } };
     writeFileSync(SHOT, Buffer.from(r.result!.data!, 'base64'));
+  } else if (EVAL && PROFILE) {
+    console.log(JSON.stringify(await page(EVAL), null, 1));
+    await profile(PROFILE);
   } else if (EVAL) console.log(JSON.stringify(await page(EVAL), null, 1));
   else if (PROFILE) await profile(PROFILE);
   else {
