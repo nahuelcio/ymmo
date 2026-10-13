@@ -4,7 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
 import { bumpNormal, relief } from './textures';
 import { plazaBenches } from '../../../shared/src/layout';
-import { albaCurtain, BELL_TOWER, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
+import { albaCurtain, BELL_TOWER, duskCurtain, duskProps, type PropInst, type PropName, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
 
 /**
  * Static kit meshes for settlements. Each glTF primitive (one material) is instanced
@@ -96,20 +96,41 @@ function kitFloor(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
   );
 }
 
+/** How much of the texture's own colour a dyed kit piece loses before its tint is applied. */
+const DYE_GREY = 0.7;
+function kitDye(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <map_fragment>',
+    `#include <map_fragment>
+     #ifdef USE_MAP
+       diffuseColor.rgb = diffuse * mix(sampledDiffuseColor.rgb, vec3(dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114))), ${DYE_GREY.toFixed(2)});
+     #endif`,
+  );
+}
+
 function lambert(map: THREE.Texture | null, color = 0xffffff, floor = false): THREE.MeshLambertMaterial {
   const key = `${texKey(map)}|${color}|${floor}`;
   let m = matCache.get(key);
   if (m) return m;
   matCache.set(key, (m = new THREE.MeshLambertMaterial({ map, color, side: THREE.DoubleSide })));
+  // A tint (the Bastión's dark stone, slate and wine roofs) dyes a greyed copy of the texture: multiplying the
+  // bright orange tiles as they are only gives a deeper orange.
+  const dye = color !== 0xffffff && !floor;
   if (map) {
-    m.customProgramCacheKey = () => (floor ? 'kit-floor' : 'kit');
+    m.customProgramCacheKey = () => (floor ? 'kit-floor' : dye ? 'kit-dye' : 'kit');
     m.onBeforeCompile = (shader) => {
       kitRelief(shader);
       if (floor) kitFloor(shader);
+      if (dye) kitDye(shader);
     };
   }
   return m;
 }
+
+/** Fantasy Props MegaKit pieces by name (client/public/v/props.glb). */
+const propPrims = new Map<PropName, Prim[]>();
+/** Banners in the Bastión's red, the weapon stand in dark wood (kitDye greys the texture first). */
+const PROP_DYE: Partial<Record<PropName, number>> = { Banner_1_Cloth: 0xa8282c, Banner_2_Cloth: 0x8a2028, WeaponStand: 0x8a6e5a };
 
 /** One-off CC0 bell tower. Flat materials, so it is not an instanced kit piece. */
 let bell: THREE.Object3D | null = null;
@@ -123,7 +144,7 @@ type CurtainKind = CurtainDraw['kind'];
 const curtainPrims: Record<CurtainKind, { geo: THREE.BufferGeometry; color: number }[]> = {
   wall: [], gate: [], tower: [],
 };
-const curtainMats = new Map<THREE.Texture, THREE.MeshLambertMaterial>();
+const curtainMats = new Map<string, THREE.MeshLambertMaterial>();
 
 /** Flat glb colours, matched to the kit textures those parts already use on the houses. */
 function curtainMap(color: number): THREE.Texture | null {
@@ -139,13 +160,16 @@ function curtainMap(color: number): THREE.Texture | null {
  * Box-map the kit textures in world metres so a brick stays the size it has on a 2×3 m house wall,
  * including on wall runs whose length scale differs.
  */
-function curtainLambert(map: THREE.Texture): THREE.MeshLambertMaterial {
-  const cached = curtainMats.get(map);
+function curtainLambert(map: THREE.Texture, tint = 0xffffff): THREE.MeshLambertMaterial {
+  const key = `${map.uuid}|${tint}`;
+  const cached = curtainMats.get(key);
   if (cached) return cached;
-  const mat = new THREE.MeshLambertMaterial({ map, color: 0xffffff, side: THREE.DoubleSide });
-  mat.customProgramCacheKey = () => 'curtain-box';
+  const mat = new THREE.MeshLambertMaterial({ map, color: tint, side: THREE.DoubleSide });
+  const dye = tint !== 0xffffff;
+  mat.customProgramCacheKey = () => (dye ? 'curtain-box-dye' : 'curtain-box');
   mat.onBeforeCompile = (shader) => {
     kitRelief(shader);
+    if (dye) kitDye(shader);
     shader.vertexShader = shader.vertexShader.replace(
       '#include <uv_vertex>',
       `#include <uv_vertex>
@@ -163,7 +187,7 @@ function curtainLambert(map: THREE.Texture): THREE.MeshLambertMaterial {
        #endif`,
     );
   };
-  curtainMats.set(map, mat);
+  curtainMats.set(key, mat);
   return mat;
 }
 
@@ -225,13 +249,25 @@ export function loadV(): Promise<void> {
       });
       prims.set(name, meshes);
     });
-    const [tower, benchGltf, wallGltf, gateGltf, watchGltf] = await Promise.all([
+    const [tower, benchGltf, wallGltf, gateGltf, watchGltf, propsGltf] = await Promise.all([
       loader.loadAsync('v/Bell_Tower.glb'),
       loader.loadAsync('v/Bench.glb'),
       loader.loadAsync('v/Stone_Wall.glb'),
       loader.loadAsync('v/Stone_Gate.glb'),
       loader.loadAsync('v/Stone_Tower.glb'),
+      loader.loadAsync('v/props.glb'),
     ]);
+    // town props, a scene each: every mesh baked into its scene's frame, so one instance matrix places the lot
+    for (const sc of propsGltf.scenes) {
+      sc.updateMatrixWorld(true);
+      const list: Prim[] = [];
+      sc.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        const map = (o.material as THREE.MeshStandardMaterial).map;
+        list.push({ geo: bakePiece(o.geometry, o.matrixWorld), map });
+      });
+      propPrims.set(sc.name as PropName, list);
+    }
     const group = new THREE.Group();
     group.name = 'bell-tower';
     for (const prim of flatPrims(tower.scene)) {
@@ -254,20 +290,21 @@ export function loadV(): Promise<void> {
   })());
 }
 
-/** Alba's buildings and curtain wall. No-op until loadV() finishes. */
+/** Both towns' kit buildings, paving and curtain walls, and Alba's bell tower. No-op until loadV() finishes. */
 export function buildVillage(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'village';
   if (!ready) return g;
   const items = [...groundInstances(), ...houseInstances()];
-  const buckets = new Map<string, { piece: VPiece; prim: number; list: { x: number; y: number; z: number; rot: number }[] }>();
+  const buckets = new Map<string, { piece: VPiece; prim: number; tint: number; list: { x: number; y: number; z: number; rot: number }[] }>();
   for (const it of items) {
-    const key = `${it.piece}|${chunkKey(it.x, it.z)}`;
+    const tint = it.tint ?? 0xffffff;
+    const key = `${it.piece}|${chunkKey(it.x, it.z)}|${tint}`;
     const n = prims.get(it.piece)?.length ?? 0;
     for (let p = 0; p < n; p++) {
       const k = `${key}|${p}`;
       let b = buckets.get(k);
-      if (!b) buckets.set(k, (b = { piece: it.piece, prim: p, list: [] }));
+      if (!b) buckets.set(k, (b = { piece: it.piece, prim: p, tint, list: [] }));
       b.list.push(it);
     }
   }
@@ -275,7 +312,7 @@ export function buildVillage(): THREE.Group {
   const up = new THREE.Vector3(0, 1, 0);
   for (const b of buckets.values()) {
     const prim = prims.get(b.piece)![b.prim];
-    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, 0xffffff, b.piece === 'Floor_UnevenBrick'), b.list.length);
+    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, b.tint, b.piece === 'Floor_UnevenBrick'), b.list.length);
     b.list.forEach((it, i) => {
       q.setFromAxisAngle(up, it.rot);
       pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
@@ -308,14 +345,30 @@ export function buildVillage(): THREE.Group {
     mesh.computeBoundingSphere();
     g.add(mesh);
   }
-  const curtain = albaCurtain().draw;
-  for (const kind of ['wall', 'gate', 'tower'] as const) {
+  // the Bastión's props, instanced per prop and primitive
+  const byName = new Map<PropName, PropInst[]>();
+  for (const pr of duskProps()) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
+  for (const [name, list] of byName) for (const prim of propPrims.get(name) ?? []) {
+    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, PROP_DYE[name] ?? 0xffffff), list.length);
+    list.forEach((it, i) => {
+      q.setFromAxisAngle(up, it.rot);
+      pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
+      scl.setScalar(it.s);
+      mesh.setMatrixAt(i, m4.compose(pos, q, scl));
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.computeBoundingSphere();
+    g.add(mesh);
+  }
+  for (const curtain of [albaCurtain().draw, duskCurtain().draw]) for (const kind of ['wall', 'gate', 'tower'] as const) {
     const primList = curtainPrims[kind];
     const list = curtain.filter((d) => d.kind === kind);
     if (!list.length || !primList.length) continue;
+    const tint = list[0].tint ?? 0xffffff;
     for (const prim of primList) {
       const map = curtainMap(prim.color);
-      const mesh = new THREE.InstancedMesh(prim.geo, map ? curtainLambert(map) : lambert(null, prim.color), list.length);
+      const mesh = new THREE.InstancedMesh(prim.geo, map ? curtainLambert(map, tint) : lambert(null, new THREE.Color(prim.color).multiply(new THREE.Color(tint)).getHex()), list.length);
       list.forEach((it, i) => {
         q.setFromAxisAngle(up, it.rot);
         pos.set(it.x, TOWN_HEIGHT + 0.02, it.z);

@@ -17,6 +17,8 @@ const DAY_SHARE = 0.8;
  * stretched and the night half squeezed, so the in-game clock simply runs faster after dark.
  */
 export function sunPhase(): number {
+  const fixed = (globalThis as { __sunPhase?: number }).__sunPhase; // a fixed hour for dev views (?town=…&hour=)
+  if (fixed !== undefined) return fixed;
   const f = ((Date.now() % DAY_MS) / DAY_MS + 0.2) % 1; // offset so a fresh cycle starts mid-morning
   return f < DAY_SHARE ? (f / DAY_SHARE) * Math.PI : Math.PI + ((f - DAY_SHARE) / (1 - DAY_SHARE)) * Math.PI;
 }

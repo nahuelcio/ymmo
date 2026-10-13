@@ -21,14 +21,12 @@ function buildObstacles(): Obstacle[] {
   // pebbles are walkable, boulders aren't
   for (const r of layoutRocks()) if (r.sc > 0.7) o.push(circle(r.x, r.z, Math.min(r.s[0], r.s[2]) * 0.85));
   const town = layoutTown();
-  o.push(circle(DUSK.x, DUSK.z, 1.8)); // watch fire
+  o.push(circle(DUSK.x, DUSK.z, 1.6)); // the Bastión's brazier
   for (const h of town.houses) o.push(obb(h.x, h.z, h.w / 2 + 0.15, h.d / 2 + 0.15, h.rot));
   o.push(obb(TOWN.x + BELL_TOWER.x, TOWN.z + BELL_TOWER.z, BELL_TOWER.hw, BELL_TOWER.hd, BELL_TOWER.rot));
   for (const s of town.stalls) o.push(obb(s.x, s.z, 1.6, 0.55, s.rot));
   for (const w of town.walls) {
     o.push(obb(w.x, w.z, w.hw ?? 3.6, w.hd ?? 0.4, w.rot));
-    // Dusk log towers are wider than their wall box. Alba towers already use that box.
-    if (w.tower && w.out) o.push(circle(w.x, w.z, 1.35));
   }
   for (const g of town.gates) o.push(circle(g.x, g.z, 0.8));
   const zp = layoutZoneProps();

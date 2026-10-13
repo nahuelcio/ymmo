@@ -19,12 +19,11 @@ import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
-import { createWorldScene, type WorldScene } from './render/scene';
+import { BRAZIER_FIRE, createWorldScene, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
-import { lightSources } from './render/scene';
 import { PostFX } from './render/post';
 import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
@@ -292,6 +291,7 @@ export class Game {
     }
     this.lights = new LocalLights(this.world.scene, lightSources());
     this.fx.onLight = (at, color, power, range, ms) => this.lights.flash(at, color, power, range, ms);
+    this.fx.hearth(new THREE.Vector3(BRAZIER_FIRE.x, BRAZIER_FIRE.y, BRAZIER_FIRE.z), 1.1);
     this.nodes = new NodeVisuals(this.world.scene);
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';
@@ -1974,7 +1974,7 @@ export class Game {
       (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
     }
     this.fx.p.setShade(0.25 + 0.75 * ATMOS.day);
-    this.fx.update();
+    this.fx.update(this.self?.pos);
     this.nodes.update();
     tickLod();
     this.ui.update(now);

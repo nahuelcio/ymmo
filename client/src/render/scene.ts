@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { duskLanterns } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
@@ -982,7 +983,7 @@ function buildTown(): THREE.Group {
   const L = layoutTown();
   const kit = vReady();
   for (const h of L.houses) {
-    if (!h.out && kit) continue; // the kit instances replace the village boxes
+    if (kit) continue; // the kit instances (render/village.ts) replace the boxes in both towns
     const hs = h.kind === 'tavern' ? tavern(h.w, h.d) : h.kind === 'hall' ? townHall(h.w, h.d) : h.kind === 'smithy' ? smithy(h.w, h.d) : house(h.w, h.d, h.wall, h.roof);
     hs.position.set(h.x, y, h.z);
     hs.rotation.y = h.rot;
@@ -1000,54 +1001,13 @@ function buildTown(): THREE.Group {
     stall.rotation.y = st.rot;
     g.add(stall);
   }
-  // The village ring is the stone curtain (render/village.ts). These logs are the Bastión.
-  // Without the kit, the village falls back to one box per wall, gate jamb and tower.
-  for (const w of L.walls) {
-    if (!w.out) {
-      if (!kit) {
-        const wy = heightAt(w.x, w.z);
-        const h = w.tower ? 11 : 4;
-        const seg = box((w.hw ?? 1) * 2, h, (w.hd ?? 0.15) * 2, w.tower ? 0x9a9488 : 0x8a8478, w.x, wy + h / 2, w.z);
-        seg.rotation.y = w.rot;
-        g.add(seg);
-      }
-      continue;
-    }
+  // Both rings are the kit stone curtain (render/village.ts). Without the kit: one box per wall, gate jamb and tower.
+  if (!kit) for (const w of L.walls) {
     const wy = heightAt(w.x, w.z);
-    for (let k = -3.5; k <= 3.5; k++) {
-      const lx = w.x + Math.cos(w.rot) * k * 0.9, lz = w.z - Math.sin(w.rot) * k * 0.9;
-      const h = 3.1 + (((k + 3.5) * 7 + 3) % 5) * 0.12;
-      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.45, h, 6), mat(k % 2 ? 0x6e4e2e : 0x7a5a3a));
-      log.position.set(lx, wy + h / 2 - 0.2, lz);
-      log.castShadow = log.receiveShadow = true;
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.7, 6), mat(0x8a6a4a));
-      tip.position.set(lx, wy + h - 0.2 + 0.35, lz);
-      tip.castShadow = true;
-      g.add(log, tip);
-    }
-    const rail = box(7.3, 0.28, 0.2, 0x4a3420, w.x, wy + 2.1, w.z);
-    rail.rotation.y = w.rot;
-    rail.translateZ(-0.5); // on the town side
-    g.add(rail);
-    if (w.tower) {
-      const tower = new THREE.Group();
-      tower.add(box(2.6, 3.4, 2.6, 0x8a8478, 0, 1.7, 0));
-      tower.add(box(2.8, 0.25, 2.8, 0x6e695f, 0, 3.4, 0));
-      tower.add(box(3.2, 0.3, 3.2, 0x5a3a20, 0, 3.7, 0)); // platform
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) tower.add(box(0.28, 2.6, 0.28, 0x5a3a20, sx * 1.4, 5.1, sz * 1.4));
-      for (const sx of [-1, 1]) {
-        tower.add(box(0.14, 0.9, 2.8, 0x6a4a2a, sx * 1.4, 4.3, 0));
-        tower.add(box(2.8, 0.9, 0.14, 0x6a4a2a, 0, 4.3, sx * 1.4));
-      }
-      const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.2, 4), mat(0x8a3a2a));
-      roof.position.y = 7.5;
-      roof.rotation.y = Math.PI / 4;
-      roof.castShadow = true;
-      tower.add(roof);
-      tower.position.set(w.x, wy - 0.2, w.z);
-      tower.rotation.y = w.rot;
-      g.add(tower);
-    }
+    const h = w.tower ? 11 : 4;
+    const seg = box((w.hw ?? 1) * 2, h, (w.hd ?? 0.15) * 2, w.tower ? 0x9a9488 : 0x8a8478, w.x, wy + h / 2, w.z);
+    seg.rotation.y = w.rot;
+    g.add(seg);
   }
   // gate pillars with banners at road exits
   for (const gp of L.gates) {
@@ -1058,15 +1018,8 @@ function buildTown(): THREE.Group {
   }
   // the village's own dressing (lanes, arches, yards) only knows the village
   dressTown(g, { ...L, houses: L.houses.filter((h) => !h.out), walls: L.walls.filter((w) => !w.out), gates: L.gates.filter((p) => !p.out) }, y);
-  // Bastión del Ocaso: a dark stone plaza around a watch fire
-  const dusk = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 0.2, 24), mat(0x6e695f));
-  dusk.position.set(DUSK.x, y + 0.02, DUSK.z);
-  dusk.receiveShadow = true;
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.6, 10), mat(0x4a4640));
-  ring.position.set(DUSK.x, y + 0.3, DUSK.z);
-  const fire = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 6), new THREE.MeshLambertMaterial({ color: 0xff8a2a, emissive: 0xff5a10, emissiveIntensity: 1, flatShading: true }));
-  fire.position.set(DUSK.x, y + 1.3, DUSK.z);
-  g.add(dusk, ring, fire);
+  // Bastión del Ocaso: a big iron brazier on a stone plinth (its flames are particles, game.ts; its light, lightSources)
+  g.add(brazier(DUSK.x, y, DUSK.z));
   return g;
 }
 
@@ -1143,6 +1096,45 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
 }
 
 /** Everything that glows in the world: lamp posts, campfires, the forge and the tavern door. */
+/** Where the Bastión's brazier burns: flames, embers and smoke are emitted here (game.ts), and it lights the plaza. */
+export const BRAZIER_FIRE = { x: DUSK.x, y: TOWN_HEIGHT + 2.05, z: DUSK.z };
+
+/** A wide iron bowl on a stepped stone plinth, glowing coals inside. */
+function brazier(x: number, y: number, z: number): THREE.Group {
+  const g = new THREE.Group();
+  const stone = mat(0x55525a), dark = mat(0x3e3c42), iron = mat(0x2a2a30);
+  const step = (r: number, h: number, at: number, m: THREE.Material) => {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.04, h, 8), m);
+    c.position.y = at + h / 2;
+    c.castShadow = c.receiveShadow = true;
+    g.add(c);
+  };
+  step(1.55, 0.25, 0, dark);
+  step(1.2, 0.3, 0.25, stone);
+  step(0.42, 0.75, 0.55, stone); // the column
+  // the bowl: a lathe profile flaring out to a lip
+  const bowl = new THREE.Mesh(new THREE.LatheGeometry([
+    new THREE.Vector2(0.35, 0), new THREE.Vector2(0.9, 0.2), new THREE.Vector2(1.15, 0.55), new THREE.Vector2(1.22, 0.62), new THREE.Vector2(1.1, 0.62), new THREE.Vector2(0.85, 0.3), new THREE.Vector2(0, 0.3),
+  ], 12), iron);
+  bowl.position.y = 1.3;
+  bowl.castShadow = true;
+  g.add(bowl);
+  for (let i = 0; i < 4; i++) {
+    // iron legs from the plinth to the rim
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 0.1), iron);
+    leg.position.set(Math.cos(a) * 0.8, 1.15, Math.sin(a) * 0.8);
+    leg.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+    g.add(leg);
+  }
+  const coals = new THREE.Mesh(new THREE.CircleGeometry(0.95, 12), new THREE.MeshLambertMaterial({ color: 0x8a2a10, emissive: 0xc8400c, emissiveIntensity: 0.55 }));
+  coals.rotation.x = -Math.PI / 2;
+  coals.position.y = 1.72;
+  g.add(coals);
+  g.position.set(x, y, z);
+  return g;
+}
+
 export function lightSources(): LightSource[] {
   const out: LightSource[] = [];
   for (let i = 0; i < 8; i++) {
@@ -1150,6 +1142,8 @@ export function lightSources(): LightSource[] {
     out.push({ x: TOWN.x + Math.cos(a) * 17.4, y: TOWN_HEIGHT + 2.8, z: TOWN.z + Math.sin(a) * 17.4, fire: false });
   }
   for (const c of layoutCamps()) out.push({ x: c.fire.x, y: heightAt(c.fire.x, c.fire.z) + 1, z: c.fire.z, fire: true });
+  out.push({ ...BRAZIER_FIRE, y: BRAZIER_FIRE.y + 0.8, fire: true });
+  for (const l of duskLanterns()) out.push({ x: l.x, y: TOWN_HEIGHT + l.y, z: l.z, fire: false });
   for (const h of layoutTown().houses) {
     // a point in the building's own frame (front = +z), turned into the world like its mesh
     const local = h.kind === 'smithy' ? [0, 1.6, h.d / 2 + 0.6] : h.kind === 'tavern' ? [0, 2.4, h.d / 2 + 1] : null;

@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { TOWN } from './terrain';
+import { DUSK, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -42,6 +42,8 @@ export interface Stamp {
   kind?: 'hall' | 'tavern' | 'smithy';
   wall: number;
   roof: number;
+  /** multiplies the kit textures (the Bastión's dark stone): walls and gables, roof tiles, wood */
+  tint?: { wall: number; roof: number; wood: number };
 }
 
 /** Cardinal yaw whose +Z points back toward the plaza. */
@@ -66,7 +68,7 @@ export const ALBA_STAMPS: Stamp[] = [
   { id: 'c-nne', x: 16, z: 22, w: 4, d: 4, rot: face(16, 22), wall: 0xe0d4b8, roof: 0x8a3a2a },
 ];
 
-export interface KitInst { piece: VPiece; x: number; y: number; z: number; rot: number }
+export interface KitInst { piece: VPiece; x: number; y: number; z: number; rot: number; tint?: number }
 
 /** Roof_RoundTiles_6x4's pivot sits on the back edge; shift it so the span centres on the footprint. */
 const ROOF_Z: Partial<Record<VPiece, number>> = { Roof_RoundTiles_6x4: -2.355 };
@@ -134,11 +136,20 @@ export function expandStamp(st: Stamp): KitInst[] {
   out.push(place(st, gable, 0, WALL_TOP, st.d / 2, 0));
   out.push(place(st, gable, 0, WALL_TOP, -st.d / 2, Math.PI));
   out.push(place(st, 'Prop_Chimney', st.w / 2 - 1.2, WALL_TOP, -st.d / 2 + 1.2, 0));
+  if (st.tint) for (const it of out) it.tint = tintOf(it.piece, st.tint);
   return out;
 }
 
+/** Which of a stamp's tints a piece takes (floors keep their own colour). */
+function tintOf(piece: VPiece, t: NonNullable<Stamp['tint']>): number | undefined {
+  if (piece.startsWith('Roof_RoundTiles')) return t.roof;
+  if (piece === 'Door_1_Round' || piece === 'DoorFrame_Flat_WoodDark' || piece === 'Corner_Exterior_Wood' || piece === 'Window_Wide_Flat1') return t.wood;
+  if (piece.startsWith('Floor')) return undefined;
+  return t.wall;
+}
+
 export function houseInstances(): KitInst[] {
-  return ALBA_STAMPS.flatMap(expandStamp);
+  return [...ALBA_STAMPS, ...DUSK_STAMPS].flatMap(expandStamp);
 }
 
 /**
@@ -156,27 +167,32 @@ export const BELL_TOWER = {
   scale: BELL_SCALE,
 };
 
-/** Stone paving for the whole village, out to the palisade. House interiors keep their own tiles. */
-export function groundInstances(): KitInst[] {
+/** Stone paving for a whole town, out to its wall. House interiors keep their own tiles. */
+function paving(town: { x: number; z: number; r: number }, stamps: Stamp[], tint?: number): KitInst[] {
   const out: KitInst[] = [];
-  const limit = TOWN.r + CELL;
+  const limit = town.r + CELL;
   const n = Math.ceil(limit / CELL);
   const covered = (x: number, z: number) => {
-    for (const st of ALBA_STAMPS) {
+    for (const st of stamps) {
       const c = Math.cos(st.rot), s = Math.sin(st.rot);
-      const dx = x - (TOWN.x + st.x), dz = z - (TOWN.z + st.z);
+      const dx = x - st.x, dz = z - st.z;
       const lx = dx * c - dz * s, lz = dx * s + dz * c;
       if (Math.abs(lx) < st.w / 2 - 0.05 && Math.abs(lz) < st.d / 2 - 0.05) return true;
     }
     return false;
   };
   for (let ix = -n; ix <= n; ix++) for (let iz = -n; iz <= n; iz++) {
-    const x = TOWN.x + ix * CELL, z = TOWN.z + iz * CELL;
-    if ((x - TOWN.x) ** 2 + (z - TOWN.z) ** 2 > limit * limit) continue;
+    const x = town.x + ix * CELL, z = town.z + iz * CELL;
+    if ((x - town.x) ** 2 + (z - town.z) ** 2 > limit * limit) continue;
     if (covered(x, z)) continue;
-    out.push({ piece: 'Floor_UnevenBrick', x, y: 0, z, rot: (ix + iz) & 1 ? Math.PI / 2 : 0 });
+    out.push({ piece: 'Floor_UnevenBrick', x, y: 0, z, rot: (ix + iz) & 1 ? Math.PI / 2 : 0, tint });
   }
   return out;
+}
+
+/** Paving for both towns (Alba sits at the origin, so its stamps' coordinates are world ones too). */
+export function groundInstances(): KitInst[] {
+  return [...paving(TOWN, ALBA_STAMPS), ...paving(DUSK, DUSK_STAMPS, DUSK_STONE)];
 }
 
 /**
@@ -201,6 +217,8 @@ const TOWER_JOIN = 0.2;
 
 export interface CurtainDraw {
   kind: 'wall' | 'gate' | 'tower';
+  /** multiplies the stone (the Bastión's darker wall) */
+  tint?: number;
   x: number;
   z: number;
   rot: number;
@@ -220,13 +238,25 @@ export interface CurtainWall {
 
 /** One gate on every road out of Alba, a watchtower at the middle of each span, and wall runs between them. */
 export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
+  return curtain(TOWN, TOWN.r + 2, ROAD_TO.map(([x, z]) => Math.atan2(z - TOWN.z, x - TOWN.x)), { scale: CURTAIN_SCALE, towers: 1 });
+}
+
+/** The Bastión's wall: darker stone, lower than Alba's, a gate toward Alba and one toward the ruins, two towers a span. */
+export function duskCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
+  return curtain(DUSK, DUSK.r + 2, DUSK_GATES, { scale: 7, towers: 2, tint: DUSK_STONE });
+}
+
+/**
+ * A ring of stone wall of radius R around a town: an open gate at each angle (radians, x = cos, z = sin),
+ * `towers` watchtowers spread along each span between gates, and wall runs filling the rest.
+ */
+function curtain(town: { x: number; z: number }, R: number, gateAngles: number[], o: { scale: number; towers: number; tint?: number }): { draw: CurtainDraw[]; walls: CurtainWall[] } {
   const draw: CurtainDraw[] = [];
   const walls: CurtainWall[] = [];
-  const S = CURTAIN_SCALE;
-  const R = TOWN.r + 2;
+  const S = o.scale, tint = o.tint;
   const overlap = 0.35;
-  const angles = ROAD_TO.map(([x, z]) => Math.atan2(z - TOWN.z, x - TOWN.x)).sort((a, b) => a - b);
-  const at = (a: number) => ({ x: TOWN.x + Math.cos(a) * R, z: TOWN.z + Math.sin(a) * R });
+  const angles = [...gateAngles].sort((a, b) => a - b);
+  const at = (a: number) => ({ x: town.x + Math.cos(a) * R, z: town.z + Math.sin(a) * R });
   /** Local +Z points radially out, so the wall's length lies on the tangent. */
   const wallRot = (a: number) => -a + Math.PI / 2;
   const halfAng = (halfLen: number) => Math.atan(Math.max(0, halfLen - overlap) / R);
@@ -242,7 +272,7 @@ export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
       const len = 2 * R * Math.tan(step / 2);
       const rot = wallRot(a);
       const p = at(a);
-      draw.push({ kind: 'wall', x: p.x, z: p.z, rot, sx: len / WALL_LEN, sy: S, sz: S });
+      draw.push({ kind: 'wall', x: p.x, z: p.z, rot, sx: len / WALL_LEN, sy: S, sz: S, tint });
       walls.push({ x: p.x, z: p.z, rot, tower: false, hw: len / 2, hd: WALL_HZ * S });
     }
   };
@@ -251,7 +281,7 @@ export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
     const rot = wallRot(a);
     const p = at(a);
     const c = Math.cos(rot), s = Math.sin(rot);
-    draw.push({ kind: 'gate', x: p.x, z: p.z, rot, sx: S, sy: S, sz: S });
+    draw.push({ kind: 'gate', x: p.x, z: p.z, rot, sx: S, sy: S, sz: S, tint });
     for (const side of GATE_SIDES) {
       const lx = side.x * S;
       walls.push({
@@ -264,17 +294,166 @@ export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
     const a0 = angles[i];
     let a1 = angles[(i + 1) % angles.length];
     if (a1 <= a0) a1 += Math.PI * 2;
-    const mid = (a0 + a1) / 2;
-    const tp = at(mid);
-    // Door (+Z) faces the city.
-    const rotT = wallRot(mid) + Math.PI;
-    draw.push({ kind: 'tower', x: tp.x, z: tp.z, rot: rotT, sx: S, sy: S, sz: S });
-    walls.push({ x: tp.x, z: tp.z, rot: rotT, tower: true, hw: TOWER_HX * S, hd: TOWER_HZ * S });
-    fill(a0 + halfAng(GATE_HX * S), mid - halfAng(TOWER_JOIN * S));
-    fill(mid + halfAng(TOWER_JOIN * S), a1 - halfAng(GATE_HX * S));
+    // towers spread evenly along the span; wall runs go gate, tower, ..., tower, gate
+    let from = a0 + halfAng(GATE_HX * S);
+    for (let t = 1; t <= o.towers; t++) {
+      const ta = a0 + ((a1 - a0) * t) / (o.towers + 1);
+      const tp = at(ta);
+      // Door (+Z) faces the town.
+      const rotT = wallRot(ta) + Math.PI;
+      draw.push({ kind: 'tower', x: tp.x, z: tp.z, rot: rotT, sx: S, sy: S, sz: S, tint });
+      walls.push({ x: tp.x, z: tp.z, rot: rotT, tower: true, hw: TOWER_HX * S, hd: TOWER_HZ * S });
+      fill(from, ta - halfAng(TOWER_JOIN * S));
+      from = ta + halfAng(TOWER_JOIN * S);
+    }
+    fill(from, a1 - halfAng(GATE_HX * S));
   }
 
   return { draw, walls };
+}
+
+// ---------------------------------------------------------------- Bastión del Ocaso
+
+/** Dark stone for the Bastión's paving and wall (multiplies the kit's albedo). */
+export const DUSK_STONE = 0x8e8c96;
+/** Dyes for a greyed copy of the kit textures (client/src/render/village.ts kitDye): dark stone, wine or slate roofs, dark wood. */
+const DUSK_TINT = { wall: 0x9a96a0, roof: 0x6e2c32, wood: 0x7a6258 };
+const DUSK_TINT_SLATE = { wall: 0x9a96a0, roof: 0x5a6478, wood: 0x7a6258 };
+/** Its two roads: back toward Alba, and on toward the ruins. Angles from its centre (x = cos, z = sin). */
+export const DUSK_GATES = (() => {
+  const back = Math.atan2(TOWN.z - DUSK.z, TOWN.x - DUSK.x);
+  return [back, back + Math.PI];
+})();
+
+/** A Bastión building at (lx, lz) from its centre, door toward the plaza. */
+const dusk = (id: string, lx: number, lz: number, w: number, d: number, o: Partial<Stamp> = {}): Stamp => ({
+  id, x: DUSK.x + lx, z: DUSK.z + lz, w, d, rot: face(lx, lz), brick: true, wall: 0x6e6a66, roof: 0x5a2a2a,
+  tint: DUSK_TINT, ...o,
+});
+
+/**
+ * A ring of dark stone buildings around the brazier: barracks, an armoury, houses.
+ * Off the two roads (DUSK_GATES), clear of the four merchants and their stalls, inside the wall (R = 32).
+ */
+export const DUSK_STAMPS: Stamp[] = [
+  dusk('barracks', 20, 6, 6, 8, { kind: 'hall', tint: DUSK_TINT_SLATE }),
+  dusk('armoury', 14, 18, 6, 4, { kind: 'smithy' }),
+  dusk('d-n', 0, 22, 4, 4, { tint: DUSK_TINT_SLATE }),
+  dusk('d-nw', -8, 24, 4, 4, { brick: false }),
+  dusk('d-w', -22, -4, 6, 4, { tint: DUSK_TINT_SLATE }),
+  dusk('d-sw', -16, -18, 6, 4),
+  dusk('d-s', -2, -22, 4, 4, { brick: false, tint: DUSK_TINT_SLATE }),
+  dusk('d-se', 8, -24, 4, 4),
+  dusk('d-e', 23, -8, 4, 4, { brick: false }),
+];
+
+/** The Bastión's merchants (shared/src/data/world.ts), whose spots and stalls the buildings must leave clear. */
+const DUSK_FOLK: { id: string; x: number; z: number }[] = [
+  { id: 'dusk_weapons', x: 178, z: -162 },
+  { id: 'dusk_armor', x: 162, z: -178 },
+  { id: 'dusk_grocer', x: 181, z: -172 },
+  { id: 'dusk_gate', x: 159, z: -168 },
+];
+
+/** Empty when the Bastión's plan stays off its plaza, its roads, its wall and its merchants, without overlaps. */
+export function duskIssues(): string[] {
+  const issues: string[] = [];
+  const boxes = DUSK_STAMPS.map((st) => {
+    const pts = corners(st);
+    const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
+    return { st, x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs), pts };
+  });
+  for (const b of boxes) {
+    for (const [x, z] of b.pts) {
+      const r = Math.hypot(x - DUSK.x, z - DUSK.z);
+      if (r < 14) issues.push(`${b.st.id} enters the plaza (${r.toFixed(1)})`);
+      if (r > 28) issues.push(`${b.st.id} reaches the wall (${r.toFixed(1)})`);
+    }
+    for (const ga of DUSK_GATES) {
+      // how far the building's centre is from the road, a ray from the centre out through the gate
+      const dx = b.st.x - DUSK.x, dz = b.st.z - DUSK.z, ux = Math.cos(ga), uz = Math.sin(ga);
+      const along = dx * ux + dz * uz, off = Math.abs(dx * uz - dz * ux);
+      const need = Math.hypot(b.st.w, b.st.d) / 2 + 3;
+      if (along > 0 && off < need) issues.push(`${b.st.id} is ${off.toFixed(1)} m from a road (need ${need.toFixed(1)})`);
+    }
+    const c = Math.cos(b.st.rot), s = Math.sin(b.st.rot);
+    const hw = b.st.w / 2 + 2.5, hd = b.st.d / 2 + 2.5; // the merchant, and the stall behind them
+    for (const n of DUSK_FOLK) {
+      const dx = n.x - b.st.x, dz = n.z - b.st.z;
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      if (Math.abs(lx) < hw && Math.abs(lz) < hd) issues.push(`${b.st.id} crowds ${n.id}`);
+    }
+  }
+  for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+    const a = boxes[i], b = boxes[j];
+    if (a.x0 < b.x1 + 1 && b.x0 < a.x1 + 1 && a.z0 < b.z1 + 1 && b.z0 < a.z1 + 1) issues.push(`${a.st.id} is too close to ${b.st.id}`);
+  }
+  return issues;
+}
+
+/** Fantasy Props MegaKit pieces (client/public/v/props.glb, tools/scripts/props-assets.mjs). */
+export type PropName = 'Banner_1_Cloth' | 'Banner_2_Cloth' | 'Lantern_Wall' | 'WeaponStand' | 'Anvil' | 'Cauldron' | 'Barrel' | 'Crate_Wooden';
+/** y is above the town floor (TOWN_HEIGHT); the model's own front is +Z. */
+export interface PropInst { name: PropName; x: number; y: number; z: number; rot: number; s: number }
+
+/** Native heights of the curtain glbs (scale 1), for hanging banners just under their tops. */
+const GATE_TOP = 0.73, TOWER_TOP = 1.19, TOWER_FRONT = 0.43, GATE_BACK = 0.18;
+/** Lantern_Wall hangs off its wall by 1.25 m: where its flame is, in its own frame. */
+export const LANTERN_FLAME = { y: 0.75, z: 1.1 };
+
+/** Turns a point from a frame at (x, z) turned by rot into the world (the same turn as `place`). */
+const at = (x: number, z: number, rot: number, lx: number, lz: number) => {
+  const c = Math.cos(rot), s = Math.sin(rot);
+  return { x: x + lx * c + lz * s, z: z - lx * s + lz * c };
+};
+
+/**
+ * The Bastión's props: red banners on the town side of its gates and towers, a lantern by every door, the
+ * smith's anvil and weapon stand in front of the armoury, the alchemist's cauldron, barrels and crates.
+ */
+export function duskProps(): PropInst[] {
+  const out: PropInst[] = [];
+  const { draw } = duskCurtain();
+  const S = 7;
+  for (const d of draw) {
+    if (d.kind === 'gate') {
+      // the gate's town side is its local -Z: the banners face that way
+      for (const lx of [-0.57 * S, 0.57 * S]) {
+        const p = at(d.x, d.z, d.rot, lx, -GATE_BACK * S - 0.06);
+        out.push({ name: 'Banner_1_Cloth', x: p.x, y: GATE_TOP * S - 0.4, z: p.z, rot: d.rot + Math.PI, s: 1.7 });
+      }
+    } else if (d.kind === 'tower') {
+      // a tower's door (+Z) faces the town
+      for (const lx of [-0.26 * S, 0.26 * S]) {
+        const p = at(d.x, d.z, d.rot, lx, TOWER_FRONT * S + 0.06);
+        out.push({ name: 'Banner_2_Cloth', x: p.x, y: TOWER_TOP * S - 1.1, z: p.z, rot: d.rot, s: 1.6 });
+      }
+    }
+  }
+  for (const st of DUSK_STAMPS) {
+    // beside the door, on the front wall (the door bay is the middle one, rounded down)
+    const doorX = -st.w / 2 + CELL / 2 + Math.floor(st.w / CELL / 2) * CELL;
+    const p = at(st.x, st.z, st.rot, doorX - CELL / 2, st.d / 2 + 0.06);
+    out.push({ name: 'Lantern_Wall', x: p.x, y: 1.4, z: p.z, rot: st.rot, s: 1 });
+  }
+  const rel = (name: PropName, lx: number, lz: number, rot: number, s = 1.3) => out.push({ name, x: DUSK.x + lx, y: 0, z: DUSK.z + lz, rot, s });
+  // the smith, before the armoury
+  rel('Anvil', 12.4, 14, 0.4);
+  rel('WeaponStand', 16, 14.2, Math.PI);
+  // the alchemist, beside Mirta's counter
+  rel('Cauldron', 16, -4, 0.6);
+  rel('Barrel', 16.8, 1.4, 0.3);
+  rel('Barrel', 17.7, 2.1, 1.1);
+  rel('Crate_Wooden', 15.3, 2.2, 0.2);
+  return out;
+}
+
+/** Where the Bastión's lanterns burn, for the lamp light pool. */
+export function duskLanterns(): { x: number; y: number; z: number }[] {
+  return duskProps().filter((p) => p.name === 'Lantern_Wall').map((p) => {
+    const f = at(p.x, p.z, p.rot, 0, LANTERN_FLAME.z * p.s);
+    return { x: f.x, y: p.y + LANTERN_FLAME.y * p.s, z: f.z };
+  });
 }
 
 /** Alba residents, at the spots already authored in the town. Footprints stay clear of them. */

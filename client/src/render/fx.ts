@@ -17,6 +17,8 @@ const GEO = {
   dome: new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
 };
 
+/** permanent fires (hearth) emit within this distance of the player, m */
+const HEARTH_RANGE = 90;
 /** fast start, soft landing: expansions read as an impact instead of a slow inflate */
 const out = (k: number) => 1 - (1 - k) ** 3;
 const V = () => new THREE.Vector3();
@@ -37,6 +39,8 @@ export class FxManager {
   onLight: ((at: THREE.Vector3, color: number, power: number, range: number, ms: number) => void) | null = null;
   private last = performance.now();
   private dustAt: number[] = [];
+  /** fires that always burn (the Bastión's brazier): emitted only while someone is near enough to see them */
+  private hearths: { at: THREE.Vector3; r: number; fire: (dt: number) => number; smoke: (dt: number) => number; ember: (dt: number) => number }[] = [];
   /**
    * Finished mesh effects hand their materials back here instead of disposing them: a fresh material costs the
    * renderer a shader lookup on its first draw. Keyed by blending; colour and opacity are set on every reuse.
@@ -304,6 +308,21 @@ export class FxManager {
     });
   }
 
+  /** A fire that burns for good at `at` (r = how wide): flames, embers and a thin column of smoke. */
+  hearth(at: THREE.Vector3, r = 1) {
+    this.hearths.push({ at: at.clone(), r, fire: this.rate(38 * r), smoke: this.rate(5 * r), ember: this.rate(6 * r) });
+  }
+
+  private burnHearths(dt: number, near: THREE.Vector3 | undefined) {
+    for (const h of this.hearths) {
+      if (near && near.distanceToSquared(h.at) > HEARTH_RANGE * HEARTH_RANGE) continue;
+      const r = h.r;
+      this.p.emit({ cell: 'flame', n: h.fire(dt), at: h.at, shape: 'disc', r: r * 0.55, up: 1.9, speed: 0.25, size: [0.8 + r * 0.45, 0.3], life: [380, 620], color: 0xffa83a, color1: 0xa8300c, bright: 1.25, alpha: 0.9, spin: 0.6, fadeIn: 0.15 });
+      this.p.emit({ cell: 'glow', n: h.ember(dt), at: h.at, shape: 'disc', r: r * 0.5, up: 2.4, speed: 0.6, gravity: -0.4, size: [0.1, 0.03], life: [1200, 2200], color: 0xffb050, bright: 1.6 });
+      this.p.emit({ cell: 'puff', n: h.smoke(dt), at: h.at.clone().setY(h.at.y + 1.6), shape: 'disc', r: r * 0.3, up: 1.1, speed: 0.2, size: [0.7, 2.4], life: [2200, 3000], color: 0x3a3634, alpha: 0.22, solid: true, spin: 0.5, fadeIn: 0.25 });
+    }
+  }
+
   /** A cloud of smoke or dust swelling out from a spot (raised off the ground: a puff cut by the ground shows a hard edge). */
   smoke(pos: THREE.Vector3, r = 1, dur = 1200, color = 0x5a5550, n = 8) {
     this.p.emit({ cell: 'puff', n, at: pos.clone().setY(pos.y + r * 0.7), shape: 'sphere', r: r * 0.5, outward: true, speed: r * 0.9, drag: 1.5, up: 0.45, size: [r * 0.7, r * 1.6], life: [dur * 0.7, dur], color, alpha: 0.3, solid: true, spin: 0.8, fadeIn: 0.15 });
@@ -347,10 +366,12 @@ export class FxManager {
     });
   }
 
-  update() {
+  /** Every frame; `near` is where the player is (hearths far from it don't emit). */
+  update(near?: THREE.Vector3) {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
+    this.burnHearths(dt, near);
     this.list = this.list.filter((f) => {
       const k = (now - f.t0) / f.dur;
       if (k >= 1) {

@@ -391,6 +391,11 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 }
 
 async function boot() {
+  // ?town=dusk|alba: a town in the real world scene, orbiting camera (no server needed)
+  if (new URLSearchParams(location.search).has('town')) {
+    cleanup = await (await import('./render/town-gallery')).mountTownGallery(document.body);
+    return;
+  }
   // ?fx=1: skill effect gallery only (no server needed)
   if (new URLSearchParams(location.search).has('fx')) {
     cleanup = await (await import('./render/fx-gallery')).mountFxGallery(document.body);
