@@ -10,7 +10,7 @@ export interface ItemDef {
   slot?: Slot;
   grade?: Grade;
   /** cosmetic: picks the model and the tooltip label, combat only reads the stats */
-  weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger';
+  weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger' | 'pickaxe';
   pAtk?: number; mAtk?: number; pDef?: number; mDef?: number; hp?: number; mp?: number;
   /** cooldown reduction for skills, as a fraction: 0.1 = 10% shorter (capped at 50% in total) */
   cdr?: number;
@@ -56,16 +56,19 @@ const list: ItemDef[] = [
   { id: 'short_sword', name: 'Espada Corta', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 8, mAtk: 6, price: 80, icon: '🗡️', color: 0xb8c4cc },
   { id: 'apprentice_wand', name: 'Varita de Aprendiz', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 5, mAtk: 8, price: 80, icon: '🪄', color: 0x9b7b4a },
   { id: 'broadsword', name: 'Espada Ancha', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 11, mAtk: 7, price: 600, icon: '⚔️', color: 0xc8d0d8 },
-  { id: 'willow_staff', name: 'Báculo de Sauce', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 7, mAtk: 12, price: 600, icon: '🪄', color: 0x7a9b4a },
-  { id: 'iron_hammer', name: 'Martillo de Hierro', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'blunt', pAtk: 12, mAtk: 6, price: 750, icon: '🔨', color: 0x8a8f95 },
+  { id: 'willow_staff', name: 'Báculo de Sauce', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 7, mAtk: 12, price: 600, icon: '🪄', color: 0x7a9b4a, craft: { mats: [['wood_log', 10]], adena: 150 } },
+  { id: 'iron_hammer', name: 'Martillo de Hierro', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'blunt', pAtk: 12, mAtk: 6, price: 750, icon: '🔨', color: 0x8a8f95, craft: { mats: [['iron_ore', 8], ['wood_log', 3]], adena: 180 } },
   { id: 'dagger', name: 'Daga', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'dagger', pAtk: 9, mAtk: 6, price: 250, icon: '🗡️', color: 0xb8c4cc },
-  { id: 'hand_axe', name: 'Hacha de Mano', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 11, mAtk: 6, price: 650, icon: '🪓', color: 0x9aa2aa },
+  { id: 'hand_axe', name: 'Hacha de Mano', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 11, mAtk: 6, price: 650, icon: '🪓', color: 0x9aa2aa, craft: { mats: [['iron_ore', 6], ['wood_log', 4]], adena: 150 } },
+  // gathering tools: an axe fells trees, a pickaxe (or any hammer) mines rocks (shared/src/nodes.ts)
+  { id: 'woodcutter_axe', name: 'Hacha de Leñador', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 6, mAtk: 3, price: 120, icon: '🪓', color: 0x8a6a4a, desc: 'Sirve para talar árboles.' },
+  { id: 'miner_pickaxe', name: 'Pico de Minero', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'pickaxe', pAtk: 6, mAtk: 3, price: 120, icon: '⛏️', color: 0x8a8f95, desc: 'Sirve para picar rocas.' },
   { id: 'spear', name: 'Lanza', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'spear', pAtk: 11, mAtk: 7, price: 650, icon: '🔱', color: 0xb8c4cc },
   { id: 'assassin_dagger', name: 'Daga del Asesino', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'dagger', pAtk: 19, mAtk: 12, price: 5800, icon: '🗡️', color: 0x7adf6a },
-  { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'axe', pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060 },
+  { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'axe', pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060, craft: { mats: [['iron_ore', 40], ['wood_log', 20]], adena: 2000 } },
   { id: 'partisan', name: 'Partesana', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'spear', pAtk: 21, mAtk: 11, price: 6200, icon: '🔱', color: 0xa8d8e8 },
   { id: 'sword_of_revolution', name: 'Espada de la Revolución', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'sword', pAtk: 20, mAtk: 12, price: 6000, icon: '⚔️', color: 0x9ad0ff },
-  { id: 'war_hammer', name: 'Martillo de Guerra Enano', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'blunt', pAtk: 22, mAtk: 10, price: 6500, icon: '🔨', color: 0xc08a50 },
+  { id: 'war_hammer', name: 'Martillo de Guerra Enano', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'blunt', pAtk: 22, mAtk: 10, price: 6500, icon: '🔨', color: 0xc08a50, craft: { mats: [['iron_ore', 45], ['wood_log', 15]], adena: 2000 } },
   { id: 'staff_of_life', name: 'Báculo de la Vida', type: 'weapon', slot: 'weapon', grade: 'D', weaponType: 'staff', pAtk: 12, mAtk: 22, price: 6000, icon: '🪄', color: 0x6fe08a },
   { id: 'samurai_longsword', name: 'Espada Larga Samurái', type: 'weapon', slot: 'weapon', grade: 'C', weaponType: 'sword', pAtk: 33, mAtk: 18, price: 30000, icon: '⚔️', color: 0xff6a6a },
   { id: 'sages_staff', name: 'Báculo del Sabio', type: 'weapon', slot: 'weapon', grade: 'C', weaponType: 'staff', pAtk: 18, mAtk: 35, price: 30000, icon: '🪄', color: 0xb070ff },
@@ -106,7 +109,8 @@ const list: ItemDef[] = [
   { id: 'amulet_of_haste', name: 'Amuleto de Celeridad', type: 'armor', slot: 'amulet', grade: 'C', mDef: 6, hp: 50, cdr: 0.1, price: 13000, icon: '📿', color: 0xe0c060, desc: 'Recarga de habilidades -10%.' },
   // Consumables
   { id: 'lesser_healing_potion', name: 'Poción de Curación Menor', type: 'consumable', stack: true, price: 15, use: { hp: 60, cd: 5000 }, icon: '🧪', color: 0xd04040, desc: 'Recupera 60 de HP.' },
-  { id: 'healing_potion', name: 'Poción de Curación', type: 'consumable', stack: true, price: 60, use: { hp: 160, cd: 5000 }, icon: '🧪', color: 0xff3030, desc: 'Recupera 160 de HP.' },
+  { id: 'healing_potion', name: 'Poción de Curación', type: 'consumable', stack: true, price: 60, use: { hp: 160, cd: 5000 }, icon: '🧪', color: 0xff3030, desc: 'Recupera 160 de HP.', craft: { mats: [['wild_berries', 5]], adena: 15 } },
+  { id: 'wild_berries', name: 'Bayas Silvestres', type: 'consumable', stack: true, price: 6, use: { hp: 35, cd: 2000 }, icon: '🫐', color: 0xb02a4a, desc: 'Recuperan 35 de HP. Con 5 te preparan una Poción de Curación.' },
   { id: 'mana_potion', name: 'Poción de Maná', type: 'consumable', stack: true, price: 80, use: { mp: 60, cd: 8000 }, icon: '🧪', color: 0x3060ff, desc: 'Recupera 60 de MP.' },
   { id: 'greater_healing_potion', name: 'Poción de Curación Mayor', type: 'consumable', stack: true, price: 250, use: { hp: 400, cd: 5000 }, icon: '🧪', color: 0xff5080, desc: 'Recupera 400 de HP.' },
   { id: 'greater_mana_potion', name: 'Poción de Maná Mayor', type: 'consumable', stack: true, price: 320, use: { mp: 180, cd: 8000 }, icon: '🧪', color: 0x50a0ff, desc: 'Recupera 180 de MP.' },
@@ -120,6 +124,10 @@ const list: ItemDef[] = [
   { id: 'goblin_ear', name: 'Oreja de Goblin', type: 'material', stack: true, price: 45, icon: '👂', color: 0x77aa55 },
   { id: 'orc_tusk', name: 'Colmillo de Orco', type: 'material', stack: true, price: 80, icon: '🦷', color: 0xeeeecc },
   { id: 'stone_fragment', name: 'Fragmento de Piedra', type: 'material', stack: true, price: 110, icon: '🪨', color: 0x888888 },
+  // gathered in the world (shared/src/nodes.ts)
+  { id: 'wood_log', name: 'Madera', type: 'material', stack: true, price: 8, icon: '🪵', color: 0x8a5a2a, desc: 'De talar árboles. Se usa para fabricar armas.' },
+  { id: 'raw_stone', name: 'Piedra', type: 'material', stack: true, price: 5, icon: '🪨', color: 0x9a9a9a, desc: 'De picar rocas.' },
+  { id: 'iron_ore', name: 'Mineral de Hierro', type: 'material', stack: true, price: 25, icon: '⛏️', color: 0x8a7060, desc: 'De picar rocas, sobre todo en las colinas y el cuartel orco. Se usa para fabricar armas.' },
   { id: 'camp_chest', name: 'Cofre del Campamento', type: 'chest', price: 0, icon: '🧰', color: 0x8a5a2a, desc: 'Botín del campamento. Abrilo para quedarte con lo que tiene.' },
   { id: 'cursed_bone', name: 'Hueso Maldito', type: 'material', stack: true, price: 150, icon: '💀', color: 0xbbbbaa },
   { id: 'sea_pearl', name: 'Perla Marina', type: 'material', stack: true, price: 220, icon: '🫧', color: 0xd8e8f0 },

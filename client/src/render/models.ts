@@ -41,6 +41,13 @@ export interface AnimState {
   t: number; // seconds
   /** /dance emote */
   dancing?: boolean;
+  /** ms since sitting down (-1 / absent: standing), and since getting up again (plays the get-up) */
+  sitAge?: number;
+  standAge?: number;
+  /** in deep water */
+  swimming?: boolean;
+  /** working a world node: how it moves, ms since it began and the length of one stroke */
+  gather?: { anim: 'chop' | 'mine' | 'pick'; age: number; swingMs: number } | null;
 }
 
 /**
@@ -1130,6 +1137,12 @@ export function animate(rig: Rig, s: AnimState) {
     if (rig.pose === 'float') legs.forEach((l) => (l.rotation.x = 0.15));
     if (armR) { armR.rotation.x = ar; armR.rotation.z = zr; }
     if (armL) { armL.rotation.x = al; armL.rotation.z = zl; }
+    // the textured rigs have real clips for these; the procedural one only hints at them
+    if ((s.sitAge ?? -1) >= 0) {
+      legs.forEach((l) => (l.rotation.x = -1.45));
+      body.position.y = -0.42;
+    }
+    if (s.swimming) body.rotation.x = -1.1;
   } else if (rig.kind === 'beast') {
     legs[0].rotation.x = legs[1].rotation.x = walk * 0.6;
     legs[2].rotation.x = legs[3].rotation.x = -walk * 0.6;

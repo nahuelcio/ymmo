@@ -23,7 +23,7 @@ impl World {
             sid: m.sid, out: m.out, lang: m.lang, stats: Stats::default(), buffs: vec![], target: None, intent: None, next_attack: 0.0, casting: None,
             cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, auto_loot: false, dodge_until: 0.0, rtt: 80.0,
             saved_at: crate::world::now_ms() - rnd() * 60000.0, look: row.look, last_combat: 0.0, escape_at: 0.0, party: None, pending_invite: None,
-            talking_to: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(),
+            talking_to: None, sitting: None, stand_until: 0.0, gather: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(),
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
         };
@@ -41,6 +41,7 @@ impl World {
         let p = self.pl(id).unwrap();
         p.send(json!({ "t": kind, "self": self.self_state(id), "inv": p.inv }));
         send_quests(p);
+        self.send_nodes(id, crate::world::now_ms());
         Some(id)
     }
 
@@ -69,6 +70,7 @@ impl World {
             self.save_player(pid, at);
         }
         self.party_leave(pid, true);
+        self.stand_up(pid); // frees the seat
         let Ent { k: Kind::Player(p), .. } = self.remove(pid)? else { return None };
         self.sessions.remove(&p.sid);
         Some(Member { sid: p.sid, account_id: p.account_id, char_id: p.char_id, lang: p.lang, out: p.out })

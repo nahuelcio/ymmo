@@ -158,6 +158,7 @@ impl World {
         let src_is_player = src_player.is_some();
         let t = self.pl_mut(tid).unwrap();
         t.last_combat = now;
+        t.gather = None; // a hit breaks off felling / mining / picking
         let t_karma = t.karma;
         if src_is_player {
             let absorbed = t.cp.min(dmg);

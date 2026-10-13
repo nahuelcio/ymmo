@@ -43,6 +43,7 @@ impl World {
                     self.sys(pid, "En 10 segundos volvés a la aldea...", "You will be returned to the village in 10 seconds...");
                 }
                 "raid" => self.raid_command(pid, &arg.to_lowercase()),
+                "sit" => if !self.ents[&pid].c.dead { self.toggle_sit(pid) },
                 "dance" => {
                     let c = &self.ents[&pid].c;
                     if !c.dead { self.send_near(c.x, c.z, serde_json::json!({ "t": "fx", "s": pid, "tg": pid, "skill": "dance" })); }

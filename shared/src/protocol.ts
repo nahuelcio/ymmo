@@ -27,6 +27,10 @@ export const F_CASTING = 4;
 export const F_COMBAT = 8;
 /** Player has PvP mode enabled (can attack / be attacked by other PvP players). */
 export const F_PVP = 64;
+/** sitting (on a seat or on the ground); 128-1024 are status effects (status.ts) */
+export const F_SITTING = 2048;
+/** felling, mining or picking (the node comes in the 'gather' event) */
+export const F_GATHER = 4096;
 
 /** e: enchant level (+N) of a piece of gear */
 export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number }
@@ -87,6 +91,10 @@ export type C2S =
   /** dodge roll toward a point */
   | { t: 'dash'; x: number; z: number; dx: number; dz: number }
   | { t: 'stop' }
+  /** use a world node (shared/src/nodes.ts): fell, mine, pick or sit; the server walks there first */
+  | { t: 'interact'; node: number }
+  /** sit down on the spot, or stand up (also /sit) */
+  | { t: 'sit' }
   /** answer to the server's ping (it measures the round trip) */
   | { t: 'pong'; s: number };
 
@@ -123,4 +131,10 @@ export type S2C =
   /** telegraphed area attack: a red circle filling up for ms before it hits */
   | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number }
   /** latency probe: echo s back as a pong; rtt is the server's current estimate */
-  | { t: 'ping'; s: number; rtt: number };
+  | { t: 'ping'; s: number; rtt: number }
+  /** spent nodes on entering a world: [id, ms until it is back] */
+  | { t: 'nodes'; gone: [number, number][] }
+  /** a node was spent (ms until back) or is back (ms = 0) */
+  | { t: 'node'; id: number; ms: number }
+  /** s starts working node for ms (others play the felling / mining / picking) */
+  | { t: 'gather'; s: number; node: number; ms: number };

@@ -12,11 +12,26 @@ import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAI
 import { RAIDS } from '../../shared/src/data/raids';
 import { STATUSES } from '../../shared/src/status';
 import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
-import { PLAYABLE_HALF, TOWN, TOWNS } from '../../shared/src/terrain';
+import { isDeep, PLAYABLE_HALF, SWIM_SPEED, TOWN, TOWNS, WATER_CELL, WORLD_HALF } from '../../shared/src/terrain';
+import { allNodes, GATHER, STAND_UP_MS } from '../../shared/src/nodes';
 import { campName, itemName, mobName, npcLines, npcText, questField, skillName, specName, teleportName, zoneName } from '../../shared/src/i18n';
 
+/** Deep water on the WATER_CELL grid, as runs per row: [row, firstCol, lastCol] (the server has no terrain function). */
+function waterRuns(): [number, number, number][] {
+  const n = (WORLD_HALF * 2) / WATER_CELL, runs: [number, number, number][] = [];
+  for (let row = 0; row < n; row++) {
+    let start = -1;
+    for (let col = 0; col <= n; col++) {
+      const deep = col < n && isDeep(-WORLD_HALF + (col + 0.5) * WATER_CELL, -WORLD_HALF + (row + 0.5) * WATER_CELL);
+      if (deep && start < 0) start = col;
+      else if (!deep && start >= 0) (runs.push([row, start, col - 1]), (start = -1));
+    }
+  }
+  return runs;
+}
+
 const out = {
-  constants: { PLAYABLE_HALF, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
+  constants: { PLAYABLE_HALF, SWIM_SPEED, STAND_UP_MS, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
   town: { ...TOWN, nameEn: zoneName(TOWN.name, 'en') },
   towns: TOWNS.map((t) => ({ ...t, nameEn: zoneName(t.name, 'en') })),
   wild: { name: 'Tierras Salvajes', nameEn: zoneName('Tierras Salvajes', 'en') },
@@ -39,9 +54,13 @@ const out = {
   specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en') })),
   statuses: Object.entries(STATUSES).map(([id, s]) => ({ id, flag: s.flag })),
   raids: Object.values(RAIDS),
+  // world nodes: [id, x, z, r, ry, seatY, zone]; gather rules per kind
+  nodes: allNodes().map((n) => [n.id, +n.x.toFixed(2), +n.z.toFixed(2), +n.r.toFixed(2), +(n.ry ?? 0).toFixed(3), n.y ?? 0, n.zone ?? '']),
+  gather: GATHER,
+  water: { cell: WATER_CELL, half: WORLD_HALF, runs: waterRuns() },
   obstacles: getObstacles().map((o) => (o.k === 'c' ? { k: 'c', x: o.x, z: o.z, r: o.r } : { k: 'b', x: o.x, z: o.z, hw: o.hw, hd: o.hd, cos: o.cos, sin: o.sin })),
 };
 
 const path = new URL('../../server-rs/data/game.json', import.meta.url);
 writeFileSync(path, JSON.stringify(out));
-console.log(`[export-data] ${out.items.length} items, ${out.mobs.length} mobs, ${out.skills.length} skills, ${out.quests.length} quests, ${out.obstacles.length} obstacles -> server-rs/data/game.json`);
+console.log(`[export-data] ${out.items.length} items, ${out.mobs.length} mobs, ${out.skills.length} skills, ${out.quests.length} quests, ${out.obstacles.length} obstacles, ${out.nodes.length} nodes, ${out.water.runs.length} water runs -> server-rs/data/game.json`);

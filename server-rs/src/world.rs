@@ -64,6 +64,9 @@ pub struct World {
     pub events: Vec<HubEvent>,
     pub db: Db,
     pub tick_cost: f64,
+    /** world nodes spent until (ms), and seats taken -> player (gather.rs) */
+    pub nodes_gone: HashMap<u32, f64>,
+    pub seats: HashMap<u32, u32>,
 }
 
 impl World {
@@ -71,7 +74,7 @@ impl World {
         let mut w = World {
             ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
-            sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0,
+            sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(),
         };
         if let Some((r, size)) = raid {
             let boss = w.spawn_mob(&r.boss, r.x, r.z);
@@ -200,6 +203,7 @@ impl World {
     }
 
     pub fn teleport(&mut self, pid: u32, x: f64, z: f64) {
+        self.idle_interrupt(pid);
         if let Some(e) = self.ents.get_mut(&pid) {
             e.c.moving = false;
             if let Some(p) = e.player_mut() {
@@ -250,7 +254,9 @@ impl World {
         }
         let (dx, dz) = (wx - e.c.x, wz - e.c.z);
         let wd = { let h = dx.hypot(dz); if h == 0.0 { 1e-4 } else { h } };
-        let step = (speed * e.c.speed_mul(now) * dt).min((wd - wstop).max(0.0));
+        // swimming is slower (deep water, shared/src/terrain.ts isDeep)
+        let swim = if d().is_deep(e.c.x, e.c.z) { d().c.swim_speed } else { 1.0 };
+        let step = (speed * swim * e.c.speed_mul(now) * dt).min((wd - wstop).max(0.0));
         e.c.ry = dx.atan2(dz);
         let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, e.c.radius);
         e.c.moving = true;
@@ -557,7 +563,10 @@ impl World {
         for pid in self.players.clone() { self.send_snapshot(pid, now); }
         if self.tick_n % 2 == 0 { for pid in self.players.clone() { self.send_self(pid); } }
         if self.tick_n % 10 == 0 { self.send_party_updates(); }
-        if self.tick_n % 20 == 0 { self.npc_chatter(now); }
+        if self.tick_n % 20 == 0 {
+            self.npc_chatter(now);
+            self.tick_nodes(now);
+        }
         if self.tick_n % 40 == 0 {
             for pid in &self.players { if let Some(p) = self.pl(*pid) { p.send(json!({ "t": "ping", "s": now.floor(), "rtt": p.rtt.round() })) } }
         }

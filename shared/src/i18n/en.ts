@@ -153,6 +153,30 @@ export const EN = {
   "stone_fragment": {
    "name": "Stone Fragment"
   },
+  "wood_log": {
+   "name": "Wood",
+   "desc": "From felling trees. Used to make weapons."
+  },
+  "raw_stone": {
+   "name": "Stone",
+   "desc": "From mining rocks."
+  },
+  "iron_ore": {
+   "name": "Iron Ore",
+   "desc": "From mining rocks, mostly in the hills and the orc barracks. Used to make weapons."
+  },
+  "wild_berries": {
+   "name": "Wild Berries",
+   "desc": "Restore 35 HP. Five of them make a Healing Potion."
+  },
+  "woodcutter_axe": {
+   "name": "Woodcutter's Axe",
+   "desc": "For felling trees."
+  },
+  "miner_pickaxe": {
+   "name": "Miner's Pickaxe",
+   "desc": "For mining rocks."
+  },
   "cursed_bone": {
    "name": "Cursed Bone"
   },

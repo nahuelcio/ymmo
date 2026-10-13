@@ -1,7 +1,8 @@
 // Regenerates client/public/q from the Quaternius packs (all CC0):
 //   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library.
 // The heads come from heads.glb, built by art/blender/characters.py.
-// Usage: node scripts/q-assets.mjs <dir with the three packs unzipped>
+// Usage: node scripts/q-assets.mjs <dir with the three packs unzipped> [--anims-only]
+//   --anims-only: rebuild just anims.gltf/.bin from the animation library (the other packs need not be there)
 // Keeps only BaseColor (as 1024px WebP, via `npx sharp-cli`) and the animation clips the game plays,
 // then quantizes and meshopt-compresses every model (via `npx @gltf-transform/cli`).
 import { execSync } from 'node:child_process';
@@ -9,9 +10,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const SRC = process.argv[2];
+const ANIMS_ONLY = process.argv.includes('--anims-only');
 if (!SRC || !fs.existsSync(SRC)) throw new Error('usage: node scripts/q-assets.mjs <unzipped packs dir>');
 const OUT = path.resolve('client/public/q');
-const CLIPS = ['Idle_Loop', 'Jog_Fwd_Loop', 'Sword_Attack', 'Punch_Jab', 'Spell_Simple_Idle_Loop', 'Death01'];
+const CLIPS = [
+  'Idle_Loop', 'Jog_Fwd_Loop', 'Sword_Attack', 'Punch_Jab', 'Spell_Simple_Idle_Loop', 'Death01', 'Dance_Loop',
+  // world interactions (shared/src/nodes.ts): sitting, swimming, picking
+  'Sitting_Enter', 'Sitting_Idle_Loop', 'Sitting_Exit', 'Swim_Idle_Loop', 'Swim_Fwd_Loop', 'Fixing_Kneeling',
+];
 
 const walk = (d, o = []) => {
   for (const f of fs.readdirSync(d)) {
@@ -34,6 +40,7 @@ const compress = (file) => {
 fs.mkdirSync(OUT, { recursive: true });
 
 // --- models: drop everything but BaseColor, point the images at the shared .webp files
+if (!ANIMS_ONLY) {
 const models = all.filter((f) => /Modular Parts[\\/].*\.gltf$|Rigged to Head Bone[\\/]glTF[^\\/]*[\\/]Hair_.*\.gltf$/.test(f));
 const textures = new Set();
 for (const f of models) {
@@ -64,6 +71,7 @@ for (const name of textures) {
 }
 execSync(`npx -y sharp-cli -i "${tmp.replaceAll('\\', '/')}/*.png" -o "${OUT}" -f webp -q 82 resize 1024 1024`, { stdio: 'ignore' });
 fs.rmSync(tmp, { recursive: true });
+}
 
 // --- animations: only CLIPS, rotations only (plus the pelvis translation) so every body keeps its own proportions
 const glb = fs.readFileSync(all.find((f) => f.endsWith('UAL1_Standard.glb')));
@@ -103,7 +111,7 @@ fs.writeFileSync(path.join(OUT, 'anims.gltf'), JSON.stringify({
 compress('anims.gltf');
 
 // --- heads.glb (art/blender/characters.py output): only the body, eyes, brows and tusks are used
-if (fs.existsSync(path.join(OUT, 'heads.glb'))) {
+if (!ANIMS_ONLY && fs.existsSync(path.join(OUT, 'heads.glb'))) {
   const h = fs.readFileSync(path.join(OUT, 'heads.glb'));
   const len = h.readUInt32LE(12), j = JSON.parse(h.subarray(20, 20 + len).toString());
   const drop = new Set(j.nodes.flatMap((n, i) => (/__(belt|boots|bottom|gloves|top|hair\d|buzz|beard|sock_\w+)$/.test(n.name) ? [i] : [])));
@@ -120,7 +128,7 @@ if (fs.existsSync(path.join(OUT, 'heads.glb'))) {
 }
 
 // --- hand-made props
-for (const f of fs.readdirSync(OUT)) if (f.endsWith('.glb') && f !== 'heads.glb') compress(f);
+if (!ANIMS_ONLY) for (const f of fs.readdirSync(OUT)) if (f.endsWith('.glb') && f !== 'heads.glb') compress(f);
 
 const size = fs.readdirSync(OUT).reduce((n, f) => n + fs.statSync(path.join(OUT, f)).size, 0);
 console.log(`${fs.readdirSync(OUT).length} files, ${(size / 1e6).toFixed(1)} MB -> ${OUT}`);
