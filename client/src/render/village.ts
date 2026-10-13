@@ -146,6 +146,9 @@ const curtainPrims: Record<CurtainKind, { geo: THREE.BufferGeometry; color: numb
 };
 const curtainMats = new Map<string, THREE.MeshLambertMaterial>();
 
+/** A kit colour map by file name (null until loadV finishes): the golems borrow the rock. */
+export const kitTexture = (file: string): THREE.Texture | null => kitTex.get(file) ?? null;
+
 /** Flat glb colours, matched to the kit textures those parts already use on the houses. */
 function curtainMap(color: number): THREE.Texture | null {
   const file = color === 0xb15945 ? 'T_RoundTiles_BaseColor.webp'

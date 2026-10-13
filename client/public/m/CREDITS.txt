@@ -1,5 +1,18 @@
-Mob models, all CC0 1.0 (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+Mob models, CC0 1.0 (public domain) unless noted: https://creativecommons.org/publicdomain/zero/1.0/
 wolf.glb, fox.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
 skeleton_*.glb: KayKit Character Pack: Skeletons 1.1 by Kay Lousberg (kaylousberg.com)
 skeleton_anims.glb: KayKit Character Animations 1.1 by Kay Lousberg (kaylousberg.com)
+spider.glb, wyvern.glb: Spider and Dragon by Quaternius (quaternius.com), via poly.pizza
+drake.glb: Cethiel's Dragon 3D by Drummyfish, after Cethiel's 2D dragon (opengameart.org/content/cethiels-dragon-3d)
+crab.glb: Crab low poly animated 3D model by methodical pixel (opengameart.org/content/crab-low-poly-animated-3d-model)
+limule.glb: Swamp Limule by Čestmír Dammer (CDmir) (opengameart.org/content/swamp-limule)
+golem.glb: Lava golem by gavlig (opengameart.org/content/lava-golem)
+raptor.glb: Velociraptor, Animated LowPoly Dinosaurs by Quaternius (quaternius.itch.io/animated-lowpoly-dinosaurs)
+werewolf.glb: Werewolf by br-n518 (opengameart.org/content/werewolf-0)
+forest.glb: Forest Monster by Čestmír Dammer (CDmir) (opengameart.org/content/forest-monster); its body only, without
+  the tree on its back (that one used a CC BY-NC-SA texture)
+
+Not CC0 - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/):
+cobra.glb: "Cobra" by Poly by Google (poly.pizza/m/40_5Xq467-U)
+
 Regenerate with tools/scripts/m-assets.mjs.

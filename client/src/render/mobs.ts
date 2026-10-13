@@ -5,6 +5,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import { MOBS } from '../../../shared/src/data/mobs';
 import { animate, heldWeapon, mobModel, type AnimState, type Rig, type WeaponKind } from './models';
 import { loadQ, qPlayer, qReady, qWeapon, type Helm } from './quaternius';
+import { kitTexture, loadV } from './village';
 
 /**
  * Mob models instead of the procedural box rigs (models.ts mobModel), all CC0:
@@ -99,10 +100,13 @@ function qMob(tplId: string): Rig | null {
 
 // --- models with their own skeleton and clips (client/public/m)
 
-type Model = 'wolf' | 'fox' | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage';
+/** creatures: one file each, clips named by role in tools/scripts/m-assets.mjs (CREATURES) */
+const CREATURES = ['spider', 'wyvern', 'cobra', 'drake', 'crab', 'limule', 'golem', 'raptor', 'werewolf', 'forest'] as const;
+type Model = 'wolf' | 'fox' | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
 type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
 type ClipSet = Partial<Record<Role, string>>;
 const ANIMAL: ClipSet = { idle: 'Idle', run: 'Gallop', attack: 'Attack', death: 'Death' };
+const CREATURE: ClipSet = { idle: 'Idle', run: 'Walk', attack: 'Attack', death: 'Death' };
 const BONES: ClipSet = { idle: 'Skeletons_Idle', run: 'Running_A', attack: 'Melee_1H_Attack_Chop', death: 'Skeletons_Death', cast: 'Ranged_Magic_Spellcasting' };
 const SKELETONS = ['skeleton_warrior', 'skeleton_minion', 'skeleton_rogue', 'skeleton_mage'] as const;
 
@@ -116,6 +120,17 @@ interface GlbLook {
   right?: string;
   left?: string;
   clips?: ClipSet;
+  /** multiplies every material (a light tint keeps a texture readable) */
+  dye?: number;
+  /** a glow of this colour on every material */
+  glow?: number;
+  /** a translucent, glowing spirit (the wraith) */
+  ghost?: boolean;
+  /** a static model that undulates along its length (the sea serpent) */
+  wave?: boolean;
+  /** painted with the village kit's rock (repeat count), instead of its own texture: the golems */
+  rock?: number;
+  kind?: Rig['kind'];
 }
 
 export const MOB_GLB: Record<string, GlbLook> = {
@@ -132,9 +147,38 @@ export const MOB_GLB: Record<string, GlbLook> = {
   kaim_vanul: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', tint: { skeleton: 0x9a88b8, Glow: 0xb050ff } },
   kaim_ascended: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', tint: { skeleton: 0x8a78b0, Glow: 0xc060ff } },
   kaim_reborn: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', tint: { skeleton: 0xf0c8d8, Glow: 0xff4080 } },
+  ruin_wraith: { model: 'skeleton_mage', height: 1.9, ghost: true, dye: 0xb8d8ff, glow: 0x4a7ab0, kind: 'humanoid' },
+  // spiders, crabs and the deep lurker
+  cave_spider: { model: 'spider', height: 0.9, dye: 0x9a8aa8, kind: 'spider' },
+  ember_spider: { model: 'spider', height: 0.9, dye: 0xffa070, glow: 0x7a2200, kind: 'spider' },
+  brood_spider: { model: 'spider', height: 0.9, dye: 0xa86a7a, kind: 'spider' },
+  tide_crab: { model: 'crab', height: 0.75, kind: 'spider' },
+  tide_spawn: { model: 'crab', height: 0.75, dye: 0xffc0c8, kind: 'spider' },
+  coast_queen: { model: 'crab', height: 0.75, dye: 0xe8a8d0, kind: 'spider' },
+  deep_lurker: { model: 'limule', height: 0.8, dye: 0xa0c0d0, kind: 'spider' },
+  // beasts
+  werewolf: { model: 'werewolf', height: 1.9, clips: { run: 'Run' } },
+  hill_lizard: { model: 'raptor', height: 1.25, dye: 0xa8d0a8, clips: { run: 'Run' } },
+  aberration: { model: 'forest', height: 2.1, dye: 0xd0a8d8 },
+  sea_serpent: { model: 'cobra', height: 1.0, dye: 0x8ac0e0, wave: true },
+  // drakes and dragons
+  drake_whelp: { model: 'drake', height: 1.3, dye: 0xb0e0a8 },
+  nest_hatchling: { model: 'drake', height: 1.3, dye: 0xffb898 },
+  valley_basilisk: { model: 'drake', height: 1.4, dye: 0xd0d898 },
+  elder_drake: { model: 'drake', height: 1.5, dye: 0x98c8a8 },
+  ancient_drake: { model: 'drake', height: 1.55, dye: 0xd89090 },
+  vharion: { model: 'drake', height: 1.6, dye: 0xc86058, glow: 0x2a0800 },
+  wyvern: { model: 'wyvern', height: 1.8, dye: 0xffe0b8, clips: { idle: 'Fly', run: 'Fly' } },
+  // golems: the lava golem, dyed per kind
+  stone_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xd8d4d0, kind: 'humanoid' },
+  reef_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xa8dcc8, kind: 'humanoid' },
+  ruin_sentinel: { model: 'golem', height: 2.3, rock: 4, dye: 0xd0d8d8, kind: 'humanoid' },
+  magma_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xffa888, glow: 0x5a1400, kind: 'humanoid' },
+  obsidian_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6e6e80, kind: 'humanoid' },
+  nest_guardian: { model: 'golem', height: 2.3, rock: 4, dye: 0xd0a888, kind: 'humanoid' },
 };
 
-interface Loaded { scene: THREE.Object3D; height: number; clips: THREE.AnimationClip[] }
+interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
 const loaded: Partial<Record<Model, Loaded>> = {};
 const weapons: Record<string, THREE.Object3D> = {};
 let loadingMobs: Promise<void> | null = null;
@@ -145,36 +189,78 @@ export function loadMobs(): Promise<void> {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
     const get = (f: string) => loader.loadAsync(`m/${f}.glb`);
     const [wolf, fox, anims, kit, ...skels] = await Promise.all([get('wolf'), get('fox'), get('skeleton_anims'), get('skeleton_weapons'), ...SKELETONS.map(get)]);
+    // creatures: a file that fails leaves its mobs procedural, not the rest
+    const creatures = await Promise.all(CREATURES.map((c) => get(c).catch((err) => (console.warn('mob model', c, err), null))));
     const add = (m: Model, g: { scene: THREE.Object3D }, clips: THREE.AnimationClip[]) => {
       g.scene.updateMatrixWorld(true);
-      loaded[m] = { scene: g.scene, height: new THREE.Box3().setFromObject(g.scene).max.y, clips };
+      const box = new THREE.Box3().setFromObject(g.scene);
+      loaded[m] = { scene: g.scene, height: box.max.y - box.min.y, base: box.min.y, clips };
     };
     add('wolf', wolf, wolf.animations);
     add('fox', fox, fox.animations);
     SKELETONS.forEach((m, i) => add(m, skels[i], anims.animations));
     for (const s of kit.scenes) weapons[s.name] = s;
+    CREATURES.forEach((c, i) => creatures[i] && add(c, creatures[i]!, creatures[i]!.animations));
   })());
 }
 
 /** Lambert like the rest of the world (the files carry PBR), one per source material and tint. */
 const mats = new Map<string, THREE.Material>();
-function lambert(src: THREE.Material, tint: number | undefined): THREE.Material {
-  const key = `${src.uuid}:${tint ?? ''}`;
+/** the sea serpent's sway (render time, seconds), shared by every wave material */
+const WAVE_T = { value: 0 };
+/** The kit's rock texture repeated n times over a model's own UVs (a copy: the walls keep theirs). */
+const rocks = new Map<number, THREE.Texture>();
+function rockMap(n: number): THREE.Texture | null {
+  let t = rocks.get(n);
+  if (!t) {
+    const base = kitTexture('T_RockTrim_BaseColor.webp');
+    if (!base) return null;
+    t = base.clone();
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(n, n);
+    t.needsUpdate = true;
+    rocks.set(n, t);
+  }
+  return t;
+}
+function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material {
+  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}`;
   let m = mats.get(key);
   if (!m) {
     const s = src as THREE.MeshStandardMaterial;
     const color = tint === undefined ? s.color.clone() : s.map ? s.color.clone().multiply(new THREE.Color(tint)) : new THREE.Color(tint);
+    if (l?.dye !== undefined) color.multiply(new THREE.Color(l.dye));
     const glow = !!s.emissive && s.emissive.getHex() !== 0;
-    mats.set(key, (m = new THREE.MeshLambertMaterial({
-      name: s.name, map: s.map, color,
-      emissive: glow ? (tint === undefined ? s.emissive.clone() : new THREE.Color(tint)) : 0x000000, emissiveMap: s.emissiveMap,
-    })));
+    const mat = new THREE.MeshLambertMaterial({
+      name: s.name, map: (l?.rock && rockMap(l.rock)) || s.map, color,
+      emissive: l?.glow ?? (glow ? (tint === undefined ? s.emissive.clone() : new THREE.Color(tint)) : 0x000000), emissiveMap: l?.glow ? null : s.emissiveMap,
+    });
+    if (l?.ghost) Object.assign(mat, { transparent: true, opacity: 0.55, depthWrite: false });
+    if (l?.wave) {
+      // a travelling S along the body (local z), stronger toward the tail
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.uWaveT = WAVE_T;
+        sh.vertexShader = sh.vertexShader
+          .replace('#include <common>', '#include <common>\nuniform float uWaveT;')
+          .replace('#include <begin_vertex>', `#include <begin_vertex>
+            transformed.x += sin(transformed.z * 6.0 - uWaveT * 3.0) * 0.06 * smoothstep(0.1, -0.4, transformed.z);
+            transformed.y += sin(transformed.z * 4.0 - uWaveT * 2.2) * 0.02;`);
+      };
+      mat.customProgramCacheKey = () => 'mob-wave';
+    }
+    mats.set(key, (m = mat));
   }
   return m;
 }
 
 const ATK_MS = 700;
-interface ClipAnim { mixer: THREE.AnimationMixer; acts: Partial<Record<Role, THREE.AnimationAction>>; w: Partial<Record<Role, number>>; t: number }
+interface ClipAnim {
+  mixer: THREE.AnimationMixer; acts: Partial<Record<Role, THREE.AnimationAction>>; w: Partial<Record<Role, number>>; t: number;
+  /** the model's holder, for the moves a model has no clip for (lunge, keel over, hover) */
+  body: THREE.Object3D;
+  float: boolean;
+  wave: boolean;
+}
 
 function glbMob(tplId: string): Rig | null {
   const l = MOB_GLB[tplId], t = MOBS[tplId], src = l && loaded[l.model];
@@ -184,7 +270,7 @@ function glbMob(tplId: string): Rig | null {
   obj.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     const m = o.material as THREE.Material;
-    o.material = lambert(m, l.tint?.[m.name]);
+    o.material = lambert(m, l.tint?.[m.name], l);
     o.castShadow = true;
     o.frustumCulled = false; // bind-pose bounds; the game culls whole entities itself
     if (o instanceof THREE.SkinnedMesh) skinned.push(o);
@@ -205,11 +291,13 @@ function glbMob(tplId: string): Rig | null {
   body.add(obj);
   const height = l.height * t.scale;
   obj.scale.multiplyScalar(height / src.height);
+  obj.position.y = -src.base * (height / src.height); // feet on the ground whatever the model's origin
 
   const animal = !l.model.startsWith('skeleton');
-  const set = { ...(animal ? ANIMAL : BONES), ...l.clips };
+  const creature = (CREATURES as readonly string[]).includes(l.model);
+  const set = { ...(creature ? CREATURE : animal ? ANIMAL : BONES), ...l.clips };
   const mixer = new THREE.AnimationMixer(obj);
-  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity };
+  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity, body, float: !!l.ghost, wave: !!l.wave };
   for (const role of Object.keys(set) as Role[]) {
     const clip = src.clips.find((c) => c.name === set[role]);
     if (!clip) continue;
@@ -219,7 +307,7 @@ function glbMob(tplId: string): Rig | null {
     act.play();
   }
   return {
-    root, body, kind: animal ? 'beast' : 'humanoid', legs: [], height, radius: (animal ? 0.55 : 0.35) * t.scale,
+    root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * t.scale,
     anim: (s) => animateClips(a, s),
     dispose: () => {
       mixer.stopAllAction();
@@ -243,6 +331,18 @@ function animateClips(a: ClipAnim, s: AnimState) {
     cur = 'attack';
     at(a.acts.attack, (s.atkAge / ATK_MS) * a.acts.attack.getClip().duration * 1000);
   } else if (s.moving && a.acts.run) cur = 'run';
+  // moves a model has no clip for, on its holder: a lunge, keeling over, hovering, a bob while walking
+  const b = a.body;
+  b.position.set(0, 0, 0);
+  b.rotation.set(0, 0, 0);
+  if (s.deadAge >= 0 && !a.acts.death) {
+    const k = Math.min(1, s.deadAge / 500);
+    b.rotation.z = k * Math.PI * 0.5;
+    b.position.y = -k * 0.15;
+  } else if (s.atkAge < ATK_MS && !a.acts.attack) b.position.z = Math.sin((s.atkAge / ATK_MS) * Math.PI) * 0.45;
+  else if (s.moving && !a.acts.run) b.position.y = Math.abs(Math.sin(s.t * 9)) * 0.06;
+  if (a.float && s.deadAge < 0) b.position.y += 0.35 + Math.sin(s.t * 1.6) * 0.12;
+  if (a.wave) WAVE_T.value = s.t;
   // weights snap to 0/1 at the ends, as in animateQ: the mixer skips clips at zero weight
   const k = Math.min(1, dt * 14);
   for (const r of Object.keys(a.acts) as Role[]) {
@@ -274,7 +374,7 @@ export async function mountMobPreview(host: HTMLElement): Promise<() => void> {
   const sun = new THREE.DirectionalLight(0xfff0d0, 2);
   sun.position.set(2, 4, 3);
   scene.add(sun);
-  await Promise.all([loadQ(), loadMobs().catch((err) => console.warn('mobs', err))]);
+  await Promise.all([loadQ(), loadV().catch(() => {}), loadMobs().catch((err) => console.warn('mobs', err))]);
 
   const p = new URLSearchParams(location.search);
   const only = p.get('only')?.split(',');
