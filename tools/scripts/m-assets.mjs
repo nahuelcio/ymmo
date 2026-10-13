@@ -1,5 +1,7 @@
-// Regenerates client/public/m, the mob models (all CC0):
+// Regenerates client/public/m, the mob models (CC0 unless noted, see CREDITS below):
 //   Quaternius Ultimate Animated Animal Pack: Wolf.glb, Fox.glb (from poly.pizza)
+//   Creatures (CREATURES): Quaternius' Spider and Dragon and Poly by Google's Cobra (CC-BY 3.0) from poly.pizza, and
+//   OpenGameArt models exported from .blend by tools/art/blender/mobs_export.py into "<Mob Models>/glb" first
 //   KayKit Character Pack: Skeletons 1.1 (Kay Lousberg): the four skeletons and their weapons
 //   KayKit Character Animations 1.1 (Kay Lousberg): the Rig_Medium clips the skeletons share
 // Usage: node tools/scripts/m-assets.mjs <unzipped pack dir>...
@@ -16,6 +18,19 @@ const OUT = path.resolve('client/public/m');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'm-assets-'));
 
 const ANIMALS = { wolf: 'Wolf.glb', fox: 'Fox.glb' };
+/** output name -> source file and its clips (source name -> the short name the client uses) */
+const CREATURES = {
+  spider: { file: 'Spider.glb', clips: { 'SpiderArmature|Spider_Idle': 'Idle', 'SpiderArmature|Spider_Walk': 'Walk', 'SpiderArmature|Spider_Attack': 'Attack', 'SpiderArmature|Spider_Death': 'Death' } },
+  wyvern: { file: 'Dragon.glb', clips: { 'DragonArmature|Dragon_Flying': 'Fly', 'DragonArmature|Dragon_Attack': 'Attack', 'DragonArmature|Dragon_Death': 'Death' } },
+  cobra: { file: 'Cobra.glb', clips: {} },
+  drake: { file: 'drake.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Die: 'Death' } },
+  crab: { file: 'crab.glb', clips: { idle: 'Idle', walk: 'Walk' } },
+  limule: { file: 'limule.glb', clips: { Idle: 'Idle', Forward: 'Walk', 'Attack.000': 'Attack', OnBack: 'Death' } },
+  golem: { file: 'golem.glb', clips: { idle: 'Idle', walk: 'Walk', smash: 'Attack' } },
+  raptor: { file: 'raptor.glb', clips: { Velociraptor_Idle: 'Idle', Velociraptor_Run: 'Run', Velociraptor_Attack: 'Attack', Velociraptor_Death: 'Death' } },
+  werewolf: { file: 'werewolf.glb', clips: { 'idle-loop': 'Idle', 'run-loop': 'Run', attack: 'Attack', death: 'Death' } },
+  forest: { file: 'forest.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Dying: 'Death' } },
+};
 const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Attack', 'Death'];
 const SKELETONS = ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Mage'];
 const WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Shield_Large_A', 'Skeleton_Shield_Small_A'];
@@ -53,9 +68,11 @@ function editGlb(src, edit, dst = src) {
   head.writeUInt32LE(json.length, 12), head.writeUInt32LE(0x4e4f534a, 16);
   fs.writeFileSync(dst, Buffer.concat([head, json, bin]));
 }
-/** Only the named clips, the scene named `name`, and optionally no meshes (clips only). */
+/** Only the named clips (a list, or source name -> new name), the scene named `name`, and optionally no meshes (clips only). */
 const trim = (src, dst, { name, clips, clipsOnly = false }) => editGlb(src, (g) => {
-  g.animations = (g.animations ?? []).filter((a) => clips?.includes(a.name));
+  const keep = Array.isArray(clips) ? Object.fromEntries(clips.map((c) => [c, c])) : clips ?? {};
+  g.animations = (g.animations ?? []).filter((a) => a.name in keep);
+  for (const a of g.animations) a.name = keep[a.name];
   if (!g.animations.length) delete g.animations;
   if (name) g.scenes[g.scene ?? 0].name = name;
   if (clipsOnly) {
@@ -77,16 +94,34 @@ for (const [out, file] of Object.entries(ANIMALS)) {
   finish(tmp(file), `${out}.glb`);
 }
 
+/** shrinks a file's textures to 512 px WebP */
+const texture = (f) => {
+  gt(`resize "${f}" "${f}" --width 512 --height 512`);
+  gt(`webp "${f}" "${f}"`);
+};
+
+// --- creatures: a file each, their clips renamed to the roles' names, textures shrunk
+for (const [out, { file, clips }] of Object.entries(CREATURES)) {
+  const f = tmp(`creature_${out}.glb`);
+  trim(find(new RegExp(`[\\\\/]${file.replace('.', '\\.')}$`)), f, { name: out, clips });
+  editGlb(f, (g) => {
+    // only the colour map: normal, specular and occlusion maps are not used by the game's materials
+    for (const m of g.materials ?? []) {
+      for (const k of ['normalTexture', 'occlusionTexture', 'emissiveTexture']) delete m[k];
+      if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+    }
+  });
+  gt(`prune "${f}" "${f}" --keep-leaves`);
+  if ((JSON.parse(fs.readFileSync(f).subarray(20, 20 + fs.readFileSync(f).readUInt32LE(12))).images ?? []).length) texture(f);
+  finish(f, `${out}.glb`);
+}
+
 // --- skeletons: a file each (merged into one, three.js would rename the repeated bones hips_1, hips_2...)
 const glbOf = (name) => {
   let src = find(new RegExp(`[\\\\/]${name}\\.(glb|gltf)$`));
   if (src.endsWith('.gltf')) gt(`copy "${src}" "${(src = tmp(`${name}.src.glb`))}"`);
   trim(src, tmp(`${name}.glb`), { name });
   return tmp(`${name}.glb`);
-};
-const texture = (f) => {
-  gt(`resize "${f}" "${f}" --width 512 --height 512`);
-  gt(`webp "${f}" "${f}"`);
 };
 for (const name of SKELETONS) {
   const f = glbOf(name);
@@ -122,10 +157,23 @@ editGlb(anims, (g) => {
 });
 finish(anims, 'skeleton_anims.glb');
 
-fs.writeFileSync(path.join(OUT, 'CREDITS.txt'), `Mob models, all CC0 1.0 (public domain): https://creativecommons.org/publicdomain/zero/1.0/
+fs.writeFileSync(path.join(OUT, 'CREDITS.txt'), `Mob models, CC0 1.0 (public domain) unless noted: https://creativecommons.org/publicdomain/zero/1.0/
 wolf.glb, fox.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
 skeleton_*.glb: KayKit Character Pack: Skeletons 1.1 by Kay Lousberg (kaylousberg.com)
 skeleton_anims.glb: KayKit Character Animations 1.1 by Kay Lousberg (kaylousberg.com)
+spider.glb, wyvern.glb: Spider and Dragon by Quaternius (quaternius.com), via poly.pizza
+drake.glb: Cethiel's Dragon 3D by Drummyfish, after Cethiel's 2D dragon (opengameart.org/content/cethiels-dragon-3d)
+crab.glb: Crab low poly animated 3D model by methodical pixel (opengameart.org/content/crab-low-poly-animated-3d-model)
+limule.glb: Swamp Limule by Čestmír Dammer (CDmir) (opengameart.org/content/swamp-limule)
+golem.glb: Lava golem by gavlig (opengameart.org/content/lava-golem)
+raptor.glb: Velociraptor, Animated LowPoly Dinosaurs by Quaternius (quaternius.itch.io/animated-lowpoly-dinosaurs)
+werewolf.glb: Werewolf by br-n518 (opengameart.org/content/werewolf-0)
+forest.glb: Forest Monster by Čestmír Dammer (CDmir) (opengameart.org/content/forest-monster); its body only, without
+  the tree on its back (that one used a CC BY-NC-SA texture)
+
+Not CC0 - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/):
+cobra.glb: "Cobra" by Poly by Google (poly.pizza/m/40_5Xq467-U)
+
 Regenerate with tools/scripts/m-assets.mjs.
 `);
 fs.rmSync(TMP, { recursive: true, force: true });
