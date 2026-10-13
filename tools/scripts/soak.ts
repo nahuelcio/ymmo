@@ -139,7 +139,9 @@ try {
     (btn('Crear') || btn('Create')).click();
     await wait(() => btn('Entrar al mundo') && !btn('Entrar al mundo').disabled);
     btn('Entrar al mundo').click();
-    await wait(() => window.soak && window.game?.self, 30000);
+    // in the world: the game canvas is up (window.game and soak exist in dev builds only)
+    await wait(() => document.querySelector('#game canvas'), 30000);
+    if (document.querySelector('script[src*="/@vite/client"]')) await wait(() => window.soak && window.game?.self, 30000);
   `);
   await sleep(5000); // let the world finish streaming in
   if (SNAPS) await page(`window.__snap = (n) => new Promise((r) => { window.__snapDone = r; console.log('[snap] ' + n); }); return 1;`);

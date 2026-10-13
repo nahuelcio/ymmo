@@ -363,7 +363,7 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts.Sword_Attack.time = ((s.gather.age % s.gather.swingMs) / s.gather.swingMs) * (clips.Sword_Attack.duration - 0.02);
   } else if (s.gather && q.acts.Fixing_Kneeling) cur = 'Fixing_Kneeling';
   else if (sitAge >= 0) {
-    if (sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = q.acts.Sitting_Idle_Loop ? 'Sitting_Idle_Loop' : 'Idle_Loop';
+    if (!clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
   else if (s.casting) cur = 'Spell_Simple_Idle_Loop';
@@ -372,6 +372,8 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
+  // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
+  if (!q.acts[cur]) cur = s.moving && !s.swimming ? 'Jog_Fwd_Loop' : 'Idle_Loop';
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) {
     // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
