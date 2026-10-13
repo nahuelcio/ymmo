@@ -3,7 +3,7 @@
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
 import { DUSK, heightAt, inTown, mulberry32, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
-import { ALBA_STAMPS, albaCurtain } from './village';
+import { ALBA_STAMPS, albaCurtain, DUSK_STAMPS, duskCurtain } from './village';
 
 /**
  * Road segments from the village: one toward each hunting ground around it and one to the second town.
@@ -167,8 +167,6 @@ let town: TownL | null = null;
 export function layoutTown(): TownL {
   if (town) return town;
   town = { houses: [], stalls: [], walls: [], gates: [] };
-  const roadAngles = ROADS.map(([ax, az, bx, bz]) => Math.atan2(bz - az, bx - ax));
-  const angDiff = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
   // the village is a fixed grid of kit buildings (shared/src/village.ts), not the old ring
   for (const s of ALBA_STAMPS)
     town.houses.push({ x: TOWN.x + s.x, z: TOWN.z + s.z, rot: s.rot, w: s.w, d: s.d, wall: s.wall, roof: s.roof, kind: s.kind });
@@ -193,23 +191,10 @@ export function layoutTown(): TownL {
   }
   // stone curtain: wall runs, an open gate on every road, a tower midway along each span
   for (const w of albaCurtain().walls) town.walls.push(w);
-  // the second town: a smaller ring of dark stone houses inside its own palisade, with a gate where the road
-  // from the village comes in and another on the far side, toward the ruins
-  const back = Math.atan2(TOWN.z - DUSK.z, TOWN.x - DUSK.x), gateAngles = [back, back + Math.PI];
-  const rng2 = mulberry32(17);
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + 0.2;
-    if (gateAngles.some((ga) => angDiff(a, ga) < 0.42)) continue;
-    const r = DUSK.r - 9 + rng2() * 3;
-    town.houses.push({ x: DUSK.x + Math.cos(a) * r, z: DUSK.z + Math.sin(a) * r, rot: -a - Math.PI / 2, w: 5 + rng2() * 2, d: 4.5 + rng2() * 1.5, wall: rng2() < 0.5 ? 0x8a8478 : 0x9a8f80, roof: rng2() < 0.5 ? 0x3a3a44 : 0x5a2a2a, out: true });
-  }
-  for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2, r = DUSK.r + 2;
-    if (gateAngles.some((ga) => angDiff(a, ga) < 0.2)) continue;
-    town.walls.push({ x: DUSK.x + Math.cos(a) * r, z: DUSK.z + Math.sin(a) * r, rot: -a + Math.PI / 2, tower: i % 7 === 0, out: true });
-  }
-  for (const ga of gateAngles)
-    for (const off of [-0.18, 0.18]) town.gates.push({ x: DUSK.x + Math.cos(ga + off) * (DUSK.r + 2), z: DUSK.z + Math.sin(ga + off) * (DUSK.r + 2), rot: -ga, out: true });
+  // the second town: dark stone kit buildings inside a stone wall with a gate on each road (shared/src/village.ts)
+  for (const s of DUSK_STAMPS)
+    town.houses.push({ x: s.x, z: s.z, rot: s.rot, w: s.w, d: s.d, wall: s.wall, roof: s.roof, kind: s.kind, out: true });
+  for (const w of duskCurtain().walls) town.walls.push({ ...w, out: true });
   return town;
 }
 

@@ -1,0 +1,3 @@
+Town kit: Medieval Village MegaKit by Quaternius (quaternius.com), CC0 1.0 (tools/scripts/v-assets.ts).
+props.glb: Fantasy Props MegaKit (Standard) by Quaternius (quaternius.com), CC0 1.0 (tools/scripts/props-assets.mjs).
+https://creativecommons.org/publicdomain/zero/1.0/
