@@ -391,6 +391,11 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
 }
 
 async function boot() {
+  // ?fx=1: skill effect gallery only (no server needed)
+  if (new URLSearchParams(location.search).has('fx')) {
+    cleanup = await (await import('./render/fx-gallery')).mountFxGallery(document.body);
+    return;
+  }
   // ?mobs=1: mob gallery only (no server needed)
   if (new URLSearchParams(location.search).has('mobs')) {
     cleanup = await mountMobPreview(document.body);
