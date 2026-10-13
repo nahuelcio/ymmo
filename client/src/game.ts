@@ -120,7 +120,7 @@ const SWIM_BODY_Y = WATER_LEVEL - 0.05;
 /** Got up since it last sat down (the server may not have said so yet, for our own character). */
 const isStanding = (c: CEnt) => c.standAt !== undefined && c.standAt > (c.sitAt ?? -Infinity);
 /** How far sitting on the ground lowers the body (the sitting clip is made for a chair). */
-const SIT_GROUND_DROP = 0.42;
+const SIT_GROUND_DROP = 0.44;
 /** What the cast bar says while working a node. */
 const GATHER_LABEL: Record<'chop' | 'mine' | 'pick', () => string> = {
   chop: () => tx('Talando…', 'Chopping…'),
@@ -1846,6 +1846,7 @@ export class Game {
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
           swimming,
+          floorSit: !!c.groundSit,
           sitAge: sitting ? now - (c.sitAt ?? now - 5000) : -1,
           standAge: c.standAt ? now - c.standAt : Infinity,
           gather: c.gather && c.flags & F_GATHER ? { anim: c.gather.anim, age: now - c.gather.at, swingMs: c.gather.swingMs } : null,

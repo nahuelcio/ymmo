@@ -245,7 +245,12 @@ export interface QOpts {
   inHand?: THREE.Object3D | null;
 }
 
-export interface QAnim { mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean }
+export interface QAnim {
+  mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean;
+  /** knees and ankles with their straight rest pose, and how far a floor sit has straightened them (0..1) */
+  legs: { bone: THREE.Object3D; rest: THREE.Quaternion }[];
+  floor: number;
+}
 
 /** Hangs `o` from a bone keeping the orientation it was modelled in (bones have arbitrary axes). */
 function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number) {
@@ -329,7 +334,8 @@ export function qPlayer(o: QOpts): Rig {
   body.scale.set(o.bulk, 1, o.bulk);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand },
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0,
+      legs: ['calf_l', 'calf_r', 'foot_l', 'foot_r'].map((n) => ({ bone: byName[n], rest: byName[n].quaternion.clone() })) },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
 }
@@ -376,6 +382,12 @@ export function animateQ(q: QAnim, s: AnimState) {
     q.acts[n].setEffectiveWeight((q.w[n] = w));
   }
   q.mixer.update(dt);
+  // Sitting on the floor: there is no floor-sit clip, so the chair sit is lowered to the ground (game.ts) and its
+  // knees straightened back toward the bind pose: legs out in front instead of shins sunk into the ground.
+  const floor = s.floorSit && (cur === 'Sitting_Enter' || cur === 'Sitting_Idle_Loop') ? 1 : 0;
+  q.floor += (floor - q.floor) * Math.min(1, dt * 8);
+  if (q.floor < 0.01) q.floor = 0;
+  if (q.floor > 0) for (const l of q.legs) l.bone.quaternion.slerp(l.rest, q.floor);
 }
 
 /** Dev gallery (?q=1): every race and gender in each gear tier, with the animation states. No server needed. */
