@@ -229,8 +229,18 @@ export class LocalLights {
   private slotSrc: (LightSource | null)[] = new Array(LocalLights.SIZE).fill(null);
   private fade = new Float64Array(LocalLights.SIZE);
   private lastT = 0;
+  /** spell flashes (fx.ts): they borrow the pool's last slots while they last, lamps fade back in after */
+  private flashes = Array.from({ length: LocalLights.SIZE }, () => ({ x: 0, y: 0, z: 0, color: 0, power: 0, range: 0, t0: 0, ms: 0 }));
 
   constructor(private scene: THREE.Scene, private sources: LightSource[]) {}
+
+  /** A short light at a spell's impact (only with the Local lights setting). The oldest flash gives way to a new one. */
+  flash(p: THREE.Vector3, color: number, power: number, range: number, ms: number) {
+    if (!settings.s.localLights) return;
+    const now = performance.now();
+    const f = this.flashes.reduce((a, b) => (b.t0 + b.ms < a.t0 + a.ms ? b : a));
+    Object.assign(f, { x: p.x, y: p.y, z: p.z, color, power, range, t0: now, ms });
+  }
 
   update(p: THREE.Vector3, t: number) {
     const on = settings.s.localLights;
@@ -265,11 +275,28 @@ export class LocalLights {
       this.fade[i] = goal > this.fade[i] ? Math.min(this.fade[i] + speed, goal) : Math.max(this.fade[i] - speed, goal);
       if (!s || this.fade[i] <= 0) return void (l.intensity = 0);
       l.position.set(s.x, s.y, s.z);
+      l.distance = 24;
       l.color.set(s.fire ? 0xff8a3a : 0xffc878);
       const flicker = s.fire ? 0.88 + 0.12 * Math.sin(t * 11 + i * 2.1) * Math.sin(t * 5.3 + i) : 1;
       // modest: a light sits close to walls and the ground, and bloom multiplies whatever blows out
       l.intensity = (s.fire ? 26 * (0.4 + 0.6 * night) : 16 * night) * flicker * this.fade[i];
     });
+    // live flashes take the last slots, brightest first: a quick rise, then a falloff
+    const now = performance.now();
+    let slot = this.pool.length - 1;
+    for (const f of this.flashes) {
+      const k = (now - f.t0) / f.ms;
+      if (k < 0 || k >= 1 || slot < 0) continue;
+      const l = this.pool[slot];
+      l.position.set(f.x, f.y, f.z);
+      l.color.set(f.color);
+      l.distance = f.range;
+      l.intensity = f.power * Math.min(1, k * 8) * (1 - k) ** 2;
+      // the lamp this slot lit comes back with a fade rather than a pop
+      this.fade[slot] = 0;
+      this.slotSrc[slot] = null;
+      slot--;
+    }
   }
 }
 

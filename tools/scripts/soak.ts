@@ -30,6 +30,8 @@ const PROFILE = +arg('profile', '0');
 const SHOT = arg('shot', '');
 /** --snaps dir: an --eval script may call 'await window.__snap(name)' to save dir/name.png at that moment */
 const SNAPS = arg('snaps', '');
+/** --nologin: a page that needs no account (the ?fx=1 / ?mobs=1 galleries): open --url and go straight to --eval / --shot */
+const NOLOGIN = process.argv.includes('--nologin');
 const EVAL =((e) => (e.startsWith('@') ? readFileSync(e.slice(1), 'utf8') : e))(arg('eval', '')); // @file reads it from a file
 const PORT = 9333;
 const CHROME = arg('chrome', [
@@ -126,6 +128,7 @@ try {
   await send('Page.navigate', { url: URL });
   await sleep(4000);
   // a fresh account and character each run (local dev server only)
+  if (!NOLOGIN) {
   const user = `soak${Date.now().toString(36).slice(-6)}`;
   await page(`
     const wait = async (f, ms = 15000) => { const t = Date.now(); while (!f()) { if (Date.now() - t > ms) throw new Error('timeout'); await new Promise(r => setTimeout(r, 100)); } };
@@ -144,6 +147,7 @@ try {
     await wait(() => document.querySelector('#game canvas'), 30000);
     if (document.querySelector('script[src*="/@vite/client"]')) await wait(() => window.soak && window.game?.self, 30000);
   `);
+  }
   await sleep(5000); // let the world finish streaming in
   if (SNAPS) await page(`window.__snap = (n) => new Promise((r) => { window.__snapDone = r; console.log('[snap] ' + n); }); return 1;`);
   if (SHOT) {

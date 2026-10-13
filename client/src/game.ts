@@ -17,7 +17,7 @@ import { dashEnd, findPath, navGrid, pushOut } from '../../shared/src/collision'
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
-import { SKILL_VFX } from './render/skill-fx';
+import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
 import { createWorldScene, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -291,6 +291,7 @@ export class Game {
       /* ignore */
     }
     this.lights = new LocalLights(this.world.scene, lightSources());
+    this.fx.onLight = (at, color, power, range, ms) => this.lights.flash(at, color, power, range, ms);
     this.nodes = new NodeVisuals(this.world.scene);
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';
@@ -533,11 +534,7 @@ export class Game {
     n.on('levelUp', (m) => {
       const e = this.ents.get(m.id);
       if (e) play('levelUp', this.near(e));
-      if (e) {
-        this.fx.pillar(e.pos.clone(), 0xffd966);
-        this.fx.ring(e.pos.clone(), 0xffd966, 3, 900);
-        this.fx.sparkles(e.pos.clone(), 0xfff0b0, 1400);
-      }
+      if (e) this.vfx('levelup', e);
       if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
     n.on('chat', (m) => {
@@ -1039,32 +1036,34 @@ export class Game {
     }
     this.floatText(t, m.crit ? `${m.v}!` : String(m.v), `${mine ? 'f-hurt' : 'f-dmg'}${m.crit ? ' f-crit' : ''}`);
     if (m.crit && m.s === this.me.id) this.sys(tx(`¡Crítico! ${m.v} de daño.`, `Critical hit! ${m.v} damage.`));
-    const hitAt = t.pos.clone().setY(t.pos.y + t.height * 0.55);
-    if (!mine) this.fx.burst(hitAt, m.crit ? 0xffcc33 : 0xffffff, m.crit ? 0.6 : 0.35, m.crit ? 320 : 220);
-    if (m.crit && src && src !== t) this.fx.slash(hitAt, src.pos.clone().setY(src.pos.y + src.height * 0.6), 0xffcc33, 1.3);
+    if (m.crit && src && src !== t) this.vfx('crit', src, t);
+    else if (!mine) this.vfx('hit', src ?? t, t);
+  }
+
+  /** One of the shared non-skill effects (skill-fx.ts GENERIC_VFX): hits, crits, level-up, chests, potions, dodges. */
+  private vfx(id: string, s: CEnt, t: CEnt = s) {
+    GENERIC_VFX[id]({ f: this.fx, s, t, color: 0xffffff, aoe: 6 });
   }
 
   private onFx(sId: number, tId: number, skill: string) {
     const s = this.ents.get(sId), t = this.ents.get(tId);
     if (!s) return;
     const chest = (e: CEnt) => e.pos.clone().setY(e.pos.y + e.height * 0.6);
-    if (skill === 'potion') return this.fx.sparkles(s.pos.clone(), 0xff5555, 700);
+    if (skill === 'potion') return this.vfx('potion', s);
     if (skill === 'chest') {
       play('coin');
-      this.fx.sparkles(s.pos.clone(), 0xffd24d, 1200);
-      this.fx.pillar(s.pos.clone(), 0xffd24d, 1000, 3);
-      return;
+      return this.vfx('chest', s);
     }
     if (skill === 'dash') {
       if (s !== this.self || !s.rollAt || performance.now() - s.rollAt > ROLL_MS) {
         play('dash', this.near(s));
         s.rollAt = performance.now();
       }
-      this.fx.ring(s.pos.clone(), 0xcfe6ff, 1.6, 350);
+      this.vfx('dash', s);
       if (settings.s.particles) this.fx.dust(s.pos.clone(), 600);
       return;
     }
-    if (skill === 'escape') return this.fx.pillar(s.pos.clone(), 0x66aaff, 3000, 4);
+    if (skill === 'escape') return this.vfx('escape', s);
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
     if (!def || !t) return;
@@ -1974,6 +1973,7 @@ export class Game {
       this.clickMarker.scale.setScalar(1 + k);
       (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
     }
+    this.fx.p.setShade(0.25 + 0.75 * ATMOS.day);
     this.fx.update();
     this.nodes.update();
     tickLod();
