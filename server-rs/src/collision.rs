@@ -142,6 +142,24 @@ pub fn line_clear(ax: f64, az: f64, bx: f64, bz: f64) -> bool {
     true
 }
 
+/**
+ * Where to stand to reach (tx,tz) from within `reach`: the free grid point within reach nearest to (fx,fz).
+ * For targets inside an obstacle (a tree trunk, a rock), whose own cell a path can never end on.
+ */
+pub fn approach_point(tx: f64, tz: f64, reach: f64, fx: f64, fz: f64) -> Option<P> {
+    let (cx, cz, r) = (to_cell(tx), to_cell(tz), reach.ceil() as i64 + 1);
+    let mut best: Option<(f64, P)> = None;
+    for dx in -r..=r {
+        for dz in -r..=r {
+            let (x, z) = (to_world(cx + dx), to_world(cz + dz));
+            if blocked(cx + dx, cz + dz) || (x - tx).hypot(z - tz) > reach { continue; }
+            let d = (x - fx).hypot(z - fz);
+            if best.map_or(true, |(bd, _)| d < bd) { best = Some((d, P { x, z })); }
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
 fn nearest_free(cx: i64, cz: i64) -> Option<(i64, i64)> {
     if !blocked(cx, cz) { return Some((cx, cz)); }
     for rad in 1..=12i64 {

@@ -1,5 +1,6 @@
 //! World nodes: felling trees, mining rocks, picking berries and sitting (shared/src/nodes.ts).
 //! Node ids, places and rules come from game.json; which nodes are spent lives here, per world.
+use crate::collision::approach_point;
 use crate::data::{d, NodeKind};
 use crate::ent::*;
 use crate::formulas::rnd;
@@ -9,6 +10,8 @@ use serde_json::json;
 
 /** How far beyond a node's body radius a character works it (shared reachOf). */
 const NODE_REACH: f64 = 0.9;
+/** How much farther than reach a walk that can't get any closer (blocked grid) still counts as arrived (m). */
+const STALL_SLACK: f64 = 1.5;
 
 impl World {
     /** 'interact': validate, then walk there (Intent::Interact) and use the node on arrival. */
@@ -48,7 +51,30 @@ impl World {
             return;
         };
         let reach = if n.kind == NodeKind::Seat { 0.3 } else { n.r + NODE_REACH };
-        if !self.step_toward(pid, n.x, n.z, speed, dt, reach) { return; }
+        let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        let arrived = if n.kind == NodeKind::Seat {
+            self.step_toward(pid, n.x, n.z, speed, dt, reach)
+        } else if (px - n.x).hypot(pz - n.z) <= reach {
+            self.step_toward(pid, px, pz, speed, dt, 0.0) // already there: stop
+        } else {
+            // A tree or rock stands inside its own obstacle, where a path can never end: walking at its centre left
+            // the path at whatever free cell the search found first, sometimes out of reach, and the player stood
+            // there forever. Walk to a free spot within reach instead.
+            let Some(a) = approach_point(n.x, n.z, reach - 0.05, px, pz) else {
+                self.pl_mut(pid).unwrap().intent = None;
+                return self.sys(pid, "No llegás hasta ahí.", "You can't get there.");
+            };
+            self.step_toward(pid, a.x, a.z, speed, dt, 0.02)
+        };
+        if !arrived {
+            // step_toward stops walking (moving = false) when it can't get any closer: near enough counts, else give up
+            let c = &self.ents[&pid].c;
+            if c.moving { return; }
+            if n.kind == NodeKind::Seat || (c.x - n.x).hypot(c.z - n.z) > reach + STALL_SLACK {
+                self.pl_mut(pid).unwrap().intent = None;
+                return self.sys(pid, "No llegás hasta ahí.", "You can't get there.");
+            }
+        }
         self.pl_mut(pid).unwrap().intent = None;
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         if d().is_deep(x, z) { return self.sys(pid, "No podés hacer eso nadando.", "You cannot do that while swimming."); }
