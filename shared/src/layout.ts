@@ -2,7 +2,7 @@
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
-import { DUSK, heightAt, inTown, mulberry32, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
+import { DUSK, firstMapHeightAt, heightAt, INNER_HALF, inTown, mulberry32, PLAYABLE_HALF, RING_ROADS, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
 import { ALBA_STAMPS, albaCurtain, DUSK_STAMPS, duskCurtain } from './village';
 
 /**
@@ -10,16 +10,33 @@ import { ALBA_STAMPS, albaCurtain, DUSK_STAMPS, duskCurtain } from './village';
  * The 20-50 zones have no road (you get there by Gatekeeper): every road opens a gate in the village
  * palisade and takes the houses in its way, which would move the landmarks the NPCs stand by.
  */
-export const ROADS: [number, number, number, number][] = [
+/** The first map's own roads, from the village out to its zones and the Bastión. */
+const FIRST_ROADS: [number, number, number, number][] = [
   ...['meadows', 'hills', 'barracks', 'wastes'].map((id) => ZONES.find((z) => z.id === id)!),
   DUSK,
 ].map((to) => [TOWN.x, TOWN.z, to.x, to.z]);
+/** ...and on through the passes to the ring's towns. */
+export const ROADS: [number, number, number, number][] = [...FIRST_ROADS, ...RING_ROADS];
+
+/** Out in the ring beyond the first map: margin keeps its scatter off the first map's own (which reaches inner * k). */
+const inRing = (x: number, z: number, k: number) => Math.max(Math.abs(x), Math.abs(z)) >= INNER_HALF * k;
 
 function distToSegment(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number]) {
   const dx = bx - ax, dz = bz - az;
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
   return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
 }
+
+const distTo = (roads: [number, number, number, number][], x: number, z: number) => Math.min(...roads.map((r) => distToSegment(x, z, r)));
+/**
+ * The world as the first map's scatter judges it: its old roads and its ground before the passes. Deciding with these
+ * keeps every tree, rock and bush there drawn from the same random numbers as always; what the new roads run over is
+ * removed afterwards (offRingRoads) and heights are read from the real ground.
+ */
+const OLD = { roadDist: (x: number, z: number) => distTo(FIRST_ROADS, x, z), height: firstMapHeightAt };
+const NEW = { roadDist: (x: number, z: number) => roadDist(x, z), height: heightAt };
+type View = typeof OLD;
+const offRingRoads = (x: number, z: number, clear: number) => distTo(RING_ROADS, x, z) >= clear;
 
 export function roadDist(x: number, z: number): number {
   let d = Infinity;
@@ -53,37 +70,77 @@ export interface ZonePropsL {
   huts: { x: number; z: number }[];
 }
 
+/** A tree at (x, z), or null where none grows; draws from rng in the order the first map's trees always have. */
+function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | null {
+  if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || w.roadDist(x, z) < 6) return null;
+  const h = w.height(x, z);
+  if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) return null; // no trees on peaks, in ponds or in camps
+  const zone = zoneOf(x, z);
+  // keep hunting grounds a bit more open
+  if (zone && rng() < 0.55) return null;
+  const sc = 0.7 + rng() * 0.7;
+  const rot = rng() * Math.PI * 2;
+  const dead = zone?.id === 'wastes';
+  let pine = false, hue = 0, light = 0;
+  if (!dead) {
+    pine = h > 10 || zone?.id === 'barracks' ? rng() < 0.8 : rng() < 0.35;
+    hue = rng();
+    light = rng();
+  }
+  return { x, z, h, rot, sc, dead, pine, hue, light };
+}
+
 let trees: TreeL[] | null = null;
 export function layoutTrees(): TreeL[] {
   if (trees) return trees;
   trees = [];
+  // the first map, as it always was (gathering nodes are numbered by this order: the ring comes after)
   const rng = mulberry32(7);
   const N = 2600;
   for (let i = 0; i < N * 3 && trees.length < N; i++) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
-    if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || roadDist(x, z) < 6) continue;
-    const h = heightAt(x, z);
-    if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) continue; // no trees on peaks, in ponds or in camps
-    const zone = zoneOf(x, z);
-    // keep hunting grounds a bit more open
-    if (zone && rng() < 0.55) continue;
-    const sc = 0.7 + rng() * 0.7;
-    const rot = rng() * Math.PI * 2;
-    const dead = zone?.id === 'wastes';
-    let pine = false, hue = 0, light = 0;
-    if (!dead) {
-      pine = h > 10 || zone?.id === 'barracks' ? rng() < 0.8 : rng() < 0.35;
-      hue = rng();
-      light = rng();
-    }
-    trees.push({ x, z, h, rot, sc, dead, pine, hue, light });
+    const t = placeTree(rng, (rng() * 2 - 1) * INNER_HALF * 0.95, (rng() * 2 - 1) * INNER_HALF * 0.95, OLD);
+    if (t) trees.push(t);
+  }
+  // the new roads clear their way; the rest stand on the real ground (lower where a pass was cut)
+  trees = trees.filter((t) => offRingRoads(t.x, t.z, 6)).map((t) => ({ ...t, h: heightAt(t.x, t.z) }));
+  const ring = mulberry32(8), RING_N = 3500;
+  for (let i = 0, n = 0; i < RING_N * 4 && n < RING_N; i++) {
+    const x = (ring() * 2 - 1) * WORLD_HALF * 0.95, z = (ring() * 2 - 1) * WORLD_HALF * 0.95;
+    if (!inRing(x, z, 0.95)) continue;
+    const t = placeTree(ring, x, z, NEW);
+    if (t) (trees.push(t), n++);
   }
   return trees;
 }
 
+/**
+ * Grass cells: the first map's grid as it always was, then the ring's, aligned to the same lines. Each brings the
+ * seed for its own tufts (`draws`: random numbers one cell takes), the same ones it had when all were drawn in one go.
+ */
+export function detailCells(chunk: number, draws: number): { x0: number; z0: number; seed: number }[] {
+  const out: { x0: number; z0: number; seed: number }[] = [];
+  // mulberry32 only counts (a fixed step per draw): the seed a cell's stretch of one long sequence starts from is
+  // known without drawing the cells before it, so a cell can be built alone, in any order, always the same
+  const at = (seed: number, i: number) => (seed + Math.imul(i * draws, 0x6d2b79f5)) >>> 0;
+  const lo = -INNER_HALF * 0.86, n = Math.ceil((INNER_HALF * 2 * 0.86) / chunk), hi = lo + n * chunk;
+  let i = 0, j = 0;
+  for (let cx = 0; cx < n; cx++) for (let cz = 0; cz < n; cz++) out.push({ x0: lo + cx * chunk, z0: lo + cz * chunk, seed: at(77, i++) });
+  const k = Math.ceil((PLAYABLE_HALF + lo) / chunk), start = lo - k * chunk, m = n + 2 * k;
+  for (let cx = 0; cx < m; cx++)
+    for (let cz = 0; cz < m; cz++) {
+      const x0 = start + cx * chunk, z0 = start + cz * chunk;
+      if (x0 >= lo && x0 < hi && z0 >= lo && z0 < hi) continue;
+      out.push({ x0, z0, seed: at(78, j++) });
+    }
+  return out;
+}
+
 /** Ground where grass and bushes grow: dry land off the roads, out of towns and camps, below the bare peaks. */
 export function fertile(x: number, z: number, h: number): boolean {
-  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
+  return fertileIn(NEW, x, z, h);
+}
+function fertileIn(w: View, x: number, z: number, h: number): boolean {
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && w.roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
 }
 
 /** A stable pseudo-random value in [0, 1) for a spot (picks models and variants without an rng). */
@@ -103,18 +160,23 @@ export function layoutBushes(): BushL[] {
   if (bushes) return bushes;
   bushes = [];
   // the exact rng sequence the client drew these with before they were shared: change nothing here
-  const rng = mulberry32(21);
-  for (let i = 0, n = 0; i < 4000 && n < 1400; i++) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.9, z = (rng() * 2 - 1) * WORLD_HALF * 0.9, h = heightAt(x, z);
-    if (!fertile(x, z, h) || zoneOf(x, z)?.id === 'wastes') continue;
+  const place = (rng: () => number, x: number, z: number, ring: boolean) => {
+    const w = ring ? NEW : OLD, h = w.height(x, z);
+    if ((ring && !inRing(x, z, 0.9)) || !fertileIn(w, x, z, h) || zoneOf(x, z)?.id === 'wastes') return false;
     const sc = 0.7 + rng() * 0.8;
     rng(); // the old blob's vertical squash; kept so later samples stay put
     const u = spotHash(x, z);
     const rot = rng() * 6.3;
     // a third of the plain (non-flowering) bushes bear fruit
-    bushes.push({ x, z, h, sc, rot, u, fruit: u >= 0.18 && spotHash(x + 0.37, z - 0.71) < 0.35 });
-    n++;
-  }
+    bushes!.push({ x, z, h, sc, rot, u, fruit: u >= 0.18 && spotHash(x + 0.37, z - 0.71) < 0.35 });
+    return true;
+  };
+  const rng = mulberry32(21);
+  for (let i = 0, n = 0; i < 4000 && n < 1400; i++) if (place(rng, (rng() * 2 - 1) * INNER_HALF * 0.9, (rng() * 2 - 1) * INNER_HALF * 0.9, false)) n++;
+  bushes = bushes.filter((b) => offRingRoads(b.x, b.z, 3.2)).map((b) => ({ ...b, h: heightAt(b.x, b.z) }));
+  // the ring, after the first map's (fruit bushes are numbered by this order)
+  const ring = mulberry32(22);
+  for (let i = 0, n = 0; i < 9000 && n < 2000; i++) if (place(ring, (ring() * 2 - 1) * WORLD_HALF * 0.9, (ring() * 2 - 1) * WORLD_HALF * 0.9, true)) n++;
   return bushes;
 }
 
@@ -150,16 +212,23 @@ let rocks: RockL[] | null = null;
 export function layoutRocks(): RockL[] {
   if (rocks) return rocks;
   rocks = [];
-  const rng = mulberry32(99);
-  while (rocks.length < 500) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.95, z = (rng() * 2 - 1) * WORLD_HALF * 0.95;
-    if (inTown(x, z) || roadDist(x, z) < 4) continue;
-    const sc = 0.3 + rng() * rng() * 2.5;
-    const e: [number, number, number] = [rng() * 3, rng() * 3, rng() * 3];
-    const s: [number, number, number] = [sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6)];
-    const light = rng();
-    if (!nearCamp(x, z, 17)) rocks.push({ x, z, y: heightAt(x, z) + sc * 0.2, sc, e, s, light });
-  }
+  const scatter = (rng: () => number, half: number, want: number, ring: boolean) => {
+    const w = ring ? NEW : OLD;
+    for (let n = 0; n < want;) {
+      const x = (rng() * 2 - 1) * half * 0.95, z = (rng() * 2 - 1) * half * 0.95;
+      if ((ring && !inRing(x, z, 0.95)) || inTown(x, z) || w.roadDist(x, z) < 4) continue;
+      const sc = 0.3 + rng() * rng() * 2.5;
+      const e: [number, number, number] = [rng() * 3, rng() * 3, rng() * 3];
+      const s: [number, number, number] = [sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6)];
+      const light = rng();
+      // only rocks actually placed count (the first map's always worked that way)
+      if (!nearCamp(x, z, 17)) (rocks!.push({ x, z, y: heightAt(x, z) + sc * 0.2, sc, e, s, light }), n++);
+    }
+  };
+  // the first map as it always was, then the ring (rock nodes are numbered by this order)
+  scatter(mulberry32(99), INNER_HALF, 500, false);
+  rocks = rocks.filter((r) => offRingRoads(r.x, r.z, 4)).map((r) => ({ ...r, y: heightAt(r.x, r.z) + r.sc * 0.2 }));
+  scatter(mulberry32(100), WORLD_HALF, 900, true);
   return rocks;
 }
 

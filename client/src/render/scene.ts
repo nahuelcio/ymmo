@@ -4,9 +4,9 @@ import { duskLanterns } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
-import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf } from '../../../shared/src/layout';
+import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf, detailCells, layoutBushes } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
-import { buildNatureBushes, buildNatureDetail, buildNatureRocks, buildNatureTown, buildNatureTrees, natureReady } from './nature';
+import { buildNatureBushes, buildNatureRocks, buildNatureTown, buildNatureTrees, natureDetailCell, NATURE_DETAIL_DRAWS, natureReady } from './nature';
 import { setCharAniso } from './quaternius';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
@@ -190,11 +190,14 @@ export interface WorldScene {
 
 export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene {
   const scene = new THREE.Scene();
+  // The scene itself never moves. Left on, it re-marks its own matrix every frame and three.js then recomputes the
+  // world matrix of every node under it, frozen or not (4.7 ms a frame on the grown map).
+  scene.matrixAutoUpdate = false;
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, 90, 420);
   /** where follow() last culled the chunks, and with which view distance / foliage setting */
   const lastCull = new THREE.Vector3(Infinity, 0, 0);
-  let lastReach = 0, lastDetail = false;
+  let lastReach = 0, lastDetail = false, grassLeft = false;
 
   const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 1.6);
   scene.add(hemi);
@@ -245,7 +248,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
   const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
   scene.add(water);
-  const detail = natureReady() ? buildNatureDetail() : buildDetail();
+  const grass = natureReady() ? lazyDetail(natureDetailCell, NATURE_DETAIL_DRAWS) : lazyDetail(makeDetailCell(), DETAIL_PER_CELL * 5);
+  const detail = grass.group;
   scene.add(detail);
   scene.add(mergeStatic(buildTown()));
   if (natureReady()) scene.add(buildNatureTown());
@@ -358,13 +362,13 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       sun.target.position.copy(p);
       // chunk visibility only changes after a few steps (or a new view distance): don't re-check every frame
       const reachNow = (scene.fog as THREE.Fog).far;
-      if (lastCull.distanceToSquared(p) < 4 && lastReach === reachNow && lastDetail === detail.visible) return;
+      const moved = lastCull.distanceToSquared(p);
+      if (moved < 4 && lastReach === reachNow && lastDetail === detail.visible && !grassLeft) return;
       lastCull.copy(p);
       lastReach = reachNow;
       lastDetail = detail.visible;
-      // grass and flowers only around the player
-      if (detail.visible)
-        for (const ch of detail.children) ch.visible = Math.abs(ch.userData.cx - p.x) < 95 && Math.abs(ch.userData.cz - p.z) < 95;
+      // grass and flowers only around the player (still building some: come back next frame)
+      if (detail.visible) grassLeft = !grass.update(p, moved > 60 * 60);
       // fog hides everything past its far end: skip whole forest chunks beyond it (150 covers a chunk's half-diagonal plus the camera's offset)
       const reach = (scene.fog as THREE.Fog).far + 150;
       for (const g of forest) for (const ch of g.children) if (ch.userData.cx !== undefined) ch.visible = Math.hypot(ch.userData.cx - p.x, ch.userData.cz - p.z) < reach;
@@ -379,8 +383,14 @@ function freeze(o: THREE.Object3D) {
     x.matrixAutoUpdate = false;
   });
   o.updateMatrixWorld(true);
-  // and keep the per-frame matrix pass out of the whole subtree: thousands of nodes walked for nothing otherwise
+  // and keep the per-frame matrix pass out of the whole subtree: thousands of nodes walked for nothing otherwise.
+  // (three.js r186 still walks the children of a node with matrixWorldAutoUpdate off, so the walk stops here;
+  // an explicit updateMatrixWorld(true) still goes all the way down.)
   o.matrixWorldAutoUpdate = false;
+  o.updateMatrixWorld = frozenUpdate;
+}
+function frozenUpdate(this: THREE.Object3D, force?: boolean) {
+  if (force) THREE.Object3D.prototype.updateMatrixWorld.call(this, true);
 }
 
 /**
@@ -416,7 +426,7 @@ const chunkKey = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floo
 function buildTerrain(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'terrain';
-  const n = Math.round((WORLD_HALF * 2) / CHUNK), seg = Math.round(250 / n);
+  const n = Math.round((WORLD_HALF * 2) / CHUNK), seg = CHUNK / 4; // a vertex every 4 m
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   mat.onBeforeCompile = cloudShadow;
   const c = new THREE.Color();
@@ -614,21 +624,16 @@ function buildBushes(): THREE.Group {
   ])!;
   const items: Inst[] = [];
   const q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < 4000 && items.length < 1400; i++) {
-    const x = (rng() * 2 - 1) * WORLD_HALF * 0.9, z = (rng() * 2 - 1) * WORLD_HALF * 0.9, h = heightAt(x, z);
-    if (!fertile(x, z, h) || zoneOf(x, z)?.id === 'wastes') continue;
-    const sc = 0.7 + rng() * 0.8;
-    items.push({ m: new THREE.Matrix4().compose(p.set(x, h - 0.1, z), q.setFromAxisAngle(up, rng() * 6.3), sv.set(sc, sc * (0.8 + rng() * 0.4), sc)),
-      x, z, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.45, 0.24 + rng() * 0.1) });
+  for (const b of layoutBushes()) {
+    items.push({ m: new THREE.Matrix4().compose(p.set(b.x, b.h - 0.1, b.z), q.setFromAxisAngle(up, b.rot), sv.set(b.sc, b.sc * (0.8 + b.u * 0.4), b.sc)),
+      x: b.x, z: b.z, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.45, 0.24 + rng() * 0.1) });
   }
   return chunkedInstances(geo, instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'leaves'), items);
 }
 
 const DETAIL_CHUNK = 40;
-/** Grass tufts and flowers: dense but tiny, so only chunks near the player are drawn. */
-function buildDetail(): THREE.Group {
-  const g = new THREE.Group();
-  const rng = mulberry32(77);
+/** Grass tufts and flowers without the nature models: a builder for one cell (shared/src/layout.ts detailCells). */
+function makeDetailCell(): (x0: number, z0: number, seed: number) => THREE.Object3D[] {
   const blade = mergeGeometries([0, 1, 2].map((i) =>
     new THREE.ConeGeometry(0.07, 0.55, 3).translate(0, 0.27, 0).rotateZ((i - 1) * 0.35).translate((i - 1) * 0.08, 0, (i % 2) * 0.06).toNonIndexed()))!;
   const flower = mergeGeometries([
@@ -639,12 +644,10 @@ function buildDetail(): THREE.Group {
   const flowerMat = sway(new THREE.MeshLambertMaterial({ flatShading: true }), 0.5);
   const FLOWERS = [0xf0e04a, 0xffffff, 0xe85a8a, 0x8a7aff, 0xff8a3a];
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), c = new THREE.Color();
-  const n = Math.ceil((WORLD_HALF * 2 * 0.86) / DETAIL_CHUNK);
-  for (let cx = 0; cx < n; cx++)
-    for (let cz = 0; cz < n; cz++) {
-      const x0 = -WORLD_HALF * 0.86 + cx * DETAIL_CHUNK, z0 = -WORLD_HALF * 0.86 + cz * DETAIL_CHUNK;
+  return (x0, z0, seed) => {
+      const rng = mulberry32(seed), out: THREE.Object3D[] = [];
       const grass: [THREE.Matrix4, THREE.Color][] = [], flowers: [THREE.Matrix4, THREE.Color][] = [];
-      for (let i = 0; i < 520; i++) {
+      for (let i = 0; i < DETAIL_PER_CELL; i++) {
         const x = x0 + rng() * DETAIL_CHUNK, z = z0 + rng() * DETAIL_CHUNK, h = heightAt(x, z);
         const r1 = rng(), r2 = rng(), r3 = rng();
         if (!fertile(x, z, h)) continue;
@@ -670,10 +673,44 @@ function buildDetail(): THREE.Group {
         im.receiveShadow = true;
         im.userData.cx = x0 + DETAIL_CHUNK / 2;
         im.userData.cz = z0 + DETAIL_CHUNK / 2;
-        g.add(im);
+        out.push(im);
       }
-    }
-  return g;
+      return out;
+  };
+}
+const DETAIL_PER_CELL = 520;
+
+/**
+ * Grass and flowers are only drawn within 95 m of the player, so only those cells are built: all of them over the
+ * grown map were 34 MB and 6,000 meshes for the two dozen ever on screen. Walking builds a few new cells a frame
+ * (all at once after a jump: spawning, teleports) and lets go of the ones left 200 m behind; a cell comes back
+ * exactly as it was (detailCells gives each its seed).
+ */
+function lazyDetail(build: (x0: number, z0: number, seed: number) => THREE.Object3D[], draws: number) {
+  const SHOW = 95, KEEP = 200, PER_CALL = 2;
+  const group = new THREE.Group();
+  const cells = detailCells(DETAIL_CHUNK, draws), built = new Map<number, THREE.Object3D[]>();
+  /** Show the cells around `p`, building the missing ones (`all`: no limit per call). False while some are left to build. */
+  const update = (p: THREE.Vector3, all: boolean): boolean => {
+    let left = all ? Infinity : PER_CALL, done = true;
+    cells.forEach((c, i) => {
+      const dx = Math.abs(c.x0 + DETAIL_CHUNK / 2 - p.x), dz = Math.abs(c.z0 + DETAIL_CHUNK / 2 - p.z), near = dx < SHOW && dz < SHOW;
+      let meshes = built.get(i);
+      if (near && !meshes) {
+        if (left-- <= 0) return void (done = false);
+        built.set(i, (meshes = build(c.x0, c.z0, c.seed)));
+        // the group is frozen (no per-frame matrix pass): the meshes sit at the origin, so their matrices already are right
+        for (const m of meshes) (m.matrixAutoUpdate = false), group.add(m);
+      }
+      if (!meshes) return;
+      if (Math.max(dx, dz) > KEEP) {
+        for (const m of meshes) group.remove(m), (m as THREE.InstancedMesh).dispose(); // frees the instance buffers; geometry and material are shared
+        built.delete(i);
+      } else for (const m of meshes) m.visible = near;
+    });
+    return done;
+  };
+  return { group, update };
 }
 
 function box(w: number, h: number, d: number, color: number, x = 0, y = 0, z = 0, surface?: Surface | 'none') {

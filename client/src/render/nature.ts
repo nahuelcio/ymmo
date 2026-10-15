@@ -166,11 +166,12 @@ export function loadNature(): Promise<void> {
 
 interface Item { m: THREE.Matrix4; x: number; z: number; piece: string; prim: number; c?: THREE.Color; node?: number }
 
-function chunked(items: Item[], chunk: number): THREE.Group {
+/** Instanced meshes per world chunk and model; with `cell`, everything is that one cell's (centred there). */
+function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group {
   const g = new THREE.Group();
   const buckets = new Map<string, Item[]>();
   for (const it of items) {
-    const k = `${Math.floor(it.x / chunk)},${Math.floor(it.z / chunk)}|${it.piece}|${it.prim}`;
+    const k = `${cell ? '0,0' : `${Math.floor(it.x / chunk)},${Math.floor(it.z / chunk)}`}|${it.piece}|${it.prim}`;
     let l = buckets.get(k);
     if (!l) buckets.set(k, (l = []));
     l.push(it);
@@ -194,8 +195,8 @@ function chunked(items: Item[], chunk: number): THREE.Group {
     mesh.computeBoundingSphere();
     // every chunk size gets its center so follow() can hide the far ones
     const [ix, iz] = k.split('|')[0].split(',').map(Number);
-    mesh.userData.cx = (ix + 0.5) * chunk;
-    mesh.userData.cz = (iz + 0.5) * chunk;
+    mesh.userData.cx = cell ? cell.cx : (ix + 0.5) * chunk;
+    mesh.userData.cz = cell ? cell.cz : (iz + 0.5) * chunk;
     g.add(mesh);
   }
   return g;
@@ -252,14 +253,14 @@ export function buildNatureBushes(): THREE.Group {
   return chunked(items, CHUNK);
 }
 
-export function buildNatureDetail(): THREE.Group {
-  const rng = mulberry32(77);
+/** Random numbers one grass cell takes (5 per candidate, placed or not): see detailCells. */
+export const NATURE_DETAIL_DRAWS = DETAIL_PER_CELL * 5;
+/** One grass cell (shared/src/layout.ts detailCells): its tufts and flowers, one instanced mesh per model. */
+export function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[] {
   const items: Item[] = [];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
-  const n = Math.ceil((WORLD_HALF * 2 * 0.86) / DETAIL_CHUNK);
-  for (let cx = 0; cx < n; cx++)
-    for (let cz = 0; cz < n; cz++) {
-      const x0 = -WORLD_HALF * 0.86 + cx * DETAIL_CHUNK, z0 = -WORLD_HALF * 0.86 + cz * DETAIL_CHUNK;
+  const rng = mulberry32(seed);
+  {
       // ponytail: fewer candidates per cell (was 520) cuts blade count ~30%; the look changes slightly, the cost ceiling is this constant
       for (let i = 0; i < DETAIL_PER_CELL; i++) {
         const x = x0 + rng() * DETAIL_CHUNK, z = z0 + rng() * DETAIL_CHUNK, h = heightAt(x, z);
@@ -277,7 +278,7 @@ export function buildNatureDetail(): THREE.Group {
         }
       }
     }
-  return chunked(items, DETAIL_CHUNK);
+  return [...chunked(items, DETAIL_CHUNK, { cx: x0 + DETAIL_CHUNK / 2, cz: z0 + DETAIL_CHUNK / 2 }).children];
 }
 
 /** Alba's yards and the inside of the curtain. Kept out of mergeStatic so the albedo UVs survive. */
