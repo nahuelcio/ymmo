@@ -74,6 +74,8 @@ export interface CEnt {
   roll?: { fx: number; fz: number; tx: number; tz: number; ry: number; at: number };
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
+  /** the bubble's label object: replacing a bubble must take this off, the label layer re-adds a lone element */
+  bubbleObj?: CSS2DObject | null;
   /** quest giver's floating ! / ? */
   marker?: { obj: CSS2DObject; el: HTMLDivElement };
   /** when it sat down / got up (F_SITTING edges), for the sit-down and get-up clips */
@@ -100,6 +102,16 @@ const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
  * The hit flash, one material per shader variant (skinned and/or with shape keys): a single shared one made the
  * renderer switch programs on every draw while a character flashed.
  */
+/** At most BUBBLE_CHARS characters of a chat line, cut at the last space when there is one near the end. */
+const BUBBLE_CHARS = 30;
+function oneLine(text: string): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  if (t.length <= BUBBLE_CHARS) return t;
+  const cut = t.slice(0, BUBBLE_CHARS);
+  const sp = cut.lastIndexOf(' ');
+  return `${(sp > BUBBLE_CHARS * 0.6 ? cut.slice(0, sp) : cut).trimEnd()}…`;
+}
+
 /** scratch for the per-frame "did this rig move" check (game.ts frame) */
 const MW_TMP: number[] = [];
 const FLASH_MATS = new Map<string, THREE.MeshBasicMaterial>();
@@ -544,6 +556,12 @@ export class Game {
       const gain = m.ch === 'sys' && settings.s.damageNumbers ? GAIN.exec(m.text) : null;
       if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
       this.ui.chat.add(gain || (m.ch === 'sys' && NOT_READY.test(m.text)) ? 'log' : m.ch, m.from, m.text);
+      // what a player says nearby, shouts or tells the party also floats over their head, cut to one line.
+      // Party lines only reach the party's members (server-rs/src/chat.rs), so only they ever see the green bubble.
+      if (m.ch === 'all' || m.ch === 'shout' || m.ch === 'party') {
+        const c = [...this.ents.values()].find((e) => e.rec.k === 'p' && e.rec.n === m.from);
+        if (c) this.speech(c, m.text, m.ch === 'all' ? 'line' : m.ch);
+      }
     });
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
@@ -934,20 +952,27 @@ export class Game {
     if (add.length) this.ui.onTargetChanged();
   }
 
-  /** Speech bubble above an entity's head for a few seconds. */
-  speech(c: CEnt, text: string) {
+  /**
+   * Speech bubble above an entity's head for a few seconds. NPCs say it all; a player's chat ('line', 'shout' or
+   * 'party') keeps to one line: the start of it, cut at a word, the full message stays in the chat window.
+   */
+  speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party') {
     c.bubble?.remove();
+    if (c.bubbleObj) c.tag.remove(c.bubbleObj);
     const el = document.createElement('div');
-    el.className = 'speech';
-    el.textContent = text;
+    el.className = style ? `speech one-line${style === 'line' ? '' : ` ${style}`}` : 'speech';
+    // a one-line bubble clips its text in an inner span: clipping the bubble itself would cut off its tail
+    if (style) el.appendChild(document.createElement('span')).textContent = oneLine(text);
+    else el.textContent = text;
     const obj = new CSS2DObject(el);
     obj.position.set(0, c.height + 1.35, 0);
     c.tag.add(obj);
     c.bubble = el;
+    c.bubbleObj = obj;
     setTimeout(() => {
       c.tag.remove(obj);
       el.remove();
-      if (c.bubble === el) c.bubble = null;
+      if (c.bubble === el) (c.bubble = null), (c.bubbleObj = null);
     }, 6000);
   }
 
