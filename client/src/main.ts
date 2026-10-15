@@ -61,6 +61,14 @@ function rejoinInPlace() {
   const token = store.get('session');
   if (!game || !char || !token) return reconnect();
   if (rejoining) return;
+  // a few rejoins a minute at most: past that something keeps dropping us (e.g. another tab on this
+  // account, if the server didn't say so), so wait for the player instead of looping
+  const now = Date.now();
+  rejoins = rejoins.filter((at) => now - at < 60000);
+  if (rejoins.length >= 3) {
+    return paused(t('Se perdió la conexión varias veces seguidas.', 'The connection dropped several times in a row.'), t('Reconectar', 'Reconnect'));
+  }
+  rejoins.push(now);
   const banner = el('div', 'rejoin', document.body, t('Conexión perdida. Reconectando…', 'Connection lost. Reconnecting…'));
   rejoining = { el: banner, enterTries: 0 };
   let tries = 0;
@@ -77,6 +85,29 @@ function rejoinInPlace() {
     }
   };
   void knock();
+}
+
+/** Recent in-place rejoins (Date.now()), for the cap in rejoinInPlace(). */
+let rejoins: number[] = [];
+/** The server said this character was entered elsewhere: the coming close is not a dropped connection. */
+let kicked = false;
+
+/**
+ * Stop and wait for a click before rejoining in place (which takes the character back, kicking
+ * whoever has it now). Used when another tab or device took over, or after too many rejoins.
+ */
+function paused(text: string, button: string) {
+  const d = el('div', 'disconnected', document.body);
+  const box = el('div', 'panel', d);
+  el('b', '', box, text);
+  el('br', '', box);
+  el('br', '', box);
+  el('button', 'btn primary', box, button).onclick = () => {
+    d.remove();
+    kicked = false;
+    rejoins = [];
+    rejoinInPlace();
+  };
 }
 
 /** In-place rejoin didn't work: drop the banner and do it the old way (reload). */
@@ -433,7 +464,12 @@ async function boot() {
     }
   }
   await models;
-  net.onClose = () => (inGame ? rejoinInPlace() : reconnect());
+  net.onClose = () => {
+    if (kicked) return paused(t('Estás jugando en otra pestaña o ventana.', 'Playing in another tab or window.'), t('Jugar acá', 'Play here'));
+    if (inGame) rejoinInPlace();
+    else reconnect();
+  };
+  net.on('kicked', () => (kicked = true));
   net.on('error', (m) => {
     // rejoining from a raid: the server first has to take the old character out, then asks to retry
     if (rejoining) {

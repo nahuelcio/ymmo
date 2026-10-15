@@ -279,7 +279,11 @@ export class Game {
   private last = performance.now();
   private down: { x: number; y: number } | null = null;
 
+  /** the skill bars' layout as the server keeps it (ui/hud.ts) */
+  barData: string;
+
   constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>) {
+    this.barData = enter.bar ?? '';
     this.me = enter.self;
     ambience(enter.self.zone);
     this.inv = enter.inv;
@@ -635,6 +639,7 @@ export class Game {
     this.ui.npc.win.hide();
     this.ui.onMe();
     this.ui.onInv();
+    this.ui.hud.sendBar(); // a change made while the connection was down
     this.ui.hud.banner(zoneName(m.self.zone, lang));
     ambience(m.self.zone);
   }
@@ -1618,13 +1623,13 @@ export class Game {
       const fk = /^F(\d+)$/.exec(e.key);
       if (fk && +fk[1] >= 1 && +fk[1] <= 10) {
         e.preventDefault();
-        this.ui.hud.activateSlot(+fk[1] - 1);
+        this.ui.hud.activateSlot(0, +fk[1] - 1);
         return;
       }
       const action = bound(e);
-      const slot = action && /^slot(\d+)$/.exec(action);
+      const slot = action && /^(?:bar(\d))?slot(\d+)$/.exec(action);
       if (slot && !e.ctrlKey && !e.altKey) {
-        this.ui.hud.activateSlot(+slot[1] - 1);
+        this.ui.hud.activateSlot(slot[1] ? +slot[1] - 1 : 0, +slot[2] - 1);
         return;
       }
       if (action && (e.key === ' ' || e.key === 'Tab')) e.preventDefault();
@@ -1636,6 +1641,7 @@ export class Game {
         case 'settings': this.ui.settings.win.toggle(); break;
         case 'party': this.ui.party.toggle(); break;
         case 'clan': this.ui.clan.toggle(); break;
+        case 'bars': this.ui.hud.toggleBarsMenu(); break;
         case 'loot': this.pickupNearest(); break;
         case 'attack': this.attackTarget(); break;
         case 'stop': this.stop(); break;

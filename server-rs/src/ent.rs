@@ -161,6 +161,8 @@ pub struct Player {
     pub known: HashMap<u32, [f64; 6]>,
     pub known_av: HashMap<u32, u32>,
     pub last_me: String,
+    /** the skill bars' layout, JSON from the client (msgs.rs "hotbar"), sent back on entering */
+    pub hotbar: String,
     pub inv_dirty: bool,
     pub next_uid: u32,
     pub inv: Vec<InvItem>,

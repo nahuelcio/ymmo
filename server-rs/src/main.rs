@@ -217,10 +217,11 @@ async fn client(socket: WebSocket, app: App) {
     let mut count = 0u32;
     let mut window = std::time::Instant::now();
     let mut logging_in = false;
+    let mut kicked = false;
     loop {
         let msg = tokio::select! {
             m = stream.next() => m,
-            _ = kick.notified() => None,
+            _ = kick.notified() => { kicked = true; None }
         };
         let Some(Ok(msg)) = msg else { break };
         let m = match msg {
@@ -248,6 +249,8 @@ async fn client(socket: WebSocket, app: App) {
             if let Some(w) = s.world { to_world(hub, w, WorldCmd::Quit { sid }); }
         }
     }
+    // kicked: give the writer a moment to deliver the "kicked" notice before the socket goes
+    if kicked { tokio::time::sleep(std::time::Duration::from_millis(250)).await; }
     writer.abort();
 }
 
@@ -356,8 +359,10 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
             let char_id = m.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
             let hub = &mut *app.hub.lock().unwrap();
             // the same character online on another socket: kick it
-            let other = hub.sessions.iter().find(|(k, s)| **k != sid && s.char_id == char_id && s.world.is_some()).map(|(k, s)| (*k, s.world.unwrap(), s.kick.clone()));
-            if let Some((osid, ow, okick)) = other {
+            let other = hub.sessions.iter().find(|(k, s)| **k != sid && s.char_id == char_id && s.world.is_some()).map(|(k, s)| (*k, s.world.unwrap(), s.kick.clone(), s.out.clone()));
+            if let Some((osid, ow, okick, oout)) = other {
+                // tell it why, so it doesn't reconnect and kick us back (two tabs on one account)
+                send(&oout, json!({ "t": "kicked" }));
                 okick.notify_one();
                 if let Some(o) = hub.sessions.get_mut(&osid) { o.world = None; o.char_id = 0; }
                 to_world(hub, ow, WorldCmd::Quit { sid: osid });

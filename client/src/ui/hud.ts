@@ -14,6 +14,16 @@ import { campName, className, itemDesc, itemName, mobName, npcText, questField, 
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
 export type Slot = { type: 'skill' | 'item'; id: string } | null;
+/** The main bar and two extra ones above it, ten slots each. */
+const BARS = 3, SLOTS = 10;
+/**
+ * The bars' layout, kept on the server per character (characters.hotbar, sent back on entering), so it is the same
+ * in every browser. known: ids already placed once, so emptying a slot by hand sticks; shown / collapsed: bars 2-3.
+ */
+interface BarState { v: 2; bars: Slot[][]; known: string[]; shown: boolean[]; collapsed: boolean[] }
+const emptyBar = () => Array<Slot>(SLOTS).fill(null);
+/** the action whose key fires slot i of bar b (the main bar keeps its old action names) */
+const slotAction = (b: number, i: number) => (b === 0 ? `slot${i + 1}` : `bar${b + 1}slot${i + 1}`) as Action;
 
 export class Hud {
   private statusEl!: HTMLDivElement;
@@ -29,12 +39,13 @@ export class Hud {
   private target: HTMLDivElement;
   private tName: HTMLDivElement;
   private tHp; private tActions: HTMLDivElement;
-  private slotEls: HTMLDivElement[] = [];
-  private slots: Slot[] = [];
-  /** ids that were already placed on the bar once, so emptying a slot by hand sticks */
-  private known: string[] = [];
-  /** what is being dragged onto the bar: one of its own slots, or a skill / consumable from a window */
-  drag: { from?: number; slot?: Slot } | null = null;
+  private slotEls: HTMLDivElement[][] = [];
+  private st: BarState | null = null;
+  private barRows: HTMLDivElement[] = [];
+  private barsPop!: HTMLDivElement;
+  private saveTimer = 0;
+  /** what is being dragged onto a bar: one of the bars' own slots, or a skill / consumable from a window */
+  drag: { from?: { b: number; i: number }; slot?: Slot } | null = null;
   private cast: HTMLDivElement;
   private castFill: HTMLDivElement;
   private castName: HTMLSpanElement;
@@ -71,42 +82,28 @@ export class Hud {
     this.hp = bar(vit, 'bar-hp', 'HP');
     this.mp = bar(vit, 'bar-mp', 'MP');
     this.xp = bar(sc, 'bar-xp');
-    for (let i = 0; i < 10; i++) {
-      const s = el('div', 'slot', sc);
-      const keyEl = el('span', 'slot-key', s);
-      const syncKey = () => (keyEl.textContent = keyLabel(settings.s.keys[`slot${i + 1}` as Action]));
-      syncKey();
-      settings.on((_, changed) => changed.includes('keys') && syncKey());
-      s.onclick = () => this.activateSlot(i);
-      // rearrange: drag a slot onto another (they swap), drop a skill or potion from its window, right click empties
-      s.ondragstart = () => (hideTip(), (this.drag = { from: i }));
-      s.ondragend = () => (this.drag = null);
-      s.ondragover = (e) => e.preventDefault();
-      s.ondrop = (e) => {
-        e.preventDefault();
-        const d = this.drag;
-        if (!d) return;
-        const here = this.slots[i];
-        if (d.from !== undefined) [this.slots[d.from], this.slots[i]] = [here, this.slots[d.from]];
-        else if (d.slot) {
-          // already on the bar somewhere else: that slot takes what was here
-          const at = this.slots.findIndex((x) => x?.id === d.slot!.id);
-          if (at >= 0) this.slots[at] = here;
-          this.slots[i] = d.slot;
-        }
+    // bars 2 and 3 stack over the vitals; each folds down to a thin strip with its arrow
+    const extra = el('div', 'extra-bars', sc);
+    this.slotEls.push(this.buildSlots(0, sc));
+    for (let b = 1; b < BARS; b++) {
+      const row = el('div', 'bar-row', extra);
+      const fold = el('button', 'bar-toggle', row);
+      fold.title = tx(`Barra ${b + 1}: plegar / desplegar`, `Bar ${b + 1}: fold / unfold`);
+      fold.onclick = () => {
+        if (!this.st) return;
+        this.st.collapsed[b - 1] = !this.st.collapsed[b - 1];
         this.saveBar();
       };
-      s.oncontextmenu = (e) => {
-        e.preventDefault();
-        this.slots[i] = null;
+      el('span', 'bar-num', row, String(b + 1));
+      // folded, the whole strip unfolds it
+      row.dataset.label = tx(`Barra ${b + 1} — clic para desplegar`, `Bar ${b + 1} — click to unfold`);
+      row.onclick = (e) => {
+        if (!this.st?.collapsed[b - 1] || e.target === fold) return;
+        this.st.collapsed[b - 1] = false;
         this.saveBar();
       };
-      setTip(s, () => {
-        const sl = this.slots[i];
-        if (!sl) return '';
-        return sl.type === 'skill' ? skillTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
-      });
-      this.slotEls.push(s);
+      this.slotEls.push(this.buildSlots(b, row));
+      this.barRows.push(row);
     }
 
     // auto-attack button (Space by default), next to the bar instead of on it, with the swing as its sweep
@@ -146,7 +143,7 @@ export class Hud {
       const k = el('span', 'mb-key', b);
       const sync = () => {
         k.textContent = keyLabel(settings.s.keys[icon]);
-        b.title = `${label} (${k.textContent})`;
+        b.title = k.textContent ? `${label} (${k.textContent})` : label;
         delete b.dataset.tip;
       };
       sync();
@@ -157,11 +154,16 @@ export class Hud {
     btn('inventory', tx('Inventario', 'Inventory'), () => g.ui.inventory.win.toggle());
     btn('map', tx('Mapa', 'Map'), () => g.ui.minimap.toggleMap());
     btn('clan', 'Clan', () => g.ui.clan.toggle());
+    btn('bars', tx('Barras', 'Bars'), () => this.toggleBarsMenu());
     btn('help', tx('Ayuda', 'Help'), () => g.ui.help.toggle());
     btn('settings', tx('Opciones', 'Settings'), () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
     this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
+
+    // which extra bars are on screen
+    this.barsPop = el('div', 'panel bars-pop', root);
+    this.barsPop.style.display = 'none';
 
     this.bannerEl = el('div', 'banner', root);
 
@@ -236,54 +238,162 @@ export class Hud {
     this.refreshSlots();
   }
 
-  /** The bar layout is the player's own, kept per character in this browser. */
-  private get barKey() {
-    return `hotbar:${this.g.me.name}`;
+  /** Ten slots of bar b: click or key uses it, drag rearranges (across bars too), right click empties. */
+  private buildSlots(b: number, parent: HTMLElement): HTMLDivElement[] {
+    const out: HTMLDivElement[] = [];
+    for (let i = 0; i < SLOTS; i++) {
+      const s = el('div', 'slot', parent);
+      const keyEl = el('span', 'slot-key', s);
+      const syncKey = () => (keyEl.textContent = keyLabel(settings.s.keys[slotAction(b, i)] ?? ''));
+      syncKey();
+      settings.on((_, changed) => changed.includes('keys') && syncKey());
+      s.onclick = () => this.activateSlot(b, i);
+      s.ondragstart = () => (hideTip(), (this.drag = { from: { b, i } }));
+      s.ondragend = () => (this.drag = null);
+      s.ondragover = (e) => e.preventDefault();
+      s.ondrop = (e) => {
+        e.preventDefault();
+        const d = this.drag, bars = this.st?.bars;
+        if (!d || !bars) return;
+        const here = bars[b][i];
+        if (d.from) [bars[d.from.b][d.from.i], bars[b][i]] = [here, bars[d.from.b][d.from.i]];
+        else if (d.slot) {
+          // already on a bar somewhere else: that slot takes what was here
+          for (const row of bars) {
+            const at = row.findIndex((x) => x?.id === d.slot!.id);
+            if (at >= 0) row[at] = here;
+          }
+          bars[b][i] = d.slot;
+        }
+        this.saveBar();
+      };
+      s.oncontextmenu = (e) => {
+        e.preventDefault();
+        if (!this.st) return;
+        this.st.bars[b][i] = null;
+        this.saveBar();
+      };
+      setTip(s, () => {
+        const sl = this.st?.bars[b][i];
+        if (!sl) return '';
+        return sl.type === 'skill' ? skillTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
+      });
+      out.push(s);
+    }
+    return out;
+  }
+
+  /** The layout the server kept; failing that, the one this browser used to keep (moved to the server); or none yet. */
+  private loadBars(): BarState {
+    const fix = (v: Partial<BarState> | null): BarState | null => {
+      if (!v || !Array.isArray(v.bars)) return null;
+      const bars = Array.from({ length: BARS }, (_, b) => Array.from({ length: SLOTS }, (_, i) => {
+        const s = v.bars![b]?.[i];
+        // auto-attack used to sit on the bar: free the slot an old layout still gives it
+        return s && (s.type === 'skill' || s.type === 'item') && typeof s.id === 'string' ? { type: s.type, id: s.id } : null;
+      }));
+      const flags = (a: unknown, n: number) => Array.from({ length: n }, (_, k) => Array.isArray(a) && !!a[k]);
+      return { v: 2, bars, known: Array.isArray(v.known) ? v.known.filter((k) => typeof k === 'string') : [], shown: flags(v.shown, BARS - 1), collapsed: flags(v.collapsed, BARS - 1) };
+    };
+    try {
+      const st = fix(JSON.parse(this.g.barData || 'null'));
+      if (st) return st;
+    } catch {
+      /* not JSON: start over */
+    }
+    try {
+      const old = JSON.parse(localStorage.getItem(`hotbar:${this.g.me.name}`) ?? 'null') as { slots?: Slot[]; known?: string[] } | null;
+      const st = fix(old?.slots ? { bars: [old.slots], known: old.known } : null);
+      if (st) {
+        this.queueSave(st);
+        return st;
+      }
+    } catch {
+      /* unavailable or corrupt */
+    }
+    return { v: 2, bars: Array.from({ length: BARS }, emptyBar), known: [], shown: [false, false], collapsed: [false, false] };
+  }
+
+  /** Send the layout to the server, once things settle (a drag can change it twice in a row). */
+  private queueSave(st: BarState) {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => this.sendBar(st), 500);
+  }
+
+  /**
+   * The layout to the server. With the socket down (reconnecting) it tries again shortly; game.ts also calls this
+   * after every re-entry, since a message sent between the socket opening and the character entering is dropped.
+   */
+  sendBar(st = this.st) {
+    if (!st) return;
+    clearTimeout(this.saveTimer);
+    this.g.barData = JSON.stringify(st);
+    if (this.g.net.open) this.g.net.send({ t: 'hotbar', data: this.g.barData });
+    else this.saveTimer = window.setTimeout(() => this.sendBar(st), 2000);
   }
 
   private saveBar() {
-    try {
-      localStorage.setItem(this.barKey, JSON.stringify({ slots: this.slots, known: this.known }));
-    } catch {
-      /* storage unavailable: the layout lasts for this session */
-    }
+    if (this.st) this.queueSave(this.st);
     this.refreshSlots();
+  }
+
+  /** The menu's "Bars" button: tick which extra bars show. */
+  toggleBarsMenu() {
+    const p = this.barsPop;
+    if (p.style.display !== 'none') return void (p.style.display = 'none');
+    p.innerHTML = '';
+    el('div', 'quest-head', p, tx('Barras de habilidades', 'Skill bars'));
+    for (let b = 1; b < BARS; b++) {
+      const r = el('label', 'bars-pop-row', p);
+      const box = el('input', '', r);
+      box.type = 'checkbox';
+      box.checked = !!this.st?.shown[b - 1];
+      box.onchange = () => {
+        if (!this.st) return;
+        this.st.shown[b - 1] = box.checked;
+        this.st.collapsed[b - 1] = false;
+        this.saveBar();
+      };
+      el('span', '', r, tx(`Barra ${b + 1}`, `Bar ${b + 1}`));
+    }
+    el('div', 'tt-dim bars-pop-hint', p, tx('Las teclas de sus casilleros se asignan en Opciones > Controles.', 'Their slots\' keys are set in Options > Controls.'));
+    p.style.display = '';
   }
 
   refreshSlots() {
     const m = this.g.me;
     this.adenaEl.textContent = this.g.adena.toLocaleString();
-    if (!this.slots.length) {
-      this.slots = Array<Slot>(10).fill(null);
-      try {
-        const saved = JSON.parse(localStorage.getItem(this.barKey) ?? 'null') as { slots: Slot[]; known: string[] } | null;
-        if (saved?.slots?.length === 10) ({ slots: this.slots, known: this.known } = saved);
-      } catch {
-        /* corrupt or unavailable: start from the automatic layout */
-      }
-      // auto-attack used to sit on the bar: free the slot a saved layout still gives it
-      this.slots = this.slots.map((s) => ((s?.type as string) === 'attack' ? null : s));
-    }
+    const st = (this.st ??= this.loadBars());
     let added = false;
-    // anything new (a skill just learned, a first potion) lands on the first free slot, once
+    // anything new (a skill just learned, a first potion) lands on the main bar's first free slot, once
     const have: NonNullable<Slot>[] = m.skills.map((id) => ({ type: 'skill' as const, id }));
     for (const id of CONSUMABLES) if (this.itemCount(id) > 0) have.push({ type: 'item', id });
     for (const h of have) {
-      if (this.known.includes(h.id)) continue;
-      this.known.push(h.id);
-      const free = this.slots.indexOf(null);
-      if (free >= 0 && !this.slots.some((x) => x?.id === h.id)) this.slots[free] = h;
+      if (st.known.includes(h.id)) continue;
+      st.known.push(h.id);
+      const free = st.bars[0].indexOf(null);
+      if (free >= 0 && !st.bars.some((row) => row.some((x) => x?.id === h.id))) st.bars[0][free] = h;
       added = true;
     }
     if (added) return this.saveBar();
-    const key = JSON.stringify(this.slots) + this.slots.map((s) => (s?.type === 'item' ? this.itemCount(s.id) : '')).join();
+    const all = st.bars.flat();
+    const key = JSON.stringify(st) + all.map((s) => (s?.type === 'item' ? this.itemCount(s.id) : '')).join();
     if (key === this.slotsKey) return;
     this.slotsKey = key;
-    this.slotEls.forEach((s, i) => {
+    // extra bars: hidden, folded or open; the cast bar moves up over the ones on screen
+    let up = 0;
+    this.barRows.forEach((row, k) => {
+      row.style.display = st.shown[k] ? '' : 'none';
+      row.classList.toggle('collapsed', st.collapsed[k]);
+      row.querySelector('.bar-toggle')!.textContent = st.collapsed[k] ? '▸' : '▾';
+      if (st.shown[k]) up += st.collapsed[k] ? 19 : 47;
+    });
+    document.documentElement.style.setProperty('--xbars', `${up}px`);
+    this.slotEls.forEach((els, b) => els.forEach((s, i) => {
       s.querySelector('.icon')?.remove();
       s.querySelector('.cd')?.remove();
       s.querySelector('.cd-num')?.remove();
-      const sl = this.slots[i];
+      const sl = st.bars[b][i];
       s.draggable = !!sl;
       // a consumable that ran out keeps its place, greyed out
       s.classList.toggle('spent', sl?.type === 'item' && this.itemCount(sl.id) === 0);
@@ -292,17 +402,18 @@ export class Hud {
       s.prepend(ic);
       el('div', 'cd', s);
       el('span', 'cd-num', s);
-    });
+    }));
   }
 
-  activateSlot(i: number) {
-    const sl = this.slots[i];
+  activateSlot(b: number, i: number) {
+    const sl = this.st?.bars[b]?.[i];
     if (!sl) return;
+    if (b > 0 && (!this.st!.shown[b - 1] || this.st!.collapsed[b - 1])) return; // a bar out of sight does nothing
     // still cooling down for real (not a client guess): shake the slot instead of asking the server
     const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
     const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
-    this.slotEls[i].classList.add(cls);
-    setTimeout(() => this.slotEls[i].classList.remove(cls), cls === 'denied' ? 250 : 120);
+    this.slotEls[b][i].classList.add(cls);
+    setTimeout(() => this.slotEls[b][i].classList.remove(cls), cls === 'denied' ? 250 : 120);
     if (cls === 'denied') return;
     if (sl.type === 'skill') this.g.useSkill(sl.id);
     else this.g.useItemById(sl.id);
@@ -331,8 +442,8 @@ export class Hud {
 
   update(now: number) {
     // cooldown overlays
-    this.slotEls.forEach((s, i) => {
-      const sl = this.slots[i];
+    this.slotEls.forEach((els, b) => els.forEach((s, i) => {
+      const sl = this.st?.bars[b][i];
       if (!sl) return;
       const ov = s.querySelector('.cd') as HTMLDivElement | null;
       if (!ov) return;
@@ -343,7 +454,7 @@ export class Hud {
       if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
-    });
+    }));
     const self = this.g.self, swing = 60000 / Math.max(1, this.g.me.atkSpd);
     const arem = self && self.atkAt > 0 ? swing - (now - self.atkAt) : 0;
     this.atkCd.style.height = arem > 0 ? `${(arem / swing) * 100}%` : '0';

@@ -10,6 +10,7 @@ pub struct Db { pub c: Connection }
 pub struct CharRow {
     pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub xp: i64,
     pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64, pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub look: Look, pub spec: Option<String>,
+    pub hotbar: String,
 }
 
 pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub spec: Option<String>, pub level: i64, pub look: Look }
@@ -86,7 +87,9 @@ impl Db {
         for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0", "spec TEXT",
             // clans (clans.rs): membership, power grade, title and the join / found penalties (ms since epoch)
             "clan_id INTEGER", "clan_grade INTEGER NOT NULL DEFAULT 5", "title TEXT NOT NULL DEFAULT ''",
-            "clan_join_until INTEGER NOT NULL DEFAULT 0", "clan_found_until INTEGER NOT NULL DEFAULT 0"] {
+            "clan_join_until INTEGER NOT NULL DEFAULT 0", "clan_found_until INTEGER NOT NULL DEFAULT 0",
+            // the skill bars' layout, as the client keeps it (JSON, client/src/ui/hud.ts)
+            "hotbar TEXT NOT NULL DEFAULT ''"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
         }
         let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
@@ -156,6 +159,11 @@ impl Db {
         None
     }
 
+    /** The skill bars' layout (written as soon as the player changes it). */
+    pub fn char_hotbar(&self, id: i64, json: &str) {
+        let _ = self.c.execute("UPDATE characters SET hotbar = ? WHERE id = ?", params![json, id]);
+    }
+
     pub fn owns_char(&self, account_id: i64, id: i64) -> bool {
         self.c.query_row("SELECT 1 FROM characters WHERE id = ? AND account_id = ?", params![id, account_id], |_| Ok(())).optional().ok().flatten().is_some()
     }
@@ -172,12 +180,12 @@ impl Db {
     /** items come back as (item id, count, slot, enchant) */
     pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64)>, Vec<(String, i64, bool)>)> {
         let row = self.c.query_row(
-            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec FROM characters WHERE id = ? AND account_id = ?",
+            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec, hotbar FROM characters WHERE id = ? AND account_id = ?",
             params![id, account_id],
             |r| Ok(CharRow {
                 id: r.get(0)?, name: r.get(1)?, race: r.get(2)?, cls: r.get(3)?, level: r.get(4)?, xp: r.get(5)?, x: r.get(6)?, z: r.get(7)?,
                 hp: r.get(8)?, mp: r.get(9)?, cp: r.get(10)?, adena: r.get(11)?, karma: r.get(12)?, pk: r.get(13)?, pvp: r.get(14)?,
-                look: look_of(r.get(15)?, r.get(16)?, r.get(17)?), spec: r.get(18)?,
+                look: look_of(r.get(15)?, r.get(16)?, r.get(17)?), spec: r.get(18)?, hotbar: r.get(19)?,
             }),
         ).optional().ok().flatten()?;
         let data = d();

@@ -128,6 +128,17 @@ impl World {
                 if self.raid.is_some() { self.exit_to_town(pid) } else { self.respawn_player(pid) }
             }
             "pvpMode" => self.set_pvp_mode(pid, truthy(m, "on")),
+            "hotbar" => {
+                // the client's own layout: only kept, never read here; small, and JSON
+                let data = s(m, "data");
+                if data.len() > 4096 || serde_json::from_str::<Value>(&data).is_err() { return; }
+                let p = self.pl_mut(pid).unwrap();
+                if p.hotbar != data {
+                    p.hotbar = data;
+                    let (cid, json) = (p.char_id, p.hotbar.clone());
+                    self.db.char_hotbar(cid, &json);
+                }
+            }
             "autoLoot" => self.pl_mut(pid).unwrap().auto_loot = truthy(m, "on"),
             "dash" => self.dash(pid, num(m, "x"), num(m, "z"), num(m, "dx"), num(m, "dz"), now),
             "interact" => if let Some(n) = id(m, "node") { self.request_interact(pid, n, now) },
