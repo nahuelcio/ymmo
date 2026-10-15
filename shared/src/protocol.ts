@@ -155,6 +155,8 @@ export type S2C =
   | { t: 'error'; msg: string }
   | { t: 'chars'; list: CharSummary[]; token?: string }
   | { t: 'resumeFail' }
+  /** this character was entered from another tab or device; the server closes this socket right after */
+  | { t: 'kicked' }
   /** admin window: ok is false until this socket gave the admin password */
   | { t: 'admin'; ok: false }
   | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number }[]; logs: { t: number; err: boolean; line: string }[]; casts: { id: string; name: string; base: number; cast: number }[]; balance: { key: string; label: string; base: number; current: number; min: number; max: number }[] }
