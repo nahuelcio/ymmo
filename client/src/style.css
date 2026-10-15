@@ -428,6 +428,8 @@ input { font: inherit; user-select: text; }
 .speech::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: rgba(250, 245, 230, 0.95); }
 .speech.one-line span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 204px; }
 .speech.shout { border: 2px solid #d8a83a; font-weight: 600; }
+.speech.party { background: rgba(214, 245, 206, 0.95); color: #1e3a18; border-color: #4a9a3a; }
+.speech.party::after { border-top-color: rgba(214, 245, 206, 0.95); }
 
 .look-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 8px; }
 .look-card { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 6px 7px; border: 1px solid #333; border-radius: 4px; cursor: pointer; color: var(--text); background: #0d0f16; min-height: 62px; }

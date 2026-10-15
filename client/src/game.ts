@@ -556,10 +556,11 @@ export class Game {
       const gain = m.ch === 'sys' && settings.s.damageNumbers ? GAIN.exec(m.text) : null;
       if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
       this.ui.chat.add(gain || (m.ch === 'sys' && NOT_READY.test(m.text)) ? 'log' : m.ch, m.from, m.text);
-      // what a player says nearby (or shouts) also floats over their head, cut to one line
-      if (m.ch === 'all' || m.ch === 'shout') {
+      // what a player says nearby, shouts or tells the party also floats over their head, cut to one line.
+      // Party lines only reach the party's members (server-rs/src/chat.rs), so only they ever see the green bubble.
+      if (m.ch === 'all' || m.ch === 'shout' || m.ch === 'party') {
         const c = [...this.ents.values()].find((e) => e.rec.k === 'p' && e.rec.n === m.from);
-        if (c) this.speech(c, m.text, m.ch === 'shout' ? 'shout' : 'line');
+        if (c) this.speech(c, m.text, m.ch === 'all' ? 'line' : m.ch);
       }
     });
     n.on('error', (m) => this.sys(m.msg));
@@ -952,14 +953,14 @@ export class Game {
   }
 
   /**
-   * Speech bubble above an entity's head for a few seconds. NPCs say it all; a player's chat ('line', or 'shout')
-   * keeps to one line: the start of it, cut at a word, the full message stays in the chat window.
+   * Speech bubble above an entity's head for a few seconds. NPCs say it all; a player's chat ('line', 'shout' or
+   * 'party') keeps to one line: the start of it, cut at a word, the full message stays in the chat window.
    */
-  speech(c: CEnt, text: string, style?: 'line' | 'shout') {
+  speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party') {
     c.bubble?.remove();
     if (c.bubbleObj) c.tag.remove(c.bubbleObj);
     const el = document.createElement('div');
-    el.className = style ? `speech one-line${style === 'shout' ? ' shout' : ''}` : 'speech';
+    el.className = style ? `speech one-line${style === 'line' ? '' : ` ${style}`}` : 'speech';
     // a one-line bubble clips its text in an inner span: clipping the bubble itself would cut off its tail
     if (style) el.appendChild(document.createElement('span')).textContent = oneLine(text);
     else el.textContent = text;
