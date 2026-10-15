@@ -12,6 +12,8 @@ export interface EntPlayer {
   race: Race; cls: ClassType; spec?: Spec | null; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
   /** other visible gear: [head, gloves, legs, feet] item ids */
   eq: (string | null)[];
+  /** the held weapon's enchantment (its glow, render/enchant-fx.ts) */
+  we?: number;
   /** clan: id, name, crest version (its PNG is /crest/<id>.png?v=<cv>), and this character's title */
   cl?: number | null; cn?: string | null; cv?: number | null; ti?: string | null;
   /** alliance id and its crest's version (/crest/a<id>.png?v=<ac>) */

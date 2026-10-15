@@ -1,3 +1,4 @@
+import { enchantFx } from './enchant-fx';
 import * as THREE from 'three';
 import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Gender, type Look, type Race } from '../../../shared/src/data/classes';
 import { GRADE_COLOR, ITEMS, type ItemDef } from '../../../shared/src/data/items';
@@ -159,7 +160,7 @@ export interface Gear { chest?: ItemDef | null; head?: ItemDef | null; gloves?: 
 
 interface HumanoidOpts {
   skin: number; hair: number; top: number; bottom: number; height: number; bulk: number;
-  weapon: WeaponKind; weaponColor?: number; weaponGrade?: string; robe?: boolean; ears?: 'elf' | 'goblin'; tusks?: boolean; beard?: boolean; bald?: boolean; skull?: boolean;
+  weapon: WeaponKind; weaponColor?: number; weaponGrade?: string; weaponEnchant?: number; robe?: boolean; ears?: 'elf' | 'goblin'; tusks?: boolean; beard?: boolean; bald?: boolean; skull?: boolean;
   hat?: number;
   /** 0 short, 1 long, 2 topknot */
   hairStyle?: number;
@@ -249,6 +250,13 @@ function raceFeatures(head: THREE.Object3D, skin: number, ears?: 'elf' | 'goblin
   if (tusks) for (const sx of [-1, 1]) head.add(part(new THREE.ConeGeometry(0.025, 0.1, 4), 0xf0f0e0, sx * 0.07, -0.1, 0.16));
 }
 
+/** The weapon with its enchantment's glow hung under it (nothing at +0). */
+function enchanted<T extends THREE.Object3D | null>(w: T, level: number): T {
+  const fx = w && level > 0 ? enchantFx(level, w) : null;
+  if (fx) w!.add(fx);
+  return w;
+}
+
 /** The weapon as held: C-grade blades glow. */
 export function heldWeapon(kind: WeaponKind, color = 0xc8d0d8, grade?: string): THREE.Group | null {
   const w = weaponMesh(kind, color);
@@ -332,7 +340,7 @@ export function humanoid(o: HumanoidOpts): Rig {
     body.add(arm);
     arms.push(arm);
   }
-  const w = heldWeapon(o.weapon, o.weaponColor, o.weaponGrade);
+  const w = enchanted(heldWeapon(o.weapon, o.weaponColor, o.weaponGrade), o.weaponEnchant ?? 0);
   if (w) {
     w.position.y = -0.64;
     arms[1].add(w);
@@ -653,7 +661,8 @@ export function rimLit(root: THREE.Object3D) {
   });
 }
 
-export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = []): Rig {
+/** A player's look; weaponEnchant lights the held weapon (render/enchant-fx.ts). */
+export function playerModel(race: Race, cls: ClassType, weapon: string | null, chest: string | null, look: Look = DEFAULT_LOOK, eq: (string | null)[] = [], weaponEnchant = 0): Rig {
   const r = RACES[race];
   const female = look.g === 'f';
   const hair = HAIR_COLORS[look.hc] >= 0 ? HAIR_COLORS[look.hc] : r.hair;
@@ -674,14 +683,14 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
-      inHand: qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade),
+      inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade), weaponEnchant),
     });
   }
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
   return bake(humanoid({
     skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
     hairStyle: look.hs, female,
-    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, robe,
+    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, weaponEnchant, robe,
     ears: elf ? 'elf' : undefined, tusks, beard, bald,
     gear: { chest: chestDef, head, gloves, legs, feet },
   }));

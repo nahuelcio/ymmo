@@ -40,7 +40,7 @@ pub fn stat_mods(race: &str, g: &str) -> StatMods {
 /** Chance that enchanting a piece currently at +e succeeds. */
 pub fn enchant_chance(e: i64) -> f64 {
     let c = &d().enchant;
-    if e < c.safe { 1.0 } else { 1.0 - c.step * (e - c.safe + 1) as f64 }
+    if e < c.safe { 1.0 } else { c.chance }
 }
 
 /** equipped: each worn piece with its enchant level (+N) */
@@ -146,6 +146,7 @@ pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64 {
 mod tests {
     use super::*;
 
+
     /// Pacing table for levels 1..max: `cargo test balance -- --nocapture` prints it.
     #[test]
     fn balance_table() {
@@ -193,9 +194,11 @@ mod tests {
 
     #[test]
     fn enchant() {
+        // as in L2: safe up to +3, then a flat 66% for every step up to +16
+        assert_eq!(d().enchant.max, 16);
         assert_eq!(enchant_chance(0), 1.0);
         assert_eq!(enchant_chance(2), 1.0);
-        assert!((enchant_chance(3) - 0.9).abs() < 1e-9 && (enchant_chance(9) - 0.3).abs() < 1e-9);
+        for e in 3..16 { assert!((enchant_chance(e) - 0.66).abs() < 1e-9, "+{e}"); }
         let sword = &d().items["broadsword"];
         let at = |e| compute_stats("human", "fighter", 10, &[(sword, e)], &[], "m").p_atk;
         assert!(at(0) < at(3) && at(3) < at(10));

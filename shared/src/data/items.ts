@@ -143,8 +143,9 @@ export const ITEMS: Record<string, ItemDef> = Object.fromEntries(list.map((i) =>
  * Enchanting: each +1 adds `weapon`/`armor` (a fraction) to the piece's stats. Safe up to +`safe`; after that every
  * attempt is `step` less likely, and a failed one destroys the piece (failDestroys) or sends it back to +0.
  */
-export const ENCHANT = { weapon: 0.08, armor: 0.05, safe: 3, step: 0.1, max: 10, failDestroys: true };
-export const enchantChance = (e: number) => (e < ENCHANT.safe ? 1 : 1 - ENCHANT.step * (e - ENCHANT.safe + 1));
+/** As in L2: safe up to +3, then a flat chance for every step up to +16 (a failure destroys the piece). */
+export const ENCHANT = { weapon: 0.08, armor: 0.05, safe: 3, chance: 0.66, max: 16, failDestroys: true };
+export const enchantChance = (e: number) => (e < ENCHANT.safe ? 1 : ENCHANT.chance);
 /** A stat of a piece at +e, as the tooltips show it (the server does the real math). */
 export const enchanted = (d: ItemDef, k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef', e = 0) => Math.round((d[k] ?? 0) * (1 + (d.type === 'weapon' ? ENCHANT.weapon : ENCHANT.armor) * e));
 

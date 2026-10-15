@@ -159,10 +159,12 @@ impl World {
         // the scroll's row may be gone: look the piece up again
         let idx = p.inv.iter().position(|i| i.u == uid).unwrap();
         let worn = p.inv[idx].s.is_some();
+        let weapon = p.inv[idx].s.as_deref() == Some("weapon");
         if ok { p.inv[idx].e += 1; } else if cfg.fail_destroys { p.inv.remove(idx); } else { p.inv[idx].e = 0; }
         p.recalc();
         p.inv_dirty = true;
-        if worn && !ok && cfg.fail_destroys { self.ents.get_mut(&pid).unwrap().c.av += 1; }
+        // a worn piece crumbling, or the held weapon's glow growing (enchant-fx.ts): everyone redraws the character
+        if (worn && !ok && cfg.fail_destroys) || (weapon && ok) { self.ents.get_mut(&pid).unwrap().c.av += 1; }
         let n = e + 1;
         if ok {
             self.sys(pid, &format!("¡Éxito! {} ahora es +{n}.", def.name), &format!("Success! {} is now +{n}.", def.name_en));
