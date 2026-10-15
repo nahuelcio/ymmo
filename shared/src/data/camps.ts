@@ -34,6 +34,15 @@ export const CAMPS: CampDef[] = [
     mobs: [{ mob: 'skeleton', count: 5 }, { mob: 'zombie', count: 3 }], respawn: 240000,
     chest: { adena: [5000, 9000], loot: [{ item: 'healing_potion', chance: 1, min: 4, max: 8 }, { item: 'cursed_bone', chance: 1, min: 3, max: 6 },
       { item: 'full_plate_helmet', chance: 0.1 }, { item: 'demons_circlet', chance: 0.1 }, { item: 'full_plate_armor', chance: 0.06 }, { item: 'demons_tunic', chance: 0.06 }, { item: 'samurai_longsword', chance: 0.05 }] } },
+  // the frost region (50-60)
+  { id: 'tundra_camp', name: 'Campamento de los Saqueadores', zone: 'tundra', x: -280, z: -610, level: 54, leader: 'tundra_jarl', banner: 0x4a6a8a,
+    mobs: [{ mob: 'tundra_raider', count: 5 }, { mob: 'frost_wolf', count: 3 }], respawn: 270000,
+    chest: { adena: [30000, 50000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 3, max: 6 }, { item: 'frost_pelt', chance: 1, min: 3, max: 6 },
+      { item: 'glacial_helm', chance: 0.12 }, { item: 'glacial_boots', chance: 0.12 }, { item: 'glacial_gauntlets', chance: 0.12 }, { item: 'glacial_blade', chance: 0.05 }, { item: 'scroll_enchant_armor', chance: 0.3 }] } },
+  { id: 'yeti_den', name: 'Cubil de la Matriarca', zone: 'peaks', x: -500, z: -615, level: 59, leader: 'yeti_matriarch', banner: 0xd0e0f0,
+    mobs: [{ mob: 'yeti', count: 4 }, { mob: 'frost_giant', count: 2 }], respawn: 300000,
+    chest: { adena: [45000, 70000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 4, max: 8 }, { item: 'ice_crystal', chance: 1, min: 3, max: 6 },
+      { item: 'glacial_plate', chance: 0.08 }, { item: 'glacial_robe', chance: 0.08 }, { item: 'glacial_ring', chance: 0.1 }, { item: 'glacial_staff', chance: 0.05 }, { item: 'scroll_enchant_weapon', chance: 0.25 }] } },
 ];
 
 export const CAMP_BY_ID: Record<string, CampDef> = Object.fromEntries(CAMPS.map((c) => [c.id, c]));

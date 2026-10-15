@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { DUSK, TOWN } from './terrain';
+import { DUSK, FROST, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -149,7 +149,7 @@ function tintOf(piece: VPiece, t: NonNullable<Stamp['tint']>): number | undefine
 }
 
 export function houseInstances(): KitInst[] {
-  return [...ALBA_STAMPS, ...DUSK_STAMPS].flatMap(expandStamp);
+  return [...ALBA_STAMPS, ...FORTS.flatMap((f) => f.stamps)].flatMap(expandStamp);
 }
 
 /**
@@ -190,9 +190,9 @@ function paving(town: { x: number; z: number; r: number }, stamps: Stamp[], tint
   return out;
 }
 
-/** Paving for both towns (Alba sits at the origin, so its stamps' coordinates are world ones too). */
+/** Paving for every town (Alba sits at the origin, so its stamps' coordinates are world ones too). */
 export function groundInstances(): KitInst[] {
-  return [...paving(TOWN, ALBA_STAMPS), ...paving(DUSK, DUSK_STAMPS, DUSK_STONE)];
+  return [...paving(TOWN, ALBA_STAMPS), ...FORTS.flatMap((f) => paving(f.town, f.stamps, f.stone))];
 }
 
 /**
@@ -241,10 +241,11 @@ export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
   return curtain(TOWN, TOWN.r + 2, ROAD_TO.map(([x, z]) => Math.atan2(z - TOWN.z, x - TOWN.x)), { scale: CURTAIN_SCALE, towers: 1 });
 }
 
-/** The Bastión's wall: darker stone, lower than Alba's, a gate toward Alba and one toward the ruins, two towers a span. */
-export function duskCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
-  return curtain(DUSK, DUSK.r + 2, DUSK_GATES, { scale: 7, towers: 2, tint: DUSK_STONE });
+/** A fort's wall: its own stone, lower than Alba's, a gate on each of its roads, two towers a span. */
+export function fortCurtain(f: Fort): { draw: CurtainDraw[]; walls: CurtainWall[] } {
+  return curtain(f.town, f.town.r + 2, f.gates, { scale: FORT_SCALE, towers: 2, tint: f.stone });
 }
+const FORT_SCALE = 7;
 
 /**
  * A ring of stone wall of radius R around a town: an open gate at each angle (radians, x = cos, z = sin),
@@ -356,30 +357,31 @@ const DUSK_FOLK: { id: string; x: number; z: number }[] = [
   { id: 'dusk_clan', x: 183, z: -163.5 },
 ];
 
-/** Empty when the Bastión's plan stays off its plaza, its roads, its wall and its merchants, without overlaps. */
-export function duskIssues(): string[] {
+/** Empty when a fort's plan stays off its plaza, its roads, its wall and its folk, without overlaps. */
+export function fortIssues(f: Fort): string[] {
   const issues: string[] = [];
-  const boxes = DUSK_STAMPS.map((st) => {
+  const T = f.town;
+  const boxes = f.stamps.map((st) => {
     const pts = corners(st);
     const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
     return { st, x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs), pts };
   });
   for (const b of boxes) {
     for (const [x, z] of b.pts) {
-      const r = Math.hypot(x - DUSK.x, z - DUSK.z);
+      const r = Math.hypot(x - T.x, z - T.z);
       if (r < 14) issues.push(`${b.st.id} enters the plaza (${r.toFixed(1)})`);
-      if (r > 28) issues.push(`${b.st.id} reaches the wall (${r.toFixed(1)})`);
+      if (r > T.r - 2) issues.push(`${b.st.id} reaches the wall (${r.toFixed(1)})`);
     }
-    for (const ga of DUSK_GATES) {
+    for (const ga of f.gates) {
       // how far the building's centre is from the road, a ray from the centre out through the gate
-      const dx = b.st.x - DUSK.x, dz = b.st.z - DUSK.z, ux = Math.cos(ga), uz = Math.sin(ga);
+      const dx = b.st.x - T.x, dz = b.st.z - T.z, ux = Math.cos(ga), uz = Math.sin(ga);
       const along = dx * ux + dz * uz, off = Math.abs(dx * uz - dz * ux);
       const need = Math.hypot(b.st.w, b.st.d) / 2 + 3;
       if (along > 0 && off < need) issues.push(`${b.st.id} is ${off.toFixed(1)} m from a road (need ${need.toFixed(1)})`);
     }
     const c = Math.cos(b.st.rot), s = Math.sin(b.st.rot);
     const hw = b.st.w / 2 + 2.5, hd = b.st.d / 2 + 2.5; // the merchant, and the stall behind them
-    for (const n of DUSK_FOLK) {
+    for (const n of f.folk) {
       const dx = n.x - b.st.x, dz = n.z - b.st.z;
       const lx = dx * c - dz * s, lz = dx * s + dz * c;
       if (Math.abs(lx) < hw && Math.abs(lz) < hd) issues.push(`${b.st.id} crowds ${n.id}`);
@@ -388,6 +390,14 @@ export function duskIssues(): string[] {
   for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
     const a = boxes[i], b = boxes[j];
     if (a.x0 < b.x1 + 1 && b.x0 < a.x1 + 1 && a.z0 < b.z1 + 1 && b.z0 < a.z1 + 1) issues.push(`${a.st.id} is too close to ${b.st.id}`);
+  }
+  // the folk keep out of the gate lanes and off each other's counters
+  for (const n of f.folk) {
+    for (const ga of f.gates) {
+      const dx = n.x - T.x, dz = n.z - T.z, ux = Math.cos(ga), uz = Math.sin(ga);
+      if (dx * ux + dz * uz > 0 && Math.abs(dx * uz - dz * ux) < 3) issues.push(`${n.id} stands in a gate lane`);
+    }
+    for (const o of f.folk) if (o !== n && Math.hypot(o.x - n.x, o.z - n.z) < 4) issues.push(`${n.id} is too close to ${o.id}`);
   }
   return issues;
 }
@@ -409,13 +419,13 @@ const at = (x: number, z: number, rot: number, lx: number, lz: number) => {
 };
 
 /**
- * The Bastión's props: red banners on the town side of its gates and towers, a lantern by every door, the
- * smith's anvil and weapon stand in front of the armoury, the alchemist's cauldron, barrels and crates.
+ * A fort's props: banners on the town side of its gates and towers, a lantern by every door, and its own extras
+ * (the Bastión's smith and alchemist; in the ring's forts, the same beside their smithy and alchemist).
  */
-export function duskProps(): PropInst[] {
+export function fortProps(f: Fort): PropInst[] {
   const out: PropInst[] = [];
-  const { draw } = duskCurtain();
-  const S = 7;
+  const { draw } = fortCurtain(f);
+  const S = FORT_SCALE;
   for (const d of draw) {
     if (d.kind === 'gate') {
       // the gate's town side is its local -Z: the banners face that way
@@ -431,17 +441,22 @@ export function duskProps(): PropInst[] {
       }
     }
   }
-  for (const st of DUSK_STAMPS) {
+  for (const st of f.stamps) {
     // beside the door, on the front wall (the door bay is the middle one, rounded down)
     const doorX = -st.w / 2 + CELL / 2 + Math.floor(st.w / CELL / 2) * CELL;
     const p = at(st.x, st.z, st.rot, doorX - CELL / 2, st.d / 2 + 0.06);
     out.push({ name: 'Lantern_Wall', x: p.x, y: 1.4, z: p.z, rot: st.rot, s: 1 });
   }
+  out.push(...f.extras());
+  return out;
+}
+
+/** The Bastión's smith before the armoury, and its alchemist beside Mirta's counter. */
+function duskExtras(): PropInst[] {
+  const out: PropInst[] = [];
   const rel = (name: PropName, lx: number, lz: number, rot: number, s = 1.3) => out.push({ name, x: DUSK.x + lx, y: 0, z: DUSK.z + lz, rot, s });
-  // the smith, before the armoury
   rel('Anvil', 12.4, 14, 0.4);
   rel('WeaponStand', 16, 14.2, Math.PI);
-  // the alchemist, beside Mirta's counter
   rel('Cauldron', 16, -4, 0.6);
   rel('Barrel', 16.8, 1.4, 0.3);
   rel('Barrel', 17.7, 2.1, 1.1);
@@ -449,9 +464,9 @@ export function duskProps(): PropInst[] {
   return out;
 }
 
-/** Where the Bastión's lanterns burn, for the lamp light pool. */
-export function duskLanterns(): { x: number; y: number; z: number }[] {
-  return duskProps().filter((p) => p.name === 'Lantern_Wall').map((p) => {
+/** Where every fort's lanterns burn, for the lamp light pool. */
+export function fortLanterns(): { x: number; y: number; z: number }[] {
+  return FORTS.flatMap(fortProps).filter((p) => p.name === 'Lantern_Wall').map((p) => {
     const f = at(p.x, p.z, p.rot, 0, LANTERN_FLAME.z * p.s);
     return { x: f.x, y: p.y + LANTERN_FLAME.y * p.s, z: f.z };
   });
@@ -546,4 +561,121 @@ export function albaIssues(): string[] {
     if (a.x0 < b.x1 && b.x0 < a.x1 && a.z0 < b.z1 && b.z0 < a.z1) issues.push(`${a.st.id} overlaps ${b.st.id}`);
   }
   return issues;
+}
+
+/** A walled town past the village: kit buildings round a brazier, a stone curtain with a gate on each of its roads. */
+export interface Fort {
+  id: string;
+  town: { x: number; z: number; r: number; name: string };
+  /** a gate on each road, as angles from the centre (x = cos, z = sin) */
+  gates: number[];
+  stamps: Stamp[];
+  /** the curtain's and the paving's stone */
+  stone: number;
+  /** the residents' spots (shared/src/data/world.ts places them there): the plan leaves them clear */
+  folk: { id: string; x: number; z: number; ry: number }[];
+  extras: () => PropInst[];
+}
+
+const DUSK_FORT: Fort = {
+  id: 'dusk', town: DUSK, gates: DUSK_GATES, stamps: DUSK_STAMPS, stone: DUSK_STONE,
+  folk: DUSK_FOLK.map((n) => ({ ...n, ry: 0 })), extras: duskExtras,
+};
+
+/** A ring fort's plan: who lives there (merchants first) and what is built, the rest is laid out round the plaza. */
+interface FortSpec {
+  id: string;
+  town: Fort['town'];
+  /** where its roads come from: a gate faces each */
+  roads: [number, number][];
+  stone: number;
+  wall: number;
+  roof: number;
+  tint: NonNullable<Stamp['tint']>;
+  /** a second set of dyes, for every other building */
+  tintAlt: NonNullable<Stamp['tint']>;
+  buildings: { id: string; w: number; d: number; kind?: Stamp['kind']; brick?: boolean }[];
+  folk: string[];
+  /** whose counter the smith's anvil and the alchemist's cauldron stand by */
+  smith: string;
+  alchemist: string;
+}
+
+/** Folk round the brazier, buildings round them: both spread evenly over the arcs between the gate lanes. */
+const FOLK_R = 11, BUILD_R = 21.5, FOLK_GATE = 0.4, BUILD_GATE = 0.42;
+
+/** n angles spread evenly over the circle, leaving `clear` radians either side of each gate. */
+function freeAngles(gates: number[], n: number, clear: number): number[] {
+  const g = [...gates].map((a) => ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI)).sort((a, b) => a - b);
+  const arcs = g.map((a, i) => {
+    const next = i + 1 < g.length ? g[i + 1] : g[0] + 2 * Math.PI;
+    return [a + clear, next - clear] as [number, number];
+  }).filter(([a, b]) => b > a);
+  const total = arcs.reduce((s, [a, b]) => s + b - a, 0);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    let t = ((i + 0.5) / n) * total;
+    for (const [a, b] of arcs) {
+      if (t <= b - a) { out.push(a + t); break; }
+      t -= b - a;
+    }
+  }
+  return out;
+}
+
+function ringFort(s: FortSpec): Fort {
+  const T = s.town;
+  const gates = s.roads.map(([x, z]) => Math.atan2(z - T.z, x - T.x));
+  const folk = freeAngles(gates, s.folk.length, FOLK_GATE).map((a, i) => {
+    const lx = Math.cos(a) * FOLK_R, lz = Math.sin(a) * FOLK_R;
+    // facing the brazier
+    return { id: s.folk[i], x: T.x + lx, z: T.z + lz, ry: Math.atan2(-lx, -lz) };
+  });
+  const stamps = freeAngles(gates, s.buildings.length, BUILD_GATE).map((a, i): Stamp => {
+    const b = s.buildings[i];
+    // on the 2 m grid, door toward the plaza
+    const lx = Math.round((Math.cos(a) * BUILD_R) / 2) * 2, lz = Math.round((Math.sin(a) * BUILD_R) / 2) * 2;
+    return { id: b.id, x: T.x + lx, z: T.z + lz, w: b.w, d: b.d, rot: face(lx, lz), brick: b.brick ?? true, kind: b.kind, wall: s.wall, roof: s.roof, tint: i % 2 ? s.tintAlt : s.tint };
+  });
+  const extras = (): PropInst[] => {
+    const out: PropInst[] = [];
+    const smith = stamps.find((st) => st.kind === 'smithy');
+    if (smith) {
+      // before the smithy's door
+      const a = at(smith.x, smith.z, smith.rot, -1.6, smith.d / 2 + 2.2), b = at(smith.x, smith.z, smith.rot, 1.8, smith.d / 2 + 2.4);
+      out.push({ name: 'Anvil', x: a.x, y: 0, z: a.z, rot: smith.rot + 0.4, s: 1.3 }, { name: 'WeaponStand', x: b.x, y: 0, z: b.z, rot: smith.rot + Math.PI, s: 1.3 });
+    }
+    const al = folk.find((n) => n.id === s.alchemist);
+    if (al) {
+      // beside the counter, off the stall behind them (local +x is to their left)
+      const c = at(al.x, al.z, al.ry, 2.6, -0.4), b1 = at(al.x, al.z, al.ry, -2.6, -0.6), b2 = at(al.x, al.z, al.ry, -3.2, -1.3);
+      out.push({ name: 'Cauldron', x: c.x, y: 0, z: c.z, rot: al.ry + 0.6, s: 1.3 }, { name: 'Barrel', x: b1.x, y: 0, z: b1.z, rot: 0.3, s: 1.3 }, { name: 'Crate_Wooden', x: b2.x, y: 0, z: b2.z, rot: 0.2, s: 1.3 });
+    }
+    return out;
+  };
+  return { id: s.id, town: T, gates, stamps, stone: s.stone, folk, extras };
+}
+
+/** Fuerte de Escarcha (levels 50-60): pale stone and slate under the snow, a gate toward the pass and one toward its lands. */
+const FROST_FORT = ringFort({
+  id: 'frost', town: FROST, roads: [[20, -220], [FROST.x - 200, FROST.z]],
+  stone: 0xc4ccd6, wall: 0xb8bcc4, roof: 0x4a5a78,
+  tint: { wall: 0xf0f2f6, roof: 0x7a90b4, wood: 0xa89888 }, tintAlt: { wall: 0xe4e8ee, roof: 0x8a98ac, wood: 0x9a8a7a },
+  // whitewashed plaster, a few stone ones
+  buildings: [
+    { id: 'f-hall', w: 6, d: 8, kind: 'hall', brick: false }, { id: 'f-smithy', w: 6, d: 4, kind: 'smithy' }, { id: 'f-1', w: 4, d: 4, brick: false },
+    { id: 'f-2', w: 6, d: 4, brick: false }, { id: 'f-3', w: 4, d: 4 }, { id: 'f-4', w: 4, d: 4, brick: false },
+    { id: 'f-5', w: 6, d: 4, brick: false }, { id: 'f-6', w: 4, d: 4, brick: false },
+  ],
+  folk: ['frost_weapons', 'frost_armor', 'frost_grocer', 'frost_gate', 'frost_clan', 'ingrid', 'sven', 'astrid'],
+  smith: 'frost_weapons', alchemist: 'frost_grocer',
+});
+
+/** The Bastión and the ring's forts. */
+export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT];
+export const fortById = (id: string) => FORTS.find((f) => f.id === id)!;
+/** A fort resident's spot and facing (shared/src/data/world.ts). */
+export function fortFolk(id: string): { x: number; z: number; ry: number } {
+  for (const f of FORTS) for (const n of f.folk) if (n.id === id) return n;
+  throw new Error(`no fort resident ${id}`);
 }

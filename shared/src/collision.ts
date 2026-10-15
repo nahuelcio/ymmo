@@ -1,7 +1,7 @@
 // Static world collision + pathfinding, shared by server (authoritative) and client (prediction).
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps } from './layout';
-import { DUSK, PLAYABLE_HALF, TOWN } from './terrain';
-import { BELL_TOWER } from './village';
+import { PLAYABLE_HALF, TOWN } from './terrain';
+import { BELL_TOWER, FORTS } from './village';
 
 /** Circle (r) or oriented box (hw/hd half extents, rot = three.js rotation.y). */
 export type Obstacle =
@@ -21,7 +21,7 @@ function buildObstacles(): Obstacle[] {
   // pebbles are walkable, boulders aren't
   for (const r of layoutRocks()) if (r.sc > 0.7) o.push(circle(r.x, r.z, Math.min(r.s[0], r.s[2]) * 0.85));
   const town = layoutTown();
-  o.push(circle(DUSK.x, DUSK.z, 1.6)); // the Bastión's brazier
+  for (const f of FORTS) o.push(circle(f.town.x, f.town.z, 1.6)); // each fort's brazier
   for (const h of town.houses) o.push(obb(h.x, h.z, h.w / 2 + 0.15, h.d / 2 + 0.15, h.rot));
   o.push(obb(TOWN.x + BELL_TOWER.x, TOWN.z + BELL_TOWER.z, BELL_TOWER.hw, BELL_TOWER.hd, BELL_TOWER.rot));
   for (const s of town.stalls) o.push(obb(s.x, s.z, 1.6, 0.55, s.rot));

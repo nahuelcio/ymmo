@@ -1,5 +1,5 @@
-import { TOWNS } from '../terrain';
-import { ALBA_FOLK } from '../village';
+import { FROST, TOWNS } from '../terrain';
+import { ALBA_FOLK, fortFolk } from '../village';
 
 export interface ZoneDef {
   id: string;
@@ -32,6 +32,11 @@ export const ZONES: ZoneDef[] = [
     spawns: [{ mob: 'drake_whelp', count: 12 }, { mob: 'valley_basilisk', count: 10 }, { mob: 'obsidian_golem', count: 7 }, { mob: 'wyvern', count: 7 }, { mob: 'elder_drake', count: 5 }, { mob: 'kaim_reborn', count: 1 }] },
   { id: 'nest', name: 'Nido del Dragón', x: -340, z: 130, r: 80, levels: '45-50', tint: [0.28, 0.22, 0.3],
     spawns: [{ mob: 'nest_guardian', count: 10 }, { mob: 'dragon_cultist', count: 10 }, { mob: 'brood_spider', count: 8 }, { mob: 'dragonkin', count: 8 }, { mob: 'ancient_drake', count: 5 }] },
+  // 50-78: the ring past the inner range. The frost region (north pass), west of the Fuerte de Escarcha
+  { id: 'tundra', name: 'Tundra Helada', x: -235, z: -650, r: 85, levels: '50-55', tint: [0.86, 0.9, 0.95],
+    spawns: [{ mob: 'frost_wolf', count: 14 }, { mob: 'tundra_raider', count: 10 }, { mob: 'frost_wraith', count: 8 }, { mob: 'ice_shaman', count: 8 }, { mob: 'ice_golem', count: 5 }] },
+  { id: 'peaks', name: 'Picos Helados', x: -470, z: -650, r: 85, levels: '55-60', tint: [0.8, 0.86, 0.93],
+    spawns: [{ mob: 'yeti', count: 12 }, { mob: 'white_drake', count: 10 }, { mob: 'frost_giant', count: 8 }, { mob: 'frost_wyvern', count: 7 }, { mob: 'frost_knight', count: 6 }, { mob: 'primal_yeti', count: 1 }] },
 ];
 
 export function zoneAt(x: number, z: number): string {
@@ -98,9 +103,13 @@ export const TELEPORTS = [
   { id: 'citadel', name: 'Ciudadela Orca (Nv 35-40)', x: -271, z: 298, cost: 16000 },
   { id: 'valley', name: 'Valle del Dragón (Nv 40-45)', x: 270, z: -103, cost: 22000 },
   { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', x: -270, z: 103, cost: 30000 },
+  { id: 'frost', name: 'Fuerte de Escarcha', x: FROST.x, z: FROST.z + 6, cost: 40000 },
+  { id: 'tundra', name: 'Tundra Helada (Nv 50-55)', x: -180, z: -640, cost: 45000 },
+  { id: 'peaks', name: 'Picos Helados (Nv 55-60)', x: -400, z: -660, cost: 50000 },
 ];
 
 const folk = (id: string) => ALBA_FOLK.find((n) => n.id === id)!;
+const fort = (id: string) => { const n = fortFolk(id); return { x: n.x, z: n.z, ry: n.ry }; };
 
 export const NPCS: NpcDef[] = [
   { id: 'grocer', name: 'Lia', title: 'Almacenera', x: folk('grocer').x, z: folk('grocer').z, ry: folk('grocer').ry, kind: 'shop', color: 0x4a8a3a,
@@ -167,4 +176,28 @@ export const NPCS: NpcDef[] = [
     greeting: 'Todo lo que camina en este valle tiene escamas.' },
   { id: 'sibila', name: 'Sibila', title: 'Vidente', x: -265, z: 98, ry: Math.atan2(1, -0.4), kind: 'quest', color: 0x6a3a7a,
     greeting: 'El nido está despierto. Lo siento en los huesos.' },
+  // Fuerte de Escarcha (levels 50-60): the Glacial set over the counter (shared/src/village.ts lays out where they stand)
+  { id: 'frost_weapons', name: 'Bjorn', title: 'Maestro Armero', ...fort('frost_weapons'), kind: 'shop', color: 0x5a6a8a,
+    shop: ['glacial_blade', 'glacial_staff'], greeting: 'Acero templado en la nieve. No se quiebra con el frío.' },
+  { id: 'frost_armor', name: 'Freya', title: 'Maestra Armadurera', ...fort('frost_armor'), kind: 'shop', color: 0x3a5a8a,
+    shop: ['helm', 'plate', 'robe', 'greaves', 'gauntlets', 'boots', 'ring', 'earring', 'necklace'].map((k) => `glacial_${k}`),
+    greeting: 'Sin una buena coraza, en el norte durás lo que dura una tormenta.' },
+  { id: 'frost_grocer', name: 'Helga', title: 'Alquimista', ...fort('frost_grocer'), kind: 'shop', color: 0x3a7a7a,
+    shop: ['greater_healing_potion', 'supreme_healing_potion', 'greater_mana_potion', 'supreme_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
+    greeting: 'Pociones que no se congelan. Y vaya si las vas a necesitar.' },
+  { id: 'frost_gate', name: 'Odvar', title: 'Guardián del Portal', ...fort('frost_gate'), kind: 'gatekeeper', color: 0x5a3a8a,
+    greeting: 'El frío corta, pero el portal corta más rápido. Elegí destino.' },
+  { id: 'frost_clan', name: 'Sigrun', title: 'Maestra de Clanes', ...fort('frost_clan'), kind: 'clan', color: 0x3a4a6a,
+    greeting: 'En el norte nadie sobrevive solo. Por eso existen los clanes.' },
+  { id: 'ingrid', name: 'Ingrid', title: 'Capitana de la Guardia', ...fort('ingrid'), kind: 'quest', color: 0x7a8aa0,
+    greeting: 'La muralla aguanta. La guardia, no tanto.' },
+  { id: 'sven', name: 'Sven', title: 'Peletero', ...fort('sven'), kind: 'quest', color: 0x8a6a4a,
+    greeting: 'Acá el frío te muerde antes que los lobos.' },
+  { id: 'astrid', name: 'Astrid', title: 'Estudiosa del Hielo', ...fort('astrid'), kind: 'quest', color: 0x4a8aaa,
+    greeting: 'Este frío tiene voluntad propia. Lo puedo probar.' },
+  // where the Gatekeeper drops you in each frost zone
+  { id: 'rurik', name: 'Rurik', title: 'Explorador', x: -186, z: -634, ry: Math.atan2(6, -6), kind: 'quest', color: 0x5a6a5a,
+    greeting: 'La tundra se traga las huellas en minutos.' },
+  { id: 'eira', name: 'Eira', title: 'Vidente', x: -406, z: -652, ry: Math.atan2(6, -8), kind: 'quest', color: 0x6a5a9a,
+    greeting: 'El Rey Gélido sueña, y su sueño congela el norte.' },
 ];

@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
 import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
@@ -23,6 +23,7 @@ const PINES = ['PineTree_1', 'PineTree_2', 'PineTree_3'] as const;
 const GREENS = ['NormalTree_1', 'NormalTree_2'] as const;
 const AUTUMN = ['BirchTree_1', 'MapleTree_1'] as const;
 const DEAD = ['DeadTree_1', 'DeadTree_2'] as const;
+const FROSTED = new THREE.Color(0x9ab8b4);
 const BUSHES = ['Bush_Small', 'Bush', 'Bush_Large'] as const;
 const BUSH_FLOWERS = ['Bush_Small_Flowers', 'Bush_Flowers'] as const;
 
@@ -222,7 +223,9 @@ export function buildNatureTrees(): THREE.Group {
     const u = hash(t.x, t.z);
     const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : u < 0.3 ? pick(AUTUMN, u / 0.3) : pick(GREENS, (u - 0.3) / 0.7);
     const m = new THREE.Matrix4().compose(p.set(t.x, t.h - 0.1, t.z), q.setFromAxisAngle(up, t.rot), s.set(t.sc, t.sc, t.sc));
-    items.push(...spawn(piece, m, t.x, t.z, undefined, NODE_BASE.tree + treeIdx));
+    // the frost region's pines, dulled under the cold
+    const tint = biomeWeight('frost', t.x, t.z) > 0.5 ? FROSTED : undefined;
+    items.push(...spawn(piece, m, t.x, t.z, tint, NODE_BASE.tree + treeIdx));
   });
   return chunked(items, CHUNK);
 }

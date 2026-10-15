@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Clouds, cloudShadow } from './clouds';
-import { duskLanterns } from '../../../shared/src/village';
+import { fortLanterns, FORTS } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { DUSK, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf, detailCells, layoutBushes } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
@@ -81,13 +81,16 @@ function groundFactors(x: number, z: number, h: number) {
   const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
   const town = Math.max(...TOWNS.map((t) => 1 - smoothstep(t.r - 2, t.r + 6, Math.hypot(x - t.x, z - t.z))));
   const dirt = Math.max(road * 0.85, town);
+  const frost = biomeWeight('frost', x, z), peak = smoothstep(45, 60, h);
   return {
     n: fbm(x / 40 + 50, z / 40 - 20, 3),
     rock: smoothstep(14, 26, h),
-    snow: smoothstep(45, 60, h),
+    // the peaks, and the whole frost region under its snow
+    snow: Math.max(peak, frost * 0.92),
+    peak,
     road, town, dirt,
-    // pond shores: sand at the waterline, darker silt underwater
-    sand: (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt),
+    // pond shores: sand at the waterline (snow in the frost region), darker silt underwater
+    sand: (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt) * (1 - frost),
     deep: 1 - smoothstep(WATER_LEVEL - 2.5, WATER_LEVEL - 0.2, h),
   };
 }
@@ -137,8 +140,8 @@ export function groundLayers(x: number, z: number, h: number, out: Float32Array,
   apply(5, f.town); // towns are paved
   apply(3, f.sand);
   apply(3, f.deep); // silt under the ponds reads as sand
-  // steep slopes turn to bare rock (snow stays on top of the peaks)
-  apply(2, smoothstep(0.07, 0.28, slopeAt(x, z)) * 0.85 * (1 - f.snow) * (1 - f.town));
+  // steep slopes turn to bare rock (snow stays on top of the peaks; the frost region's cliffs show their stone)
+  apply(2, smoothstep(0.07, 0.28, slopeAt(x, z)) * 0.85 * (1 - f.peak) * (1 - f.town));
 }
 
 /**
@@ -1029,8 +1032,8 @@ function buildTown(): THREE.Group {
   }
   // the village's own dressing (lanes, arches, yards) only knows the village
   dressTown(g, { ...L, houses: L.houses.filter((h) => !h.out), walls: L.walls.filter((w) => !w.out), gates: L.gates.filter((p) => !p.out) }, y);
-  // Bastión del Ocaso: a big iron brazier on a stone plinth (its flames are particles, game.ts; its light, lightSources)
-  g.add(brazier(DUSK.x, y, DUSK.z));
+  // every fort: a big iron brazier on a stone plinth (its flames are particles, game.ts; its light, lightSources)
+  for (const f of FORTS) g.add(brazier(f.town.x, y, f.town.z));
   return g;
 }
 
@@ -1107,8 +1110,8 @@ function dressTown(g: THREE.Group, L: ReturnType<typeof layoutTown>, y: number) 
 }
 
 /** Everything that glows in the world: lamp posts, campfires, the forge and the tavern door. */
-/** Where the Bastión's brazier burns: flames, embers and smoke are emitted here (game.ts), and it lights the plaza. */
-export const BRAZIER_FIRE = { x: DUSK.x, y: TOWN_HEIGHT + 2.05, z: DUSK.z };
+/** Where each fort's brazier burns: flames, embers and smoke are emitted here (game.ts), and it lights the plaza. */
+export const BRAZIER_FIRES = FORTS.map((f) => ({ x: f.town.x, y: TOWN_HEIGHT + 2.05, z: f.town.z }));
 
 /** A wide iron bowl on a stepped stone plinth, glowing coals inside. */
 function brazier(x: number, y: number, z: number): THREE.Group {
@@ -1153,8 +1156,8 @@ export function lightSources(): LightSource[] {
     out.push({ x: TOWN.x + Math.cos(a) * 17.4, y: TOWN_HEIGHT + 2.8, z: TOWN.z + Math.sin(a) * 17.4, fire: false });
   }
   for (const c of layoutCamps()) out.push({ x: c.fire.x, y: heightAt(c.fire.x, c.fire.z) + 1, z: c.fire.z, fire: true });
-  out.push({ ...BRAZIER_FIRE, y: BRAZIER_FIRE.y + 0.8, fire: true });
-  for (const l of duskLanterns()) out.push({ x: l.x, y: TOWN_HEIGHT + l.y, z: l.z, fire: false });
+  for (const b of BRAZIER_FIRES) out.push({ ...b, y: b.y + 0.8, fire: true });
+  for (const l of fortLanterns()) out.push({ x: l.x, y: TOWN_HEIGHT + l.y, z: l.z, fire: false });
   for (const h of layoutTown().houses) {
     // a point in the building's own frame (front = +z), turned into the world like its mesh
     const local = h.kind === 'smithy' ? [0, 1.6, h.d / 2 + 0.6] : h.kind === 'tavern' ? [0, 2.4, h.d / 2 + 1] : null;

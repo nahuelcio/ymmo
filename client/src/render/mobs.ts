@@ -71,6 +71,12 @@ export const MOB_LOOK: Record<string, MobLook> = {
   zombie: { skin: ROT, hair: 0x2a2a20, hs: 1, top: 0x4a4a3a, bottom: 0x3a3428 },
   drowned_sailor: { skin: DROWNED, hair: 0x2a3a3a, hs: 1, beard: true, top: 0x5a7a80, bottom: 0x3a4a50, weapon: 'dagger' },
   drowned_corsair: { skin: 0x6a8490, hair: 0x1a2a2a, hs: 0, beard: true, ranger: true, top: 0x2a4a6a, bottom: 0x2a3440, hood: 0x6a1a1a, pauldron: true, weapon: 'samurai_longsword' },
+  // the frost region: tundra folk in furs, ice-blue orcs, and the giants of the peaks
+  tundra_raider: { skin: 0xd8b090, hair: 0xb89060, hs: 1, beard: true, ranger: true, top: 0x8a6a4a, bottom: 0x4a3a2a, hood: 0xd8d0c0, weapon: 'spear' },
+  tundra_jarl: { skin: 0xd0a080, hair: 0xc89050, hs: 1, beard: true, ranger: true, top: 0x6a4a3a, bottom: 0x3a2a20, helm: 'HelmD', pauldron: true, weapon: 'battle_axe', brawn: 1.2, bulk: 1.15 },
+  ice_shaman: orc({ skin: 0x6a8aa0, top: 0x3a5a8a, bottom: 0x2a3a5a, hs: 4, beard: true, weapon: 'staff_of_life' }),
+  frost_giant: orc({ skin: 0x8aa8c8, hair: 0xe8eef4, hs: 1, beard: true, ears: undefined, tusks: false, ranger: true, top: 0x5a6a7a, bottom: 0x3a4a5a, pauldron: true, weapon: 'war_hammer', brawn: 1.3, bulk: 1.25 }),
+  hrimgar: { skin: 0x7a9ac0, hair: 0xe8f0f8, hs: 1, beard: true, ranger: true, top: 0x7aa0c8, bottom: 0x4a5a78, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.3, bulk: 1.3 },
 };
 
 /** ?proc: every mob as its old procedural rig (to compare looks and cost) */
@@ -130,6 +136,8 @@ interface GlbLook {
   wave?: boolean;
   /** painted with the village kit's rock (repeat count), instead of its own texture: the golems */
   rock?: number;
+  /** its texture greyed and brightened by this much before the tint and dye: a white yeti from the dark werewolf */
+  pale?: number;
   kind?: Rig['kind'];
 }
 
@@ -176,6 +184,18 @@ export const MOB_GLB: Record<string, GlbLook> = {
   magma_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xffa888, glow: 0x5a1400, kind: 'humanoid' },
   obsidian_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6e6e80, kind: 'humanoid' },
   nest_guardian: { model: 'golem', height: 2.3, rock: 4, dye: 0xd0a888, kind: 'humanoid' },
+  // the frost region
+  frost_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0xe8eef4, Main_Light: 0xffffff } },
+  frost_wraith: { model: 'skeleton_mage', height: 1.9, ghost: true, dye: 0xd0f0ff, glow: 0x3a8ac8, kind: 'humanoid' },
+  ice_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xc8ecff, glow: 0x14405a, kind: 'humanoid' },
+  yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xf0f6ff },
+  yeti_cub: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfaf6f0 },
+  yeti_matriarch: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfff4e8 },
+  primal_yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.4, dye: 0xe0f0ff, glow: 0x081828 },
+  white_drake: { model: 'drake', height: 1.5, pale: 2, dye: 0xe8f4ff },
+  frost_wyvern: { model: 'wyvern', height: 1.8, tint: { Main: 0x9ac0e0, Belly: 0xf0f4f8, Wings: 0x6a90b8 }, clips: { idle: 'Fly', run: 'Fly' } },
+  frost_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.7, tint: { skeleton: 0xa8d4ff, Glow: 0x60c0ff } },
+  frost_guard: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Small_A', pale: 1.7, tint: { skeleton: 0xc0e0ff, Glow: 0x80d0ff } },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
@@ -224,7 +244,7 @@ function rockMap(n: number): THREE.Texture | null {
   return t;
 }
 function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material {
-  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}`;
+  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}:${l?.pale ?? ''}`;
   let m = mats.get(key);
   if (!m) {
     const s = src as THREE.MeshStandardMaterial;
@@ -236,6 +256,17 @@ function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): TH
       emissive: l?.glow ?? (glow ? (tint === undefined ? s.emissive.clone() : new THREE.Color(tint)) : 0x000000), emissiveMap: l?.glow ? null : s.emissiveMap,
     });
     if (l?.ghost) Object.assign(mat, { transparent: true, opacity: 0.55, depthWrite: false });
+    if (l?.pale && mat.map) {
+      // the texture's shading as grey, brightened (square root, so its dark fur still reads), then tinted
+      const k = l.pale.toFixed(2);
+      mat.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+          #ifdef USE_MAP
+            diffuseColor.rgb = diffuse * vec3(min(1.0, sqrt(dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114))) * ${k}));
+          #endif`);
+      };
+      mat.customProgramCacheKey = () => `mob-pale-${k}`;
+    }
     if (l?.wave) {
       // a travelling S along the body (local z), stronger toward the tail
       mat.onBeforeCompile = (sh) => {

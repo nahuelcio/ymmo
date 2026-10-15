@@ -108,14 +108,20 @@ export const EN = {
   "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
   "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
-  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"]].flatMap(([p, n]) =>
+  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"]].flatMap(([p, n]) =>
    ["Blade", "Staff", "Helm", "Plate", "Robe", "Greaves", "Gauntlets", "Boots", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
   "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
   "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },
   "citadel_sigil": { "name": "Citadel Sigil" }, "drake_scale": { "name": "Drake Scale" }, "dragon_fang": { "name": "Dragon Fang" },
+  "frost_pelt": { "name": "Frozen Pelt" }, "ice_crystal": { "name": "Ice Crystal" },
+  "supreme_healing_potion": { "name": "Supreme Healing Potion", "desc": "Restores 750 HP." },
+  "supreme_mana_potion": { "name": "Supreme Mana Potion", "desc": "Restores 350 MP." },
   "earring_of_focus": { "name": "Earring of Focus" },
   "necklace_of_valor": { "name": "Necklace of Valor" },
+  "ring_of_swiftness": { "name": "Ring of Swiftness", "desc": "Skill cooldowns -5%." },
+  "earring_of_clarity": { "name": "Earring of Clarity", "desc": "Skill cooldowns -8%." },
+  "amulet_of_haste": { "name": "Amulet of Haste", "desc": "Skill cooldowns -10%." },
   "ring_of_the_wastes": { "name": "Ring of the Wastes" },
   "earring_of_binding": { "name": "Earring of Binding" },
   "necklace_of_the_ascended": { "name": "Necklace of the Ascended" },
@@ -217,7 +223,11 @@ export const EN = {
   "ash_hound": "Ash Hound", "steppe_raider": "Steppe Raider", "ember_spider": "Ember Spider", "steppe_shaman": "Steppe Shaman", "magma_golem": "Magma Golem",
   "citadel_guard": "Citadel Guard", "citadel_archer": "Citadel Crossbowman", "war_wolf": "War Wolf", "citadel_warlock": "Citadel Warlock", "citadel_champion": "Citadel Champion",
   "drake_whelp": "Drake Whelp", "valley_basilisk": "Valley Basilisk", "obsidian_golem": "Obsidian Golem", "wyvern": "Wyvern", "elder_drake": "Elder Drake",
-  "nest_guardian": "Nest Guardian", "dragon_cultist": "Dragon Cultist", "brood_spider": "Brood Spider", "dragonkin": "Dragonkin", "ancient_drake": "Ancient Drake"
+  "nest_guardian": "Nest Guardian", "dragon_cultist": "Dragon Cultist", "brood_spider": "Brood Spider", "dragonkin": "Dragonkin", "ancient_drake": "Ancient Drake",
+  "frost_wolf": "Frost Wolf", "tundra_raider": "Tundra Raider", "frost_wraith": "Frost Wraith", "ice_shaman": "Ice Shaman", "ice_golem": "Ice Golem",
+  "yeti": "Yeti", "white_drake": "White Drake", "frost_giant": "Frost Giant", "frost_wyvern": "Frost Wyvern", "frost_knight": "Frost Knight",
+  "tundra_jarl": "Tundra Jarl", "yeti_matriarch": "Yeti Matriarch", "primal_yeti": "Primal Yeti", "yeti_cub": "Yeti Cub",
+  "hrimgar": "Hrimgar, the Frost King", "frost_guard": "Frost Guard"
  },
  "skills": {
   "provoke": {
@@ -439,7 +449,22 @@ export const EN = {
    "ready": "Still warm. This is enough.", "doneText": "What comes after this valley is worse. Go prepared." },
   "ancient_drakes": { "name": "Ancient Drakes", "story": "The ancient drakes have guarded the Nest since before the frontier had a name. While they live, what sleeps inside is in no hurry.",
    "offer": "The ancient drakes are the nest's last guard. Kill 8.", "busy": "Eight ancients. These are no whelps: do not go alone.",
-   "ready": "The nest stands unguarded. Now it will hear you.", "doneText": "What sleeps in there already knows your name." }
+   "ready": "The nest stands unguarded. Now it will hear you.", "doneText": "What sleeps in there already knows your name." },
+  "frost_welcome": { "name": "Wolves in the Snow", "story": "Frost Fort was raised to guard the northern pass, but the tundra asks no one's leave. Packs of frost wolves come down to the wall every night, and the guard can no longer keep up.",
+   "offer": "Frost wolves prowl the wall. Take down 15 and we will talk pay.", "busy": "You can still hear the howling. Fifteen wolves, do not make me count twice.",
+   "ready": "The guard will sleep easy for the first time in weeks. Take this.", "doneText": "The tundra is big. If you live, we will surely need you again." },
+  "frozen_pelts": { "name": "Frozen Pelts", "story": "In the north the cold kills more than any sword. Sven sews the cloaks for the whole garrison, and the frozen pelts of the tundra's wolves and raiders are the only ones that last through a storm.",
+   "offer": "Bring me 15 frozen pelts. Wolves, raiders, yetis: they all dress warm.", "busy": "Fifteen pelts. With fewer I cannot clothe even half the guard.",
+   "ready": "Thick and whole. This garrison will make it through the winter.", "doneText": "If the storm catches you, remember who kept you warm." },
+  "wraith_hunt": { "name": "Wraiths of the Tundra", "story": "Whole caravans lie buried under the tundra's snow. Their dead do not rest: they wander as frost wraiths and freeze everything they touch.",
+   "offer": "The frost wraiths will not let me through. Dispel 12.", "busy": "Twelve wraiths. If they slow you, do not stand still.",
+   "ready": "At last I can follow the caravans' trail. I owe you.", "doneText": "The tundra has gone a little quiet. I hope it lasts." },
+  "ice_crystals": { "name": "Heart of Ice", "story": "Astrid believes the northern cold is not natural: something in the Frozen Peaks feeds it. The ice crystals carried by wraiths, golems and white drakes hold the answer.",
+   "offer": "I need 14 ice crystals for my studies. The golems, the wraiths and the drakes of the peaks carry them.", "busy": "Fourteen crystals. Careful: they do not melt, but they burn your hands.",
+   "ready": "They pulse. Literally. This confirms everything I suspected.", "doneText": "Something sleeps on the Frost Throne. And it does not like being woken." },
+  "giant_slayer": { "name": "Giant Slayer", "story": "The frost giants are the Frost King's guard. While they stand, no one reaches the Frost Throne alive.",
+   "offer": "Bring down 8 frost giants and I will show you the way to the throne.", "busy": "Eight giants. When they raise the hammer, get out of the circle.",
+   "ready": "The throne is unguarded. Gather your people and type /raid frost when they are ready.", "doneText": "Hrimgar awaits you on his throne. May fire go with you." }
  },
  "npcs": {
   "grocer": {
@@ -539,7 +564,17 @@ export const EN = {
   "korgan": { "title": "Steppe Scout", "greeting": "Out here even the wind burns." },
   "brenna": { "title": "Siege Captain", "greeting": "The citadel will not fall while its champions stand." },
   "aldric": { "title": "Dragon Hunter", "greeting": "Everything that walks this valley has scales." },
-  "sibila": { "title": "Seer", "greeting": "The nest is awake. I feel it in my bones." }
+  "sibila": { "title": "Seer", "greeting": "The nest is awake. I feel it in my bones." },
+  "frost_weapons": { "title": "Master Weaponsmith", "greeting": "Steel tempered in the snow. The cold does not break it." },
+  "frost_armor": { "title": "Master Armorer", "greeting": "Without good plate, up north you last as long as a storm." },
+  "frost_grocer": { "title": "Alchemist", "greeting": "Potions that do not freeze. And you will need them." },
+  "frost_gate": { "title": "Gatekeeper", "greeting": "The cold cuts, but the portal cuts faster. Pick a destination." },
+  "frost_clan": { "title": "Clan Master", "greeting": "Up north no one survives alone. That is why clans exist." },
+  "ingrid": { "title": "Captain of the Guard", "greeting": "The wall holds. The guard, not so much." },
+  "sven": { "title": "Furrier", "greeting": "Up here the cold bites before the wolves do." },
+  "astrid": { "title": "Ice Scholar", "greeting": "This cold has a will of its own. I can prove it." },
+  "rurik": { "title": "Scout", "greeting": "The tundra swallows tracks in minutes." },
+  "eira": { "title": "Seer", "greeting": "The Frost King dreams, and his dream freezes the north." }
  },
  "zones": {
   "meadows": "Windy Meadows",
@@ -554,7 +589,10 @@ export const EN = {
   "valley": "Dragon Valley",
   "nest": "Dragon's Nest",
   "town": "Village of Dawn",
-  "wild": "Wilderness"
+  "wild": "Wilderness",
+  "frost": "Frost Fort",
+  "tundra": "Frozen Tundra",
+  "peaks": "Frozen Peaks"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -568,7 +606,10 @@ export const EN = {
   "steppes": "Burning Steppes (Lv 30-35)",
   "citadel": "Orc Citadel (Lv 35-40)",
   "valley": "Dragon Valley (Lv 40-45)",
-  "nest": "Dragon's Nest (Lv 45-50)"
+  "nest": "Dragon's Nest (Lv 45-50)",
+  "frost": "Frost Fort",
+  "tundra": "Frozen Tundra (Lv 50-55)",
+  "peaks": "Frozen Peaks (Lv 55-60)"
  },
  "races": {
   "human": {
@@ -624,7 +665,9 @@ export const EN = {
   "gremlin_den": "Gremlin Den",
   "goblin_camp": "Goblin Camp",
   "orc_outpost": "Orc War Outpost",
-  "crypt": "Desecrated Crypt"
+  "crypt": "Desecrated Crypt",
+  "tundra_camp": "Raiders' Camp",
+  "yeti_den": "Matriarch's Den"
  },
  "statuses": {
   "stun": {

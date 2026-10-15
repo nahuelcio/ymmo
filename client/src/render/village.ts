@@ -4,7 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
 import { bumpNormal, relief } from './textures';
 import { plazaBenches } from '../../../shared/src/layout';
-import { albaCurtain, BELL_TOWER, duskCurtain, duskProps, type PropInst, type PropName, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
+import { albaCurtain, BELL_TOWER, fortCurtain, fortProps, FORTS, type PropInst, type PropName, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
 
 /**
  * Static kit meshes for settlements. Each glTF primitive (one material) is instanced
@@ -348,9 +348,9 @@ export function buildVillage(): THREE.Group {
     mesh.computeBoundingSphere();
     g.add(mesh);
   }
-  // the Bastión's props, instanced per prop and primitive
+  // the forts' props, instanced per prop and primitive
   const byName = new Map<PropName, PropInst[]>();
-  for (const pr of duskProps()) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
+  for (const pr of FORTS.flatMap(fortProps)) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
   for (const [name, list] of byName) for (const prim of propPrims.get(name) ?? []) {
     const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, PROP_DYE[name] ?? 0xffffff), list.length);
     list.forEach((it, i) => {
@@ -364,7 +364,7 @@ export function buildVillage(): THREE.Group {
     mesh.computeBoundingSphere();
     g.add(mesh);
   }
-  for (const curtain of [albaCurtain().draw, duskCurtain().draw]) for (const kind of ['wall', 'gate', 'tower'] as const) {
+  for (const curtain of [albaCurtain().draw, ...FORTS.map((f) => fortCurtain(f).draw)]) for (const kind of ['wall', 'gate', 'tower'] as const) {
     const primList = curtainPrims[kind];
     const list = curtain.filter((d) => d.kind === kind);
     if (!list.length || !primList.length) continue;
