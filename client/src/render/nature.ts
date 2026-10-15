@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
 import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
@@ -23,6 +23,9 @@ const PINES = ['PineTree_1', 'PineTree_2', 'PineTree_3'] as const;
 const GREENS = ['NormalTree_1', 'NormalTree_2'] as const;
 const AUTUMN = ['BirchTree_1', 'MapleTree_1'] as const;
 const DEAD = ['DeadTree_1', 'DeadTree_2'] as const;
+const FROSTED = new THREE.Color(0x9ab8b4);
+/** the swamp's grass, dark and wet */
+const BOGGY = new THREE.Color(0.6, 0.7, 0.46);
 const BUSHES = ['Bush_Small', 'Bush', 'Bush_Large'] as const;
 const BUSH_FLOWERS = ['Bush_Small_Flowers', 'Bush_Flowers'] as const;
 
@@ -220,9 +223,13 @@ export function buildNatureTrees(): THREE.Group {
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
   layoutTrees().forEach((t, treeIdx) => {
     const u = hash(t.x, t.z);
-    const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : u < 0.3 ? pick(AUTUMN, u / 0.3) : pick(GREENS, (u - 0.3) / 0.7);
+    // the jungle keeps its green all year
+    const jungle = biomeWeight('swamp', t.x, t.z) > 0.5;
+    const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : jungle ? pick(GREENS, u) : u < 0.3 ? pick(AUTUMN, u / 0.3) : pick(GREENS, (u - 0.3) / 0.7);
     const m = new THREE.Matrix4().compose(p.set(t.x, t.h - 0.1, t.z), q.setFromAxisAngle(up, t.rot), s.set(t.sc, t.sc, t.sc));
-    items.push(...spawn(piece, m, t.x, t.z, undefined, NODE_BASE.tree + treeIdx));
+    // the frost region's pines, dulled under the cold
+    const tint = biomeWeight('frost', t.x, t.z) > 0.5 ? FROSTED : undefined;
+    items.push(...spawn(piece, m, t.x, t.z, tint, NODE_BASE.tree + treeIdx));
   });
   return chunked(items, CHUNK);
 }
@@ -273,7 +280,7 @@ export function natureDetailCell(x0: number, z0: number, seed: number): THREE.Ob
           items.push(...spawn(r1 < 0.5 ? 'Flower_1_Clump' : 'Flower_3_Clump', m, x, z));
         } else {
           const dry = zone === 'wastes' ? 1 : zone === 'barracks' ? 0.5 : 0;
-          const tint = dry === 1 ? DRY : dry === 0.5 ? PARCHED : WHITE;
+          const tint = dry === 1 ? DRY : dry === 0.5 ? PARCHED : biomeWeight('swamp', x, z) > 0.5 ? BOGGY : WHITE;
           items.push(...spawn(r1 > 0.72 ? 'Grass_Large' : 'Grass_Small', m, x, z, c.copy(tint).clone()));
         }
       }

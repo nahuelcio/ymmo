@@ -2,8 +2,8 @@
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
-import { DUSK, firstMapHeightAt, heightAt, INNER_HALF, inTown, mulberry32, PLAYABLE_HALF, RING_ROADS, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
-import { ALBA_STAMPS, albaCurtain, DUSK_STAMPS, duskCurtain } from './village';
+import { biomeWeight, DUSK, firstMapHeightAt, heightAt, INNER_HALF, inTown, inCrater, onRaidFloor, mulberry32, PLAYABLE_HALF, RING_ROADS, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
+import { ALBA_STAMPS, albaCurtain, fortCurtain, FORTS } from './village';
 
 /**
  * Road segments from the village: one toward each hunting ground around it and one to the second town.
@@ -72,18 +72,24 @@ export interface ZonePropsL {
 
 /** A tree at (x, z), or null where none grows; draws from rng in the order the first map's trees always have. */
 function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | null {
-  if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || w.roadDist(x, z) < 6) return null;
+  if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || w.roadDist(x, z) < 6 || onRaidFloor(x, z, 6) || inCrater(x, z, 4)) return null;
   const h = w.height(x, z);
   if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) return null; // no trees on peaks, in ponds or in camps
   const zone = zoneOf(x, z);
   // keep hunting grounds a bit more open
   if (zone && rng() < 0.55) return null;
-  const sc = 0.7 + rng() * 0.7;
+  // trees grow half again as big in the jungle
+  const sc = (0.7 + rng() * 0.7) * (1 + 0.5 * biomeWeight('swamp', x, z));
   const rot = rng() * Math.PI * 2;
-  const dead = zone?.id === 'wastes';
+  // dead trees in the cursed wastes and all over the ash of the volcanic region
+  const dead = zone?.id === 'wastes' || biomeWeight('ash', x, z) > 0.5;
   let pine = false, hue = 0, light = 0;
   if (!dead) {
+    // pines up high and in the orc barracks; only pines under the frost region's snow
     pine = h > 10 || zone?.id === 'barracks' ? rng() < 0.8 : rng() < 0.35;
+    if (biomeWeight('frost', x, z) > 0.5) pine = true;
+    // the swamp and jungle grow broad trees only
+    if (biomeWeight('swamp', x, z) > 0.5) pine = false;
     hue = rng();
     light = rng();
   }
@@ -108,6 +114,13 @@ export function layoutTrees(): TreeL[] {
     const x = (ring() * 2 - 1) * WORLD_HALF * 0.95, z = (ring() * 2 - 1) * WORLD_HALF * 0.95;
     if (!inRing(x, z, 0.95)) continue;
     const t = placeTree(ring, x, z, NEW);
+    if (t) (trees.push(t), n++);
+  }
+  // the Ancient Jungle grows thick (after everything else, so no other tree's number moves)
+  const thick = mulberry32(9), jungle = ZONES.find((zn) => zn.id === 'jungle')!;
+  for (let i = 0, n = 0; i < 2000 && n < 450; i++) {
+    const a = thick() * Math.PI * 2, r = Math.sqrt(thick()) * (jungle.r + 25);
+    const t = placeTree(thick, jungle.x + Math.cos(a) * r, jungle.z + Math.sin(a) * r, NEW);
     if (t) (trees.push(t), n++);
   }
   return trees;
@@ -140,7 +153,8 @@ export function fertile(x: number, z: number, h: number): boolean {
   return fertileIn(NEW, x, z, h);
 }
 function fertileIn(w: View, x: number, z: number, h: number): boolean {
-  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && w.roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
+  // nothing grows under the frost region's snow
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && w.roadDist(x, z) > 3.2 && !nearCamp(x, z, 16) && biomeWeight('frost', x, z) < 0.5 && biomeWeight('ash', x, z) < 0.5 && !onRaidFloor(x, z, 2);
 }
 
 /** A stable pseudo-random value in [0, 1) for a spot (picks models and variants without an rng). */
@@ -216,7 +230,7 @@ export function layoutRocks(): RockL[] {
     const w = ring ? NEW : OLD;
     for (let n = 0; n < want;) {
       const x = (rng() * 2 - 1) * half * 0.95, z = (rng() * 2 - 1) * half * 0.95;
-      if ((ring && !inRing(x, z, 0.95)) || inTown(x, z) || w.roadDist(x, z) < 4) continue;
+      if ((ring && !inRing(x, z, 0.95)) || inTown(x, z) || w.roadDist(x, z) < 4 || onRaidFloor(x, z, 4) || inCrater(x, z, 4)) continue;
       const sc = 0.3 + rng() * rng() * 2.5;
       const e: [number, number, number] = [rng() * 3, rng() * 3, rng() * 3];
       const s: [number, number, number] = [sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6)];
@@ -260,10 +274,12 @@ export function layoutTown(): TownL {
   }
   // stone curtain: wall runs, an open gate on every road, a tower midway along each span
   for (const w of albaCurtain().walls) town.walls.push(w);
-  // the second town: dark stone kit buildings inside a stone wall with a gate on each road (shared/src/village.ts)
-  for (const s of DUSK_STAMPS)
-    town.houses.push({ x: s.x, z: s.z, rot: s.rot, w: s.w, d: s.d, wall: s.wall, roof: s.roof, kind: s.kind, out: true });
-  for (const w of duskCurtain().walls) town.walls.push({ ...w, out: true });
+  // the forts (the Bastión and the ring's towns): kit buildings inside a stone wall with a gate on each road (shared/src/village.ts)
+  for (const f of FORTS) {
+    for (const s of f.stamps)
+      town.houses.push({ x: s.x, z: s.z, rot: s.rot, w: s.w, d: s.d, wall: s.wall, roof: s.roof, kind: s.kind, out: true });
+    for (const w of fortCurtain(f).walls) town.walls.push({ ...w, out: true });
+  }
   return town;
 }
 

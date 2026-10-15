@@ -71,6 +71,23 @@ export const MOB_LOOK: Record<string, MobLook> = {
   zombie: { skin: ROT, hair: 0x2a2a20, hs: 1, top: 0x4a4a3a, bottom: 0x3a3428 },
   drowned_sailor: { skin: DROWNED, hair: 0x2a3a3a, hs: 1, beard: true, top: 0x5a7a80, bottom: 0x3a4a50, weapon: 'dagger' },
   drowned_corsair: { skin: 0x6a8490, hair: 0x1a2a2a, hs: 0, beard: true, ranger: true, top: 0x2a4a6a, bottom: 0x2a3440, hood: 0x6a1a1a, pauldron: true, weapon: 'samurai_longsword' },
+  // the frost region: tundra folk in furs, ice-blue orcs, and the giants of the peaks
+  tundra_raider: { skin: 0xd8b090, hair: 0xb89060, hs: 1, beard: true, ranger: true, top: 0x8a6a4a, bottom: 0x4a3a2a, hood: 0xd8d0c0, weapon: 'spear' },
+  tundra_jarl: { skin: 0xd0a080, hair: 0xc89050, hs: 1, beard: true, ranger: true, top: 0x6a4a3a, bottom: 0x3a2a20, helm: 'HelmD', pauldron: true, weapon: 'battle_axe', brawn: 1.2, bulk: 1.15 },
+  ice_shaman: orc({ skin: 0x6a8aa0, top: 0x3a5a8a, bottom: 0x2a3a5a, hs: 4, beard: true, weapon: 'staff_of_life' }),
+  frost_giant: orc({ skin: 0x8aa8c8, hair: 0xe8eef4, hs: 1, beard: true, ears: undefined, tusks: false, ranger: true, top: 0x5a6a7a, bottom: 0x3a4a5a, pauldron: true, weapon: 'war_hammer', brawn: 1.3, bulk: 1.25 }),
+  // the swamp region: the drowned and witches of the bog, the jungle's tribe
+  bog_drowned: { skin: 0x6a8a5a, hair: 0x2a3a20, hs: 1, top: 0x3a4a2a, bottom: 0x2a3420 },
+  bog_witch: { g: 'f', skin: 0x8aa070, hair: 0x2a2a1a, hs: 0, top: 0x3a4a2a, bottom: 0x2a3020, hood: 0x2a3a1a, weapon: 'staff_of_life' },
+  bog_hag: { g: 'f', skin: 0x7a9060, hair: 0xd0d0c0, hs: 0, top: 0x4a2a4a, bottom: 0x2a1a2a, hood: 0x3a1a3a, weapon: 'sages_staff' },
+  tribal_hunter: { skin: 0x9a6a40, hair: 0x1a1a10, hs: 3, ranger: true, top: 0x6a5a2a, bottom: 0x4a3a1a, weapon: ['bow', 0x5a4a2a] },
+  tribal_chief: { skin: 0x8a5a30, hair: 0x1a1a10, hs: 1, beard: true, ranger: true, top: 0x8a3a1a, bottom: 0x4a3a1a, helm: 'HelmD', pauldron: true, weapon: 'partisan', brawn: 1.2, bulk: 1.15 },
+  // the volcanic region: the fire sect and the Abyss's demons
+  pyromancer: { skin: 0xc89070, hair: 0x2a1a1a, hs: 0, top: 0x8a2a10, bottom: 0x3a1a10, hood: 0x6a1a08, weapon: 'staff_of_life' },
+  high_pyromancer: { skin: 0xb88060, hair: 0xe0e0d0, hs: 1, beard: true, top: 0xa8301a, bottom: 0x3a1410, hood: 0x8a1a0a, pauldron: true, weapon: 'sages_staff' },
+  abyss_demon: orc({ skin: 0x8a2a24, top: 0x2a1a24, bottom: 0x1a1018, helm: 'HelmD', pauldron: true, weapon: 'battle_axe', brawn: 1.25, bulk: 1.2 }),
+  abyss_commander: orc({ skin: 0x6a1a20, ranger: true, top: 0x3a1a3a, bottom: 0x1a101a, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.28, bulk: 1.25 }),
+  hrimgar: { skin: 0x7a9ac0, hair: 0xe8f0f8, hs: 1, beard: true, ranger: true, top: 0x7aa0c8, bottom: 0x4a5a78, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.3, bulk: 1.3 },
 };
 
 /** ?proc: every mob as its old procedural rig (to compare looks and cost) */
@@ -130,6 +147,8 @@ interface GlbLook {
   wave?: boolean;
   /** painted with the village kit's rock (repeat count), instead of its own texture: the golems */
   rock?: number;
+  /** its texture greyed and brightened by this much before the tint and dye: a white yeti from the dark werewolf */
+  pale?: number;
   kind?: Rig['kind'];
 }
 
@@ -176,6 +195,43 @@ export const MOB_GLB: Record<string, GlbLook> = {
   magma_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xffa888, glow: 0x5a1400, kind: 'humanoid' },
   obsidian_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6e6e80, kind: 'humanoid' },
   nest_guardian: { model: 'golem', height: 2.3, rock: 4, dye: 0xd0a888, kind: 'humanoid' },
+  // the frost region
+  frost_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0xe8eef4, Main_Light: 0xffffff } },
+  frost_wraith: { model: 'skeleton_mage', height: 1.9, ghost: true, dye: 0xd0f0ff, glow: 0x3a8ac8, kind: 'humanoid' },
+  ice_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xc8ecff, glow: 0x14405a, kind: 'humanoid' },
+  yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xf0f6ff },
+  yeti_cub: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfaf6f0 },
+  yeti_matriarch: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfff4e8 },
+  primal_yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.4, dye: 0xe0f0ff, glow: 0x081828 },
+  white_drake: { model: 'drake', height: 1.5, pale: 2, dye: 0xe8f4ff },
+  frost_wyvern: { model: 'wyvern', height: 1.8, tint: { Main: 0x9ac0e0, Belly: 0xf0f4f8, Wings: 0x6a90b8 }, clips: { idle: 'Fly', run: 'Fly' } },
+  frost_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.7, tint: { skeleton: 0xa8d4ff, Glow: 0x60c0ff } },
+  // the swamp region
+  swamp_cobra: { model: 'cobra', height: 1.0, dye: 0x9ad070, wave: true },
+  serpent_brood: { model: 'cobra', height: 1.0, dye: 0xc0e890, wave: true },
+  ssithra: { model: 'cobra', height: 1.0, dye: 0x6ac0a0, glow: 0x0a2a1a, wave: true },
+  mud_crab: { model: 'crab', height: 0.75, pale: 1.8, dye: 0x9a8058, kind: 'spider' },
+  mire_lurker: { model: 'limule', height: 0.8, dye: 0x7a9a5a, kind: 'spider' },
+  jungle_raptor: { model: 'raptor', height: 1.25, tint: { Brown: 0x2a4a1a, LightBrown: 0x5a7a2a }, clips: { run: 'Run' } },
+  giant_spider: { model: 'spider', height: 0.9, tint: { Material: 0x1a2a10, 'Material.001': 0x7a9a20 }, kind: 'spider' },
+  corrupted_ent: { model: 'forest', height: 2.1, dye: 0x8a9a6a, glow: 0x14081a },
+  elder_ent: { model: 'forest', height: 2.1, dye: 0x9a8aa0, glow: 0x24082c },
+  ent_sapling: { model: 'forest', height: 2.1, dye: 0xb0d098 },
+  jungle_beast: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, dye: 0x9aa878 },
+  // the volcanic region
+  lava_salamander: { model: 'raptor', height: 1.25, tint: { Brown: 0x8a2a0a, LightBrown: 0xd86a1a, Black: 0x1a0a04 }, glow: 0x3a0a00, clips: { run: 'Run' } },
+  hellhound: { model: 'wolf', height: 1.3, tint: { Main: 0x1a1414, Main_Light: 0x5a1a10, Eyes_Black: 0xff4010 }, glow: 0x2a0600 },
+  lava_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6a4a40, glow: 0x7a2200, kind: 'humanoid' },
+  magma_drake: { model: 'drake', height: 1.5, dye: 0xff8a50, glow: 0x4a1000 },
+  flame_lord: { model: 'golem', height: 2.3, rock: 4, dye: 0x8a5040, glow: 0xa83000, kind: 'humanoid' },
+  fire_elemental: { model: 'golem', height: 2.3, rock: 4, dye: 0xffa070, glow: 0xc04000, ghost: true, kind: 'humanoid' },
+  abyss_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.6, tint: { skeleton: 0x9a78c0, Glow: 0xa040ff } },
+  lich: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', pale: 1.6, tint: { skeleton: 0x8ab07a, Glow: 0x40ff80 } },
+  abyss_weaver: { model: 'spider', height: 0.9, tint: { Material: 0x1a0a24, 'Material.001': 0x8a30c0 }, glow: 0x14041c, kind: 'spider' },
+  abyss_drake: { model: 'drake', height: 1.55, dye: 0x8a6aa8, glow: 0x1a0428 },
+  azgaroth: { model: 'drake', height: 1.6, dye: 0x5a3a6a, glow: 0x3a0606 },
+  abyss_spawn: { model: 'limule', height: 0.8, dye: 0x8a6aa0, glow: 0x14041c, kind: 'spider' },
+  frost_guard: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Small_A', pale: 1.7, tint: { skeleton: 0xc0e0ff, Glow: 0x80d0ff } },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
@@ -224,7 +280,7 @@ function rockMap(n: number): THREE.Texture | null {
   return t;
 }
 function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material {
-  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}`;
+  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}:${l?.pale ?? ''}`;
   let m = mats.get(key);
   if (!m) {
     const s = src as THREE.MeshStandardMaterial;
@@ -236,6 +292,17 @@ function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): TH
       emissive: l?.glow ?? (glow ? (tint === undefined ? s.emissive.clone() : new THREE.Color(tint)) : 0x000000), emissiveMap: l?.glow ? null : s.emissiveMap,
     });
     if (l?.ghost) Object.assign(mat, { transparent: true, opacity: 0.55, depthWrite: false });
+    if (l?.pale && mat.map) {
+      // the texture's shading as grey, brightened (square root, so its dark fur still reads), then tinted
+      const k = l.pale.toFixed(2);
+      mat.onBeforeCompile = (sh) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+          #ifdef USE_MAP
+            diffuseColor.rgb = diffuse * vec3(min(1.0, sqrt(dot(sampledDiffuseColor.rgb, vec3(0.299, 0.587, 0.114))) * ${k}));
+          #endif`);
+      };
+      mat.customProgramCacheKey = () => `mob-pale-${k}`;
+    }
     if (l?.wave) {
       // a travelling S along the body (local z), stronger toward the tail
       mat.onBeforeCompile = (sh) => {

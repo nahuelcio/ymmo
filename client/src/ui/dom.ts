@@ -111,6 +111,10 @@ function savePos(id: string, x: number, y: number) {
 /** Draggable L2-style window. */
 export class Win {
   static stack: Win[] = [];
+  /** every window, for the layout reset (Options > Game & UI) */
+  static all: Win[] = [];
+  /** where the layout opens it */
+  private home: { x: number; y: number };
   root: HTMLDivElement;
   body: HTMLDivElement;
   titleEl: HTMLSpanElement;
@@ -125,6 +129,8 @@ export class Win {
     close.onclick = () => this.hide();
     this.body = el('div', 'win-body', this.root);
     const pos = loadPos(id);
+    this.home = { x, y };
+    Win.all.push(this);
     this.place(pos?.x ?? x, pos?.y ?? y);
     this.root.style.display = 'none';
     this.root.addEventListener('pointerdown', () => this.front());
@@ -151,6 +157,18 @@ export class Win {
 
   get visible() {
     return this.root.style.display !== 'none';
+  }
+
+  /** Every window back where the layout opens it (forgetting where the player dragged it). */
+  static resetAll() {
+    for (const w of Win.all) {
+      try {
+        localStorage.removeItem(`win:${w.id}`);
+      } catch {
+        /* storage unavailable */
+      }
+      w.place(w.home.x, w.home.y);
+    }
   }
 
   front() {

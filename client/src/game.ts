@@ -20,7 +20,7 @@ import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
-import { BRAZIER_FIRE, createWorldScene, lightSources, type WorldScene } from './render/scene';
+import { BRAZIER_FIRES, createWorldScene, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph, setTipLevel } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
@@ -318,7 +318,7 @@ export class Game {
     }
     this.lights = new LocalLights(this.world.scene, lightSources());
     this.fx.onLight = (at, color, power, range, ms) => this.lights.flash(at, color, power, range, ms);
-    this.fx.hearth(new THREE.Vector3(BRAZIER_FIRE.x, BRAZIER_FIRE.y, BRAZIER_FIRE.z), 1.1);
+    for (const b of BRAZIER_FIRES) this.fx.hearth(new THREE.Vector3(b.x, b.y, b.z), 1.1);
     this.nodes = new NodeVisuals(this.world.scene);
     this.fpsEl = document.createElement('div');
     this.fpsEl.className = 'fps';

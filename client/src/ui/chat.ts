@@ -1,4 +1,5 @@
 import type { Game } from '../game';
+import { makeMovable } from './movable';
 import { el } from './dom';
 import { lang, t as tx } from '../lang';
 
@@ -29,6 +30,7 @@ export class Chat {
 
   constructor(private g: Game, root: HTMLElement) {
     const box = (this.box = el('div', 'panel chat', root));
+    makeMovable(box, 'chat');
     const tabs = el('div', 'chat-tabs', box);
     for (const t of TABS) {
       const b = el('button', 'chat-tab', tabs, t.label);

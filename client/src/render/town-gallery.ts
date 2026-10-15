@@ -1,22 +1,23 @@
 import * as THREE from 'three';
-import { DUSK, TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
+import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
+import { FORTS } from '../../../shared/src/village';
 import { settings } from '../settings';
 import { ATMOS, LocalLights } from './atmos';
 import { FxManager } from './fx';
 import { loadNature } from './nature';
 import { PostFX } from './post';
-import { BRAZIER_FIRE, createWorldScene, lightSources } from './scene';
+import { BRAZIER_FIRES, createWorldScene, lightSources } from './scene';
 import { loadV } from './village';
 
 /**
- * Dev view (?town=dusk or ?town=alba): the real world scene around a town, with an orbiting camera.
+ * Dev view (?town=alba, or a fort: dusk, frost...): the real world scene around a town, with an orbiting camera.
  * No server needed. ?hour=0..24 fixes the time of day (21 = night), ?ry=<radians> stops the orbit there,
  * ?dist and ?pitch (radians) frame it, ?at=x,z looks at another point, ?ty=<height> raises it (the sky).
  */
 export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   host.innerHTML = '';
   const p = new URLSearchParams(location.search);
-  const town = p.get('town') === 'alba' ? TOWN : DUSK;
+  const town = p.get('town') === 'alba' ? TOWN : (FORTS.find((f) => f.id === p.get('town')) ?? FORTS[0]).town;
   const hour = p.get('hour');
   // sunPhase() reads this hook: 06:00 is sunrise (0), 18:00 sunset (π)
   if (hour !== null) (globalThis as { __sunPhase?: number }).__sunPhase = ((((Number(hour) - 6 + 24) % 24) / 24) * Math.PI * 2);
@@ -37,7 +38,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   const lights = new LocalLights(world.scene, lightSources());
   const fx = new FxManager(world.scene);
   fx.onLight = (at, color, power, range, ms) => lights.flash(at, color, power, range, ms);
-  fx.hearth(new THREE.Vector3(BRAZIER_FIRE.x, BRAZIER_FIRE.y, BRAZIER_FIRE.z), 1.1);
+  for (const b of BRAZIER_FIRES) fx.hearth(new THREE.Vector3(b.x, b.y, b.z), 1.1);
   const [ax, az] = (p.get('at') ?? `${town.x},${town.z}`).split(',').map(Number);
   const target = new THREE.Vector3(ax, Number(p.get('ty')) || TOWN_HEIGHT + 2, az);
   const dist = Number(p.get('dist')) || town.r * 2.1, pitch = Number(p.get('pitch')) || 0.55;

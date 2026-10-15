@@ -99,6 +99,12 @@ const list: ItemDef[] = [
   ...tier('D', 'abyssal', 'Abisal', 'Abisales', 52, 30, 60, 8000, 0x4a8ab0, undefined, 'B'),
   ...tier('D', 'ashforged', 'de Ceniza', 'de Ceniza', 92, 38, 85, 20000, 0xc8501a, ['ember_shard', 'citadel_sigil'], 'A'),
   ...tier('C', 'dragon', 'del Dragón', 'del Dragón', 140, 48, 115, 45000, 0x8a1a2a, ['drake_scale', 'dragon_fang'], 'S'),
+  // Levels 50-78, one set a region of the ring: Glacial (B) is sold in the Fuerte de Escarcha
+  ...tier('B', 'glacial', 'Glacial', 'Glaciales', 195, 54, 145, 80000, 0x8ac8f0),
+  // Emerald (A): Juncoverde's masters make it from the swamp's venom and the jungle's bark
+  ...tier('A', 'emerald', 'Esmeralda', 'Esmeralda', 265, 62, 180, 140000, 0x3ac87a, ['swamp_venom', 'ancient_bark']),
+  // Infernal (S): Brasaoscura's masters make it from magma cores and the essence the Abyss bleeds (its raid boss gives the most)
+  ...tier('S', 'infernal', 'Infernal', 'Infernales', 350, 72, 225, 240000, 0xd8401a, ['magma_core', 'abyss_essence']),
   // Jewelry: armor without P.Def (the once-D ones sold in town, the once-C ones drop only)
   { id: 'ring_of_vigor', name: 'Anillo del Vigor', type: 'armor', slot: 'ring', grade: 'NG', look: 'D', mDef: 3, hp: 25, price: 2200, icon: '💍', color: 0xc0a040 },
   { id: 'earring_of_focus', name: 'Pendiente del Foco', type: 'armor', slot: 'earring', grade: 'NG', look: 'D', mDef: 4, mp: 30, price: 2600, icon: '✨', color: 0x6090d0 },
@@ -117,6 +123,9 @@ const list: ItemDef[] = [
   { id: 'mana_potion', name: 'Poción de Maná', type: 'consumable', stack: true, price: 80, use: { mp: 60, cd: 8000 }, icon: '🧪', color: 0x3060ff, desc: 'Recupera 60 de MP.' },
   { id: 'greater_healing_potion', name: 'Poción de Curación Mayor', type: 'consumable', stack: true, price: 250, use: { hp: 400, cd: 5000 }, icon: '🧪', color: 0xff5080, desc: 'Recupera 400 de HP.' },
   { id: 'greater_mana_potion', name: 'Poción de Maná Mayor', type: 'consumable', stack: true, price: 320, use: { mp: 180, cd: 8000 }, icon: '🧪', color: 0x50a0ff, desc: 'Recupera 180 de MP.' },
+  // sold in the ring's towns (levels 50-78)
+  { id: 'supreme_healing_potion', name: 'Poción de Curación Suprema', type: 'consumable', stack: true, price: 600, use: { hp: 750, cd: 5000 }, icon: '🧪', color: 0xff3a6a, desc: 'Recupera 750 de HP.' },
+  { id: 'supreme_mana_potion', name: 'Poción de Maná Suprema', type: 'consumable', stack: true, price: 750, use: { mp: 350, cd: 8000 }, icon: '🧪', color: 0x3a8aff, desc: 'Recupera 350 de MP.' },
   { id: 'scroll_of_escape', name: 'Pergamino de Escape', type: 'consumable', stack: true, price: 200, use: { escape: true, cd: 3000 }, icon: '📜', color: 0xe8d8a0, desc: 'Te lleva de vuelta a la Aldea del Alba.' },
   { id: 'scroll_enchant_weapon', name: 'Pergamino: Encantar Arma', type: 'consumable', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma. Click derecho sobre el arma para usarlo.' },
   { id: 'scroll_enchant_armor', name: 'Pergamino: Encantar Armadura', type: 'consumable', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya. Click derecho sobre la pieza para usarlo.' },
@@ -139,6 +148,15 @@ const list: ItemDef[] = [
   { id: 'citadel_sigil', name: 'Sello de la Ciudadela', type: 'material', stack: true, price: 520, icon: '🎖️', color: 0x8a2a2a },
   { id: 'drake_scale', name: 'Escama de Draco', type: 'material', stack: true, price: 660, icon: '🐉', color: 0x4a8a4a },
   { id: 'dragon_fang', name: 'Colmillo de Dragón', type: 'material', stack: true, price: 820, icon: '🦷', color: 0xf0e8d0 },
+  // the frost region (50-60)
+  { id: 'frost_pelt', name: 'Piel Gélida', type: 'material', stack: true, price: 1000, icon: '🐺', color: 0xc8dcec },
+  { id: 'ice_crystal', name: 'Cristal de Hielo', type: 'material', stack: true, price: 1250, icon: '🧊', color: 0x8ad0f0 },
+  // the swamp region (60-70)
+  { id: 'swamp_venom', name: 'Veneno del Pantano', type: 'material', stack: true, price: 1500, icon: '☠️', color: 0x7ac83a, desc: 'Lo fabrican las criaturas del Pantano Ponzoñoso. Con él se forja el set Esmeralda.' },
+  // the volcanic region (70-78)
+  { id: 'magma_core', name: 'Núcleo de Magma', type: 'material', stack: true, price: 2200, icon: '🔥', color: 0xe8501a, desc: 'Late dentro de las criaturas de las Tierras Volcánicas. Con él se forja el set Infernal.' },
+  { id: 'abyss_essence', name: 'Esencia del Abismo', type: 'material', stack: true, price: 2800, icon: '🌑', color: 0x8a40c8, desc: 'La sangran las criaturas del Abismo; su raid es la que más deja. Con ella se forja el set Infernal.' },
+  { id: 'ancient_bark', name: 'Corteza Ancestral', type: 'material', stack: true, price: 1800, icon: '🪵', color: 0x8a6a3a, desc: 'De los árboles y las bestias de la Selva Antigua. Con ella se forja el set Esmeralda.' },
 ];
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(list.map((i) => [i.id, i]));
