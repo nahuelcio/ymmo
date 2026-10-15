@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SKILLS } from '../../../shared/src/data/skills';
-import { settings } from '../settings';
+import { PRESETS, settings } from '../settings';
 import { LocalLights } from './atmos';
 import { FxManager } from './fx';
 import { animate, mobModel, playerModel, type Rig } from './models';
@@ -15,12 +15,16 @@ import { GENERIC_VFX, SKILL_VFX } from './skill-fx';
  * with the game's bloom and tone mapping. No server needed.
  * ?skill=<id> fires it on load (and every ?every ms), ?night, ?ry=<radians> turn the view, ?zoom, ?nobar for screenshots.
  * In the console: fxFire(id), fxBench(id, n) = CPU ms per frame with n copies of an effect alive.
+ * ?preset=<name> applies a graphics preset first (e.g. ultra, for ambient occlusion).
  * ?enchant=N (1-16): a fighter alone holding a weapon at +N (?weapon=<item id>, default broadsword), for the enchantment
- * glow (render/enchant-fx.ts); setEnchant(n) in the console swaps the level. ?look=<height> aims the camera (default 1.4).
+ * glow (render/enchant-fx.ts); setEnchant(n) in the console swaps the level. ?look=<height> aims the camera (default 1.4), ?elev=<k> raises it (default 0.42; ~1.2 looks down like the game).
  */
 export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
   host.innerHTML = '';
   const p = new URLSearchParams(location.search);
+  // ?preset=low|medium|high|ultra|cine: that graphics preset (AO, shadows...) for this visit, as the settings window applies it
+  const preset = p.get('preset') as keyof typeof PRESETS | null;
+  if (preset && PRESETS[preset]) settings.set({ preset, ...PRESETS[preset] });
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;z-index:10;display:flex;gap:4px;flex-wrap:wrap;font:11px sans-serif';
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -51,12 +55,12 @@ export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
 
   const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
   const post = new PostFX(renderer, scene, cam);
-  const zoom = Number(p.get('zoom')) || 1, ry = Number(p.get('ry')) || 0.35, look = Number(p.get('look')) || 1.4;
+  const zoom = Number(p.get('zoom')) || 1, ry = Number(p.get('ry')) || 0.35, look = Number(p.get('look')) || 1.4, elev = Number(p.get('elev')) || 0.42;
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
     cam.aspect = innerWidth / innerHeight;
     const d = 15 / zoom / Math.min(1, cam.aspect / 1.4);
-    cam.position.set(Math.sin(ry) * d, d * 0.42, Math.cos(ry) * d);
+    cam.position.set(Math.sin(ry) * d, d * elev, Math.cos(ry) * d);
     cam.position.y += look - 1.4;
     cam.lookAt(0, look, 0);
     cam.updateProjectionMatrix();
