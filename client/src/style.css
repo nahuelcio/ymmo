@@ -170,12 +170,12 @@ input { font: inherit; user-select: text; }
 .slot.denied { border-color: #d04040; animation: slotDeny 0.25s; }
 @keyframes slotDeny { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 /* XP: a thin strip along the top edge of the shortcut bar */
-.dash-btn { margin-left: 8px; }
-/* bars 2 and 3 (ui/hud.ts): stacked over the main bar, bar 2 nearest, twelve slots spread edge to edge with the main
-   bar (its ten slots and the two buttons); a folded one is a thin strip with its arrow */
+/* the attack and roll buttons stand a little apart from the slots (and so do bars 2-3's last two slots, over them) */
+.dash-btn, .bar-row .slot-gap { margin-left: var(--bar-split, 8px); }
+/* bars 2 and 3 (ui/hud.ts): stacked over the main bar, bar 2 nearest, slot for slot over it (ten slots, then two over
+   the attack and roll buttons); a folded one is a thin strip with its arrow */
 .extra-bars { position: absolute; left: 4px; right: 4px; bottom: calc(100% + 5px); display: flex; flex-direction: column-reverse; gap: 5px; pointer-events: none; }
-.bar-row { position: relative; display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; pointer-events: auto; }
-.bar-row .slot { width: auto; }
+.bar-row { position: relative; display: flex; gap: 3px; pointer-events: auto; }
 .bar-row .slot { opacity: 0.95; }
 .bar-toggle { position: absolute; right: calc(100% + 3px); top: 0; width: 16px; height: 42px; padding: 0; background: rgba(10, 11, 16, 0.85); color: var(--gold); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-size: 10px; line-height: 1; }
 .bar-num { position: absolute; right: calc(100% + 22px); top: 14px; font-size: 10px; color: var(--gold); opacity: 0.7; }
