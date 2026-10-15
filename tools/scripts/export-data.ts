@@ -2,7 +2,7 @@
 // client keep one source of truth. English names are resolved here, so Rust needs no overlay logic.
 //   npm run export-data   (also run by the Docker builds)
 import { writeFileSync } from 'node:fs';
-import { ENCHANT, ITEMS } from '../../shared/src/data/items';
+import { ENCHANT, ITEMS, GRADE_LEVEL } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
 import { SKILLS } from '../../shared/src/data/skills';
 import { QUEST_LIST } from '../../shared/src/data/quests';
@@ -38,6 +38,7 @@ const out = {
   wild: { name: 'Tierras Salvajes', nameEn: zoneName('Tierras Salvajes', 'en') },
   enchant: ENCHANT,
   items: Object.values(ITEMS).map((i) => ({ ...i, nameEn: itemName(i.id, 'en') })),
+  gradeLevel: GRADE_LEVEL,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
   quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena })),

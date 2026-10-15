@@ -28,14 +28,14 @@ pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
             if p.inv.len() >= INV_MAX { return false; }
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: count, s: None, e: 0 });
+            p.inv.push(InvItem { u, i: item.into(), c: count, s: None, e: 0, l: false });
         }
     } else {
         if p.inv.len() + count as usize > INV_MAX { return false; }
         for _ in 0..count {
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None, e: 0 });
+            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None, e: 0, l: false });
         }
     }
     p.inv_dirty = true;
@@ -75,6 +75,11 @@ impl World {
         let def = d().item(&it.i).unwrap();
         let Some(slot) = def.slot.clone() else { return };
         if it.s.is_some() { return; }
+        let need = d().wear_level(def);
+        if p.level < need && !it.l {
+            let g = def.grade.clone().unwrap_or_default();
+            return self.sys(pid, &format!("Necesitás nivel {need} para usar equipo de grado {g}."), &format!("You need level {need} to wear {g} grade gear."));
+        }
         for i in p.inv.iter_mut() { if i.s.as_deref() == Some(&slot) { i.s = None; } }
         if let Some(i) = p.inv.iter_mut().find(|i| i.u == uid) { i.s = Some(slot); }
         p.recalc();

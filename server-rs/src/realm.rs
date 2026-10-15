@@ -27,10 +27,15 @@ impl World {
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
         };
-        for (i, c, s, e) in items {
+        // worn pieces the level no longer allows (grades ask for a level since the 78 cap) go back to the bag
+        let mut took_off: Vec<&'static str> = vec![];
+        for (i, c, mut s, e, l) in items {
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i, c, s, e });
+            if let (Some(_), Some(def)) = (&s, d().item(&i)) {
+                if !l && p.level < d().wear_level(def) { s = None; took_off.push(if p.lang.en() { def.name_en.as_str() } else { def.name.as_str() }); }
+            }
+            p.inv.push(InvItem { u, i, c, s, e, l });
         }
         prime_quest_notices(&mut p);
         p.recalc();
@@ -41,6 +46,10 @@ impl World {
         let p = self.pl(id).unwrap();
         p.send(json!({ "t": kind, "self": self.self_state(id), "inv": p.inv, "bar": p.hotbar }));
         self.clan_online(id, kind == "enter");
+        if !took_off.is_empty() {
+            let list = took_off.join(", ");
+            self.sys(id, &format!("Te sacaste lo que tu nivel todavía no permite usar: {list}. Está en tu bolsa."), &format!("You took off what your level does not allow yet: {list}. It is in your bag."));
+        }
         let p = self.pl(id).unwrap();
         send_quests(p);
         self.send_nodes(id, crate::world::now_ms());

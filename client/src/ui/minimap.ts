@@ -13,7 +13,7 @@ import { gameClock } from '../render/atmos';
 import { campName, zoneName } from '../../../shared/src/i18n';
 import { BELL_TOWER } from '../../../shared/src/village';
 
-const RES = 512;
+const RES = Math.round((512 * WORLD_HALF) / 500); // ~2 m a pixel
 /** minimap size in CSS px; its canvas is backed at device resolution so it stays sharp */
 const MM = 170;
 

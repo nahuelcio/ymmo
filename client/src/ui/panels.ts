@@ -1,5 +1,5 @@
 import { CLASSES, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
-import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot } from '../../../shared/src/data/items';
+import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
@@ -97,7 +97,7 @@ export class InventoryPanel {
       m.style.left = `${at.x}px`;
       m.style.top = `${at.y}px`;
     } else {
-      el('div', 'sheet-info', m).innerHTML = itemTip(it.i, it.c, it.e) + (it.s ? '' : this.compare(it));
+      el('div', 'sheet-info', m).innerHTML = itemTip(it.i, it.c, it.e, it.l) + (it.s ? '' : this.compare(it));
     }
     const def = ITEMS[it.i];
     const act = (label: string, fn: () => void, cls = '') => {
@@ -171,7 +171,7 @@ export class InventoryPanel {
         // right click enchants what you wear, when the bag holds a scroll for it
         cell.oncontextmenu = (e) => (e.preventDefault(), this.canEnchant(it) && this.askEnchant(it));
         if (isTouchDevice()) cell.onclick = () => this.itemMenu(it, null);
-        setTip(cell, () => itemTip(it.i, 1, it.e) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.canEnchant(it) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
+        setTip(cell, () => itemTip(it.i, 1, it.e, it.l) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.canEnchant(it) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
       } else {
         // empty: a faint outline of what goes there
         glyph('item', itemIconId(GHOST[s]), SLOT_LABEL[s], cell).classList.add('doll-ghost');
@@ -194,7 +194,7 @@ export class InventoryPanel {
       const slot = ITEMS[it.i].slot;
       if (slot) {
         const worn = g.inv.find((i) => i.s === slot);
-        if (this.score(it) > (worn ? this.score(worn) : 0)) el('span', 'inv-up', cell, '▲');
+        if ((it.l || wearLevel(ITEMS[it.i]) <= g.me.lvl) && this.score(it) > (worn ? this.score(worn) : 0)) el('span', 'inv-up', cell, '▲');
         cell.draggable = true;
         cell.ondragstart = () => (hideTip(), (this.drag = { u: it.u }), this.dollCells[slot]?.classList.add('match'));
         cell.ondragend = () => ((this.drag = null), this.dollCells[slot]?.classList.remove('match'));
@@ -211,7 +211,7 @@ export class InventoryPanel {
       };
       // phones: no hover and no right click, so a tap says what it is and offers the same actions
       if (isTouchDevice()) cell.onclick = () => this.itemMenu(it, null);
-      setTip(cell, () => itemTip(it.i, it.c, it.e) + this.compare(it));
+      setTip(cell, () => itemTip(it.i, it.c, it.e, it.l) + this.compare(it));
     }
     for (let i = bag.length; i < 40; i++) el('div', 'inv-cell empty', this.grid);
     this.footer.innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span><span class="tt-dim">${g.inv.length}/80</span>`;
@@ -355,7 +355,7 @@ export class NpcPanel {
         const row = el('div', 'shop-row', list);
         itemIcon(id, row);
         const info = el('div', 'grow', row);
-        info.innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br><span class="tt-dim">${def.price} adena</span>`;
+        info.innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br><span class="tt-dim">${def.price} adena</span>${this.needTag(def)}`;
         setTip(row, () => itemTip(id));
         const qty = el('input', 'qty', row);
         qty.type = 'number';
@@ -374,7 +374,7 @@ export class NpcPanel {
         const row = el('div', 'shop-row', list);
         itemIcon(id, row);
         const mats = rec.mats.map(([mid, n]) => `<span class="${have(mid) >= n ? 'tt-dim' : 'tt-down'}">${n} × ${esc(itemName(mid, lang))} (${have(mid)})</span>`).join(' · ');
-        el('div', 'grow', row).innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br>${mats} · <span class="${g.adena >= rec.adena ? 'tt-dim' : 'tt-down'}">${rec.adena} adena</span>`;
+        el('div', 'grow', row).innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span>${this.needTag(def)}<br>${mats} · <span class="${g.adena >= rec.adena ? 'tt-dim' : 'tt-down'}">${rec.adena} adena</span>`;
         setTip(row, () => itemTip(id));
         const btn = el('button', 'btn', row, tx('Fabricar', 'Craft'));
         btn.disabled = g.adena < rec.adena || rec.mats.some(([mid, n]) => have(mid) < n);
@@ -400,6 +400,12 @@ export class NpcPanel {
       }
     }
     el('div', 'inv-footer', b).innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span>`;
+  }
+
+  /** " · Nv 52" after a piece that asks for a level: dim when yours is enough, red when it is not. */
+  private needTag(def: (typeof ITEMS)[string]) {
+    const need = def.slot ? wearLevel(def) : 0;
+    return need ? ` <span class="${this.g.me.lvl >= need ? 'tt-dim' : 'tt-down'}">· ${tx('Nv', 'Lv')} ${need}</span>` : '';
   }
 
   private renderQuest(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement) {
@@ -868,7 +874,8 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Zonas de caza</h4>
     <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul) · Costa Abandonada (20-25) · Ruinas Hundidas (25-30) · Estepas Ardientes (30-35) · Ciudadela Orca (35-40) · Valle del Dragón (40-45) · Nido del Dragón (45-50).</p>
     <p>A nivel 20 elegís una <b>especialización</b> en Estado del Personaje. Con un <b>pergamino de encantar</b> en la mochila, click derecho sobre un arma o armadura la sube +1: hasta +3 es seguro, después puede fallar y destruirla.</p>
-    <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el equipo de grado B, y sus maestros <b>fabrican</b> el de grado A y S con los materiales que sueltan las zonas de nivel 30 a 50.</p>
+    <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el set Abisal, y sus maestros <b>fabrican</b> los de Ceniza y del Dragón con los materiales que sueltan las zonas de nivel 30 a 50.</p>
+    <p>Cada <b>grado</b> de equipo pide un nivel para usarlo: D desde el 20, C desde el 40, B desde el 52, A desde el 61 y S desde el 75. El tope es el <b>nivel 78</b>, y pasando el 50 cada nivel cuesta bastante más.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
@@ -907,7 +914,8 @@ const HELP_EN = `
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul) · Forsaken Coast (20-25) · Sunken Ruins (25-30) · Burning Steppes (30-35) · Orc Citadel (35-40) · Dragon Valley (40-45) · Dragon's Nest (45-50).</p>
     <p>At level 20 you pick a <b>specialization</b> in Character Status. With an <b>enchant scroll</b> in your bag, right-click a weapon or armor piece to raise it by +1: safe up to +3, after that it can fail and destroy the piece.</p>
-    <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells B grade gear, and its masters <b>craft</b> A and S grade from the materials dropped in the level 30 to 50 zones.</p>
+    <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells the Abyssal set, and its masters <b>craft</b> the Ashforged and Dragon sets from the materials dropped in the level 30 to 50 zones.</p>
+    <p>Each gear <b>grade</b> asks for a level: D from 20, C from 40, B from 52, A from 61 and S from 75. The cap is <b>level 78</b>, and past 50 each level takes a good deal longer.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;

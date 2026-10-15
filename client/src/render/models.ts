@@ -1,7 +1,7 @@
 import { enchantFx } from './enchant-fx';
 import * as THREE from 'three';
 import { DEFAULT_LOOK, HAIR_COLORS, HAIR_STYLES, RACES, type ClassType, type Gender, type Look, type Race } from '../../../shared/src/data/classes';
-import { GRADE_COLOR, ITEMS, type ItemDef } from '../../../shared/src/data/items';
+import { GRADE_COLOR, ITEMS, type ItemDef, lookGrade } from '../../../shared/src/data/items';
 
 /** C grade and up share the top-tier look (trim, glow) */
 const topTier = (g?: string) => !!g && g !== 'NG' && g !== 'D';
@@ -190,7 +190,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
     head.add(part(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 8), darker(c, 0.7), 0, 0.03, -0.01));
     return false; // long hair still shows below a cap
   }
-  if (topTier(def.grade)) {
+  if (topTier(lookGrade(def))) {
     // closed great helm with visor slit and plume
     head.add(part(B(0.42, 0.44, 0.44), c, 0, 0.03, 0));
     head.add(part(B(0.3, 0.04, 0.02), 0x111111, 0, 0.04, 0.225));
@@ -209,7 +209,7 @@ function helmet(head: THREE.Group, def: ItemDef): boolean {
 
 function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean) {
   const c = def.color, d = 0.3 * Math.sqrt(k);
-  if (topTier(def.grade) && def.id !== 'demons_tunic') {
+  if (topTier(lookGrade(def)) && def.id !== 'demons_tunic') {
     // full plate: breastplate, gorget, big rounded pauldrons
     torso.add(part(B(0.54 * k, 0.4, d + 0.06), c, 0, 0.42, 0.01));
     torso.add(part(B(0.3 * k, 0.12, d + 0.04), darker(c, 0.85), 0, 0.66, 0));
@@ -220,7 +220,7 @@ function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean
     }
     return;
   }
-  if (def.grade === 'D' && !def.mp) {
+  if (lookGrade(def) === 'D' && !def.mp) {
     // brigandine: studded vest with leather pauldrons
     for (let r = 0; r < 3; r++)
       for (const sx of [-0.14, 0, 0.14]) torso.add(part(B(0.035, 0.035, 0.02), 0x2a2a2a, sx * k, 0.24 + r * 0.14, d / 2 + 0.005));
@@ -231,7 +231,7 @@ function chestArmor(torso: THREE.Group, def: ItemDef, k: number, female: boolean
     // caster robes: collar, sash; demon's tunic gets glowing runes
     torso.add(part(B(0.36 * k, 0.08, d + 0.02), darker(c, 0.7), 0, 0.64, 0));
     torso.add(part(B(0.08, 0.6, 0.02), darker(c, 1.4), 0, 0.32, d / 2 + 0.01));
-    if (topTier(def.grade)) for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
+    if (topTier(lookGrade(def))) for (const y of [0.2, 0.36, 0.52]) torso.add(trim(B(0.12, 0.03, 0.02), 0xff3060, 0, y, d / 2 + 0.02));
     return;
   }
   // cloth tunic: a simple collar
@@ -278,9 +278,9 @@ export function humanoid(o: HumanoidOpts): Rig {
     leg.position.set(sx * 0.12 * k, 0.9, 0);
     leg.add(part(B(0.17 * k, 0.5, 0.2), legC, 0, -0.25, 0)); // thigh
     leg.add(part(B(0.15 * k, 0.42, 0.18), darker(legC, 0.92), 0, -0.64, 0)); // shin
-    if (g.legs && g.legs.grade !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), topTier(g.legs.grade) ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
+    if (g.legs && lookGrade(g.legs) !== 'NG') leg.add(part(B(0.12 * k, 0.1, 0.06), topTier(lookGrade(g.legs)) ? 0xc0c8d0 : darker(legC, 0.7), 0, -0.47, 0.1)); // knee guard
     const sandals = g.feet?.id === 'leather_sandals';
-    const tall = g.feet && g.feet.grade !== 'NG';
+    const tall = g.feet && lookGrade(g.feet) !== 'NG';
     if (tall) leg.add(part(B(0.18 * k, 0.26, 0.21), bootC, 0, -0.74, 0.01));
     leg.add(part(B(0.19 * k, sandals ? 0.05 : 0.12, 0.28), sandals ? LEATHER : bootC, 0, sandals ? -0.89 : -0.86, 0.04));
     body.add(leg);
@@ -335,7 +335,7 @@ export function humanoid(o: HumanoidOpts): Rig {
     arm.position.set(sx * (0.3 * k * (o.female ? 0.92 : 1) + 0.02), 1.5, 0);
     arm.add(part(B(0.13 * k, 0.32, 0.14), o.top, 0, -0.15, 0)); // upper arm (sleeve)
     arm.add(part(B(0.12 * k, 0.3, 0.13), o.gear && !o.robe ? o.skin : o.top, 0, -0.45, 0)); // forearm
-    if (g.gloves) arm.add(part(B(0.15 * k, g.gloves.grade === 'NG' ? 0.08 : 0.14, 0.16), handC, 0, -0.55, 0)); // cuff / gauntlet
+    if (g.gloves) arm.add(part(B(0.15 * k, lookGrade(g.gloves) === 'NG' ? 0.08 : 0.14, 0.16), handC, 0, -0.55, 0)); // cuff / gauntlet
     arm.add(part(new THREE.IcosahedronGeometry(0.075 * k, 0), handC, 0, -0.64, 0));
     body.add(arm);
     arms.push(arm);
@@ -676,21 +676,21 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const cap = head?.id === 'leather_cap'; // worn as a hood
     const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
-    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && d.grade !== 'NG', dye: d?.color, glow: topTier(d?.grade) });
+    const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && lookGrade(d) !== 'NG', dye: d?.color, glow: topTier(lookGrade(d)) });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
-      pauldron: !!chestDef && chestDef.grade !== 'NG' && !chestDef.mp,
+      pauldron: !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
-      inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, it(weapon)?.grade), weaponEnchant),
+      inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant),
     });
   }
-  const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && chestDef.grade === 'NG'));
+  const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && lookGrade(chestDef) === 'NG'));
   return bake(humanoid({
     skin: r.skin, hair, top, bottom: darker(top, 0.65), height: r.height * (female ? 0.96 : 1), bulk: r.bulk * (female ? 0.86 : 1),
     hairStyle: look.hs, female,
-    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: it(weapon)?.grade, weaponEnchant, robe,
+    weapon: weaponKindOf(weapon, cls), weaponColor: weapon ? ITEMS[weapon]?.color : undefined, weaponGrade: lookGrade(it(weapon)), weaponEnchant, robe,
     ears: elf ? 'elf' : undefined, tusks, beard, bald,
     gear: { chest: chestDef, head, gloves, legs, feet },
   }));

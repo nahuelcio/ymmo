@@ -37,7 +37,7 @@ export interface ClanInfo {
   skills: Record<string, number>;
 }
 /** A clan warehouse row (id: its row), and a logged movement (dep: a deposit). */
-export interface ClanWhItem { id: number; i: string; c: number; e: number }
+export interface ClanWhItem { id: number; i: string; c: number; e: number; l?: boolean }
 export interface ClanWhLog { at: number; who: string; dep: boolean; i: string; c: number; e: number }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
@@ -59,7 +59,8 @@ export const F_SITTING = 2048;
 export const F_GATHER = 4096;
 
 /** e: enchant level (+N) of a piece of gear */
-export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number }
+/** e: enchant level; l: legacy, worn at any level whatever its grade asks */
+export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number; l?: boolean }
 
 export interface SelfState {
   id: number; name: string; race: Race; cls: ClassType; spec?: Spec | null; look: Look;

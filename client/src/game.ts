@@ -22,7 +22,7 @@ import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig }
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRE, createWorldScene, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
-import { glyph } from './ui/common';
+import { glyph, setTipLevel } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
 import { PostFX } from './render/post';
@@ -286,6 +286,7 @@ export class Game {
   constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>) {
     this.barData = enter.bar ?? '';
     this.me = enter.self;
+    setTipLevel(() => this.me.lvl);
     ambience(enter.self.zone);
     this.inv = enter.inv;
     this.adena = enter.self.adena;

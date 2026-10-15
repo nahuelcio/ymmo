@@ -36,7 +36,7 @@ const ALL_PRIVS: u32 = 0x7f;
 
 pub struct ClanMember { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub grade: u8, pub title: String }
 /** A warehouse row: a stack, or one (possibly enchanted) piece. */
-pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64 }
+pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64, pub legacy: bool }
 /** A warehouse movement. */
 pub struct WhLog { pub at: f64, pub who: String, pub dep: bool, pub item: String, pub count: i64, pub enchant: i64 }
 
@@ -186,8 +186,8 @@ fn load(db: &Db) -> Clans {
     }
     for (id, j, f) in pen { c.penalty.insert(id, (j, f)); }
     for (id, adena) in db.load_clan_adena() { if let Some(cl) = c.clans.get_mut(&(id as u32)) { cl.adena = adena; } }
-    for (id, clan, item, count, enchant) in db.load_clan_items() {
-        if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.items.push(WhItem { id, item, count, enchant }); }
+    for (id, clan, item, count, enchant, legacy) in db.load_clan_items() {
+        if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.items.push(WhItem { id, item, count, enchant, legacy }); }
     }
     for (clan, at, who, dep, item, count, enchant) in db.load_clan_log(d().clans.cfg.wh_log) {
         if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.log.push_back(WhLog { at, who, dep, item, count, enchant }); }
@@ -979,7 +979,7 @@ impl World {
         let cid = self.pl(pid).unwrap().char_id;
         let r = reg().read().unwrap();
         let Some(c) = r.clans.get(&clan_id) else { return };
-        let items: Vec<Value> = c.items.iter().map(|i| json!({ "id": i.id, "i": i.item, "c": i.count, "e": i.enchant })).collect();
+        let items: Vec<Value> = c.items.iter().map(|i| json!({ "id": i.id, "i": i.item, "c": i.count, "e": i.enchant, "l": i.legacy })).collect();
         let log: Vec<Value> = c.log.iter().map(|l| json!({ "at": l.at, "who": l.who, "dep": l.dep, "i": l.item, "c": l.count, "e": l.enchant })).collect();
         self.send(pid, json!({ "t": "clanWh", "items": items, "adena": c.adena, "log": log, "can": c.can(cid, P_WAREHOUSE), "slots": d().clans.cfg.wh_slots }));
     }
@@ -1001,13 +1001,13 @@ impl World {
         {
             let mut r = reg().write().unwrap();
             let clan = r.clans.get_mut(&clan_id).unwrap();
-            if let Some(row) = clan.items.iter_mut().find(|w| stack && w.item == it.i && w.enchant == 0) {
+            if let Some(row) = clan.items.iter_mut().find(|w| stack && w.item == it.i && w.enchant == 0 && !w.legacy) {
                 row.count += qty;
                 self.db.clan_item_set(row.id, row.count);
             } else {
                 if clan.items.len() >= d().clans.cfg.wh_slots { return self.sys(pid, "El depósito del clan está lleno.", "The clan warehouse is full."); }
-                let id = self.db.clan_item_add(clan_id as i64, &it.i, qty, it.e);
-                clan.items.push(WhItem { id, item: it.i.clone(), count: qty, enchant: it.e });
+                let id = self.db.clan_item_add(clan_id as i64, &it.i, qty, it.e, it.l);
+                clan.items.push(WhItem { id, item: it.i.clone(), count: qty, enchant: it.e, legacy: it.l });
             }
             self.db.clan_log(clan_id as i64, &name, true, &it.i, qty, it.e);
             clan.log(WhLog { at: crate::world::now_ms(), who: name, dep: true, item: it.i.clone(), count: qty, enchant: it.e });
@@ -1026,7 +1026,7 @@ impl World {
         let Some(clan_id) = self.wh_clan(pid, nid) else { return };
         let (cid, name) = { let p = self.pl(pid).unwrap(); (p.char_id, p.name.clone()) };
         let qty = qty.floor() as i64;
-        let (item, enchant);
+        let (item, enchant, legacy);
         {
             let mut r = reg().write().unwrap();
             let clan = r.clans.get_mut(&clan_id).unwrap();
@@ -1035,6 +1035,7 @@ impl World {
             if qty < 1 || qty > clan.items[idx].count { return; }
             item = clan.items[idx].item.clone();
             enchant = clan.items[idx].enchant;
+            legacy = clan.items[idx].legacy;
             let Some(def) = d().item(&item) else { return };
             let stack = def.stack.unwrap_or(false);
             let p = self.pl_mut(pid).unwrap();
@@ -1045,7 +1046,7 @@ impl World {
                 for _ in 0..qty {
                     let u = p.next_uid;
                     p.next_uid += 1;
-                    p.inv.push(InvItem { u, i: item.clone(), c: if stack { qty } else { 1 }, s: None, e: enchant });
+                    p.inv.push(InvItem { u, i: item.clone(), c: if stack { qty } else { 1 }, s: None, e: enchant, l: legacy });
                     if stack { break; }
                 }
                 p.inv_dirty = true;

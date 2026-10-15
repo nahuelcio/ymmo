@@ -82,7 +82,7 @@ export function sway<T extends THREE.Material>(m: T, amp: number): T {
  * needs comes from a texture baked once out of the terrain heights.
  */
 export function waterMaterial(): THREE.ShaderMaterial {
-  const N = 384, data = new Uint8Array(N * N);
+  const N = Math.round((384 * WORLD_HALF) / 500), data = new Uint8Array(N * N); // ~2.6 m a texel
   for (let j = 0; j < N; j++)
     for (let i = 0; i < N; i++) {
       const x = ((i + 0.5) / N) * 2 * WORLD_HALF - WORLD_HALF, z = ((j + 0.5) / N) * 2 * WORLD_HALF - WORLD_HALF;

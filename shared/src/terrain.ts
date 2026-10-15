@@ -1,9 +1,22 @@
 // Deterministic terrain shared by server and client so both agree on ground height.
 
-export const WORLD_HALF = 500;
+export const WORLD_HALF = 900;
+/**
+ * The first map (levels 1-50). Its mountain border is now a ridge inside a bigger world: the same slopes inside, falling
+ * away past it, with passes (RING_ROADS) out to the ring of level 50-78 lands around it.
+ */
+export const INNER_HALF = 500;
 export const TOWN = { x: 0, z: 0, r: 50, name: 'Aldea del Alba' };
 /** Second town, down a road of its own between the Goblin Hills and the Sunken Ruins: the gear for levels 20-40 is sold here. */
 export const DUSK = { x: 170, z: -170, r: 30, name: 'Bastión del Ocaso' };
+/** Where the ring's three towns stand (levels 50-60 north, 60-70 east, 70-78 south). The map draws +z downwards: north is -z. */
+export const RING_SITES = { north: { x: 0, z: -650 }, east: { x: 650, z: 60 }, south: { x: 0, z: 650 } };
+/** The roads out of the first map to them, from the zones by the ridge (wastes, meadows, hills): they cut the passes. */
+export const RING_ROADS: [number, number, number, number][] = [
+  [-20, 260, RING_SITES.south.x, RING_SITES.south.z],
+  [190, 30, RING_SITES.east.x, RING_SITES.east.z],
+  [20, -220, RING_SITES.north.x, RING_SITES.north.z],
+];
 /** Peace zones on flattened ground. TOWN is the starting village. */
 export const TOWNS = [TOWN, DUSK];
 const SEED = 1337;
@@ -41,13 +54,53 @@ export function fbm(x: number, z: number, octaves = 4): number {
 
 export const TOWN_HEIGHT = 2;
 
+function segDist(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number]): number {
+  const dx = bx - ax, dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
+  return Math.hypot(px - (ax + t * dx), pz - (az + t * dz));
+}
+
+/** Mountains: the first map's old border (unchanged inside it, falling away 80 m past it, cut by the passes) and the world's edge. */
+function ridges(x: number, z: number, passes = true): number {
+  const m = Math.max(Math.abs(x), Math.abs(z));
+  let r = 0;
+  const e = m / INNER_HALF;
+  if (e > 0.82) {
+    r = m <= INNER_HALF ? Math.pow((e - 0.82) / 0.18, 2) * 70 : 70 * (1 - smoothstep(INNER_HALF, INNER_HALF + 80, m));
+    if (passes) for (const road of RING_ROADS) r *= smoothstep(10, 36, segDist(x, z, road));
+  }
+  const eo = m / WORLD_HALF;
+  if (eo > 0.82) r += Math.pow((eo - 0.82) / 0.18, 2) * 70;
+  return r;
+}
+
 export function heightAt(x: number, z: number): number {
+  return terrainHeight(x, z, true);
+}
+
+/**
+ * The first map's ground as it was before the passes were cut: its scatter (layout.ts) still decides where things go
+ * with it, so the trees and rocks drawn from one random sequence stay exactly where they always were.
+ */
+export function firstMapHeightAt(x: number, z: number): number {
+  return terrainHeight(x, z, false);
+}
+
+function terrainHeight(x: number, z: number, passes: boolean): number {
   let h = (fbm(x / 140, z / 140, 4) - 0.5) * 32 + (valueNoise(x / 25 + 100, z / 25) - 0.5) * 3;
-  const e = Math.max(Math.abs(x), Math.abs(z)) / WORLD_HALF;
-  if (e > 0.82) h += Math.pow((e - 0.82) / 0.18, 2) * 70;
+  h += ridges(x, z, passes);
+  if (passes) h = roadBed(x, z, h);
   let t = 1;
   for (const tw of TOWNS) t = Math.min(t, smoothstep(tw.r + 5, tw.r + 45, Math.hypot(x - tw.x, z - tw.z)));
   return TOWN_HEIGHT + (h - TOWN_HEIGHT) * t;
+}
+
+/** The new roads keep their feet dry: a raised bed where they cross a pond or a pass floor below the water. */
+function roadBed(x: number, z: number, h: number): number {
+  if (h >= ROAD_BED) return h;
+  let d = Infinity;
+  for (const road of RING_ROADS) d = Math.min(d, segDist(x, z, road));
+  return h + (ROAD_BED - h) * (1 - smoothstep(5, 14, d));
 }
 
 export function inTown(x: number, z: number): boolean {
@@ -69,6 +122,8 @@ export function mulberry32(seed: number): () => number {
 export const PLAYABLE_HALF = WORLD_HALF * 0.86;
 /** Ponds fill the terrain's hollows up to this height. Shallow edges are waded, deeper water is swum. */
 export const WATER_LEVEL = -7;
+/** How high the new roads' bed stands where the ground under them dips into the water (roadBed). */
+const ROAD_BED = WATER_LEVEL + 1.5;
 /** Where a swimmer's feet hang: the water reaches the chest and the head stays out. */
 export const SWIM_Y = WATER_LEVEL - 1.35;
 /** Swimming speed, as a share of walking speed (the server applies it; the client predicts with it). */
