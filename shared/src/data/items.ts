@@ -127,7 +127,7 @@ const list: ItemDef[] = [
   // gathered in the world (shared/src/nodes.ts)
   { id: 'wood_log', name: 'Madera', type: 'material', stack: true, price: 8, icon: '🪵', color: 0x8a5a2a, desc: 'De talar árboles. Se usa para fabricar armas.' },
   { id: 'raw_stone', name: 'Piedra', type: 'material', stack: true, price: 5, icon: '🪨', color: 0x9a9a9a, desc: 'De picar rocas.' },
-  { id: 'iron_ore', name: 'Mineral de Hierro', type: 'material', stack: true, price: 25, icon: '⛏️', color: 0x8a7060, desc: 'De picar rocas, sobre todo en las colinas y el cuartel orco. Se usa para fabricar armas.' },
+  { id: 'iron_ore', name: 'Mineral de Hierro', type: 'material', stack: true, price: 25, icon: '🪨', color: 0x8a7060, desc: 'De picar rocas, sobre todo en las colinas y el cuartel orco. Se usa para fabricar armas.' },
   { id: 'camp_chest', name: 'Cofre del Campamento', type: 'chest', price: 0, icon: '🧰', color: 0x8a5a2a, desc: 'Botín del campamento. Abrilo para quedarte con lo que tiene.' },
   { id: 'cursed_bone', name: 'Hueso Maldito', type: 'material', stack: true, price: 150, icon: '💀', color: 0xbbbbaa },
   { id: 'sea_pearl', name: 'Perla Marina', type: 'material', stack: true, price: 220, icon: '🫧', color: 0xd8e8f0 },
