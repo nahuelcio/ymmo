@@ -1,4 +1,6 @@
 import { ACTIONS, keyLabel, LOOKS, settings, type Action, type LookPreset, type Preset, type Settings, type ShadowQ } from '../settings';
+import { resetLayout } from './movable';
+import { isTouchDevice } from './touch';
 import { el, Win } from './dom';
 import { LANGS } from '../../../shared/src/i18n';
 import { lang, setLang, t as tx } from '../lang';
@@ -98,6 +100,14 @@ export class SettingsPanel {
       this.range(tx('Volumen de música y ambiente', 'Music & ambience volume'), 'music', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : tx('Mudo', 'Muted')));
       this.check(tx('Auto-loot (el botín va directo al inventario)', 'Auto-loot (loot goes straight to your bag)'), 'autoLoot');
       this.range(tx('Tamaño de la interfaz', 'UI scale'), 'uiScale', 0.7, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
+      if (!isTouchDevice()) {
+        // the chat, the bars, the menu, the minimap... move by the grip in their corner; this puts them all back
+        const lr = this.row(tx('Posición de la interfaz', 'Interface layout'));
+        const back = el('button', 'btn small', lr, tx('Volver todo a su lugar', 'Put everything back'));
+        back.title = tx('El chat, las barras, el menú, el minimapa y las ventanas se mueven arrastrando el ícono de su esquina. Esto los devuelve a su lugar original.',
+          'The chat, the bars, the menu, the minimap and the windows move by dragging the grip in their corner. This puts them back where they started.');
+        back.onclick = () => resetLayout();
+      }
       this.check(tx('Nombres sobre los personajes', 'Names above characters'), 'nameplates');
       this.check(tx('Barras de vida bajo los nombres', 'Health bars under names'), 'hpBars');
       this.check(tx('Números de daño', 'Damage numbers'), 'damageNumbers');

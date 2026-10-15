@@ -1,4 +1,5 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
+import { makeMovable } from './movable';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
@@ -80,6 +81,7 @@ export class Minimap {
 
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
+    makeMovable(box, 'minimap');
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));

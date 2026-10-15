@@ -1,4 +1,5 @@
 import { CLASSES, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { makeMovable } from './movable';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
@@ -447,6 +448,7 @@ export class PartyPanel {
 
   constructor(private g: Game, parent: HTMLElement) {
     this.root = el('div', 'panel party', parent);
+    makeMovable(this.root, 'party');
     const head = el('div', 'party-head', this.root, 'Party');
     const leave = el('button', 'btn small', head, tx('Salir', 'Leave'));
     leave.onclick = () => g.net.send({ t: 'partyLeave' });

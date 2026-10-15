@@ -8,6 +8,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, hideTip, setTip } from './dom';
+import { makeMovable, onLayoutReset, uiScale } from './movable';
 import { isTouchDevice } from './touch';
 import { lang, t as tx, fmt } from '../lang';
 import { keyLabel, settings, type Action } from '../settings';
@@ -52,6 +53,8 @@ export class Hud {
   /** what is being dragged onto a bar: one of the bars' own slots, or a skill / consumable from a window */
   drag: { from?: { b: number; i: number }; slot?: Slot } | null = null;
   private cast: HTMLDivElement;
+  /** the skill bars' block: the cast bar shows just over it once the player moved it */
+  private shortcuts!: HTMLDivElement;
   private castFill: HTMLDivElement;
   private castName: HTMLSpanElement;
   private bannerEl: HTMLDivElement;
@@ -84,6 +87,7 @@ export class Hud {
     tClose.onclick = () => g.setTarget(null);
     this.tHp = bar(this.target, 'bar-hp thin');
     this.tActions = el('div', 'target-actions', this.target);
+    makeMovable(this.target, 'target');
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
@@ -132,6 +136,8 @@ export class Hud {
     this.dashCd = el('div', 'cd', this.dashEl);
     this.dashEl.title = tx('Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.', 'Roll (Shift): dodge toward the cursor, briefly invulnerable. Great for getting out of red circles.');
     this.dashEl.onclick = () => g.dash();
+    makeMovable(sc, 'shortcuts');
+    this.shortcuts = sc;
 
     this.cast = el('div', 'castbar', root);
     this.castFill = el('div', 'castbar-fill', this.cast);
@@ -165,9 +171,10 @@ export class Hud {
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
     this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
+    makeMovable(menu, 'menu');
 
-    // which extra bars are on screen
-    this.barsPop = el('div', 'panel bars-pop', root);
+    // which extra bars are on screen: it opens over the menu, wherever the menu is
+    this.barsPop = el('div', 'panel bars-pop', menu);
     this.barsPop.style.display = 'none';
 
     this.bannerEl = el('div', 'banner', root);
@@ -175,6 +182,7 @@ export class Hud {
     this.questRoot = el('div', 'panel quest-tracker', root);
     el('div', 'quest-head', this.questRoot, tx('Misiones', 'Quests'));
     this.questList = el('div', '', this.questRoot);
+    makeMovable(this.questRoot, 'quests');
     this.questRoot.style.display = 'none';
   }
 
@@ -221,9 +229,9 @@ export class Hud {
       if (e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
-      const from = { x: st.offsetLeft, y: st.offsetTop, w: st.offsetWidth };
+      const from = { x: st.offsetLeft, y: st.offsetTop, w: st.offsetWidth }, k = uiScale();
       const mv = (ev: PointerEvent) => {
-        move(ev.clientX - e.clientX, ev.clientY - e.clientY, from);
+        move((ev.clientX - e.clientX) / k, (ev.clientY - e.clientY) / k, from);
         apply();
       };
       const up = () => {
@@ -241,8 +249,23 @@ export class Hud {
       save();
       apply();
     });
+    onLayoutReset(() => {
+      saved = null;
+      save();
+      apply();
+    });
     addEventListener('resize', apply);
     apply();
+  }
+
+  /** Over the skill bars when the player moved them (the stylesheet places it otherwise, screen by screen). */
+  private placeCast() {
+    const c = this.cast.style;
+    if (!this.shortcuts.classList.contains('hud-movable') || !this.shortcuts.style.left) return void (c.left = c.top = c.bottom = '');
+    const k = uiScale(), r = this.shortcuts.getBoundingClientRect();
+    c.left = `${(r.left + r.width / 2) / k}px`;
+    c.top = `${r.top / k - 24}px`;
+    c.bottom = 'auto';
   }
 
   setQuests(list: { id: string; progress: number }[]) {
@@ -538,6 +561,7 @@ export class Hud {
     // cast bar
     const cb = this.g.castBar;
     if (cb && now < cb.end) {
+      if (this.cast.style.display !== 'block') this.placeCast();
       this.cast.style.display = 'block';
       this.castFill.style.width = `${100 - ((cb.end - now) / cb.dur) * 100}%`;
       this.castName.textContent = cb.name;
