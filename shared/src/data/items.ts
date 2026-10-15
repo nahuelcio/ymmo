@@ -103,6 +103,8 @@ const list: ItemDef[] = [
   ...tier('B', 'glacial', 'Glacial', 'Glaciales', 195, 54, 145, 80000, 0x8ac8f0),
   // Emerald (A): Juncoverde's masters make it from the swamp's venom and the jungle's bark
   ...tier('A', 'emerald', 'Esmeralda', 'Esmeralda', 265, 62, 180, 140000, 0x3ac87a, ['swamp_venom', 'ancient_bark']),
+  // Infernal (S): Brasaoscura's masters make it from magma cores and the essence the Abyss bleeds (its raid boss gives the most)
+  ...tier('S', 'infernal', 'Infernal', 'Infernales', 350, 72, 225, 240000, 0xd8401a, ['magma_core', 'abyss_essence']),
   // Jewelry: armor without P.Def (the once-D ones sold in town, the once-C ones drop only)
   { id: 'ring_of_vigor', name: 'Anillo del Vigor', type: 'armor', slot: 'ring', grade: 'NG', look: 'D', mDef: 3, hp: 25, price: 2200, icon: '💍', color: 0xc0a040 },
   { id: 'earring_of_focus', name: 'Pendiente del Foco', type: 'armor', slot: 'earring', grade: 'NG', look: 'D', mDef: 4, mp: 30, price: 2600, icon: '✨', color: 0x6090d0 },
@@ -151,6 +153,9 @@ const list: ItemDef[] = [
   { id: 'ice_crystal', name: 'Cristal de Hielo', type: 'material', stack: true, price: 1250, icon: '🧊', color: 0x8ad0f0 },
   // the swamp region (60-70)
   { id: 'swamp_venom', name: 'Veneno del Pantano', type: 'material', stack: true, price: 1500, icon: '☠️', color: 0x7ac83a, desc: 'Lo fabrican las criaturas del Pantano Ponzoñoso. Con él se forja el set Esmeralda.' },
+  // the volcanic region (70-78)
+  { id: 'magma_core', name: 'Núcleo de Magma', type: 'material', stack: true, price: 2200, icon: '🔥', color: 0xe8501a, desc: 'Late dentro de las criaturas de las Tierras Volcánicas. Con él se forja el set Infernal.' },
+  { id: 'abyss_essence', name: 'Esencia del Abismo', type: 'material', stack: true, price: 2800, icon: '🌑', color: 0x8a40c8, desc: 'La sangran las criaturas del Abismo; su raid es la que más deja. Con ella se forja el set Infernal.' },
   { id: 'ancient_bark', name: 'Corteza Ancestral', type: 'material', stack: true, price: 1800, icon: '🪵', color: 0x8a6a3a, desc: 'De los árboles y las bestias de la Selva Antigua. Con ella se forja el set Esmeralda.' },
 ];
 

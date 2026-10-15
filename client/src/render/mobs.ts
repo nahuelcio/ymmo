@@ -82,6 +82,11 @@ export const MOB_LOOK: Record<string, MobLook> = {
   bog_hag: { g: 'f', skin: 0x7a9060, hair: 0xd0d0c0, hs: 0, top: 0x4a2a4a, bottom: 0x2a1a2a, hood: 0x3a1a3a, weapon: 'sages_staff' },
   tribal_hunter: { skin: 0x9a6a40, hair: 0x1a1a10, hs: 3, ranger: true, top: 0x6a5a2a, bottom: 0x4a3a1a, weapon: ['bow', 0x5a4a2a] },
   tribal_chief: { skin: 0x8a5a30, hair: 0x1a1a10, hs: 1, beard: true, ranger: true, top: 0x8a3a1a, bottom: 0x4a3a1a, helm: 'HelmD', pauldron: true, weapon: 'partisan', brawn: 1.2, bulk: 1.15 },
+  // the volcanic region: the fire sect and the Abyss's demons
+  pyromancer: { skin: 0xc89070, hair: 0x2a1a1a, hs: 0, top: 0x8a2a10, bottom: 0x3a1a10, hood: 0x6a1a08, weapon: 'staff_of_life' },
+  high_pyromancer: { skin: 0xb88060, hair: 0xe0e0d0, hs: 1, beard: true, top: 0xa8301a, bottom: 0x3a1410, hood: 0x8a1a0a, pauldron: true, weapon: 'sages_staff' },
+  abyss_demon: orc({ skin: 0x8a2a24, top: 0x2a1a24, bottom: 0x1a1018, helm: 'HelmD', pauldron: true, weapon: 'battle_axe', brawn: 1.25, bulk: 1.2 }),
+  abyss_commander: orc({ skin: 0x6a1a20, ranger: true, top: 0x3a1a3a, bottom: 0x1a101a, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.28, bulk: 1.25 }),
   hrimgar: { skin: 0x7a9ac0, hair: 0xe8f0f8, hs: 1, beard: true, ranger: true, top: 0x7aa0c8, bottom: 0x4a5a78, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.3, bulk: 1.3 },
 };
 
@@ -213,6 +218,19 @@ export const MOB_GLB: Record<string, GlbLook> = {
   elder_ent: { model: 'forest', height: 2.1, dye: 0x9a8aa0, glow: 0x24082c },
   ent_sapling: { model: 'forest', height: 2.1, dye: 0xb0d098 },
   jungle_beast: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, dye: 0x9aa878 },
+  // the volcanic region
+  lava_salamander: { model: 'raptor', height: 1.25, tint: { Brown: 0x8a2a0a, LightBrown: 0xd86a1a, Black: 0x1a0a04 }, glow: 0x3a0a00, clips: { run: 'Run' } },
+  hellhound: { model: 'wolf', height: 1.3, tint: { Main: 0x1a1414, Main_Light: 0x5a1a10, Eyes_Black: 0xff4010 }, glow: 0x2a0600 },
+  lava_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6a4a40, glow: 0x7a2200, kind: 'humanoid' },
+  magma_drake: { model: 'drake', height: 1.5, dye: 0xff8a50, glow: 0x4a1000 },
+  flame_lord: { model: 'golem', height: 2.3, rock: 4, dye: 0x8a5040, glow: 0xa83000, kind: 'humanoid' },
+  fire_elemental: { model: 'golem', height: 2.3, rock: 4, dye: 0xffa070, glow: 0xc04000, ghost: true, kind: 'humanoid' },
+  abyss_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.6, tint: { skeleton: 0x9a78c0, Glow: 0xa040ff } },
+  lich: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', pale: 1.6, tint: { skeleton: 0x8ab07a, Glow: 0x40ff80 } },
+  abyss_weaver: { model: 'spider', height: 0.9, tint: { Material: 0x1a0a24, 'Material.001': 0x8a30c0 }, glow: 0x14041c, kind: 'spider' },
+  abyss_drake: { model: 'drake', height: 1.55, dye: 0x8a6aa8, glow: 0x1a0428 },
+  azgaroth: { model: 'drake', height: 1.6, dye: 0x5a3a6a, glow: 0x3a0606 },
+  abyss_spawn: { model: 'limule', height: 0.8, dye: 0x8a6aa0, glow: 0x14041c, kind: 'spider' },
   frost_guard: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Small_A', pale: 1.7, tint: { skeleton: 0xc0e0ff, Glow: 0x80d0ff } },
 };
 

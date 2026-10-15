@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { DUSK, FROST, REED, TOWN } from './terrain';
+import { DUSK, EMBER, FROST, REED, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -685,8 +685,22 @@ const REED_FORT = ringFort({
   smith: 'reed_weapons', alchemist: 'reed_grocer',
 });
 
+/** Brasaoscura (levels 70-78): dark basalt and red tile, a gate toward the pass and one toward the volcano and the Abyss. */
+const EMBER_FORT = ringFort({
+  id: 'ember', town: EMBER, roads: [[-20, 260], [EMBER.x + 200, EMBER.z]],
+  stone: 0x5e5250, wall: 0x6a5e5a, roof: 0x8a2a1a,
+  tint: { wall: 0x7e726e, roof: 0x9a2c1c, wood: 0x4a3a30 }, tintAlt: { wall: 0x6e6460, roof: 0x7a2418, wood: 0x3e3028 },
+  buildings: [
+    { id: 'e-hall', w: 6, d: 8, kind: 'hall' }, { id: 'e-smithy', w: 6, d: 4, kind: 'smithy' }, { id: 'e-1', w: 4, d: 4 },
+    { id: 'e-2', w: 6, d: 4 }, { id: 'e-3', w: 4, d: 4 }, { id: 'e-4', w: 4, d: 4, brick: false },
+    { id: 'e-5', w: 6, d: 4 }, { id: 'e-6', w: 4, d: 4 },
+  ],
+  folk: ['ember_weapons', 'ember_armor', 'ember_grocer', 'ember_gate', 'ember_clan', 'varga', 'brunhilda', 'nyx'],
+  smith: 'ember_weapons', alchemist: 'ember_grocer',
+});
+
 /** The Bastión and the ring's forts. */
-export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT, REED_FORT];
+export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT, REED_FORT, EMBER_FORT];
 export const fortById = (id: string) => FORTS.find((f) => f.id === id)!;
 /** A fort resident's spot and facing (shared/src/data/world.ts). */
 export function fortFolk(id: string): { x: number; z: number; ry: number } {

@@ -1,4 +1,4 @@
-import { FROST, REED, TOWNS } from '../terrain';
+import { EMBER, FROST, REED, TOWNS } from '../terrain';
 import { ALBA_FOLK, fortFolk } from '../village';
 
 export interface ZoneDef {
@@ -42,6 +42,11 @@ export const ZONES: ZoneDef[] = [
     spawns: [{ mob: 'swamp_cobra', count: 14 }, { mob: 'mud_crab', count: 10 }, { mob: 'bog_drowned', count: 8 }, { mob: 'bog_witch', count: 8 }, { mob: 'mire_lurker', count: 5 }] },
   { id: 'jungle', name: 'Selva Antigua', x: 650, z: -440, r: 85, levels: '65-70', tint: [0.22, 0.42, 0.18],
     spawns: [{ mob: 'jungle_raptor', count: 12 }, { mob: 'giant_spider', count: 10 }, { mob: 'tribal_hunter', count: 8 }, { mob: 'corrupted_ent', count: 7 }, { mob: 'jungle_beast', count: 6 }, { mob: 'elder_ent', count: 1 }] },
+  // the volcanic region (south pass), east of Brasaoscura
+  { id: 'volcanic', name: 'Tierras Volcánicas', x: 235, z: 650, r: 85, levels: '70-74', tint: [0.3, 0.17, 0.12],
+    spawns: [{ mob: 'lava_salamander', count: 14 }, { mob: 'hellhound', count: 10 }, { mob: 'lava_golem', count: 7 }, { mob: 'pyromancer', count: 8 }, { mob: 'magma_drake', count: 5 }, { mob: 'flame_lord', count: 1 }] },
+  { id: 'abyss', name: 'Abismo', x: 470, z: 650, r: 85, levels: '74-78', tint: [0.15, 0.11, 0.19],
+    spawns: [{ mob: 'abyss_knight', count: 12 }, { mob: 'lich', count: 10 }, { mob: 'abyss_weaver', count: 8 }, { mob: 'abyss_drake', count: 6 }, { mob: 'abyss_demon', count: 6 }] },
 ];
 
 export function zoneAt(x: number, z: number): string {
@@ -114,6 +119,9 @@ export const TELEPORTS = [
   { id: 'reed', name: 'Juncoverde', x: REED.x, z: REED.z + 6, cost: 60000 },
   { id: 'swamp', name: 'Pantano Ponzoñoso (Nv 60-65)', x: 655, z: -130, cost: 65000 },
   { id: 'jungle', name: 'Selva Antigua (Nv 65-70)', x: 655, z: -370, cost: 70000 },
+  { id: 'ember', name: 'Brasaoscura', x: EMBER.x - 6, z: EMBER.z, cost: 80000 },
+  { id: 'volcanic', name: 'Tierras Volcánicas (Nv 70-74)', x: 165, z: 645, cost: 85000 },
+  { id: 'abyss', name: 'Abismo (Nv 74-78)', x: 395, z: 640, cost: 90000 },
 ];
 
 const folk = (id: string) => ALBA_FOLK.find((n) => n.id === id)!;
@@ -233,4 +241,29 @@ export const NPCS: NpcDef[] = [
     greeting: 'El agua devuelve lo que se lleva. Siempre.' },
   { id: 'zahir', name: 'Zahir', title: 'Cazador de Serpientes', x: 661, z: -376, ry: Math.atan2(-6, 6), kind: 'quest', color: 0x7a5a3a,
     greeting: 'Ssithra no es una leyenda. Le vi la cola.' },
+  // Brasaoscura (levels 70-78): the Infernal set made to order from magma cores and abyss essence
+  { id: 'ember_weapons', name: 'Draven', title: 'Maestro Armero', ...fort('ember_weapons'), kind: 'shop', color: 0x8a2a1a,
+    shop: ['glacial_blade', 'glacial_staff'], craft: ['emerald_blade', 'emerald_staff', 'infernal_blade', 'infernal_staff'],
+    greeting: 'Las armas Infernales nacen del magma y de la esencia del Abismo. Traeme las dos.' },
+  { id: 'ember_armor', name: 'Ravena', title: 'Maestra Armadurera', ...fort('ember_armor'), kind: 'shop', color: 0x5a2a3a,
+    craft: ['helm', 'plate', 'robe', 'greaves', 'gauntlets', 'boots', 'ring', 'earring', 'necklace'].map((k) => `infernal_${k}`),
+    greeting: 'Acá abajo no hay segunda armadura. Que la primera sea buena.' },
+  { id: 'ember_grocer', name: 'Cassius', title: 'Alquimista', ...fort('ember_grocer'), kind: 'shop', color: 0x8a4a2a,
+    shop: ['greater_healing_potion', 'supreme_healing_potion', 'greater_mana_potion', 'supreme_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
+    greeting: 'Pociones contra el calor no tengo. Contra la muerte, algunas.' },
+  { id: 'ember_gate', name: 'Orrin', title: 'Guardián del Portal', ...fort('ember_gate'), kind: 'gatekeeper', color: 0x6a2a5a,
+    greeting: 'Cualquier lugar es mejor que este. Por unas monedas te llevo.' },
+  { id: 'ember_clan', name: 'Isaura', title: 'Maestra de Clanes', ...fort('ember_clan'), kind: 'clan', color: 0x4a1a2a,
+    greeting: 'Al Abismo no se baja solo. Se baja en clan.' },
+  { id: 'varga', name: 'Varga', title: 'Comandante', ...fort('varga'), kind: 'quest', color: 0x7a3a2a,
+    greeting: 'Los portones aguantan. Por ahora.' },
+  { id: 'brunhilda', name: 'Brunhilda', title: 'Forjadora', ...fort('brunhilda'), kind: 'quest', color: 0x9a4a1a,
+    greeting: 'Mi forja tiene hambre. Y la tuya también, si querés armas de verdad.' },
+  { id: 'nyx', name: 'Nyx', title: 'Exorcista', ...fort('nyx'), kind: 'quest', color: 0x5a3a7a,
+    greeting: 'El Abismo susurra. Yo le contesto con sellos.' },
+  // where the Gatekeeper drops you in each volcanic zone
+  { id: 'ignis', name: 'Ignis', title: 'Monje de Ceniza', x: 171, z: 639, ry: Math.atan2(-6, 6), kind: 'quest', color: 0x6a5a50,
+    greeting: 'Yo también adoré a las llamas. Me quemaron igual.' },
+  { id: 'seraphel', name: 'Seraphel', title: 'Paladín Caído', x: 401, z: 634, ry: Math.atan2(-6, 6), kind: 'quest', color: 0xc8b070,
+    greeting: 'Mi orden cayó acá. Yo todavía no.' },
 ];

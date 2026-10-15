@@ -348,21 +348,23 @@ export function buildVillage(): THREE.Group {
     mesh.computeBoundingSphere();
     g.add(mesh);
   }
-  // the forts' props, instanced per prop and primitive
-  const byName = new Map<PropName, PropInst[]>();
-  for (const pr of FORTS.flatMap(fortProps)) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
-  for (const [name, list] of byName) for (const prim of propPrims.get(name) ?? []) {
-    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, PROP_DYE[name] ?? 0xffffff), list.length);
-    list.forEach((it, i) => {
-      q.setFromAxisAngle(up, it.rot);
-      pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
-      scl.setScalar(it.s);
-      mesh.setMatrixAt(i, m4.compose(pos, q, scl));
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.computeBoundingSphere();
-    g.add(mesh);
+  // the forts' props, instanced per fort, prop and primitive (one fort's bounds, so the far ones are culled)
+  for (const fort of FORTS) {
+    const byName = new Map<PropName, PropInst[]>();
+    for (const pr of fortProps(fort)) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
+    for (const [name, list] of byName) for (const prim of propPrims.get(name) ?? []) {
+      const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, PROP_DYE[name] ?? 0xffffff), list.length);
+      list.forEach((it, i) => {
+        q.setFromAxisAngle(up, it.rot);
+        pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
+        scl.setScalar(it.s);
+        mesh.setMatrixAt(i, m4.compose(pos, q, scl));
+      });
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.computeBoundingSphere();
+      g.add(mesh);
+    }
   }
   for (const curtain of [albaCurtain().draw, ...FORTS.map((f) => fortCurtain(f).draw)]) for (const kind of ['wall', 'gate', 'tower'] as const) {
     const primList = curtainPrims[kind];

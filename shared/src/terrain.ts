@@ -21,19 +21,23 @@ export const RING_ROADS: [number, number, number, number][] = [
 export const FROST = { x: RING_SITES.north.x, z: RING_SITES.north.z, r: 34, name: 'Fuerte de Escarcha' };
 /** ...Juncoverde for 60-70, by the swamp past the east pass. */
 export const REED = { x: RING_SITES.east.x, z: RING_SITES.east.z, r: 34, name: 'Juncoverde' };
+/** ...and Brasaoscura for 70-78, the last wall before the Abyss, past the south pass. */
+export const EMBER = { x: RING_SITES.south.x, z: RING_SITES.south.z, r: 34, name: 'Brasaoscura' };
 /** Peace zones on flattened ground. TOWN is the starting village. */
-export const TOWNS = [TOWN, DUSK, FROST, REED];
+export const TOWNS = [TOWN, DUSK, FROST, REED, EMBER];
 
 /**
  * Each ring region's own ground (render/scene.ts colours and textures it, layout.ts picks its trees and grass):
  * a box with soft edges, BIOME_FADE metres wide.
  */
-export type BiomeId = 'frost' | 'swamp';
+export type BiomeId = 'frost' | 'swamp' | 'ash';
 export const BIOMES: { id: BiomeId; x0: number; x1: number; z0: number; z1: number }[] = [
   // the north side of the ring, west of its town: the frost region (50-60)
   { id: 'frost', x0: -WORLD_HALF, x1: 330, z0: -WORLD_HALF, z1: -555 },
   // the east side, from its town up to the north-east corner: the swamp and the jungle (60-70)
   { id: 'swamp', x0: 560, x1: WORLD_HALF, z0: -WORLD_HALF, z1: 170 },
+  // the south side, from its town to the south-east corner: the volcanic lands and the Abyss (70-78)
+  { id: 'ash', x0: -330, x1: WORLD_HALF, z0: 555, z1: WORLD_HALF },
 ];
 const BIOME_FADE = 70;
 /** How much of a biome covers (x, z): 0 outside, 1 well inside. */
@@ -53,11 +57,17 @@ export const RAID_FLOORS = {
   frost: { x: -660, z: -680, r: 26, h: 16 },
   // Templo del Pantano: a dry clearing raised out of the north-east corner's jungle
   swamp: { x: 660, z: -665, r: 26, h: 4 },
+  // Corazón del Abismo: a basin sunk into the south-east corner's raised ash
+  abyss: { x: 660, z: 665, r: 26, h: -1 },
 };
+/** The volcano of the Volcanic Lands: its cone, and the crater of lava at its top (render/scene.ts; a wall keeps walkers out). */
+export const VOLCANO = { x: 240, z: 745, r: 80, h: 62, crater: 22 };
 /** The Poison Swamp sinks into shallow channels (relief). */
 const MARSH = { x: 650, z: -200, r: 105 };
 /** On a raid floor (or within `pad` metres of it): kept clear of trees and rocks, the boss fights there. */
 export const onRaidFloor = (x: number, z: number, pad = 0) => Object.values(RAID_FLOORS).some((f) => Math.hypot(x - f.x, z - f.z) < f.r + pad);
+/** Inside the volcano's crater (or within `pad` metres of it): nothing grows or stands in the lava. */
+export const inCrater = (x: number, z: number, pad = 0) => Math.hypot(x - VOLCANO.x, z - VOLCANO.z) < VOLCANO.crater + pad;
 /** The frost peaks (Picos Helados): [x, z, radius, height]. */
 const PEAKS: [number, number, number, number][] = [
   [-520, -705, 55, 62], [-405, -600, 44, 42], [-565, -600, 48, 52], [-430, -720, 40, 38],
@@ -140,14 +150,22 @@ function terrainHeight(x: number, z: number, passes: boolean): number {
 
 /** The ring's landmarks, added on top of its rolling ground (nothing inside the first map's range). */
 function relief(x: number, z: number): number {
-  if (Math.max(Math.abs(x), Math.abs(z)) < 540) return 0;
-  let h = 0;
+  if (Math.max(Math.abs(x), Math.abs(z)) < INNER_HALF) return 0;
+  // the volcanic region stands higher: hardly a pond in it
+  let h = 6 * biomeWeight('ash', x, z);
   for (const [px, pz, r, ph] of PEAKS) {
     const d = Math.hypot(x - px, z - pz);
     if (d < r) h += ph * Math.pow(1 - d / r, 1.25) * (0.6 + 0.8 * valueNoise(x / 12 + 7, z / 12 - 3));
   }
   const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
   if (dm < MARSH.r) h -= 2.4 * (1 - smoothstep(MARSH.r * 0.6, MARSH.r, dm)) * (0.35 + 0.65 * valueNoise(x / 28 + 31, z / 28 - 17));
+  const dv = Math.hypot(x - VOLCANO.x, z - VOLCANO.z);
+  if (dv < VOLCANO.r) {
+    const cone = VOLCANO.h * Math.pow(1 - dv / VOLCANO.r, 1.3) * (0.88 + 0.24 * valueNoise(x / 14 + 3, z / 14 + 9));
+    // the crater: a flat floor 18 m under the rim, where the lava lies
+    const floor = VOLCANO.h * Math.pow(1 - VOLCANO.crater / VOLCANO.r, 1.3) - 18;
+    h += floor + (cone - floor) * smoothstep(VOLCANO.crater * 0.55, VOLCANO.crater, dv);
+  }
   return h;
 }
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Clouds, cloudShadow } from './clouds';
 import { fortLanterns, FORTS } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { biomeWeight, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, VOLCANO, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf, detailCells, layoutBushes } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
@@ -81,14 +81,15 @@ function groundFactors(x: number, z: number, h: number) {
   const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
   const town = Math.max(...TOWNS.map((t) => 1 - smoothstep(t.r - 2, t.r + 6, Math.hypot(x - t.x, z - t.z))));
   const dirt = Math.max(road * 0.85, town);
-  const frost = biomeWeight('frost', x, z), swamp = biomeWeight('swamp', x, z), peak = smoothstep(45, 60, h);
+  const frost = biomeWeight('frost', x, z), swamp = biomeWeight('swamp', x, z), ash = biomeWeight('ash', x, z);
+  const peak = smoothstep(45, 60, h) * (1 - ash);
   const shore = (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt);
   return {
     n: fbm(x / 40 + 50, z / 40 - 20, 3),
     rock: smoothstep(14, 26, h),
     // the peaks, and the whole frost region under its snow
     snow: Math.max(peak, frost * 0.92),
-    peak,
+    peak, ash,
     road, town, dirt,
     // pond shores: sand at the waterline (snow in the frost region, mud in the swamp), darker silt underwater
     sand: shore * (1 - frost) * (1 - swamp),
@@ -104,6 +105,9 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   // the swamp region's dark, wet green
   const sw = biomeWeight('swamp', x, z) * 0.85;
   r += (0.2 + n * 0.08 - r) * sw; g += (0.3 + n * 0.1 - g) * sw; b += (0.13 + n * 0.04 - b) * sw;
+  // the volcanic region's basalt and ash
+  const as = f.ash * 0.9;
+  r += (0.14 + n * 0.05 - r) * as; g += (0.12 + n * 0.03 - g) * as; b += (0.115 + n * 0.03 - b) * as;
   for (const zn of ZONES) {
     const w = (1 - smoothstep(zn.r * 0.5, zn.r * 1.15, Math.hypot(x - zn.x, z - zn.z))) * 0.75;
     r += (zn.tint[0] * (0.85 + n * 0.3) - r) * w;
@@ -141,6 +145,7 @@ export function groundLayers(x: number, z: number, h: number, out: Float32Array,
     out[o + layer] += k;
   };
   apply(2, f.rock);
+  apply(2, f.ash * 0.75); // the ash region: bare rock
   apply(4, f.snow);
   apply(1, f.road * 0.85); // roads: packed dirt
   apply(5, f.town); // towns are paved
@@ -258,6 +263,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
   const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
   scene.add(water);
+  // the volcano's lava churns on the water's clock
+  scene.add(buildLava(waterFancy.uniforms.time as { value: number }));
   const grass = natureReady() ? lazyDetail(natureDetailCell, NATURE_DETAIL_DRAWS) : lazyDetail(makeDetailCell(), DETAIL_PER_CELL * 5);
   const detail = grass.group;
   scene.add(detail);
@@ -468,10 +475,13 @@ function buildTerrain(): THREE.Group {
       const nrm = geo.attributes.normal as THREE.BufferAttribute;
       for (let i = 0; i < pos.count; i++) {
         const steep = 1 - smoothstep(0.72, 0.93, nrm.getY(i));
+        if (steep <= 0) continue;
         const o = i * 3;
-        colors[o] += (0.36 - colors[o]) * steep * 0.8;
-        colors[o + 1] += (0.33 - colors[o + 1]) * steep * 0.8;
-        colors[o + 2] += (0.3 - colors[o + 2]) * steep * 0.8;
+        // the volcanic region's slopes are dark basalt, not grey stone
+        const k = 1 - 0.6 * biomeWeight('ash', pos.getX(i), pos.getZ(i));
+        colors[o] += (0.36 * k - colors[o]) * steep * 0.8;
+        colors[o + 1] += (0.33 * k - colors[o + 1]) * steep * 0.8;
+        colors[o + 2] += (0.3 * k - colors[o + 2]) * steep * 0.8;
       }
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geo.computeBoundingSphere();
@@ -610,6 +620,43 @@ function buildRocks(): THREE.Group {
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
   return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'rock'), items);
+}
+
+/** The volcano's crater: a disc of slow-churning lava on its flat floor (its glow is a fire in lightSources). */
+const LAVA_Y = () => heightAt(VOLCANO.x, VOLCANO.z) + 0.4;
+function buildLava(time: { value: number }): THREE.Mesh {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { time },
+    vertexShader: /* glsl */ `
+      varying vec2 vP;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vP = w.xz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float time;
+      varying vec2 vP;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      void main() {
+        vec2 p = vP * 0.35;
+        // two crusts drifting over the melt: dark where they cool, bright in the cracks
+        float c = noise(p + vec2(time * 0.15, time * 0.08)) * 0.6 + noise(p * 2.3 - vec2(time * 0.11, -time * 0.17)) * 0.4;
+        vec3 col = mix(vec3(0.5, 0.05, 0.0), vec3(1.0, 0.5, 0.06), smoothstep(0.35, 0.8, c));
+        col += vec3(1.0, 0.85, 0.4) * smoothstep(0.82, 0.95, c) * 0.7;
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.CircleGeometry(VOLCANO.crater * 0.55 + 1, 40).rotateX(-Math.PI / 2), mat);
+  m.position.set(VOLCANO.x, LAVA_Y(), VOLCANO.z);
+  return m;
 }
 
 function buildWater(): THREE.Mesh {
@@ -1164,6 +1211,7 @@ export function lightSources(): LightSource[] {
   }
   for (const c of layoutCamps()) out.push({ x: c.fire.x, y: heightAt(c.fire.x, c.fire.z) + 1, z: c.fire.z, fire: true });
   for (const b of BRAZIER_FIRES) out.push({ ...b, y: b.y + 0.8, fire: true });
+  out.push({ x: VOLCANO.x, y: LAVA_Y() + 4, z: VOLCANO.z, fire: true }); // the lava lights its crater
   for (const l of fortLanterns()) out.push({ x: l.x, y: TOWN_HEIGHT + l.y, z: l.z, fire: false });
   for (const h of layoutTown().houses) {
     // a point in the building's own frame (front = +z), turned into the world like its mesh

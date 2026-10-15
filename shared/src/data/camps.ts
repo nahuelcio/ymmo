@@ -52,6 +52,15 @@ export const CAMPS: CampDef[] = [
     mobs: [{ mob: 'tribal_hunter', count: 4 }, { mob: 'jungle_raptor', count: 3 }], respawn: 330000,
     chest: { adena: [80000, 125000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 5, max: 9 }, { item: 'ancient_bark', chance: 1, min: 4, max: 8 },
       { item: 'emerald_greaves', chance: 0.05 }, { item: 'emerald_ring', chance: 0.05 }, { item: 'emerald_necklace', chance: 0.04 }, { item: 'emerald_blade', chance: 0.02 }, { item: 'scroll_enchant_weapon', chance: 0.3 }] } },
+  // the volcanic region (70-78)
+  { id: 'cult_forge', name: 'Forja de los Cultistas', zone: 'volcanic', x: 280, z: 610, level: 74, leader: 'high_pyromancer', banner: 0xc8401a,
+    mobs: [{ mob: 'pyromancer', count: 3 }, { mob: 'hellhound', count: 4 }], respawn: 330000,
+    chest: { adena: [100000, 160000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 5, max: 9 }, { item: 'magma_core', chance: 1, min: 4, max: 8 },
+      { item: 'infernal_helm', chance: 0.04 }, { item: 'infernal_boots', chance: 0.04 }, { item: 'infernal_gauntlets', chance: 0.04 }, { item: 'infernal_earring', chance: 0.03 }, { item: 'scroll_enchant_armor', chance: 0.4 }] } },
+  { id: 'abyss_bastion', name: 'Bastión Abisal', zone: 'abyss', x: 510, z: 615, level: 78, leader: 'abyss_commander', banner: 0x4a1a5a,
+    mobs: [{ mob: 'abyss_knight', count: 4 }, { mob: 'abyss_demon', count: 2 }], respawn: 360000,
+    chest: { adena: [130000, 200000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 6, max: 10 }, { item: 'abyss_essence', chance: 1, min: 4, max: 8 },
+      { item: 'infernal_greaves', chance: 0.04 }, { item: 'infernal_ring', chance: 0.04 }, { item: 'infernal_necklace', chance: 0.03 }, { item: 'infernal_blade', chance: 0.015 }, { item: 'scroll_enchant_weapon', chance: 0.35 }] } },
 ];
 
 export const CAMP_BY_ID: Record<string, CampDef> = Object.fromEntries(CAMPS.map((c) => [c.id, c]));

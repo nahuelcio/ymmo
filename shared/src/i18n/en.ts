@@ -108,13 +108,15 @@ export const EN = {
   "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
   "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
-  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"], ["emerald", "Emerald"]].flatMap(([p, n]) =>
+  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"], ["emerald", "Emerald"], ["infernal", "Infernal"]].flatMap(([p, n]) =>
    ["Blade", "Staff", "Helm", "Plate", "Robe", "Greaves", "Gauntlets", "Boots", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
   "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
   "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },
   "citadel_sigil": { "name": "Citadel Sigil" }, "drake_scale": { "name": "Drake Scale" }, "dragon_fang": { "name": "Dragon Fang" },
   "frost_pelt": { "name": "Frozen Pelt" }, "ice_crystal": { "name": "Ice Crystal" },
+  "magma_core": { "name": "Magma Core", "desc": "It pulses inside the creatures of the Volcanic Lands. The Infernal set is forged with it." },
+  "abyss_essence": { "name": "Abyss Essence", "desc": "The creatures of the Abyss bleed it; its raid leaves the most. The Infernal set is forged with it." },
   "swamp_venom": { "name": "Swamp Venom", "desc": "Made by the creatures of the Poison Swamp. The Emerald set is forged with it." },
   "ancient_bark": { "name": "Ancient Bark", "desc": "From the trees and beasts of the Ancient Jungle. The Emerald set is forged with it." },
   "supreme_healing_potion": { "name": "Supreme Healing Potion", "desc": "Restores 750 HP." },
@@ -233,7 +235,11 @@ export const EN = {
   "swamp_cobra": "Swamp Cobra", "mud_crab": "Mud Crab", "bog_drowned": "Bog Drowned", "bog_witch": "Bog Witch", "mire_lurker": "Mire Lurker",
   "jungle_raptor": "Jungle Raptor", "giant_spider": "Giant Spider", "tribal_hunter": "Tribal Hunter", "corrupted_ent": "Corrupted Ent", "jungle_beast": "Jungle Beast",
   "bog_hag": "Great Hag", "tribal_chief": "Tribal Chief", "elder_ent": "Corrupted Elder Ent", "ent_sapling": "Corrupted Sapling",
-  "ssithra": "Ssithra, the Serpent Mother", "serpent_brood": "Serpent Brood"
+  "ssithra": "Ssithra, the Serpent Mother", "serpent_brood": "Serpent Brood",
+  "lava_salamander": "Lava Salamander", "hellhound": "Hellhound", "lava_golem": "Lava Golem", "pyromancer": "Pyromancer", "magma_drake": "Magma Drake",
+  "abyss_knight": "Abyss Knight", "lich": "Lich", "abyss_weaver": "Abyss Weaver", "abyss_drake": "Abyssal Drake", "abyss_demon": "Abyss Demon",
+  "high_pyromancer": "High Pyromancer", "abyss_commander": "Abyssal Commander", "flame_lord": "Lord of Flames", "fire_elemental": "Fire Elemental",
+  "azgaroth": "Azgaroth, the Devourer", "abyss_spawn": "Abyss Spawn"
  },
  "skills": {
   "provoke": {
@@ -485,7 +491,22 @@ export const EN = {
    "ready": "It is rotten inside, as I feared. Something big is poisoning it.", "doneText": "The heart of the jungle beats strangely. And the temple, stranger still." },
   "ent_purge": { "name": "Purge of the Ents", "story": "The corrupted ents guard the way to the Swamp Temple, where Ssithra, the Serpent Mother, sleeps. While they stand, no one reaches her lair.",
    "offer": "Fell 8 corrupted ents and I will open the way to the temple.", "busy": "Eight ents. When they strike the ground, get out of the circle.",
-   "ready": "The way is clear. Gather your people and type /raid swamp when they are ready.", "doneText": "Ssithra awaits you in the temple. Do not look into her eyes." }
+   "ready": "The way is clear. Gather your people and type /raid swamp when they are ready.", "doneText": "Ssithra awaits you in the temple. Do not look into her eyes." },
+  "ember_welcome": { "name": "Hounds of Hell", "story": "Emberdark is the last wall before the Abyss. Every night the hellhounds crawl out of the cracks and test the gates, and Commander Varga has lost count of the guards they have taken.",
+   "offer": "The hellhounds prowl the wall. Take down 15 and I will pay you like a veteran.", "busy": "Fifteen hounds. If they bite you, put yourself out before you go on.",
+   "ready": "Tonight the gates will hold. Well done, soldier.", "doneText": "Beyond those lands lies the Abyss. There you will truly need luck." },
+  "forge_cores": { "name": "Cores for the Forge", "story": "Infernal weapons are only tempered in living fire. Brunhilda feeds her forge with the magma cores that pulse inside the golems and salamanders of the Volcanic Lands.",
+   "offer": "Bring me 15 magma cores. The golems, the salamanders and the magma drakes carry them inside.", "busy": "Fifteen cores. Grab them with gloves, if you have any.",
+   "ready": "They are still pulsing. With this my forge burns for a week.", "doneText": "When you have what it takes, come back: I will forge you something that makes the Abyss tremble." },
+  "pyro_hunt": { "name": "The Fire Sect", "story": "The pyromancers worship the Lord of Flames and offer him everything they burn. Ignis was one of them, until he saw what his god did with his faithful.",
+   "offer": "The pyromancers keep recruiting. Silence 12 before there are more.", "busy": "Twelve pyromancers. They strike from afar: close in fast.",
+   "ready": "Their bonfires are going out. Thank you for what I never dared to do.", "doneText": "The Lord of Flames will notice they are gone. I hope he comes for you and not for me." },
+  "abyss_rites": { "name": "Essences of the Abyss", "story": "Nyx seals the cracks through which the Abyss seeps into the world. To do it she needs the same essence its creatures bleed.",
+   "offer": "Bring me 14 abyss essences. Knights, liches and weavers: they all bleed them.", "busy": "Fourteen essences. Do not stare at them too long: they stare back.",
+   "ready": "With this I can seal three cracks. A thousand remain.", "doneText": "The heart of the Abyss beats louder every day. I hear it in my dreams." },
+  "abyss_guard": { "name": "The Abyss Guard", "story": "Seraphel swore to protect the world from Azgaroth, the Devourer, and lost his whole order trying. His fallen knights now guard the heart of the Abyss for their new master.",
+   "offer": "Free 8 abyss knights. They were my brothers.", "busy": "Eight knights. Show them no mercy: they remember nothing anymore.",
+   "ready": "They rest, at last. Gather your people and type /raid abyss: Azgaroth awaits you.", "doneText": "If you fall down there, do not come back like them." }
  },
  "npcs": {
   "grocer": {
@@ -605,7 +626,17 @@ export const EN = {
   "oren": { "title": "Herbalist", "greeting": "Every poison has its antidote. Almost every one." },
   "ilwen": { "title": "Druid", "greeting": "The jungle is sick. I can hear it cough." },
   "morla": { "title": "Ferrywoman", "greeting": "The water gives back what it takes. Always." },
-  "zahir": { "title": "Serpent Hunter", "greeting": "Ssithra is no legend. I have seen her tail." }
+  "zahir": { "title": "Serpent Hunter", "greeting": "Ssithra is no legend. I have seen her tail." },
+  "ember_weapons": { "title": "Master Weaponsmith", "greeting": "Infernal weapons are born of magma and the essence of the Abyss. Bring me both." },
+  "ember_armor": { "title": "Master Armorer", "greeting": "Down here there is no second armor. Make the first one good." },
+  "ember_grocer": { "title": "Alchemist", "greeting": "I have no potions against the heat. Against death, a few." },
+  "ember_gate": { "title": "Gatekeeper", "greeting": "Anywhere is better than here. For a few coins I will take you." },
+  "ember_clan": { "title": "Clan Master", "greeting": "No one goes down into the Abyss alone. You go down as a clan." },
+  "varga": { "title": "Commander", "greeting": "The gates hold. For now." },
+  "brunhilda": { "title": "Forgemaster", "greeting": "My forge is hungry. And so is yours, if you want real weapons." },
+  "nyx": { "title": "Exorcist", "greeting": "The Abyss whispers. I answer it with seals." },
+  "ignis": { "title": "Ash Monk", "greeting": "I worshipped the flames too. They burned me all the same." },
+  "seraphel": { "title": "Fallen Paladin", "greeting": "My order fell here. I have not, yet." }
  },
  "zones": {
   "meadows": "Windy Meadows",
@@ -626,7 +657,10 @@ export const EN = {
   "peaks": "Frozen Peaks",
   "reed": "Reedgreen",
   "swamp": "Poison Swamp",
-  "jungle": "Ancient Jungle"
+  "jungle": "Ancient Jungle",
+  "ember": "Emberdark",
+  "volcanic": "Volcanic Lands",
+  "abyss": "The Abyss"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -646,7 +680,10 @@ export const EN = {
   "peaks": "Frozen Peaks (Lv 55-60)",
   "reed": "Reedgreen",
   "swamp": "Poison Swamp (Lv 60-65)",
-  "jungle": "Ancient Jungle (Lv 65-70)"
+  "jungle": "Ancient Jungle (Lv 65-70)",
+  "ember": "Emberdark",
+  "volcanic": "Volcanic Lands (Lv 70-74)",
+  "abyss": "The Abyss (Lv 74-78)"
  },
  "races": {
   "human": {
@@ -706,7 +743,9 @@ export const EN = {
   "tundra_camp": "Raiders' Camp",
   "yeti_den": "Matriarch's Den",
   "witch_coven": "Swamp Coven",
-  "tribal_village": "Tribal Village"
+  "tribal_village": "Tribal Village",
+  "cult_forge": "Cultists' Forge",
+  "abyss_bastion": "Abyssal Bastion"
  },
  "statuses": {
   "stun": {

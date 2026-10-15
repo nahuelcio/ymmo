@@ -2,7 +2,7 @@
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
-import { biomeWeight, DUSK, firstMapHeightAt, heightAt, INNER_HALF, inTown, onRaidFloor, mulberry32, PLAYABLE_HALF, RING_ROADS, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
+import { biomeWeight, DUSK, firstMapHeightAt, heightAt, INNER_HALF, inTown, inCrater, onRaidFloor, mulberry32, PLAYABLE_HALF, RING_ROADS, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from './terrain';
 import { ALBA_STAMPS, albaCurtain, fortCurtain, FORTS } from './village';
 
 /**
@@ -72,7 +72,7 @@ export interface ZonePropsL {
 
 /** A tree at (x, z), or null where none grows; draws from rng in the order the first map's trees always have. */
 function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | null {
-  if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || w.roadDist(x, z) < 6 || onRaidFloor(x, z, 6)) return null;
+  if (TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 14) || w.roadDist(x, z) < 6 || onRaidFloor(x, z, 6) || inCrater(x, z, 4)) return null;
   const h = w.height(x, z);
   if (h > 42 || h < WATER_LEVEL + 0.8 || nearCamp(x, z, 18)) return null; // no trees on peaks, in ponds or in camps
   const zone = zoneOf(x, z);
@@ -81,7 +81,8 @@ function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | nu
   // trees grow half again as big in the jungle
   const sc = (0.7 + rng() * 0.7) * (1 + 0.5 * biomeWeight('swamp', x, z));
   const rot = rng() * Math.PI * 2;
-  const dead = zone?.id === 'wastes';
+  // dead trees in the cursed wastes and all over the ash of the volcanic region
+  const dead = zone?.id === 'wastes' || biomeWeight('ash', x, z) > 0.5;
   let pine = false, hue = 0, light = 0;
   if (!dead) {
     // pines up high and in the orc barracks; only pines under the frost region's snow
@@ -153,7 +154,7 @@ export function fertile(x: number, z: number, h: number): boolean {
 }
 function fertileIn(w: View, x: number, z: number, h: number): boolean {
   // nothing grows under the frost region's snow
-  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && w.roadDist(x, z) > 3.2 && !nearCamp(x, z, 16) && biomeWeight('frost', x, z) < 0.5 && !onRaidFloor(x, z, 2);
+  return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && w.roadDist(x, z) > 3.2 && !nearCamp(x, z, 16) && biomeWeight('frost', x, z) < 0.5 && biomeWeight('ash', x, z) < 0.5 && !onRaidFloor(x, z, 2);
 }
 
 /** A stable pseudo-random value in [0, 1) for a spot (picks models and variants without an rng). */
@@ -229,7 +230,7 @@ export function layoutRocks(): RockL[] {
     const w = ring ? NEW : OLD;
     for (let n = 0; n < want;) {
       const x = (rng() * 2 - 1) * half * 0.95, z = (rng() * 2 - 1) * half * 0.95;
-      if ((ring && !inRing(x, z, 0.95)) || inTown(x, z) || w.roadDist(x, z) < 4 || onRaidFloor(x, z, 4)) continue;
+      if ((ring && !inRing(x, z, 0.95)) || inTown(x, z) || w.roadDist(x, z) < 4 || onRaidFloor(x, z, 4) || inCrater(x, z, 4)) continue;
       const sc = 0.3 + rng() * rng() * 2.5;
       const e: [number, number, number] = [rng() * 3, rng() * 3, rng() * 3];
       const s: [number, number, number] = [sc * (0.8 + rng() * 0.6), sc * (0.6 + rng() * 0.4), sc * (0.8 + rng() * 0.6)];
