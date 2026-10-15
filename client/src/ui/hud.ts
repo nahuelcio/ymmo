@@ -8,6 +8,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, hideTip, setTip } from './dom';
+import { isTouchDevice } from './touch';
 import { lang, t as tx, fmt } from '../lang';
 import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
@@ -24,6 +25,9 @@ const BARS = SIZE.length;
 interface BarState { v: 2; bars: Slot[][]; known: string[]; shown: boolean[]; collapsed: boolean[] }
 const emptyBar = (b: number) => Array<Slot>(SIZE[b]).fill(null);
 /** the action whose key fires slot i of bar b (the main bar keeps its old action names) */
+/** where the player put the status window and how wide they made it (per browser, like the windows' places) */
+const STATUS_KEY = 'hud:status';
+const STATUS_W = { min: 180, max: 640 };
 const slotAction = (b: number, i: number) => (b === 0 ? `slot${i + 1}` : `bar${b + 1}slot${i + 1}`) as Action;
 
 export class Hud {
@@ -69,6 +73,7 @@ export class Hud {
     this.mp = bar(st, 'bar-mp', 'MP');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
+    this.makeStatusMovable(st);
 
     // Target window (top-center)
     this.target = el('div', 'panel target', root);
@@ -171,6 +176,73 @@ export class Hud {
     el('div', 'quest-head', this.questRoot, tx('Misiones', 'Quests'));
     this.questList = el('div', '', this.questRoot);
     this.questRoot.style.display = 'none';
+  }
+
+  /**
+   * The status window moves by dragging it and widens by its right edge; a double click on the name puts it back.
+   * Buffs and status effects stay next to it. Desktop only: on touch screens the layout is fixed.
+   */
+  private makeStatusMovable(st: HTMLDivElement) {
+    if (isTouchDevice()) return;
+    st.classList.add('movable');
+    st.title = tx('Arrastrá para moverla, estirá el borde derecho para ensancharla, doble clic en el nombre para volver al lugar original.',
+      'Drag to move it, pull the right edge to widen it, double click the name to put it back.');
+    const grip = el('div', 'status-grip', st);
+    let saved: { x: number; y: number; w: number } | null = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(STATUS_KEY) ?? 'null');
+    } catch {
+      /* unavailable */
+    }
+    const apply = () => {
+      if (!saved) {
+        st.style.left = st.style.top = st.style.width = '';
+        this.buffs.style.left = this.buffs.style.top = this.statusEl.style.left = this.statusEl.style.top = '';
+        return;
+      }
+      const w = Math.max(STATUS_W.min, Math.min(STATUS_W.max, saved.w, innerWidth - 20));
+      st.style.width = `${w}px`;
+      st.style.left = `${Math.max(0, Math.min(innerWidth - w, saved.x))}px`;
+      st.style.top = `${Math.max(0, Math.min(innerHeight - st.offsetHeight, saved.y))}px`;
+      const r = st.getBoundingClientRect();
+      this.buffs.style.left = this.statusEl.style.left = `${r.right + 10}px`;
+      this.buffs.style.top = `${r.top}px`;
+      this.statusEl.style.top = `${r.top + 34}px`;
+    };
+    const save = () => {
+      try {
+        if (saved) localStorage.setItem(STATUS_KEY, JSON.stringify(saved));
+        else localStorage.removeItem(STATUS_KEY);
+      } catch {
+        /* the layout lasts for this session */
+      }
+    };
+    const drag = (e: PointerEvent, move: (dx: number, dy: number, from: { x: number; y: number; w: number }) => void) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const from = { x: st.offsetLeft, y: st.offsetTop, w: st.offsetWidth };
+      const mv = (ev: PointerEvent) => {
+        move(ev.clientX - e.clientX, ev.clientY - e.clientY, from);
+        apply();
+      };
+      const up = () => {
+        removeEventListener('pointermove', mv);
+        removeEventListener('pointerup', up);
+        save();
+      };
+      addEventListener('pointermove', mv);
+      addEventListener('pointerup', up);
+    };
+    st.addEventListener('pointerdown', (e) => drag(e, (dx, dy, f) => (saved = { x: f.x + dx, y: f.y + dy, w: f.w })));
+    grip.addEventListener('pointerdown', (e) => drag(e, (dx, _dy, f) => (saved = { x: f.x, y: f.y, w: f.w + dx })));
+    this.name.addEventListener('dblclick', () => {
+      saved = null;
+      save();
+      apply();
+    });
+    addEventListener('resize', apply);
+    apply();
   }
 
   setQuests(list: { id: string; progress: number }[]) {

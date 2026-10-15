@@ -107,6 +107,11 @@ input { font: inherit; user-select: text; }
 .status .bar-text { font-size: 11px; line-height: 15px; }
 .status .bar-label { line-height: 15px; }
 .status .bar-cp .bar-text, .status .bar-cp .bar-label { font-size: 8px; line-height: 8px; }
+/* moved and widened by hand (ui/hud.ts makeStatusMovable): the right edge is the handle */
+.status.movable { cursor: move; user-select: none; touch-action: none; }
+.status-grip { position: absolute; top: 0; right: -4px; bottom: 0; width: 9px; cursor: ew-resize; }
+.status-grip::after { content: ''; position: absolute; top: 50%; right: 3px; width: 3px; height: 18px; margin-top: -9px; border-left: 1px solid var(--border-hi); border-right: 1px solid var(--border-hi); opacity: 0; transition: opacity 0.15s; }
+.status.movable:hover .status-grip::after { opacity: 0.8; }
 .status-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lvl { display: inline-block; min-width: 20px; text-align: center; background: #2a2416; border: 1px solid var(--border); color: var(--gold); border-radius: 2px; padding: 0 3px; }
 .buffs { position: absolute; left: 270px; top: 10px; display: flex; gap: 3px; flex-wrap: wrap; width: 260px; }
