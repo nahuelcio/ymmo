@@ -314,7 +314,8 @@ export class Hud {
   private buildSlots(b: number, parent: HTMLElement): HTMLDivElement[] {
     const out: HTMLDivElement[] = [];
     for (let i = 0; i < SIZE[b]; i++) {
-      const s = el('div', 'slot', parent);
+      // extra bars copy the main bar's layout: their slots 11 and 12 sit over the attack and roll buttons, with the same gap
+      const s = el('div', b > 0 && i >= 10 ? 'slot slot-gap' : 'slot', parent);
       const keyEl = el('span', 'slot-key', s);
       const syncKey = () => (keyEl.textContent = keyLabel(settings.s.keys[slotAction(b, i)] ?? ''));
       syncKey();
