@@ -63,7 +63,7 @@ export class Hud {
 
   constructor(private g: Game, root: HTMLElement) {
     // Status window (top-left)
-    // as in L2's status window: name, then CP, HP and MP one over the other, out of the way of the centre
+    // as in L2's status window: name, then CP, HP, MP and XP one over the other, out of the way of the centre
     const st = el('div', 'panel status', root);
     this.name = el('div', 'status-name', st);
     this.cp = bar(st, 'bar-cp', 'CP');
@@ -71,6 +71,7 @@ export class Hud {
       'CP (Combat Points): soak the damage other players deal before your HP drops. No protection against monsters.');
     this.hp = bar(st, 'bar-hp', 'HP');
     this.mp = bar(st, 'bar-mp', 'MP');
+    this.xp = bar(st, 'bar-xp');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
     this.makeStatusMovable(st);
@@ -86,8 +87,7 @@ export class Hud {
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
-    this.xp = bar(sc, 'bar-xp');
-    // bars 2 and 3 stack over the XP strip, edge to edge with the main bar; each folds down to a thin strip with its arrow
+    // bars 2 and 3 stack over the main bar, edge to edge with it; each folds down to a thin strip with its arrow
     const extra = el('div', 'extra-bars', sc);
     this.slotEls.push(this.buildSlots(0, sc));
     for (let b = 1; b < BARS; b++) {
