@@ -353,6 +353,7 @@ const DUSK_FOLK: { id: string; x: number; z: number }[] = [
   { id: 'dusk_armor', x: 162, z: -178 },
   { id: 'dusk_grocer', x: 181, z: -172 },
   { id: 'dusk_gate', x: 159, z: -168 },
+  { id: 'dusk_clan', x: 183, z: -163.5 },
 ];
 
 /** Empty when the Bastión's plan stays off its plaza, its roads, its wall and its merchants, without overlaps. */
@@ -470,6 +471,7 @@ export const ALBA_FOLK: { id: string; x: number; z: number; ry: number }[] = [
   { id: 'vessa', x: 19.3, z: 23.9, ry: Math.atan2(-19.3, -23.9) },
   { id: 'harun', x: 14, z: 26, ry: Math.atan2(-14, -26) },
   { id: 'nira', x: -14, z: 26, ry: Math.atan2(14, -26) },
+  { id: 'clan_master', x: 6, z: 18.5, ry: Math.atan2(-6, -18.5) },
 ];
 
 /** A point in front of a stamp's door, `lx` metres along the front, `out` metres past the wall. Faces the plaza. */

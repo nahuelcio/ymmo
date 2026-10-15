@@ -173,7 +173,7 @@ impl World {
         }
     }
 
-    fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef> {
+    pub(crate) fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef> {
         let pc = &self.ents[&pid].c;
         match self.ents.get(&nid) {
             Some(Ent { c, k: Kind::Npc(n) }) if (c.x - pc.x).hypot(c.z - pc.z) <= NPC_RANGE => Some(n.def),

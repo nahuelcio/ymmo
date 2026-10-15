@@ -19,6 +19,7 @@ export const ACTIONS = {
   character: tx('Personaje', 'Character'),
   map: tx('Mapa', 'Map'),
   party: 'Party',
+  clan: 'Clan',
   help: tx('Ayuda', 'Help'),
   settings: tx('Opciones', 'Options'),
   camLeft: tx('Girar cámara a la izquierda', 'Rotate camera left'),
@@ -28,7 +29,7 @@ export const ACTIONS = {
 export type Action = keyof typeof ACTIONS;
 /** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
 export const DEFAULT_KEYS: Record<Action, string> = {
-  attack: ' ', stop: 's', nextTarget: 'r', players: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
+  attack: ' ', stop: 's', nextTarget: 'r', players: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', clan: 'n', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, String(n % 10)])) as Record<SlotAction, string>),
 };
 export const keyLabel = (k: string) => (k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));

@@ -173,7 +173,7 @@ export function layoutTown(): TownL {
   // merchant stalls: beside an Alba shop (behind it would sit inside a wall); elsewhere, behind the NPC.
   // Step aside until the counter clears every resident, not only its owner.
   for (const n of NPCS) {
-    if (n.kind === 'talker' || n.kind === 'quest') continue;
+    if (n.kind === 'talker' || n.kind === 'quest' || n.kind === 'clan') continue;
     const dirX = Math.sin(n.ry), dirZ = Math.cos(n.ry);
     const albaShop = n.kind === 'shop' && Math.hypot(n.x - TOWN.x, n.z - TOWN.z) < TOWN.r;
     const at = (lx: number, lz: number) => ({ x: n.x + lx * dirZ + lz * dirX, z: n.z - lx * dirX + lz * dirZ });

@@ -67,6 +67,8 @@ pub struct World {
     /** world nodes spent until (ms), and seats taken -> player (gather.rs) */
     pub nodes_gone: HashMap<u32, f64>,
     pub seats: HashMap<u32, u32>,
+    /** the clans' version this world last refreshed its players' clan looks at (clans.rs) */
+    pub clan_seen: u64,
 }
 
 impl World {
@@ -74,7 +76,7 @@ impl World {
         let mut w = World {
             ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
-            sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(),
+            sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
         };
         if let Some((r, size)) = raid {
             let boss = w.spawn_mob(&r.boss, r.x, r.z);
@@ -362,6 +364,7 @@ impl World {
                     self.add(Ent { c, k: Kind::Item(GroundItem { item: "camp_chest".into(), count: 1, enchant: 0, owners: Some([*pid].into_iter().collect()), owner_until: now + 180000.0, expire_at: now + 180000.0, camp_id: Some(def.id.clone()) }) });
                     self.sys(*pid, &format!("¡Despejaste {}! Te espera un cofre junto a la fogata.", def.name), &format!("You cleared {}! A chest awaits you by the campfire.", def.name_en));
                 }
+                self.clan_rep(&winners, d().clans.rep.camp_clear, &def.name, &def.name_en);
             } else if self.camps[i].cleared && now >= self.camps[i].respawn_at && none_dead {
                 self.camps[i].cleared = false;
                 self.camps[i].contributors.clear();
@@ -382,6 +385,8 @@ impl World {
         if let (Some(raid), Some(boss)) = (self.raid, self.raid_boss) {
             if boss == mid {
                 self.raid_cleared_at = now;
+                let all = self.players.clone();
+                self.clan_rep(&all, d().clans.rep.raid_boss, "jefe de raid", "raid boss");
                 let others: Vec<u32> = self.mobs.iter().copied().filter(|&id| id != mid).collect();
                 for id in others {
                     let e = self.ents.get_mut(&id).unwrap();
@@ -457,7 +462,10 @@ impl World {
                 let eqi = |s: &str| p.equipped_in(s).map(|i| Value::String(i.i.clone())).unwrap_or(Value::Null);
                 json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "p", "n": p.name, "l": p.level, "race": p.race, "cls": p.cls, "spec": p.spec,
                     "lk": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc }, "w": eqi("weapon"), "a": eqi("chest"), "nc": p.name_color(now),
-                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet")] })
+                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet")],
+                    // clan, its name and crest version, and the character's title (absent without a clan)
+                    "cl": p.clan_look.as_ref().map(|c| c.id), "cn": p.clan_look.as_ref().map(|c| c.name.clone()),
+                    "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()) })
             }
             Kind::Mob(m) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "m", "n": m.tpl.name, "l": m.tpl.level, "tpl": m.tpl.id }),
             Kind::Npc(n) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "n", "n": n.def.name, "title": n.def.title, "npc": n.def.id }),
@@ -548,6 +556,7 @@ impl World {
         let dt = ((now - self.now) / 1000.0).min(0.2);
         self.now = now;
         self.tick_n += 1;
+        self.refresh_clan_looks();
         for pid in self.players.clone() {
             if !self.ents.contains_key(&pid) { continue; }
             if !self.ents[&pid].c.statuses.is_empty() { self.tick_statuses(pid, now); }

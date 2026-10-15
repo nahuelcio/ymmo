@@ -12,6 +12,16 @@ export interface EntPlayer {
   race: Race; cls: ClassType; spec?: Spec | null; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
   /** other visible gear: [head, gloves, legs, feet] item ids */
   eq: (string | null)[];
+  /** clan: id, name, crest version (its PNG is /crest/<id>.png?v=<cv>), and this character's title */
+  cl?: number | null; cn?: string | null; cv?: number | null; ti?: string | null;
+}
+
+/** One member in the clan window. */
+export interface ClanMemberInfo { name: string; level: number; cls: ClassType; grade: number; title: string; on: boolean }
+/** The clan window's data (server-rs/src/clans.rs info). privs: by grade (index 1-5), CLAN_PRIV bits. */
+export interface ClanInfo {
+  id: number; name: string; level: number; rep: number; leader: string; cv: number; cap: number;
+  privs: number[]; inviteUntil: number; members: ClanMemberInfo[];
 }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
@@ -83,6 +93,19 @@ export type C2S =
   | { t: 'partyInvite'; name: string }
   | { t: 'partyRespond'; accept: boolean }
   | { t: 'partyLeave' }
+  | { t: 'clanGet' }
+  | { t: 'clanCreate'; npc: number; name: string }
+  | { t: 'clanInvite'; name: string }
+  | { t: 'clanRespond'; accept: boolean }
+  | { t: 'clanLeave' }
+  | { t: 'clanKick'; name: string }
+  | { t: 'clanTransfer'; name: string }
+  | { t: 'clanDissolve'; npc: number }
+  | { t: 'clanLevelUp'; npc: number }
+  | { t: 'clanGrade'; name: string; grade: number }
+  | { t: 'clanPrivs'; grade: number; privs: number }
+  | { t: 'clanTitle'; name: string; title: string }
+  | { t: 'clanCrest'; png: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }
   | { t: 'respawn' }
@@ -120,10 +143,12 @@ export type S2C =
   | { t: 'cd'; key: string; ms: number }
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
-  | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
+  | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
+  | { t: 'clan'; clan: ClanInfo | null }
+  | { t: 'clanInvite'; from: string; clan: string }
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }
   /** an NPC says something out loud (speech bubble + local chat) */

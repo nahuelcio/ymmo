@@ -1,0 +1,73 @@
+// Clans, after Lineage 2 (Interlude). Shared so the client shows the same costs and limits the server checks.
+// The server reads these from server-rs/data/game.json (tools/scripts/export-data.ts).
+
+/** What a clan of each level allows, and what it takes to reach it from the one below (level 0: to found it). */
+export interface ClanLevel {
+  members: number;
+  adena: number;
+  mats: [string, number][];
+  /** clan reputation spent on the way up */
+  rep: number;
+}
+
+export const CLAN_LEVELS: ClanLevel[] = [
+  { members: 10, adena: 10_000, mats: [], rep: 0 },
+  { members: 15, adena: 50_000, mats: [['wood_log', 20], ['iron_ore', 10]], rep: 0 },
+  { members: 20, adena: 200_000, mats: [['stone_fragment', 20], ['orc_tusk', 20]], rep: 0 },
+  { members: 30, adena: 600_000, mats: [['cursed_bone', 15], ['ruin_relic', 10]], rep: 0 },
+  { members: 40, adena: 1_500_000, mats: [['ember_shard', 10], ['citadel_sigil', 10]], rep: 0 },
+  { members: 40, adena: 3_000_000, mats: [['drake_scale', 10], ['dragon_fang', 5]], rep: 5_000 },
+];
+export const MAX_CLAN_LEVEL = CLAN_LEVELS.length - 1;
+
+export const CLAN = {
+  /** a character must be at least this level to found a clan */
+  foundLevel: 10,
+  /** clan level at which each feature opens */
+  crestLevel: 1,
+  warehouseLevel: 1,
+  warLevel: 3,
+  allyLevel: 5,
+  skillLevel: 5,
+  /** names: letters and digits, this long */
+  nameMin: 2,
+  nameMax: 16,
+  titleMax: 16,
+  /** penalties (ms): a member who left or was dismissed may not join another clan, a clan that dismissed may not
+   * invite, a leader who dissolved may not found another */
+  leaveMs: 24 * 3600_000,
+  kickMs: 24 * 3600_000,
+  dissolveMs: 10 * 24 * 3600_000,
+  /** an invitation stands this long */
+  inviteMs: 30_000,
+  /** crest: width × height in pixels, and the most bytes its PNG may take */
+  crestW: 16,
+  crestH: 12,
+  crestBytes: 2048,
+};
+
+/** Power grades: 1 is the leader (every privilege), 2-5 get what the leader grants. */
+export const CLAN_GRADES = 5;
+/** Privileges, as bits of a grade's mask. */
+export const CLAN_PRIV = {
+  invite: 1,
+  dismiss: 2,
+  title: 4,
+  warehouse: 8,
+  crest: 16,
+  war: 32,
+  ranks: 64,
+} as const;
+export type ClanPriv = keyof typeof CLAN_PRIV;
+/** What grades 2-5 start with: officers invite and title, members nothing. */
+export const CLAN_DEFAULT_PRIVS = [0, 0x7f, CLAN_PRIV.invite | CLAN_PRIV.title | CLAN_PRIV.warehouse, CLAN_PRIV.invite, 0, 0];
+/** Clan levels at which grades open up (as in L2, the lower ranks come with a bigger clan). */
+export const CLAN_GRADE_LEVEL = [0, 0, 0, 2, 2, 0];
+
+/** Clan reputation: what clan members' deeds earn the clan. */
+export const CLAN_REP = {
+  raidBoss: 500,
+  campClear: 50,
+  warKill: 20,
+  warDeath: -10,
+};

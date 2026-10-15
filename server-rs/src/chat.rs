@@ -64,6 +64,11 @@ impl World {
             if !msg.is_empty() { self.broadcast(json!({ "t": "chat", "ch": "shout", "from": name, "text": msg })); }
             return;
         }
+        if let Some(msg) = text.strip_prefix('@') {
+            let msg = msg.trim();
+            if !msg.is_empty() { self.clan_chat(pid, msg); }
+            return;
+        }
         if let Some(msg) = text.strip_prefix('#') {
             let msg = msg.trim();
             let Some(ptid) = self.pl(pid).unwrap().party else { return self.sys(pid, "No estás en ninguna party.", "You are not in a party.") };

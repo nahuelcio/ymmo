@@ -111,6 +111,10 @@ impl Look {
     }
 }
 
+/** A character's clan as others see it: clan id and name, their title, the crest's version. */
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver: u32 }
+
 pub struct Player {
     pub sid: u64,
     pub out: Outbox,
@@ -133,6 +137,10 @@ pub struct Player {
     pub escape_at: f64,
     pub party: Option<u32>,
     pub pending_invite: Option<(u32, f64)>,
+    /** a clan invitation waiting for an answer: (clan id, until ms) */
+    pub pending_clan: Option<(u32, f64)>,
+    /** what this character's head shows of their clan (clans.rs refresh_clan_look) */
+    pub clan_look: Option<ClanLook>,
     pub talking_to: Option<u32>,
     /** sitting: the seat node, or 0 on the ground */
     pub sitting: Option<u32>,

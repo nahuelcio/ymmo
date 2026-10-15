@@ -10,6 +10,7 @@ import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
 import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
 import { RAIDS } from '../../shared/src/data/raids';
+import { CLAN, CLAN_DEFAULT_PRIVS, CLAN_GRADE_LEVEL, CLAN_LEVELS, CLAN_REP } from '../../shared/src/data/clans';
 import { STATUSES } from '../../shared/src/status';
 import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
 import { isDeep, PLAYABLE_HALF, SWIM_SPEED, TOWN, TOWNS, WATER_CELL, WORLD_HALF } from '../../shared/src/terrain';
@@ -57,6 +58,7 @@ const out = {
   // world nodes: [id, x, z, r, ry, seatY, zone]; gather rules per kind
   nodes: allNodes().map((n) => [n.id, +n.x.toFixed(2), +n.z.toFixed(2), +n.r.toFixed(2), +(n.ry ?? 0).toFixed(3), n.y ?? 0, n.zone ?? '']),
   gather: GATHER,
+  clans: { levels: CLAN_LEVELS, cfg: CLAN, privs: CLAN_DEFAULT_PRIVS, gradeLevel: CLAN_GRADE_LEVEL, rep: CLAN_REP },
   water: { cell: WATER_CELL, half: WORLD_HALF, runs: waterRuns() },
   obstacles: getObstacles().map((o) => (o.k === 'c' ? { k: 'c', x: o.x, z: o.z, r: o.r } : { k: 'b', x: o.x, z: o.z, hw: o.hw, hd: o.hd, cos: o.cos, sin: o.sin })),
 };
