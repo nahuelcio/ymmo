@@ -19,6 +19,7 @@ import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
+import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRE, createWorldScene, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph } from './ui/common';
@@ -832,7 +833,7 @@ export class Game {
     let rig: Rig | null = null;
     let model: THREE.Object3D;
     let height = 1.2, radius = 0.5;
-    if (r.k === 'p') rig = playerModel(r.race, r.cls, r.w, r.a, r.lk, r.eq ?? []);
+    if (r.k === 'p') rig = playerModel(r.race, r.cls, r.w, r.a, r.lk, r.eq ?? [], r.we ?? 0);
     else if (r.k === 'm') rig = mobModel(r.tpl);
     else if (r.k === 'n') rig = npcModel(r.npc);
     if (rig) {
@@ -1805,6 +1806,7 @@ export class Game {
       if (now - this.lastRender < step - 1) return;
       this.lastRender = Math.max(this.lastRender + step, now - step);
     } else this.lastRender = now;
+    tickEnchantFx(now / 1000, this.renderer.domElement.height);
     this.fpsFrames++;
     if (now - this.fpsAt >= 500) {
       if (settings.s.showFps) {

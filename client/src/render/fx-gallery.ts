@@ -4,6 +4,7 @@ import { settings } from '../settings';
 import { LocalLights } from './atmos';
 import { FxManager } from './fx';
 import { animate, mobModel, playerModel, type Rig } from './models';
+import { tickEnchantFx } from './enchant-fx';
 import { loadMobs } from './mobs';
 import { PostFX } from './post';
 import { loadQ } from './quaternius';
@@ -14,6 +15,8 @@ import { GENERIC_VFX, SKILL_VFX } from './skill-fx';
  * with the game's bloom and tone mapping. No server needed.
  * ?skill=<id> fires it on load (and every ?every ms), ?night, ?ry=<radians> turn the view, ?zoom, ?nobar for screenshots.
  * In the console: fxFire(id), fxBench(id, n) = CPU ms per frame with n copies of an effect alive.
+ * ?enchant=N (1-16): a fighter alone holding a weapon at +N (?weapon=<item id>, default broadsword), for the enchantment
+ * glow (render/enchant-fx.ts); setEnchant(n) in the console swaps the level. ?look=<height> aims the camera (default 1.4).
  */
 export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
   host.innerHTML = '';
@@ -48,13 +51,14 @@ export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
 
   const cam = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
   const post = new PostFX(renderer, scene, cam);
-  const zoom = Number(p.get('zoom')) || 1, ry = Number(p.get('ry')) || 0.35;
+  const zoom = Number(p.get('zoom')) || 1, ry = Number(p.get('ry')) || 0.35, look = Number(p.get('look')) || 1.4;
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
     cam.aspect = innerWidth / innerHeight;
     const d = 15 / zoom / Math.min(1, cam.aspect / 1.4);
     cam.position.set(Math.sin(ry) * d, d * 0.42, Math.cos(ry) * d);
-    cam.lookAt(0, 1.4, 0);
+    cam.position.y += look - 1.4;
+    cam.lookAt(0, look, 0);
     cam.updateProjectionMatrix();
     post.resize();
   };
@@ -70,8 +74,20 @@ export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
     scene.add(rig.root);
     return { pos: rig.root.position, height: rig.height, rig, atkAt: -1e9, castUntil: 0 };
   };
-  const s = ent(playerModel('human', 'mystic', 'sages_staff', 'karmian_tunic', { g: 'f', hs: 1, hc: 0 }), -3.5, Math.PI / 2);
+  const enchant = p.has('enchant') ? Number(p.get('enchant')) || 0 : -1;
+  const knight = (lvl: number) => playerModel('human', 'fighter', p.get('weapon') || 'broadsword', 'full_plate_armor', { g: 'm', hs: 0, hc: 0 }, [], lvl);
+  const s = enchant >= 0 ? ent(knight(enchant), 0, 0.5) : ent(playerModel('human', 'mystic', 'sages_staff', 'karmian_tunic', { g: 'f', hs: 1, hc: 0 }), -3.5, Math.PI / 2);
   const t = ent(mobModel('orc_warrior'), 3.5, -Math.PI / 2);
+  if (enchant >= 0) t.rig.root.visible = false;
+  (window as unknown as { setEnchant: (n: number) => void }).setEnchant = (n: number) => {
+    scene.remove(s.rig.root);
+    const rig = knight(n);
+    rig.root.position.copy(s.rig.root.position);
+    rig.root.rotation.copy(s.rig.root.rotation);
+    scene.add(rig.root);
+    s.rig = rig;
+    s.pos = rig.root.position;
+  };
 
   fx = new FxManager(scene);
   lighting();
@@ -108,6 +124,7 @@ export async function mountFxGallery(host: HTMLElement): Promise<() => void> {
   for (const def of Object.values(SKILLS)) btn(`${def.icon} ${def.name}`, def.id, () => fire(def.id));
 
   const frame = (now: number) => {
+    tickEnchantFx(now / 1000, renderer.domElement.height);
     for (const e of [s, t])
       animate(e.rig, { moving: false, casting: now < e.castUntil, atkAge: now - e.atkAt, deadAge: -1, t: now / 1000 });
     fx.update();

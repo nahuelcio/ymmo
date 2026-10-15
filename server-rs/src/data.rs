@@ -69,7 +69,7 @@ pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
 
 #[derive(Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub step: f64, pub max: i64, pub fail_destroys: bool }
+pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub chance: f64, pub max: i64, pub fail_destroys: bool }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
