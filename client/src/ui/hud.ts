@@ -14,14 +14,15 @@ import { campName, className, itemDesc, itemName, mobName, npcText, questField, 
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
 export type Slot = { type: 'skill' | 'item'; id: string } | null;
-/** The main bar and two extra ones above it, ten slots each. */
-const BARS = 3, SLOTS = 10;
+/** The main bar (ten slots, then the attack and roll buttons) and two extra ones above it, twelve slots each: as wide. */
+const SIZE = [10, 12, 12];
+const BARS = SIZE.length;
 /**
  * The bars' layout, kept on the server per character (characters.hotbar, sent back on entering), so it is the same
  * in every browser. known: ids already placed once, so emptying a slot by hand sticks; shown / collapsed: bars 2-3.
  */
 interface BarState { v: 2; bars: Slot[][]; known: string[]; shown: boolean[]; collapsed: boolean[] }
-const emptyBar = () => Array<Slot>(SLOTS).fill(null);
+const emptyBar = (b: number) => Array<Slot>(SIZE[b]).fill(null);
 /** the action whose key fires slot i of bar b (the main bar keeps its old action names) */
 const slotAction = (b: number, i: number) => (b === 0 ? `slot${i + 1}` : `bar${b + 1}slot${i + 1}`) as Action;
 
@@ -58,8 +59,14 @@ export class Hud {
 
   constructor(private g: Game, root: HTMLElement) {
     // Status window (top-left)
+    // as in L2's status window: name, then CP, HP and MP one over the other, out of the way of the centre
     const st = el('div', 'panel status', root);
     this.name = el('div', 'status-name', st);
+    this.cp = bar(st, 'bar-cp', 'CP');
+    this.cp.root.title = tx('CP (Puntos de Combate): absorben el daño que te hacen otros jugadores antes de que baje la vida. No protegen de los monstruos.',
+      'CP (Combat Points): soak the damage other players deal before your HP drops. No protection against monsters.');
+    this.hp = bar(st, 'bar-hp', 'HP');
+    this.mp = bar(st, 'bar-mp', 'MP');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
 
@@ -74,15 +81,8 @@ export class Hud {
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
-    // vitals sit right above the bar, where the eyes are in a fight: CP strip, then HP | MP, then XP
-    const vit = el('div', 'vitals', sc);
-    this.cp = bar(vit, 'bar-cp', 'CP');
-    this.cp.root.title = tx('CP (Puntos de Combate): absorben el daño que te hacen otros jugadores antes de que baje la vida. No protegen de los monstruos.',
-      'CP (Combat Points): soak the damage other players deal before your HP drops. No protection against monsters.');
-    this.hp = bar(vit, 'bar-hp', 'HP');
-    this.mp = bar(vit, 'bar-mp', 'MP');
     this.xp = bar(sc, 'bar-xp');
-    // bars 2 and 3 stack over the vitals; each folds down to a thin strip with its arrow
+    // bars 2 and 3 stack over the XP strip, edge to edge with the main bar; each folds down to a thin strip with its arrow
     const extra = el('div', 'extra-bars', sc);
     this.slotEls.push(this.buildSlots(0, sc));
     for (let b = 1; b < BARS; b++) {
@@ -241,7 +241,7 @@ export class Hud {
   /** Ten slots of bar b: click or key uses it, drag rearranges (across bars too), right click empties. */
   private buildSlots(b: number, parent: HTMLElement): HTMLDivElement[] {
     const out: HTMLDivElement[] = [];
-    for (let i = 0; i < SLOTS; i++) {
+    for (let i = 0; i < SIZE[b]; i++) {
       const s = el('div', 'slot', parent);
       const keyEl = el('span', 'slot-key', s);
       const syncKey = () => (keyEl.textContent = keyLabel(settings.s.keys[slotAction(b, i)] ?? ''));
@@ -287,7 +287,8 @@ export class Hud {
   private loadBars(): BarState {
     const fix = (v: Partial<BarState> | null): BarState | null => {
       if (!v || !Array.isArray(v.bars)) return null;
-      const bars = Array.from({ length: BARS }, (_, b) => Array.from({ length: SLOTS }, (_, i) => {
+      // each bar padded or cut to its size (bars 2-3 were ten slots wide before)
+      const bars = Array.from({ length: BARS }, (_, b) => Array.from({ length: SIZE[b] }, (_, i) => {
         const s = v.bars![b]?.[i];
         // auto-attack used to sit on the bar: free the slot an old layout still gives it
         return s && (s.type === 'skill' || s.type === 'item') && typeof s.id === 'string' ? { type: s.type, id: s.id } : null;
@@ -311,7 +312,7 @@ export class Hud {
     } catch {
       /* unavailable or corrupt */
     }
-    return { v: 2, bars: Array.from({ length: BARS }, emptyBar), known: [], shown: [false, false], collapsed: [false, false] };
+    return { v: 2, bars: Array.from({ length: BARS }, (_, b) => emptyBar(b)), known: [], shown: [false, false], collapsed: [false, false] };
   }
 
   /** Send the layout to the server, once things settle (a drag can change it twice in a row). */

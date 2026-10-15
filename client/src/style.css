@@ -95,12 +95,18 @@ input { font: inherit; user-select: text; }
 .bar-cp .bar-fill { background: var(--cp); }
 .bar-xp .bar-fill { background: var(--xp); }
 .bar-label { position: absolute; left: 4px; top: 0; z-index: 1; font-size: 9px; font-weight: bold; line-height: 13px; color: #fff; opacity: 0.8; text-shadow: 0 0 2px #000, 0 0 2px #000; }
-.bar.low, .vitals .bar.low { animation: barTremble 1.2s infinite; box-shadow: 0 0 6px rgba(90, 150, 255, 0.9); }
+.bar.low { animation: barTremble 1.2s infinite; box-shadow: 0 0 6px rgba(90, 150, 255, 0.9); }
 @keyframes barTremble { 0%, 40%, 100% { transform: translateX(0); } 6%, 18%, 30% { transform: translateX(-2px); } 12%, 24%, 36% { transform: translateX(2px); } }
 .bar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 13px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 
 /* ---------- HUD ---------- */
 .status { position: absolute; left: 10px; top: 10px; width: 250px; padding: 6px 8px; }
+/* CP, HP and MP one over the other in the status window */
+.status .bar { height: 16px; margin-top: 4px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.status .bar-cp { height: 9px; }
+.status .bar-text { font-size: 11px; line-height: 15px; }
+.status .bar-label { line-height: 15px; }
+.status .bar-cp .bar-text, .status .bar-cp .bar-label { font-size: 8px; line-height: 8px; }
 .status-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lvl { display: inline-block; min-width: 20px; text-align: center; background: #2a2416; border: 1px solid var(--border); color: var(--gold); border-radius: 2px; padding: 0 3px; }
 .buffs { position: absolute; left: 270px; top: 10px; display: flex; gap: 3px; flex-wrap: wrap; width: 260px; }
@@ -110,7 +116,7 @@ input { font: inherit; user-select: text; }
 .buff.flag { width: auto; padding: 0 6px; line-height: 24px; border: 1px solid #a070ff; color: #d0a0ff; border-radius: 3px; background: #1a1028; font-weight: bold; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
 
-.party { position: absolute; left: 10px; top: 48px; width: 200px; padding: 6px 8px; }
+.party { position: absolute; left: 10px; top: 104px; width: 200px; padding: 6px 8px; }
 .quest-tracker { position: absolute; right: 10px; top: 240px; width: 180px; padding: 6px 8px; }
 .qt-bar { height: 3px; margin-top: 3px; background: #08090d; border-radius: 2px; overflow: hidden; }
 .qt-bar > div { height: 100%; background: var(--cp); }
@@ -156,25 +162,20 @@ input { font: inherit; user-select: text; }
 .cd-num { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; font: bold 15px Tahoma, sans-serif; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
 .slot.denied { border-color: #d04040; animation: slotDeny 0.25s; }
 @keyframes slotDeny { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-/* vitals: CP strip over HP | MP, sitting on the XP strip and the shortcut bar */
-.vitals { position: absolute; left: 0; right: 0; bottom: calc(100% + 15px); display: flex; flex-wrap: wrap; gap: 3px 4px; }
-.vitals .bar { flex: 1 1 40%; height: 16px; margin: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
-.vitals .bar-cp { flex-basis: 100%; height: 9px; }
-.vitals .bar-text { font-size: 11px; line-height: 15px; }
-.vitals .bar-label { line-height: 15px; }
-.vitals .bar-cp .bar-text, .vitals .bar-cp .bar-label { font-size: 8px; line-height: 8px; }
 /* XP: a thin strip along the top edge of the shortcut bar */
 .shortcuts .bar-xp { position: absolute; left: 0; right: 0; bottom: 100%; height: 10px; margin: 0 0 3px; }
 .shortcuts .bar-xp .bar-text { font-size: 8px; line-height: 9px; }
 .dash-btn { margin-left: 8px; }
-/* bars 2 and 3 (ui/hud.ts): stacked over the vitals, bar 2 nearest; a folded one is a thin strip with its arrow */
-.extra-bars { position: absolute; left: 4px; bottom: calc(100% + 52px); display: flex; flex-direction: column-reverse; gap: 5px; pointer-events: none; }
-.bar-row { position: relative; display: flex; gap: 3px; pointer-events: auto; }
+/* bars 2 and 3 (ui/hud.ts): stacked over the XP strip, bar 2 nearest, twelve slots spread edge to edge with the main
+   bar (its ten slots and the two buttons); a folded one is a thin strip with its arrow */
+.extra-bars { position: absolute; left: 4px; right: 4px; bottom: calc(100% + 17px); display: flex; flex-direction: column-reverse; gap: 5px; pointer-events: none; }
+.bar-row { position: relative; display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; pointer-events: auto; }
+.bar-row .slot { width: auto; }
 .bar-row .slot { opacity: 0.95; }
 .bar-toggle { position: absolute; right: calc(100% + 3px); top: 0; width: 16px; height: 42px; padding: 0; background: rgba(10, 11, 16, 0.85); color: var(--gold); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; font-size: 10px; line-height: 1; }
 .bar-num { position: absolute; right: calc(100% + 22px); top: 14px; font-size: 10px; color: var(--gold); opacity: 0.7; }
 .bar-row.collapsed .slot { display: none; }
-.bar-row.collapsed { width: 445px; height: 12px; background: linear-gradient(#2a261c, #15130e); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
+.bar-row.collapsed { height: 12px; background: linear-gradient(#2a261c, #15130e); border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
 .bar-row.collapsed:hover { border-color: var(--border-hi); }
 .bar-row.collapsed::after { content: attr(data-label); position: absolute; inset: 0; text-align: center; font-size: 9px; line-height: 11px; color: var(--gold); }
 .bar-row.collapsed .bar-toggle { height: 14px; top: -2px; }
@@ -184,7 +185,7 @@ input { font: inherit; user-select: text; }
 .bars-pop-hint { font-size: 11px; margin-top: 4px; max-width: 220px; }
 .touch .extra-bars, .touch .bars-pop { display: none; }
 
-.castbar { position: absolute; left: 50%; bottom: calc(118px + var(--xbars, 0px)); transform: translateX(-50%); width: 240px; height: 14px; background: #08090d; border: 1px solid var(--border); display: none; border-radius: 2px; overflow: hidden; }
+.castbar { position: absolute; left: 50%; bottom: calc(84px + var(--xbars, 0px)); transform: translateX(-50%); width: 240px; height: 14px; background: #08090d; border: 1px solid var(--border); display: none; border-radius: 2px; overflow: hidden; }
 .castbar-fill { height: 100%; background: linear-gradient(#ffe38a, #b8862a); }
 .castbar-text { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 13px; color: #fff; text-shadow: 0 0 2px #000; }
 
@@ -412,7 +413,7 @@ input { font: inherit; user-select: text; }
 /* no room beside the bar at all: chat and menu sit above it */
 @media (max-width: 1140px) { .chat { width: min(420px, calc(100vw - 20px)); bottom: 84px; height: 170px; } .menu { bottom: 84px; } .castbar { bottom: calc(262px + var(--xbars, 0px)); } }
 @media (max-width: 760px) {
-  .buffs { left: 10px; top: 112px; }
+  .buffs { left: 10px; top: 104px; }
   .target { top: auto; bottom: 120px; }
   .minimap { transform: scale(0.75); transform-origin: top right; }
   .chat { height: 150px; bottom: 64px; }
@@ -513,7 +514,7 @@ input { font: inherit; user-select: text; }
 .status-row { position: absolute; left: 270px; top: 44px; display: flex; gap: 3px; }
 .buff.status { display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffb0a0; background: #3a1010; border: 1px solid #a03030; border-radius: 3px; }
 .f-dot { color: #d09aff; font-size: 13px; -webkit-text-stroke-width: 2px; }
-@media (max-width: 760px) { .status-row { left: 10px; top: 150px; } }
+@media (max-width: 760px) { .status-row { left: 10px; top: 142px; } }
 .np-elite { font-size: 12px; font-weight: bold; }
 .np-elite > div:first-child { text-shadow: 0 0 6px rgba(255, 200, 60, 0.8), 0 0 3px #000; }
 

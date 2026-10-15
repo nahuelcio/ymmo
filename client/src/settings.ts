@@ -7,6 +7,9 @@ export type LookPreset = 'off' | 'natural' | 'vivid' | 'aden' | 'cinematic' | 'n
 
 const SLOT_N = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 type SlotAction = `slot${(typeof SLOT_N)[number]}`;
+/** bars 2 and 3 are twelve slots wide (ui/hud.ts SIZE) */
+const XSLOT_N = [...SLOT_N, 11, 12] as const;
+type XSlotAction = `slot${(typeof XSLOT_N)[number]}`;
 /** Things a key can be bound to. F1-F10 (skill bar too), Enter, Esc and the arrow keys are fixed. */
 export const ACTIONS = {
   attack: tx('Atacar al objetivo', 'Attack target'),
@@ -26,8 +29,8 @@ export const ACTIONS = {
   camRight: tx('Girar cámara a la derecha', 'Rotate camera right'),
   bars: tx('Barras de habilidades (menú)', 'Skill bars (menu)'),
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, tx(`Barra de habilidades: casillero ${n}`, `Skill bar: slot ${n}`)])) as Record<SlotAction, string>),
-  ...(Object.fromEntries(SLOT_N.map((n) => [`bar2slot${n}`, tx(`Barra 2: casillero ${n}`, `Bar 2: slot ${n}`)])) as Record<`bar2${SlotAction}`, string>),
-  ...(Object.fromEntries(SLOT_N.map((n) => [`bar3slot${n}`, tx(`Barra 3: casillero ${n}`, `Bar 3: slot ${n}`)])) as Record<`bar3${SlotAction}`, string>),
+  ...(Object.fromEntries(XSLOT_N.map((n) => [`bar2slot${n}`, tx(`Barra 2: casillero ${n}`, `Bar 2: slot ${n}`)])) as Record<`bar2${XSlotAction}`, string>),
+  ...(Object.fromEntries(XSLOT_N.map((n) => [`bar3slot${n}`, tx(`Barra 3: casillero ${n}`, `Bar 3: slot ${n}`)])) as Record<`bar3${XSlotAction}`, string>),
 };
 export type Action = keyof typeof ACTIONS;
 /** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
@@ -36,8 +39,8 @@ export const DEFAULT_KEYS: Record<Action, string> = {
   bars: '',
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, String(n % 10)])) as Record<SlotAction, string>),
   // the extra bars start without keys ('' = unbound)
-  ...(Object.fromEntries(SLOT_N.map((n) => [`bar2slot${n}`, ''])) as Record<`bar2${SlotAction}`, string>),
-  ...(Object.fromEntries(SLOT_N.map((n) => [`bar3slot${n}`, ''])) as Record<`bar3${SlotAction}`, string>),
+  ...(Object.fromEntries(XSLOT_N.map((n) => [`bar2slot${n}`, ''])) as Record<`bar2${XSlotAction}`, string>),
+  ...(Object.fromEntries(XSLOT_N.map((n) => [`bar3slot${n}`, ''])) as Record<`bar3${XSlotAction}`, string>),
 };
 export const keyLabel = (k: string) => (!k ? '' : k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
 
