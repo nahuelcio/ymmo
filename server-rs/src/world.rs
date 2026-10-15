@@ -598,11 +598,11 @@ impl World {
         }
     }
 
-    /** Talker NPCs (Luigi) mumble out loud every 20-45 s when someone is around. */
+    /** Talker NPCs (Luigi) mumble out loud every 90-180 s when someone is around (he stands by the fountain, in everyone's ear: any more often grates). */
     fn npc_chatter(&mut self, now: f64) {
         let talkers: Vec<u32> = self.ents.iter().filter_map(|(id, e)| match &e.k { Kind::Npc(n) if n.def.kind == "talker" && now >= n.next_chatter => Some(*id), _ => None }).collect();
         for id in talkers {
-            if let Some(Kind::Npc(n)) = self.ents.get_mut(&id).map(|e| &mut e.k) { n.next_chatter = now + 20000.0 + rnd() * 25000.0; }
+            if let Some(Kind::Npc(n)) = self.ents.get_mut(&id).map(|e| &mut e.k) { n.next_chatter = now + 90000.0 + rnd() * 90000.0; }
             let (x, z) = { let c = &self.ents[&id].c; (c.x, c.z) };
             if !self.near_players(x, z, 30.0).is_empty() { self.npc_say(id, rnd()); }
         }
