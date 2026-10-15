@@ -10,6 +10,28 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { Settings } from '../settings';
 import { VolumetricPass } from './volumetric';
 
+/**
+ * Ambient occlusion that also leaves out see-through meshes (glows, the enchantment beam, spell effects, water). Its
+ * depth/normal pass draws the whole scene with one solid material and only hides points and lines, so a transparent
+ * plane counted as a wall and darkened a quad round it. (three.js calls `_overrideVisibility`; its typings say
+ * `overrideVisibility`.)
+ */
+class GTAO extends GTAOPass {
+  _overrideVisibility() {
+    const cache = (this as unknown as { _visibilityCache: THREE.Object3D[] })._visibilityCache;
+    const seeThrough = (m: THREE.Material) => (m.transparent && !m.depthWrite) || m.blending === THREE.AdditiveBlending;
+    this.scene.traverse((o) => {
+      if (!o.visible) return;
+      const x = o as THREE.Object3D & { isPoints?: boolean; isLine?: boolean; isLine2?: boolean; isMesh?: boolean; material?: THREE.Material | THREE.Material[] };
+      const mats = x.material ? (Array.isArray(x.material) ? x.material : [x.material]) : [];
+      if (x.isPoints || x.isLine || x.isLine2 || (x.isMesh && mats.length > 0 && mats.every(seeThrough))) {
+        o.visible = false;
+        cache.push(o);
+      }
+    });
+  }
+}
+
 /** Sharpen, white balance, saturation, contrast and vignette in one cheap full-screen pass. */
 const GradeShader = {
   uniforms: {
@@ -86,7 +108,7 @@ export class PostFX {
     c.addPass(new RenderPass(this.scene, this.camera));
     if (vol) c.addPass(new VolumetricPass(this.camera as THREE.PerspectiveCamera, this.sun!));
     if (s.ao) {
-      const ao = new GTAOPass(this.scene, this.camera, size.x, size.y);
+      const ao = new GTAO(this.scene, this.camera, size.x, size.y);
       ao.blendIntensity = 0.8;
       c.addPass(ao);
     }
