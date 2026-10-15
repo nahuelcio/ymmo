@@ -127,7 +127,13 @@ export class SettingsPanel {
   private keys() {
     for (const a of Object.keys(ACTIONS) as Action[]) {
       const r = this.row(ACTIONS[a]);
-      const b = el('button', 'btn small set-key', r, keyLabel(settings.s.keys[a]));
+      const b = el('button', 'btn small set-key', r, keyLabel(settings.s.keys[a]) || '—');
+      // right click: no key
+      b.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        settings.set({ keys: { ...settings.s.keys, [a]: '' } });
+        this.render();
+      };
       b.onclick = (ev) => {
         ev.preventDefault();
         b.textContent = tx('Apretá una tecla…', 'Press a key…');
@@ -140,7 +146,7 @@ export class SettingsPanel {
           const fixed = k === 'escape' || k === 'enter' || /^(f\d+|arrow.*|control|alt|meta)$/.test(k);
           if (fixed) return this.render();
           const keys = { ...settings.s.keys };
-          const other = (Object.keys(keys) as Action[]).find((x) => keys[x] === k);
+          const other = (Object.keys(keys) as Action[]).find((x) => x !== a && keys[x] === k);
           if (other) keys[other] = keys[a];
           keys[a] = k;
           settings.set({ keys });
@@ -149,8 +155,8 @@ export class SettingsPanel {
         addEventListener('keydown', grab, true);
       };
     }
-    el('div', 'hint set-hint', this.body, tx('Fijas: F1-F10 también usan la barra de habilidades, Enter abre el chat, Esc cierra y las flechas mueven la cámara. Se guarda en este navegador.',
-      'Fixed: F1-F10 also use the skill bar, Enter opens chat, Esc closes and the arrows move the camera. Saved in this browser.'));
+    el('div', 'hint set-hint', this.body, tx('Clic derecho en una tecla la deja sin asignar. Fijas: F1-F10 también usan la barra de habilidades, Enter abre el chat, Esc cierra y las flechas mueven la cámara. Se guarda en este navegador.',
+      'Right click a key to unbind it. Fixed: F1-F10 also use the skill bar, Enter opens chat, Esc closes and the arrows move the camera. Saved in this browser.'));
   }
 
   private row(label: string) {

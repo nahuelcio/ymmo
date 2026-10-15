@@ -45,6 +45,8 @@ export class Net {
     });
   }
 
+  get open() { return this.ws.readyState === WebSocket.OPEN; }
+
   send(m: C2S) {
     if (this.ws.readyState === WebSocket.OPEN) this.ws.send(encodeC2S(m) ?? JSON.stringify(m));
   }

@@ -24,15 +24,22 @@ export const ACTIONS = {
   settings: tx('Opciones', 'Options'),
   camLeft: tx('Girar cámara a la izquierda', 'Rotate camera left'),
   camRight: tx('Girar cámara a la derecha', 'Rotate camera right'),
+  bars: tx('Barras de habilidades (menú)', 'Skill bars (menu)'),
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, tx(`Barra de habilidades: casillero ${n}`, `Skill bar: slot ${n}`)])) as Record<SlotAction, string>),
+  ...(Object.fromEntries(SLOT_N.map((n) => [`bar2slot${n}`, tx(`Barra 2: casillero ${n}`, `Bar 2: slot ${n}`)])) as Record<`bar2${SlotAction}`, string>),
+  ...(Object.fromEntries(SLOT_N.map((n) => [`bar3slot${n}`, tx(`Barra 3: casillero ${n}`, `Bar 3: slot ${n}`)])) as Record<`bar3${SlotAction}`, string>),
 };
 export type Action = keyof typeof ACTIONS;
 /** keys as KeyboardEvent.key, lower-cased (' ' is the space bar) */
 export const DEFAULT_KEYS: Record<Action, string> = {
   attack: ' ', stop: 's', nextTarget: 'r', players: 'tab', dash: 'shift', loot: 'z', inventory: 'i', character: 'c', map: 'm', party: 'p', clan: 'n', help: 'h', settings: 'o', camLeft: 'q', camRight: 'e',
+  bars: '',
   ...(Object.fromEntries(SLOT_N.map((n) => [`slot${n}`, String(n % 10)])) as Record<SlotAction, string>),
+  // the extra bars start without keys ('' = unbound)
+  ...(Object.fromEntries(SLOT_N.map((n) => [`bar2slot${n}`, ''])) as Record<`bar2${SlotAction}`, string>),
+  ...(Object.fromEntries(SLOT_N.map((n) => [`bar3slot${n}`, ''])) as Record<`bar3${SlotAction}`, string>),
 };
-export const keyLabel = (k: string) => (k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
+export const keyLabel = (k: string) => (!k ? '' : k === ' ' ? tx('Espacio', 'Space') : k.length === 1 ? k.toUpperCase() : k[0].toUpperCase() + k.slice(1));
 
 export interface Settings {
   preset: Preset;

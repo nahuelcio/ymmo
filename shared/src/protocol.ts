@@ -134,6 +134,8 @@ export type C2S =
   | { t: 'clanWhWithdraw'; npc: number; id: number; qty: number }
   | { t: 'clanWhAdena'; npc: number; amount: number }
   | { t: 'clanSkill'; npc: number; skill: string }
+  /** the skill bars' layout (client JSON, at most 4 KB), kept per character */
+  | { t: 'hotbar'; data: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }
   | { t: 'respawn' }
@@ -156,7 +158,7 @@ export type S2C =
   /** admin window: ok is false until this socket gave the admin password */
   | { t: 'admin'; ok: false }
   | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number }[]; logs: { t: number; err: boolean; line: string }[]; casts: { id: string; name: string; base: number; cast: number }[]; balance: { key: string; label: string; base: number; current: number; min: number; max: number }[] }
-  | { t: 'enter'; self: SelfState; inv: InvItem[] }
+  | { t: 'enter'; self: SelfState; inv: InvItem[]; /** the skill bars' layout kept for this character (ui/hud.ts) */ bar?: string }
   /** moved to another world (raid instance or back): forget every entity and start over */
   | { t: 'world'; self: SelfState; inv: InvItem[] }
   /** st: server time of the tick (wire clock, see binary.ts) */
