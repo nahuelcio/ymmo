@@ -31,7 +31,12 @@ export interface ClanInfo {
   id: number; name: string; level: number; rep: number; leader: string; cv: number; cap: number;
   privs: number[]; inviteUntil: number; members: ClanMemberInfo[];
   wars: ClanWarInfo[]; ally: AllyInfo | null; allyJoinUntil: number; allyFoundUntil: number;
+  /** clan skill id -> level (CLAN_SKILLS) */
+  skills: Record<string, number>;
 }
+/** A clan warehouse row (id: its row), and a logged movement (dep: a deposit). */
+export interface ClanWhItem { id: number; i: string; c: number; e: number }
+export interface ClanWhLog { at: number; who: string; dep: boolean; i: string; c: number; e: number }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
 export interface EntItem { id: number; k: 'i'; x: number; z: number; ry: number; item: string; c: number; hp: number; f: number }
@@ -124,6 +129,11 @@ export type C2S =
   | { t: 'allyKick'; name: string }
   | { t: 'allyDissolve' }
   | { t: 'allyCrest'; png: string }
+  | { t: 'clanWhOpen'; npc: number }
+  | { t: 'clanWhDeposit'; npc: number; uid: number; qty: number }
+  | { t: 'clanWhWithdraw'; npc: number; id: number; qty: number }
+  | { t: 'clanWhAdena'; npc: number; amount: number }
+  | { t: 'clanSkill'; npc: number; skill: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }
   | { t: 'respawn' }
@@ -168,6 +178,8 @@ export type S2C =
   | { t: 'clan'; clan: ClanInfo | null }
   | { t: 'clanInvite'; from: string; clan: string }
   | { t: 'allyInvite'; from: string; clan: string; ally: string }
+  /** the clan warehouse window: contents, adena, latest movements, whether this member may withdraw */
+  | { t: 'clanWh'; items: ClanWhItem[]; adena: number; log: ClanWhLog[]; can: boolean; slots: number }
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }
   /** an NPC says something out loud (speech bubble + local chat) */

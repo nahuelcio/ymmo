@@ -8,6 +8,9 @@
 //! Wars: a clan (level 3+) declares war on another; once both have declared, the war is mutual and their members
 //! fight without flags or karma, for reputation (combat.rs asks relation()). Alliances: up to allyMax clans under
 //! the leading clan's leader, with their own chat ('$') and a small crest shown before the clan's.
+//!
+//! Warehouse (L1+): shared items and adena at the clan master; anyone deposits, withdrawing takes the privilege,
+//! every movement is logged. Skills (L5+): passives bought with reputation that lift online members' stats.
 use crate::data::d;
 use crate::db::Db;
 use crate::ent::*;
@@ -15,7 +18,7 @@ use crate::i18n::Lang;
 use crate::world::World;
 use base64::Engine;
 use serde_json::{json, Value};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{OnceLock, RwLock};
 
@@ -25,12 +28,17 @@ pub const MEMBER: u8 = 5;
 pub const P_INVITE: u32 = 1;
 pub const P_DISMISS: u32 = 2;
 pub const P_TITLE: u32 = 4;
+pub const P_WAREHOUSE: u32 = 8;
 pub const P_CREST: u32 = 16;
 pub const P_WAR: u32 = 32;
 pub const P_RANKS: u32 = 64;
 const ALL_PRIVS: u32 = 0x7f;
 
 pub struct ClanMember { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub grade: u8, pub title: String }
+/** A warehouse row: a stack, or one (possibly enchanted) piece. */
+pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64 }
+/** A warehouse movement. */
+pub struct WhLog { pub at: f64, pub who: String, pub dep: bool, pub item: String, pub count: i64, pub enchant: i64 }
 
 pub struct Clan {
     pub id: u32,
@@ -50,6 +58,12 @@ pub struct Clan {
     /** privileges by grade (index 1-5) */
     pub privs: [u32; 6],
     pub members: Vec<ClanMember>,
+    /** the warehouse: its adena, its items, the latest movements (newest first) */
+    pub adena: i64,
+    pub items: Vec<WhItem>,
+    pub log: VecDeque<WhLog>,
+    /** clan skill id -> level */
+    pub skills: HashMap<String, u8>,
 }
 
 impl Clan {
@@ -62,6 +76,24 @@ impl Clan {
         self.member(char_id).map_or(false, |m| self.privs[m.grade as usize] & privilege != 0)
     }
     pub fn capacity(&self) -> usize { d().clans.levels[self.level as usize].members }
+    /** What the clan's skills add to each member's stats. */
+    pub fn mods(&self) -> ClanMods {
+        let mut m = ClanMods::default();
+        for s in &d().clans.skills {
+            let Some(&lv) = self.skills.get(&s.id) else { continue };
+            let b = s.bonus.get(lv as usize - 1).copied().unwrap_or(0.0);
+            match s.stat.as_str() {
+                "maxHp" => m.max_hp += b, "maxMp" => m.max_mp += b, "pDef" => m.p_def += b, "mDef" => m.m_def += b,
+                "pAtk" => m.p_atk += b, "mAtk" => m.m_atk += b, "speed" => m.speed += b, "mpRegen" => m.mp_regen += b,
+                _ => {}
+            }
+        }
+        m
+    }
+    fn log(&mut self, l: WhLog) {
+        self.log.push_front(l);
+        self.log.truncate(d().clans.cfg.wh_log);
+    }
 }
 
 /** An alliance: its clans are those whose `ally` is this id; the leading clan's leader runs it. */
@@ -140,7 +172,7 @@ fn load(db: &Db) -> Clans {
         c.clans.insert(r.id as u32, Clan {
             id: r.id as u32, name: r.name, leader: r.leader, level: r.level as u8, rep: r.rep, crest: r.crest, crest_ver: r.crest_ver as u32,
             ally: r.ally.map(|a| a as u32), invite_until: r.invite_until, ally_join_until: r.ally_join_until, ally_found_until: r.ally_found_until,
-            privs: p, members: vec![],
+            privs: p, members: vec![], adena: 0, items: vec![], log: VecDeque::new(), skills: HashMap::new(),
         });
     }
     for (clan, grade, v) in privs {
@@ -153,6 +185,16 @@ fn load(db: &Db) -> Clans {
         }
     }
     for (id, j, f) in pen { c.penalty.insert(id, (j, f)); }
+    for (id, adena) in db.load_clan_adena() { if let Some(cl) = c.clans.get_mut(&(id as u32)) { cl.adena = adena; } }
+    for (id, clan, item, count, enchant) in db.load_clan_items() {
+        if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.items.push(WhItem { id, item, count, enchant }); }
+    }
+    for (clan, at, who, dep, item, count, enchant) in db.load_clan_log(d().clans.cfg.wh_log) {
+        if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.log.push_back(WhLog { at, who, dep, item, count, enchant }); }
+    }
+    for (clan, skill, level) in db.load_clan_skills() {
+        if let Some(cl) = c.clans.get_mut(&(clan as u32)) { cl.skills.insert(skill, level.clamp(1, 3) as u8); }
+    }
     let (wars, cd) = db.load_wars();
     for (a, b) in wars { if c.clans.contains_key(&(a as u32)) && c.clans.contains_key(&(b as u32)) { c.wars.insert((a as u32, b as u32)); } }
     for (a, b, until) in cd { c.war_cd.insert((a as u32, b as u32), until); }
@@ -206,7 +248,7 @@ fn info(r: &Clans, clan: &Clan) -> Value {
     });
     json!({ "id": clan.id, "name": clan.name, "level": clan.level, "rep": clan.rep, "leader": leader, "cv": clan.crest_ver,
         "cap": clan.capacity(), "privs": clan.privs, "inviteUntil": clan.invite_until, "members": members,
-        "wars": wars, "ally": ally, "allyJoinUntil": clan.ally_join_until, "allyFoundUntil": clan.ally_found_until })
+        "wars": wars, "ally": ally, "allyJoinUntil": clan.ally_join_until, "allyFoundUntil": clan.ally_found_until, "skills": clan.skills })
 }
 /** Fresh clan info to every online member. */
 fn push(r: &Clans, clan: &Clan) { let v = json!({ "t": "clan", "clan": info(r, clan) }); cast(clan, |_| v.clone()); }
@@ -296,7 +338,12 @@ impl World {
                 ally: c.ally.and_then(|a| r.allies.get(&a)).map(|a| (a.id, a.crest_ver)),
             })
         };
+        let mods = reg().read().unwrap().of(cid).map(|c| c.mods()).unwrap_or_default();
         let p = self.pl_mut(pid).unwrap();
+        if p.clan_mods != mods {
+            p.clan_mods = mods;
+            p.recalc();
+        }
         if p.clan_look == look { return false; }
         p.clan_look = look;
         true
@@ -347,7 +394,7 @@ impl World {
             let mut r = reg().write().unwrap();
             r.clans.insert(id, Clan {
                 id, name: name.to_string(), leader: cid, level: 0, rep: 0, crest: None, crest_ver: 0, ally: None, invite_until: 0.0,
-                ally_join_until: 0.0, ally_found_until: 0.0, privs,
+                ally_join_until: 0.0, ally_found_until: 0.0, privs, adena: 0, items: vec![], log: VecDeque::new(), skills: HashMap::new(),
                 members: vec![ClanMember { char_id: cid, name: pname, level: plevel, cls: pcls, grade: LEADER, title: String::new() }],
             });
             r.by_char.insert(cid, id);
@@ -912,6 +959,168 @@ impl World {
         let v = json!({ "t": "chat", "ch": "ally", "from": name, "text": msg });
         for id in r.ally_clans(ally) { cast(&r.clans[&id], |_| v.clone()); }
     }
+
+    // ------------------------------------------------------------------ warehouse
+
+    /** At the clan master, the member's clan (L1+) for warehouse work; None (and a message) otherwise. */
+    fn wh_clan(&self, pid: u32, nid: u32) -> Option<u32> {
+        let n = self.npc_in_range(pid, nid)?;
+        if n.kind != "clan" { return None; }
+        let cid = self.pl(pid)?.char_id;
+        let r = reg().read().unwrap();
+        let Some(clan) = r.of(cid) else { self.sys(pid, "No pertenecés a ningún clan.", "You are not in a clan."); return None };
+        let lvl = d().clans.cfg.warehouse_level;
+        if clan.level < lvl { self.sys(pid, &format!("El depósito del clan se abre con el nivel {lvl}."), &format!("The clan warehouse opens at clan level {lvl}.")); return None; }
+        Some(clan.id)
+    }
+
+    /** The warehouse window's contents, for this member. */
+    fn wh_send(&self, pid: u32, clan_id: u32) {
+        let cid = self.pl(pid).unwrap().char_id;
+        let r = reg().read().unwrap();
+        let Some(c) = r.clans.get(&clan_id) else { return };
+        let items: Vec<Value> = c.items.iter().map(|i| json!({ "id": i.id, "i": i.item, "c": i.count, "e": i.enchant })).collect();
+        let log: Vec<Value> = c.log.iter().map(|l| json!({ "at": l.at, "who": l.who, "dep": l.dep, "i": l.item, "c": l.count, "e": l.enchant })).collect();
+        self.send(pid, json!({ "t": "clanWh", "items": items, "adena": c.adena, "log": log, "can": c.can(cid, P_WAREHOUSE), "slots": d().clans.cfg.wh_slots }));
+    }
+
+    pub fn clan_wh_open(&mut self, pid: u32, nid: u32) {
+        if let Some(id) = self.wh_clan(pid, nid) { self.wh_send(pid, id); }
+    }
+
+    /** Put (part of) a bag item in the warehouse; stacks merge, gear keeps its enchant. */
+    pub fn clan_wh_deposit(&mut self, pid: u32, nid: u32, uid: u32, qty: f64) {
+        let Some(clan_id) = self.wh_clan(pid, nid) else { return };
+        let (name, it) = { let p = self.pl(pid).unwrap(); (p.name.clone(), p.inv.iter().find(|i| i.u == uid).cloned()) };
+        let Some(it) = it else { return };
+        if it.s.is_some() { return self.sys(pid, "Desequipá el objeto antes de depositarlo.", "Unequip the item before depositing it."); }
+        let qty = qty.floor() as i64;
+        if qty < 1 || qty > it.c { return; }
+        let Some(def) = d().item(&it.i) else { return };
+        let stack = def.stack.unwrap_or(false) && it.e == 0;
+        {
+            let mut r = reg().write().unwrap();
+            let clan = r.clans.get_mut(&clan_id).unwrap();
+            if let Some(row) = clan.items.iter_mut().find(|w| stack && w.item == it.i && w.enchant == 0) {
+                row.count += qty;
+                self.db.clan_item_set(row.id, row.count);
+            } else {
+                if clan.items.len() >= d().clans.cfg.wh_slots { return self.sys(pid, "El depósito del clan está lleno.", "The clan warehouse is full."); }
+                let id = self.db.clan_item_add(clan_id as i64, &it.i, qty, it.e);
+                clan.items.push(WhItem { id, item: it.i.clone(), count: qty, enchant: it.e });
+            }
+            self.db.clan_log(clan_id as i64, &name, true, &it.i, qty, it.e);
+            clan.log(WhLog { at: crate::world::now_ms(), who: name, dep: true, item: it.i.clone(), count: qty, enchant: it.e });
+        }
+        let p = self.pl_mut(pid).unwrap();
+        let idx = p.inv.iter().position(|i| i.u == uid).unwrap();
+        p.inv[idx].c -= qty;
+        if p.inv[idx].c <= 0 { p.inv.remove(idx); }
+        p.inv_dirty = true;
+        self.sys(pid, &format!("Depositaste {} en el depósito del clan.", wh_label(&it.i, qty, it.e, false)), &format!("You deposited {} in the clan warehouse.", wh_label(&it.i, qty, it.e, true)));
+        self.wh_send(pid, clan_id);
+    }
+
+    /** Take (part of) a warehouse row into the bag: needs the warehouse privilege and room in the bag. */
+    pub fn clan_wh_withdraw(&mut self, pid: u32, nid: u32, row: i64, qty: f64) {
+        let Some(clan_id) = self.wh_clan(pid, nid) else { return };
+        let (cid, name) = { let p = self.pl(pid).unwrap(); (p.char_id, p.name.clone()) };
+        let qty = qty.floor() as i64;
+        let (item, enchant);
+        {
+            let mut r = reg().write().unwrap();
+            let clan = r.clans.get_mut(&clan_id).unwrap();
+            if !clan.can(cid, P_WAREHOUSE) { return self.sys(pid, "No tenés permiso para retirar del depósito del clan.", "You may not withdraw from the clan warehouse."); }
+            let Some(idx) = clan.items.iter().position(|w| w.id == row) else { return };
+            if qty < 1 || qty > clan.items[idx].count { return; }
+            item = clan.items[idx].item.clone();
+            enchant = clan.items[idx].enchant;
+            let Some(def) = d().item(&item) else { return };
+            let stack = def.stack.unwrap_or(false);
+            let p = self.pl_mut(pid).unwrap();
+            let has_stack = stack && enchant == 0 && p.inv.iter().any(|i| i.i == item && i.s.is_none());
+            let need = if stack { if has_stack { 0 } else { 1 } } else { qty as usize };
+            if p.inv.len() + need > crate::inventory::INV_MAX { return self.sys(pid, "No tenés lugar en el inventario.", "Your inventory is full."); }
+            if stack && enchant == 0 { crate::inventory::add_item(p, &item, qty); } else {
+                for _ in 0..qty {
+                    let u = p.next_uid;
+                    p.next_uid += 1;
+                    p.inv.push(InvItem { u, i: item.clone(), c: if stack { qty } else { 1 }, s: None, e: enchant });
+                    if stack { break; }
+                }
+                p.inv_dirty = true;
+            }
+            clan.items[idx].count -= qty;
+            self.db.clan_item_set(row, clan.items[idx].count);
+            if clan.items[idx].count <= 0 { clan.items.remove(idx); }
+            self.db.clan_log(clan_id as i64, &name, false, &item, qty, enchant);
+            clan.log(WhLog { at: crate::world::now_ms(), who: name, dep: false, item: item.clone(), count: qty, enchant });
+        }
+        self.sys(pid, &format!("Retiraste {} del depósito del clan.", wh_label(&item, qty, enchant, false)), &format!("You withdrew {} from the clan warehouse.", wh_label(&item, qty, enchant, true)));
+        self.wh_send(pid, clan_id);
+    }
+
+    /** Adena in (amount > 0) or out (amount < 0, needs the privilege). */
+    pub fn clan_wh_adena(&mut self, pid: u32, nid: u32, amount: f64) {
+        let Some(clan_id) = self.wh_clan(pid, nid) else { return };
+        let (cid, name, have) = { let p = self.pl(pid).unwrap(); (p.char_id, p.name.clone(), p.adena) };
+        let amount = amount.trunc() as i64;
+        if amount == 0 { return; }
+        {
+            let mut r = reg().write().unwrap();
+            let clan = r.clans.get_mut(&clan_id).unwrap();
+            if amount > 0 && amount > have { return self.sys(pid, "No tenés tanta adena.", "You do not have that much adena."); }
+            if amount < 0 {
+                if !clan.can(cid, P_WAREHOUSE) { return self.sys(pid, "No tenés permiso para retirar del depósito del clan.", "You may not withdraw from the clan warehouse."); }
+                if -amount > clan.adena { return self.sys(pid, "El clan no tiene tanta adena.", "The clan does not have that much adena."); }
+            }
+            clan.adena += amount;
+            self.db.clan_adena(clan_id as i64, clan.adena);
+            self.db.clan_log(clan_id as i64, &name, amount > 0, "adena", amount.abs(), 0);
+            clan.log(WhLog { at: crate::world::now_ms(), who: name, dep: amount > 0, item: "adena".into(), count: amount.abs(), enchant: 0 });
+        }
+        let p = self.pl_mut(pid).unwrap();
+        p.adena -= amount;
+        p.inv_dirty = true;
+        if amount > 0 { self.sys(pid, &format!("Depositaste {amount} de adena en el depósito del clan."), &format!("You deposited {amount} adena in the clan warehouse.")); }
+        else { self.sys(pid, &format!("Retiraste {} de adena del depósito del clan.", -amount), &format!("You withdrew {} adena from the clan warehouse.", -amount)); }
+        self.wh_send(pid, clan_id);
+    }
+
+    // ------------------------------------------------------------------ skills
+
+    /** The leader buys a clan skill's next level with reputation, at the clan master. */
+    pub fn clan_skill(&mut self, pid: u32, nid: u32, skill: &str) {
+        let Some(n) = self.npc_in_range(pid, nid) else { return };
+        if n.kind != "clan" { return; }
+        let cid = self.pl(pid).unwrap().char_id;
+        let Some(def) = d().clans.skills.iter().find(|s| s.id == skill) else { return };
+        {
+            let mut r = reg().write().unwrap();
+            let Some(&clan_id) = r.by_char.get(&cid) else { return };
+            let clan = r.clans.get_mut(&clan_id).unwrap();
+            if clan.leader != cid { return self.sys(pid, "Solo el líder puede aprender habilidades de clan.", "Only the leader can learn clan skills."); }
+            let lvl = d().clans.cfg.skill_level;
+            if clan.level < lvl { return self.sys(pid, &format!("Las habilidades de clan se abren con el nivel {lvl}."), &format!("Clan skills open at clan level {lvl}.")); }
+            let next = clan.skills.get(skill).copied().unwrap_or(0) as usize + 1;
+            let Some(&cost) = def.rep.get(next - 1) else { return self.sys(pid, "Esa habilidad ya está al máximo.", "That skill is already at its highest level.") };
+            if clan.rep < cost { return self.sys(pid, &format!("El clan necesita {cost} de reputación."), &format!("The clan needs {cost} reputation.")); }
+            clan.rep -= cost;
+            clan.skills.insert(skill.to_string(), next as u8);
+            self.db.clan_save(clan.id as i64, clan.leader, clan.level as i64, clan.rep, clan.ally.map(|a| a as i64), clan.invite_until);
+            self.db.clan_skill(clan.id as i64, skill, next as i64);
+            cast_sys(clan, &format!("El clan aprendió {} nivel {next}.", def.name), &format!("The clan learned {} level {next}.", def.name_en));
+            push_id(&r, clan_id);
+        }
+        changed(); // every member's stats, in every world (refresh_clan_looks)
+    }
+}
+
+/** "3 × Tronco", "+2 Espada corta", "500 adena"... */
+fn wh_label(item: &str, count: i64, enchant: i64, en: bool) -> String {
+    let name = if item == "adena" { "adena".to_string() } else { d().item(item).map(|i| if en { i.name_en.clone() } else { i.name.clone() }).unwrap_or_else(|| item.to_string()) };
+    let ench = if enchant > 0 { format!("+{enchant} ") } else { String::new() };
+    if count > 1 { format!("{count} × {ench}{name}") } else { format!("{ench}{name}") }
 }
 
 /** "3 h", "2 días"... for penalty messages. */
@@ -957,7 +1166,7 @@ mod tests {
     fn leader_holds_every_privilege() {
         let clan = Clan {
             id: 1, name: "X".into(), leader: 10, level: 0, rep: 0, crest: None, crest_ver: 0, ally: None, invite_until: 0.0,
-            ally_join_until: 0.0, ally_found_until: 0.0,
+            ally_join_until: 0.0, ally_found_until: 0.0, adena: 0, items: vec![], log: VecDeque::new(), skills: HashMap::new(),
             privs: [0, 0x7f, P_INVITE, 0, 0, 0],
             members: vec![
                 ClanMember { char_id: 10, name: "L".into(), level: 20, cls: "fighter".into(), grade: 1, title: String::new() },
@@ -974,7 +1183,7 @@ mod tests {
     fn clan(id: u32, ally: Option<u32>, member: i64) -> Clan {
         Clan {
             id, name: format!("C{id}"), leader: member, level: 5, rep: 0, crest: None, crest_ver: 0, ally, invite_until: 0.0,
-            ally_join_until: 0.0, ally_found_until: 0.0, privs: [0, 0x7f, 0, 0, 0, 0],
+            ally_join_until: 0.0, ally_found_until: 0.0, privs: [0, 0x7f, 0, 0, 0, 0], adena: 0, items: vec![], log: VecDeque::new(), skills: HashMap::new(),
             members: vec![ClanMember { char_id: member, name: format!("P{member}"), level: 40, cls: "fighter".into(), grade: 1, title: String::new() }],
         }
     }
@@ -996,5 +1205,16 @@ mod tests {
         assert_eq!(r.relation(10, 30), Rel::None);
         assert_eq!(r.relation(10, 99), Rel::None, "no clan");
         assert_eq!(r.ally_clans(7), vec![3, 4]);
+    }
+
+    #[test]
+    fn clan_skills_add_up_by_level() {
+        let mut c = clan(1, None, 10);
+        assert_eq!(c.mods(), ClanMods::default());
+        let s = &d().clans.skills;
+        let vit = s.iter().find(|s| s.stat == "maxHp").unwrap();
+        c.skills.insert(vit.id.clone(), 2);
+        assert!((c.mods().max_hp - vit.bonus[1]).abs() < 1e-9);
+        assert_eq!(c.mods().p_def, 0.0);
     }
 }

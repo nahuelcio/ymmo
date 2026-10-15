@@ -223,6 +223,9 @@ input { font: inherit; user-select: text; }
 .ch-party { color: #6aff8a; }
 .ch-clan { color: #8ab4ff; }
 .ch-ally { color: #7fe0b0; }
+.clan-sub { margin: 10px 0 4px; font-weight: bold; color: #ffd98a; }
+.clan-skill-line { font-size: 12px; padding: 1px 0; }
+.clan-log { font-size: 12px; padding: 3px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .np-war { color: #ff8a3a; font-size: 10px; margin-right: 3px; }
 .crest-ally { width: 8px; }
 .crest-ally-big { width: 16px; height: 24px; }

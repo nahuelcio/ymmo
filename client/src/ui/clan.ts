@@ -1,11 +1,12 @@
 // The clan window (N), after Lineage 2's: the clan's level, reputation and leader, its members, the grades'
 // privileges and the crest, its wars and its alliance. What a member may do comes from the clan's privilege masks (shared/src/data/clans.ts).
-import { CLAN, CLAN_GRADE_LEVEL, CLAN_GRADES, CLAN_LEVELS, CLAN_PRIV, MAX_CLAN_LEVEL, type ClanPriv } from '../../../shared/src/data/clans';
+import { CLAN, CLAN_GRADE_LEVEL, CLAN_GRADES, CLAN_LEVELS, CLAN_PRIV, CLAN_SKILLS, MAX_CLAN_LEVEL, type ClanPriv, type ClanSkill } from '../../../shared/src/data/clans';
 import { className, itemName } from '../../../shared/src/i18n';
 import type { ClanInfo, S2C } from '../../../shared/src/protocol';
 import { crestImg, type Game } from '../game';
 import { lang, t as tx } from '../lang';
-import { el, esc, Win } from './dom';
+import { itemIcon, itemTip } from './common';
+import { el, esc, setTip, Win } from './dom';
 
 const PRIV_LABEL: Record<ClanPriv, string> = {
   invite: tx('Invitar', 'Invite'),
@@ -81,6 +82,11 @@ export class ClanPanel {
     row(tx('Reputación', 'Reputation'), c.rep.toLocaleString(lang === 'en' ? 'en-US' : 'es-AR'));
     row(tx('Miembros', 'Members'), `${c.members.length} / ${c.cap} (${online} ${tx('conectados', 'online')})`);
     if (c.level < MAX_CLAN_LEVEL) el('div', 'tt-dim', b, tx(`Para subir de nivel: hablá con el Maestro de Clanes (líder).`, `To level up: talk to the Clan Master (leader).`));
+    const learned = CLAN_SKILLS.filter((s) => c.skills[s.id]);
+    if (learned.length) {
+      el('div', 'clan-sub', b, tx('Habilidades del clan', 'Clan skills'));
+      for (const s of learned) el('div', 'clan-skill-line', b, `${skillLabel(s)} ${c.skills[s.id]} — ${bonusText(s, c.skills[s.id])}`);
+    }
 
     // crest: L1+, with the privilege; the image is shrunk to 16×12 here and sent as a PNG
     if (this.can('crest')) {
@@ -282,8 +288,13 @@ export function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLEle
     return;
   }
   el('div', '', b).innerHTML = `<b>${esc(clan.name)}</b> — ${tx('nivel', 'level')} ${clan.level}, ${clan.members.length}/${clan.cap} ${tx('miembros', 'members')}`;
+  if (clan.level >= CLAN.warehouseLevel) {
+    const wr = el('div', 'row', b);
+    const wh = el('button', 'btn', wr, tx('Depósito del clan', 'Clan warehouse'));
+    wh.onclick = () => g.ui.clanWh.open(m.npc);
+  }
   if (meIn?.grade !== 1) {
-    el('div', 'tt-dim', b, tx('Solo el líder puede subir el nivel o disolver el clan.', 'Only the leader can raise or dissolve the clan.'));
+    el('div', 'tt-dim', b, tx('Solo el líder puede subir el nivel, aprender habilidades o disolver el clan.', 'Only the leader can raise the clan, learn clan skills or dissolve it.'));
     return;
   }
   const next = CLAN_LEVELS[clan.level + 1];
@@ -295,6 +306,20 @@ export function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLEle
     const up = el('button', 'btn primary', row, tx('Subir', 'Raise'));
     up.onclick = () => g.net.send({ t: 'clanLevelUp', npc: m.npc });
   } else el('div', 'tt-dim', b, tx('Tu clan tiene el nivel máximo.', 'Your clan is at the highest level.'));
+  if (clan.level >= CLAN.skillLevel) {
+    el('div', 'clan-sub', b, tx(`Habilidades de clan — reputación: ${clan.rep.toLocaleString('es-AR')}`, `Clan skills — reputation: ${clan.rep.toLocaleString('en-US')}`));
+    for (const s of CLAN_SKILLS) {
+      const lv = clan.skills[s.id] ?? 0;
+      const row = el('div', 'shop-row', b);
+      const cost = s.rep[lv];
+      el('div', 'grow', row).innerHTML = `<b>${esc(skillLabel(s))}</b> ${lv ? `${tx('nivel', 'level')} ${lv}` : ''}<br><span class="tt-dim">${
+        cost !== undefined ? `${tx('Siguiente', 'Next')}: ${bonusText(s, lv + 1)} — ${cost} ${tx('de reputación', 'reputation')}` : tx('Al máximo', 'Maxed out')}</span>`;
+      if (cost === undefined) continue;
+      const learn = el('button', 'btn', row, tx('Aprender', 'Learn'));
+      learn.disabled = clan.rep < cost;
+      learn.onclick = () => g.net.send({ t: 'clanSkill', npc: m.npc, skill: s.id });
+    }
+  } else el('div', 'tt-dim', b, tx(`Las habilidades de clan se abren con el nivel ${CLAN.skillLevel}.`, `Clan skills open at clan level ${CLAN.skillLevel}.`));
   if (!clan.ally && clan.level >= CLAN.allyLevel) {
     const ar = el('div', 'row', b);
     const inp = el('input', 'grow', ar);
@@ -314,6 +339,115 @@ export function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLEle
 }
 
 const itemLabel = (id: string) => itemName(id, lang);
+const skillLabel = (s: ClanSkill) => (lang === 'en' ? s.nameEn : s.name);
+const STAT_LABEL: Record<ClanSkill['stat'], string> = {
+  maxHp: tx('HP máx.', 'Max HP'), maxMp: tx('MP máx.', 'Max MP'), pDef: 'P.Def', mDef: 'M.Def', pAtk: 'P.Atk', mAtk: 'M.Atk',
+  speed: tx('velocidad', 'speed'), mpRegen: tx('regeneración de MP', 'MP regen'),
+};
+const bonusText = (s: ClanSkill, lv: number) => `+${Math.round((s.bonus[lv - 1] ?? 0) * 100)}% ${STAT_LABEL[s.stat]}`;
+
+/** The clan warehouse (at the clan master): what the clan holds, what I can put in, and who moved what. */
+export class ClanWarehouse {
+  win: Win;
+  private npc = 0;
+  private data: Extract<S2C, { t: 'clanWh' }> | null = null;
+  private tab: 'clan' | 'bag' | 'log' = 'clan';
+
+  constructor(private g: Game, root: HTMLElement) {
+    this.win = new Win('clanwh', tx('Depósito del clan', 'Clan warehouse'), 340, 110, 400, root);
+  }
+
+  open(npc: number) {
+    this.npc = npc;
+    this.g.net.send({ t: 'clanWhOpen', npc });
+  }
+
+  set(m: Extract<S2C, { t: 'clanWh' }>) {
+    this.data = m;
+    this.win.show();
+    this.render();
+  }
+
+  /** the bag changed (a deposit or withdrawal lands in the next inventory update) */
+  onInv() { if (this.win.visible && this.data) this.render(); }
+
+  private render() {
+    const m = this.data;
+    if (!m) return;
+    const b = this.win.body;
+    b.innerHTML = '';
+    const tabs = el('div', 'tabs', b);
+    for (const [id, label] of [['clan', tx('Del clan', 'Clan items')], ['bag', tx('Depositar', 'Deposit')], ['log', tx('Registro', 'Log')]] as const) {
+      const t = el('button', `tab${this.tab === id ? ' on' : ''}`, tabs, label);
+      t.onclick = () => { this.tab = id; this.render(); };
+    }
+    const loc = lang === 'en' ? 'en-US' : 'es-AR';
+    // adena: in for anyone, out with the privilege
+    const ar = el('div', 'row', b);
+    el('span', 'adena grow', ar, `${m.adena.toLocaleString(loc)} Adena`);
+    const amt = el('input', 'qty', ar);
+    amt.type = 'number';
+    amt.min = '1';
+    amt.placeholder = tx('Adena', 'Adena');
+    amt.addEventListener('keydown', (e) => e.stopPropagation());
+    const dep = el('button', 'btn small', ar, tx('Depositar', 'Deposit'));
+    dep.onclick = () => +amt.value > 0 && this.g.net.send({ t: 'clanWhAdena', npc: this.npc, amount: Math.floor(+amt.value) });
+    if (m.can) {
+      const wd = el('button', 'btn small', ar, tx('Retirar', 'Withdraw'));
+      wd.onclick = () => +amt.value > 0 && this.g.net.send({ t: 'clanWhAdena', npc: this.npc, amount: -Math.floor(+amt.value) });
+    }
+    const list = el('div', 'clan-members', b);
+    if (this.tab === 'clan') {
+      if (!m.can) el('div', 'tt-dim', list, tx('Podés depositar, pero tu rango no tiene permiso para retirar.', 'You may deposit, but your grade may not withdraw.'));
+      if (!m.items.length) el('div', 'tt-dim', list, tx('El depósito está vacío.', 'The warehouse is empty.'));
+      for (const it of m.items) {
+        const row = this.itemRow(list, it.i, it.c, it.e);
+        if (!m.can) continue;
+        const qty = this.qty(row, it.c);
+        const btn = el('button', 'btn small', row, tx('Retirar', 'Withdraw'));
+        btn.onclick = () => this.g.net.send({ t: 'clanWhWithdraw', npc: this.npc, id: it.id, qty: clampQty(qty, it.c) });
+      }
+      el('div', 'tt-dim', b, `${m.items.length} / ${m.slots}`);
+    } else if (this.tab === 'bag') {
+      const bag = this.g.inv.filter((i) => !i.s);
+      if (!bag.length) el('div', 'tt-dim', list, tx('No tenés nada para depositar.', 'You have nothing to deposit.'));
+      for (const it of bag) {
+        const row = this.itemRow(list, it.i, it.c, it.e ?? 0);
+        const qty = this.qty(row, it.c);
+        const btn = el('button', 'btn small', row, tx('Depositar', 'Deposit'));
+        btn.onclick = () => this.g.net.send({ t: 'clanWhDeposit', npc: this.npc, uid: it.u, qty: clampQty(qty, it.c) });
+      }
+    } else {
+      if (!m.log.length) el('div', 'tt-dim', list, tx('Todavía no hay movimientos.', 'No movements yet.'));
+      for (const l of m.log) {
+        const when = new Date(l.at).toLocaleString(loc, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const what = `${l.c > 1 ? `${l.c.toLocaleString(loc)} × ` : ''}${l.e ? `+${l.e} ` : ''}${l.i === 'adena' ? 'adena' : itemLabel(l.i)}`;
+        el('div', 'clan-log', list).innerHTML = `<span class="tt-dim">${when}</span> <b>${esc(l.who)}</b> ${l.dep ? tx('depositó', 'deposited') : tx('retiró', 'withdrew')} ${esc(what)}`;
+      }
+    }
+  }
+
+  private itemRow(list: HTMLElement, id: string, c: number, e: number) {
+    const row = el('div', 'shop-row', list);
+    itemIcon(id, row, c, e);
+    el('div', 'grow', row).textContent = `${e ? `+${e} ` : ''}${itemLabel(id)}${c > 1 ? ` ×${c}` : ''}`;
+    setTip(row, () => itemTip(id, c, e));
+    return row;
+  }
+
+  private qty(row: HTMLElement, max: number) {
+    const q = el('input', 'qty', row);
+    q.type = 'number';
+    q.min = '1';
+    q.max = String(max);
+    q.value = String(max);
+    if (max <= 1) q.style.display = 'none';
+    q.addEventListener('keydown', (e) => e.stopPropagation());
+    return q;
+  }
+}
+
+const clampQty = (q: HTMLInputElement, max: number) => Math.min(max, Math.max(1, Math.floor(+q.value || 1)));
 const hours = (ms: number) => Math.ceil(ms / 3600_000);
 
 /** Pick an image file, shrink it to the crest's size (w×h) on a canvas and hand back the PNG as base64. */

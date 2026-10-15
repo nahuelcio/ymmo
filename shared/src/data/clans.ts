@@ -54,6 +54,9 @@ export const CLAN = {
   allyCrestH: 12,
   allyLeaveMs: 24 * 3600_000,
   allyDissolveMs: 24 * 3600_000,
+  /** clan warehouse: how many different stacks / pieces it holds, and how many log lines the window shows */
+  whSlots: 100,
+  whLog: 30,
 };
 
 /** Power grades: 1 is the leader (every privilege), 2-5 get what the leader grants. */
@@ -73,6 +76,22 @@ export type ClanPriv = keyof typeof CLAN_PRIV;
 export const CLAN_DEFAULT_PRIVS = [0, 0x7f, CLAN_PRIV.invite | CLAN_PRIV.title | CLAN_PRIV.warehouse, CLAN_PRIV.invite, 0, 0];
 /** Clan levels at which grades open up (as in L2, the lower ranks come with a bigger clan). */
 export const CLAN_GRADE_LEVEL = [0, 0, 0, 2, 2, 0];
+
+/** A stat a clan skill raises (as a fraction: 0.05 = +5%). */
+export type ClanSkillStat = 'maxHp' | 'maxMp' | 'pDef' | 'mDef' | 'pAtk' | 'mAtk' | 'speed' | 'mpRegen';
+/** Clan skills (L2's, passive): the leader buys each level with clan reputation at the clan master; they count for
+ * every member while they are online. bonus and rep: by level (1-3). */
+export interface ClanSkill { id: string; name: string; nameEn: string; stat: ClanSkillStat; bonus: number[]; rep: number[] }
+export const CLAN_SKILLS: ClanSkill[] = [
+  { id: 'clan_vitality', name: 'Vitalidad del Clan', nameEn: 'Clan Vitality', stat: 'maxHp', bonus: [0.03, 0.06, 0.09], rep: [1000, 2000, 4000] },
+  { id: 'clan_spirituality', name: 'Espiritualidad del Clan', nameEn: 'Clan Spirituality', stat: 'maxMp', bonus: [0.03, 0.06, 0.09], rep: [1000, 2000, 4000] },
+  { id: 'clan_aegis', name: 'Égida del Clan', nameEn: 'Clan Aegis', stat: 'pDef', bonus: [0.03, 0.06, 0.09], rep: [1000, 2000, 4000] },
+  { id: 'clan_magic_protection', name: 'Protección Mágica del Clan', nameEn: 'Clan Magic Protection', stat: 'mDef', bonus: [0.03, 0.06, 0.09], rep: [1000, 2000, 4000] },
+  { id: 'clan_might', name: 'Poderío del Clan', nameEn: 'Clan Might', stat: 'pAtk', bonus: [0.02, 0.04, 0.06], rep: [1500, 3000, 6000] },
+  { id: 'clan_empowering', name: 'Potencia del Clan', nameEn: 'Clan Empowering', stat: 'mAtk', bonus: [0.02, 0.04, 0.06], rep: [1500, 3000, 6000] },
+  { id: 'clan_march', name: 'Marcha del Clan', nameEn: 'Clan March', stat: 'speed', bonus: [0.02, 0.04, 0.06], rep: [1500, 3000, 6000] },
+  { id: 'clan_clarity', name: 'Claridad del Clan', nameEn: 'Clan Clarity', stat: 'mpRegen', bonus: [0.1, 0.2, 0.3], rep: [1000, 2000, 4000] },
+];
 
 /** Clan reputation: what clan members' deeds earn the clan. */
 export const CLAN_REP = {

@@ -590,6 +590,7 @@ export class Game {
     });
     n.on('clanInvite', (m) => this.ui.dialogs.clanInvite(m.from, m.clan));
     n.on('allyInvite', (m) => this.ui.dialogs.allyInvite(m.from, m.clan, m.ally));
+    n.on('clanWh', (m) => this.ui.clanWh.set(m));
     n.on('party', (m) => this.ui.party.set(m.members));
     // moved to another world (raid instance or back): every entity we knew is gone, our id changed
     n.on('world', (m) => this.resetWorld(m));

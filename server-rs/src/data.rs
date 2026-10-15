@@ -280,13 +280,17 @@ pub struct ClanCfg {
     pub crest_w: u32, pub crest_h: u32, pub crest_bytes: usize,
     pub max_wars: usize, pub war_cooldown_ms: f64,
     pub ally_max: usize, pub ally_crest_w: u32, pub ally_crest_h: u32, pub ally_leave_ms: f64, pub ally_dissolve_ms: f64,
+    pub wh_slots: usize, pub wh_log: usize,
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef }
+pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
 
 #[derive(Deserialize)]
 struct Raw {

@@ -117,6 +117,11 @@ impl World {
             "allyKick" => self.ally_kick(pid, &s(m, "name")),
             "allyDissolve" => self.ally_dissolve(pid),
             "allyCrest" => self.ally_crest(pid, &s(m, "png")),
+            "clanWhOpen" => if let Some(n) = id(m, "npc") { self.clan_wh_open(pid, n) },
+            "clanWhDeposit" => if let (Some(n), Some(u)) = (id(m, "npc"), id(m, "uid")) { self.clan_wh_deposit(pid, n, u, num(m, "qty")) },
+            "clanWhWithdraw" => if let Some(n) = id(m, "npc") { self.clan_wh_withdraw(pid, n, num(m, "id") as i64, num(m, "qty")) },
+            "clanWhAdena" => if let Some(n) = id(m, "npc") { self.clan_wh_adena(pid, n, num(m, "amount")) },
+            "clanSkill" => if let Some(n) = id(m, "npc") { self.clan_skill(pid, n, &s(m, "skill")) },
             "chooseSpec" => self.choose_spec(pid, &s(m, "spec")),
             "respawn" => {
                 // dying in a raid sends you back to the village

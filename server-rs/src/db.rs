@@ -75,6 +75,11 @@ impl Db {
              CREATE TABLE IF NOT EXISTS clan_privs (clan_id INTEGER NOT NULL, grade INTEGER NOT NULL, privs INTEGER NOT NULL, PRIMARY KEY (clan_id, grade));
              CREATE TABLE IF NOT EXISTS clan_wars (clan INTEGER NOT NULL, target INTEGER NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (clan, target));
              CREATE TABLE IF NOT EXISTS clan_war_cd (clan INTEGER NOT NULL, target INTEGER NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (clan, target));
+             CREATE TABLE IF NOT EXISTS clan_items (id INTEGER PRIMARY KEY, clan_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0);
+             CREATE INDEX IF NOT EXISTS clan_items_clan ON clan_items(clan_id);
+             CREATE TABLE IF NOT EXISTS clan_log (id INTEGER PRIMARY KEY, clan_id INTEGER NOT NULL, at INTEGER NOT NULL, who TEXT NOT NULL, dep INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0);
+             CREATE INDEX IF NOT EXISTS clan_log_clan ON clan_log(clan_id);
+             CREATE TABLE IF NOT EXISTS clan_skills (clan_id INTEGER NOT NULL, skill TEXT NOT NULL, level INTEGER NOT NULL, PRIMARY KEY (clan_id, skill));
              CREATE TABLE IF NOT EXISTS alliances (id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, leader_clan INTEGER NOT NULL,
                crest BLOB, crest_ver INTEGER NOT NULL DEFAULT 0, invite_until INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL);",
         ).expect("schema");
@@ -86,7 +91,7 @@ impl Db {
         }
         let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
-        for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0"] {
+        for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
             let _ = c.execute(&format!("ALTER TABLE clans ADD COLUMN {col}"), []);
         }
         let _ = c.execute("DELETE FROM sessions WHERE expires < ?", [now_ms() as i64]);
@@ -335,11 +340,78 @@ impl Db {
         let _ = self.c.execute("UPDATE clans SET ally = NULL WHERE ally = ?", [id]);
     }
 
+    /** Every clan's warehouse: (row id, clan, item, count, enchant); its adena is in clans.adena. */
+    pub fn load_clan_items(&self) -> Vec<(i64, i64, String, i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, clan_id, item_id, count, enchant FROM clan_items") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    /** A new warehouse row; its id. */
+    pub fn clan_item_add(&self, clan: i64, item: &str, count: i64, enchant: i64) -> i64 {
+        let _ = self.c.execute("INSERT INTO clan_items (clan_id, item_id, count, enchant) VALUES (?, ?, ?, ?)", params![clan, item, count, enchant]);
+        self.c.last_insert_rowid()
+    }
+
+    /** A warehouse row's new count (0: gone). */
+    pub fn clan_item_set(&self, id: i64, count: i64) {
+        if count <= 0 { let _ = self.c.execute("DELETE FROM clan_items WHERE id = ?", [id]); }
+        else { let _ = self.c.execute("UPDATE clan_items SET count = ? WHERE id = ?", params![count, id]); }
+    }
+
+    pub fn clan_adena(&self, clan: i64, adena: i64) {
+        let _ = self.c.execute("UPDATE clans SET adena = ? WHERE id = ?", params![adena, clan]);
+    }
+
+    /** Each clan's adena (the warehouse's). */
+    pub fn load_clan_adena(&self) -> Vec<(i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, adena FROM clans") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    /** A warehouse movement: dep true = deposit. */
+    pub fn clan_log(&self, clan: i64, who: &str, dep: bool, item: &str, count: i64, enchant: i64) {
+        let _ = self.c.execute("INSERT INTO clan_log (clan_id, at, who, dep, item_id, count, enchant) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            params![clan, now_ms() as i64, who, dep as i64, item, count, enchant]);
+    }
+
+    /** The latest warehouse movements of every clan, newest first: (clan, at, who, dep, item, count, enchant). */
+    pub fn load_clan_log(&self, per_clan: usize) -> Vec<(i64, f64, String, bool, String, i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan_id, at, who, dep, item_id, count, enchant FROM clan_log c
+            WHERE (SELECT COUNT(*) FROM clan_log n WHERE n.clan_id = c.clan_id AND n.id > c.id) < ? ORDER BY id DESC") {
+            if let Ok(rows) = q.query_map([per_clan as i64], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as f64, r.get(2)?, r.get::<_, i64>(3)? != 0, r.get(4)?, r.get(5)?, r.get(6)?))) {
+                v.extend(rows.flatten());
+            }
+        }
+        v
+    }
+
+    pub fn load_clan_skills(&self) -> Vec<(i64, String, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan_id, skill, level FROM clan_skills") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    pub fn clan_skill(&self, clan: i64, skill: &str, level: i64) {
+        let _ = self.c.execute("INSERT OR REPLACE INTO clan_skills (clan_id, skill, level) VALUES (?, ?, ?)", params![clan, skill, level]);
+    }
+
     /** The clan goes, and every member is free again. */
     pub fn clan_delete(&self, id: i64) {
         let _ = self.c.execute("DELETE FROM clans WHERE id = ?", [id]);
         let _ = self.c.execute("DELETE FROM clan_privs WHERE clan_id = ?", [id]);
         let _ = self.c.execute("DELETE FROM clan_wars WHERE clan = ?1 OR target = ?1", [id]);
+        let _ = self.c.execute("DELETE FROM clan_items WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_log WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_skills WHERE clan_id = ?", [id]);
         let _ = self.c.execute("DELETE FROM clan_war_cd WHERE clan = ?1 OR target = ?1", [id]);
         let _ = self.c.execute("UPDATE characters SET clan_id = NULL, clan_grade = 5, title = '' WHERE clan_id = ?", [id]);
     }

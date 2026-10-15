@@ -7,7 +7,7 @@ use crate::world::World;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
-const INV_MAX: usize = 80;
+pub(crate) const INV_MAX: usize = 80;
 const NPC_RANGE: f64 = 8.0;
 const AUTOLOOT_RANGE: f64 = 40.0;
 

@@ -7,7 +7,7 @@ import { SettingsPanel } from './settings';
 import { isTouchDevice, TouchControls } from './touch';
 import { AdminPanel, CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPanel, PartyPanel } from './panels';
 import { SPEC_LEVEL } from '../../../shared/src/data/classes';
-import { ClanPanel } from './clan';
+import { ClanPanel, ClanWarehouse } from './clan';
 
 export class UI {
   root: HTMLElement;
@@ -18,6 +18,7 @@ export class UI {
   npc: NpcPanel;
   party: PartyPanel;
   clan: ClanPanel;
+  clanWh: ClanWarehouse;
   minimap: Minimap;
   dialogs: Dialogs;
   help: Win;
@@ -30,6 +31,7 @@ export class UI {
     this.hud = new Hud(g, this.root);
     this.party = new PartyPanel(g, this.root);
     this.clan = new ClanPanel(g, this.root);
+    this.clanWh = new ClanWarehouse(g, this.root);
     this.chat = new Chat(g, this.root);
     this.inventory = new InventoryPanel(g, this.root);
     this.character = new CharacterPanel(g, this.root);
@@ -87,6 +89,7 @@ export class UI {
     this.inventory.refresh();
     this.hud.refreshSlots();
     this.npc.refresh();
+    this.clanWh.onInv();
   }
 
   onTargetChanged() {
