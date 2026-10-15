@@ -622,6 +622,11 @@ input { font: inherit; user-select: text; }
 .touch .focus-btn { display: block; position: absolute; z-index: 7; left: calc(6px + env(safe-area-inset-left)); top: calc(6px + env(safe-area-inset-top));
   width: 34px; height: 34px; border-radius: 6px; border: 1px solid var(--border); background: rgba(12, 14, 22, 0.85); color: var(--gold); font-size: 20px; line-height: 1; padding: 0; }
 .touch .status { left: 46px; }
+/* touch: the item sheet (ui/panels.ts itemMenu): what the item is, then big buttons */
+.ctx-menu.sheet { position: fixed; left: 50%; right: auto; top: auto; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(340px, 94vw); max-height: 70vh; overflow-y: auto; z-index: 1000; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ctx-menu.sheet .sheet-info { font-size: 12px; line-height: 1.35; padding: 4px 4px 8px; border-bottom: 1px solid var(--border); }
+.ctx-menu.sheet button { min-height: 44px; font-size: 14px; text-align: center; background: linear-gradient(#2a261c, #15130e); border: 1px solid var(--border); border-radius: 3px; }
+.ctx-menu.sheet .sheet-close { color: var(--text-dim, #a9a089); }
 .hud-focus .menu, .hud-focus .chat, .hud-focus .quest-tracker, .hud-focus .party, .hud-focus .status, .hud-focus .buffs { display: none !important; }
 
 /* ---------- admin window (/admin) ---------- */
