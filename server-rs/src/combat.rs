@@ -40,6 +40,12 @@ impl World {
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
         if in_town(pc.x, pc.z) || in_town(te.c.x, te.c.z) { return Some(tr(l, "No se puede atacar en una zona de paz.", "You cannot attack in a peace zone.").into()); }
         if p.party.is_some() && p.party == t.party { return Some(tr(l, "No podés atacar a alguien de tu party.", "You cannot attack a party member.").into()); }
+        match crate::clans::relation(p.char_id, t.char_id) {
+            crate::clans::Rel::Friend => return Some(tr(l, "No podés atacar a alguien de tu clan o de tu alianza.", "You cannot attack a member of your clan or alliance.").into()),
+            // a mutual clan war (as in L2): enemies fight without PvP mode, flags or Ctrl
+            crate::clans::Rel::War => return None,
+            crate::clans::Rel::None => {}
+        }
         if !p.pvp_on { return Some(tr(l, "Tenés el PvP desactivado. Activalo (botón PvP o /pvp) para pelear con jugadores.", "Your PvP mode is off. Turn it on (PvP button or /pvp) to fight players.").into()); }
         if !t.pvp_on && t.karma == 0 { return Some(if l.en() { format!("{} has PvP mode off.", t.name) } else { format!("{} tiene el PvP desactivado.", t.name) }); }
         if t.karma > 0 || t.pvp_until > now || force { return None; }
@@ -335,7 +341,10 @@ impl World {
         if by_player {
             let k_name = self.pl(killer).unwrap().name.clone();
             self.sys(tid, &format!("{k_name} te mató."), &format!("You have been killed by {k_name}."));
-            if t_karma > 0 || t_flag {
+            // a war enemy is fair game: no karma, and the clans' reputation moves
+            let war = crate::clans::relation(self.pl(killer).unwrap().char_id, self.pl(tid).unwrap().char_id) == crate::clans::Rel::War;
+            if war { self.clan_war_kill(killer, tid); }
+            if t_karma > 0 || t_flag || war {
                 self.pl_mut(killer).unwrap().pvp += 1;
                 self.sys(killer, &format!("Derrotaste a {t_name}."), &format!("You have defeated {t_name}."));
             } else {

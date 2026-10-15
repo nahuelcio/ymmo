@@ -7,7 +7,7 @@ use crate::world::World;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
-const INV_MAX: usize = 80;
+pub(crate) const INV_MAX: usize = 80;
 const NPC_RANGE: f64 = 8.0;
 const AUTOLOOT_RANGE: f64 = 40.0;
 
@@ -173,7 +173,7 @@ impl World {
         }
     }
 
-    fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef> {
+    pub(crate) fn npc_in_range(&self, pid: u32, nid: u32) -> Option<&'static crate::data::NpcDef> {
         let pc = &self.ents[&pid].c;
         match self.ents.get(&nid) {
             Some(Ent { c, k: Kind::Npc(n) }) if (c.x - pc.x).hypot(c.z - pc.z) <= NPC_RANGE => Some(n.def),

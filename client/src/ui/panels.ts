@@ -10,6 +10,7 @@ import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
 import { isTouchDevice } from './touch';
+import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
 const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
@@ -303,6 +304,10 @@ export class NpcPanel {
       this.renderQuest(m, b);
       return;
     }
+    if (m.kind === 'clan') {
+      renderClanNpc(g, m, b);
+      return;
+    }
     if (m.kind === 'gatekeeper') {
       for (const d of m.dests ?? []) {
         const row = el('div', 'shop-row', b);
@@ -498,6 +503,21 @@ export class Dialogs {
     this.show(tx(`<b>${esc(from)}</b> te invitó a su party.`, `<b>${esc(from)}</b> invited you to their party.`), [
       [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'partyRespond', accept: true }), 'primary'],
       [tx('Rechazar', 'Decline'), () => this.g.net.send({ t: 'partyRespond', accept: false })],
+    ]);
+  }
+
+  clanInvite(from: string, clan: string) {
+    this.show(tx(`<b>${esc(from)}</b> te invitó al clan <b>${esc(clan)}</b>.`, `<b>${esc(from)}</b> invited you to the clan <b>${esc(clan)}</b>.`), [
+      [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'clanRespond', accept: true }), 'primary'],
+      [tx('Rechazar', 'Decline'), () => this.g.net.send({ t: 'clanRespond', accept: false })],
+    ]);
+  }
+
+  allyInvite(from: string, clan: string, ally: string) {
+    this.show(tx(`<b>${esc(from)}</b>, del clan <b>${esc(clan)}</b>, invitó a tu clan a la alianza <b>${esc(ally)}</b>.`,
+      `<b>${esc(from)}</b>, of the clan <b>${esc(clan)}</b>, invited your clan to the alliance <b>${esc(ally)}</b>.`), [
+      [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'allyRespond', accept: true }), 'primary'],
+      [tx('Rechazar', 'Decline'), () => this.g.net.send({ t: 'allyRespond', accept: false })],
     ]);
   }
 

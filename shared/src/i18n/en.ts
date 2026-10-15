@@ -532,6 +532,8 @@ export const EN = {
   "dusk_armor": { "title": "Master Armorer", "greeting": "The village gear is for hunting wolves. Here we dress the ones headed for the Nest." },
   "dusk_grocer": { "title": "Alchemist", "greeting": "The strong potions. The others they sell you in the village." },
   "dusk_gate": { "title": "Gatekeeper", "greeting": "From here the rough zones are a step away. And a few coins." },
+  "clan_master": { "title": "Clan Master", "greeting": "A banner, a name and people who won't leave you alone. That's a clan." },
+  "dusk_clan": { "title": "Clan Master", "greeting": "True clans are forged here, far from the village." },
   "tobias": { "title": "Lighthouse Keeper", "greeting": "The tide gives back the ones it took." },
   "ysolde": { "title": "Archaeologist", "greeting": "These ruins were a city before the water rose." },
   "korgan": { "title": "Steppe Scout", "greeting": "Out here even the wind burns." },

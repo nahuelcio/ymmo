@@ -33,7 +33,11 @@ export default defineConfig(({ command }) => ({
     port: 5173,
     fs: { allow: ['..'] },
     // GAME_PORT is the game server. Local cargo uses 3001. The Docker map is 3002.
-    proxy: { '/ws': { target: `ws://127.0.0.1:${process.env.GAME_PORT ?? '3001'}`, ws: true } },
+    proxy: {
+      '/ws': { target: `ws://127.0.0.1:${process.env.GAME_PORT ?? '3001'}`, ws: true },
+      // clan crests are served by the game server (server-rs/src/main.rs)
+      '/crest': { target: `http://127.0.0.1:${process.env.GAME_PORT ?? '3001'}` },
+    },
     allowedHosts: ['localhost', 'bus-sonic-screenshots-escape.trycloudflare.com', '0.0.0.0'],
   },
   build: {

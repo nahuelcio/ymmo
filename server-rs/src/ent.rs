@@ -111,6 +111,14 @@ impl Look {
     }
 }
 
+/** What the clan's skills add to a member's stats, as fractions (0.05 = +5%; clans.rs clan_mods). */
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ClanMods { pub max_hp: f64, pub max_mp: f64, pub p_def: f64, pub m_def: f64, pub p_atk: f64, pub m_atk: f64, pub speed: f64, pub mp_regen: f64 }
+
+/** A character's clan as others see it: clan id and name, their title, the crest's version. */
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver: u32, /** alliance id and crest version */ pub ally: Option<(u32, u32)> }
+
 pub struct Player {
     pub sid: u64,
     pub out: Outbox,
@@ -133,6 +141,14 @@ pub struct Player {
     pub escape_at: f64,
     pub party: Option<u32>,
     pub pending_invite: Option<(u32, f64)>,
+    /** a clan invitation waiting for an answer: (clan id, until ms) */
+    pub pending_clan: Option<(u32, f64)>,
+    /** an alliance invitation waiting for this clan leader's answer: (alliance id, until ms) */
+    pub pending_ally: Option<(u32, f64)>,
+    /** what this character's head shows of their clan (clans.rs refresh_clan_look) */
+    pub clan_look: Option<ClanLook>,
+    /** what their clan's skills add (none without a clan) */
+    pub clan_mods: ClanMods,
     pub talking_to: Option<u32>,
     /** sitting: the seat node, or 0 on the ground */
     pub sitting: Option<u32>,
@@ -174,6 +190,17 @@ impl Player {
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
+        let (s, m) = (&mut self.stats, &self.clan_mods);
+        if *m != ClanMods::default() {
+            s.max_hp = jround(s.max_hp * (1.0 + m.max_hp));
+            s.max_mp = jround(s.max_mp * (1.0 + m.max_mp));
+            s.p_def = jround(s.p_def * (1.0 + m.p_def));
+            s.m_def = jround(s.m_def * (1.0 + m.m_def));
+            s.p_atk = jround(s.p_atk * (1.0 + m.p_atk));
+            s.m_atk = jround(s.m_atk * (1.0 + m.m_atk));
+            s.speed *= 1.0 + m.speed;
+            s.mp_regen *= 1.0 + m.mp_regen;
+        }
         self.hp = self.hp.min(self.stats.max_hp);
         self.mp = self.mp.min(self.stats.max_mp);
         self.cp = self.cp.min(self.stats.max_cp);

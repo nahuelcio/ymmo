@@ -102,6 +102,15 @@ const WHO = /^(?:Jugadores conectados|Players online) \((\d+)\): (.*)$/;
  * The hit flash, one material per shader variant (skinned and/or with shape keys): a single shared one made the
  * renderer switch programs on every draw while a character flashed.
  */
+/** A clan's crest (16×12, drawn pixel-sharp), or an alliance's (8×12); the version in the URL makes a new crest a new image. */
+export function crestImg(clan: number, ver: number, ally = false): HTMLImageElement {
+  const img = document.createElement('img');
+  img.className = ally ? 'crest crest-ally' : 'crest';
+  img.src = `/crest/${ally ? 'a' : ''}${clan}.png?v=${ver}`;
+  img.alt = '';
+  return img;
+}
+
 /** At most BUBBLE_CHARS characters of a chat line, cut at the last space when there is one near the end. */
 const BUBBLE_CHARS = 30;
 function oneLine(text: string): string {
@@ -557,8 +566,8 @@ export class Game {
       if (gain && this.self) this.floatText(this.self, gain[1] ? `+${gain[1]} adena` : `+${gain[2]} XP`, gain[1] ? 'f-gold' : 'f-xp');
       this.ui.chat.add(gain || (m.ch === 'sys' && NOT_READY.test(m.text)) ? 'log' : m.ch, m.from, m.text);
       // what a player says nearby, shouts or tells the party also floats over their head, cut to one line.
-      // Party lines only reach the party's members (server-rs/src/chat.rs), so only they ever see the green bubble.
-      if (m.ch === 'all' || m.ch === 'shout' || m.ch === 'party') {
+      // Party and clan lines only reach their members (server-rs/src/chat.rs, clans.rs), so only they ever see those bubbles.
+      if (m.ch === 'all' || m.ch === 'shout' || m.ch === 'party' || m.ch === 'clan' || m.ch === 'ally') {
         const c = [...this.ents.values()].find((e) => e.rec.k === 'p' && e.rec.n === m.from);
         if (c) this.speech(c, m.text, m.ch === 'all' ? 'line' : m.ch);
       }
@@ -574,6 +583,14 @@ export class Game {
       this.ui.npc.syncQuest(m.list);
     });
     n.on('partyInvite', (m) => this.ui.dialogs.invite(m.from));
+    n.on('clan', (m) => {
+      this.ui.clan.set(m.clan);
+      // wars and alliances change how other players' names look
+      for (const c of this.ents.values()) if (c.rec.k === 'p') this.refreshLabel(c);
+    });
+    n.on('clanInvite', (m) => this.ui.dialogs.clanInvite(m.from, m.clan));
+    n.on('allyInvite', (m) => this.ui.dialogs.allyInvite(m.from, m.clan, m.ally));
+    n.on('clanWh', (m) => this.ui.clanWh.set(m));
     n.on('party', (m) => this.ui.party.set(m.members));
     // moved to another world (raid instance or back): every entity we knew is gone, our id changed
     n.on('world', (m) => this.resetWorld(m));
@@ -635,12 +652,32 @@ export class Game {
     c.hpFill = null;
     if (r.k === 'p') {
       const self = r.id === this.me.id;
-      const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : self ? '#ffffff' : '#7fc4ff';
+      // a clan at war with ours (as in L2): crossed swords before the name, orange when the war is mutual
+      const war = !self && r.cl ? this.ui.clan.clan?.wars.find((w) => w.id === r.cl) : undefined;
+      const mutual = !!war && war.ours && war.theirs;
+      const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : mutual ? '#ff8a3a' : self ? '#ffffff' : '#7fc4ff';
       el.innerHTML = '';
       el.className = `nameplate np-player${self ? ' np-self' : ''}`;
+      // as in L2: the title over the name, the clan's crest before it (and here its name under it)
+      if (r.ti) {
+        const t = document.createElement('div');
+        t.className = 'np-ptitle';
+        t.textContent = r.ti;
+        el.appendChild(t);
+      }
       const n = document.createElement('div');
       n.textContent = self ? r.n : `${r.n} `;
       n.style.color = color;
+      if (r.cl && r.cv) n.prepend(crestImg(r.cl, r.cv));
+      if (r.ai && r.ac) n.prepend(crestImg(r.ai, r.ac, true));
+      if (war) {
+        const sw = document.createElement('span');
+        sw.className = 'np-war';
+        glyph('ui', 'pvp', '', sw);
+        if (!mutual) sw.style.opacity = '0.5';
+        sw.title = mutual ? tx('Guerra de clanes', 'Clan war') : war.ours ? tx('Le declaramos la guerra', 'We declared war on them') : tx('Nos declararon la guerra', 'They declared war on us');
+        n.prepend(sw);
+      }
       if (c.flags & F_PVP) {
         const sw = document.createElement('span');
         sw.className = 'np-pvp';
@@ -655,6 +692,12 @@ export class Game {
         n.appendChild(l);
       }
       el.appendChild(n);
+      if (r.cn) {
+        const cn = document.createElement('div');
+        cn.className = 'np-clan';
+        cn.textContent = r.cn;
+        el.appendChild(cn);
+      }
       if (!self) this.addHpBar(c);
       this.addStatusIcons(c);
     } else if (r.k === 'm') {
@@ -956,7 +999,7 @@ export class Game {
    * Speech bubble above an entity's head for a few seconds. NPCs say it all; a player's chat ('line', 'shout' or
    * 'party') keeps to one line: the start of it, cut at a word, the full message stays in the chat window.
    */
-  speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party') {
+  speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party' | 'clan' | 'ally') {
     c.bubble?.remove();
     if (c.bubbleObj) c.tag.remove(c.bubbleObj);
     const el = document.createElement('div');
@@ -1592,6 +1635,7 @@ export class Game {
         case 'help': this.ui.help.toggle(); break;
         case 'settings': this.ui.settings.win.toggle(); break;
         case 'party': this.ui.party.toggle(); break;
+        case 'clan': this.ui.clan.toggle(); break;
         case 'loot': this.pickupNearest(); break;
         case 'attack': this.attackTarget(); break;
         case 'stop': this.stop(); break;

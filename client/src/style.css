@@ -221,6 +221,30 @@ input { font: inherit; user-select: text; }
 .ch-all { color: #f0f0f0; }
 .ch-shout { color: #ff9a3a; }
 .ch-party { color: #6aff8a; }
+.ch-clan { color: #8ab4ff; }
+.ch-ally { color: #7fe0b0; }
+.clan-sub { margin: 10px 0 4px; font-weight: bold; color: #ffd98a; }
+.clan-skill-line { font-size: 12px; padding: 1px 0; }
+.clan-log { font-size: 12px; padding: 3px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.np-war { color: #ff8a3a; font-size: 10px; margin-right: 3px; }
+.crest-ally { width: 8px; }
+.crest-ally-big { width: 16px; height: 24px; }
+.clan-war { display: flex; align-items: center; gap: 6px; padding: 5px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.clan-war .war-state { font-size: 11px; }
+.clan-war .war-state.mutual { color: #ff8a3a; font-weight: bold; }
+.clan-head { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.clan-name { font-size: 16px; font-weight: bold; color: #ffd98a; }
+.crest-big { width: 32px; height: 24px; }
+.clan-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 6px 0 10px; }
+.clan-members { max-height: 320px; overflow-y: auto; margin-top: 6px; }
+.clan-member { display: flex; align-items: center; gap: 6px; padding: 5px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.clan-member.off { opacity: 0.55; }
+.clan-acts { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 190px; }
+.clan-acts select { font-size: 11px; }
+.btn.small { padding: 2px 6px; font-size: 11px; }
+.clan-privs { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 12px; }
+.clan-privs th, .clan-privs td { padding: 3px 4px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.clan-privs td:first-child { text-align: left; }
 .ch-whisper { color: #e08aff; }
 .ch-sys { color: #b8d0ff; }
 .ch-log { color: #7f8698; }
@@ -335,6 +359,9 @@ input { font: inherit; user-select: text; }
 /* ---------- world labels ---------- */
 .nameplate { font-size: 12px; text-align: center; text-shadow: 0 0 3px #000, 0 0 2px #000, 1px 1px 1px #000; white-space: nowrap; pointer-events: none; }
 .np-title { color: #ffd98a; font-size: 10px; letter-spacing: 0.3px; }
+.np-ptitle { color: #f0e060; font-size: 10px; }
+.np-clan { color: #a8c8ff; font-size: 10px; }
+.crest { width: 16px; height: 12px; image-rendering: pixelated; vertical-align: -1px; margin-right: 3px; border: 1px solid rgba(0,0,0,0.6); }
 .np-npc-name { color: #ffe9a8; font-weight: bold; }
 .np-player { font-weight: bold; }
 .np-self { opacity: 0.85; }
@@ -430,6 +457,10 @@ input { font: inherit; user-select: text; }
 .speech.shout { border: 2px solid #d8a83a; font-weight: 600; }
 .speech.party { background: rgba(214, 245, 206, 0.95); color: #1e3a18; border-color: #4a9a3a; }
 .speech.party::after { border-top-color: rgba(214, 245, 206, 0.95); }
+.speech.clan { background: rgba(212, 226, 252, 0.95); color: #182a4a; border-color: #4a6ab0; }
+.speech.clan::after { border-top-color: rgba(212, 226, 252, 0.95); }
+.speech.ally { background: rgba(214, 246, 230, 0.95); color: #12402a; border-color: #3a9a6a; }
+.speech.ally::after { border-top-color: rgba(214, 246, 230, 0.95); }
 
 .look-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 8px; }
 .look-card { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 6px 7px; border: 1px solid #333; border-radius: 4px; cursor: pointer; color: var(--text); background: #0d0f16; min-height: 62px; }

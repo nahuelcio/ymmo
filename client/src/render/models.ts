@@ -927,6 +927,8 @@ const DRESS: Record<string, NpcDress> = {
   brenna: { g: 'f', hs: 0, hair: 0x3a1a1a, ranger: true, helm: 'HelmD', pauldron: true, weapon: 'broadsword' },
   aldric: { g: 'm', hs: 0, hair: 0x4a3a28, ranger: true, hood: 0x3a4a30, weapon: 'partisan' },
   sibila: { g: 'f', hs: 1, hair: 0xe6e6f0, hood: 0x3a2048, weapon: 'sages_staff' },
+  clan_master: { g: 'm', hs: 0, hair: 0x6a6a70, beard: true, ranger: true, helm: 'HelmD', pauldron: true, weapon: 'broadsword' },
+  dusk_clan: { g: 'f', hs: 1, hair: 0x2a1a2a, ranger: true, hood: 0x3a1a4a, pauldron: true, weapon: 'partisan' },
 };
 
 function qNpc(n: (typeof NPCS)[number]): Rig {

@@ -68,12 +68,32 @@ impl Db {
              CREATE INDEX IF NOT EXISTS items_char ON items(char_id);
              CREATE TABLE IF NOT EXISTS quests (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, progress INTEGER NOT NULL, done INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id));
              CREATE TABLE IF NOT EXISTS skill_cast (skill TEXT PRIMARY KEY, ms REAL NOT NULL);
-             CREATE TABLE IF NOT EXISTS balance (key TEXT PRIMARY KEY, value REAL NOT NULL);",
+             CREATE TABLE IF NOT EXISTS balance (key TEXT PRIMARY KEY, value REAL NOT NULL);
+             CREATE TABLE IF NOT EXISTS clans (id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, leader INTEGER NOT NULL,
+               level INTEGER NOT NULL DEFAULT 0, rep INTEGER NOT NULL DEFAULT 0, crest BLOB, crest_ver INTEGER NOT NULL DEFAULT 0,
+               ally INTEGER, invite_until INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL);
+             CREATE TABLE IF NOT EXISTS clan_privs (clan_id INTEGER NOT NULL, grade INTEGER NOT NULL, privs INTEGER NOT NULL, PRIMARY KEY (clan_id, grade));
+             CREATE TABLE IF NOT EXISTS clan_wars (clan INTEGER NOT NULL, target INTEGER NOT NULL, since INTEGER NOT NULL, PRIMARY KEY (clan, target));
+             CREATE TABLE IF NOT EXISTS clan_war_cd (clan INTEGER NOT NULL, target INTEGER NOT NULL, until INTEGER NOT NULL, PRIMARY KEY (clan, target));
+             CREATE TABLE IF NOT EXISTS clan_items (id INTEGER PRIMARY KEY, clan_id INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0);
+             CREATE INDEX IF NOT EXISTS clan_items_clan ON clan_items(clan_id);
+             CREATE TABLE IF NOT EXISTS clan_log (id INTEGER PRIMARY KEY, clan_id INTEGER NOT NULL, at INTEGER NOT NULL, who TEXT NOT NULL, dep INTEGER NOT NULL, item_id TEXT NOT NULL, count INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0);
+             CREATE INDEX IF NOT EXISTS clan_log_clan ON clan_log(clan_id);
+             CREATE TABLE IF NOT EXISTS clan_skills (clan_id INTEGER NOT NULL, skill TEXT NOT NULL, level INTEGER NOT NULL, PRIMARY KEY (clan_id, skill));
+             CREATE TABLE IF NOT EXISTS alliances (id INTEGER PRIMARY KEY, name TEXT UNIQUE COLLATE NOCASE NOT NULL, leader_clan INTEGER NOT NULL,
+               crest BLOB, crest_ver INTEGER NOT NULL DEFAULT 0, invite_until INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL);",
         ).expect("schema");
-        for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0", "spec TEXT"] {
+        for col in ["gender TEXT NOT NULL DEFAULT 'm'", "hair_style INTEGER NOT NULL DEFAULT 0", "hair_color INTEGER NOT NULL DEFAULT 0", "spec TEXT",
+            // clans (clans.rs): membership, power grade, title and the join / found penalties (ms since epoch)
+            "clan_id INTEGER", "clan_grade INTEGER NOT NULL DEFAULT 5", "title TEXT NOT NULL DEFAULT ''",
+            "clan_join_until INTEGER NOT NULL DEFAULT 0", "clan_found_until INTEGER NOT NULL DEFAULT 0"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
         }
         let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
+        // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
+        for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
+            let _ = c.execute(&format!("ALTER TABLE clans ADD COLUMN {col}"), []);
+        }
         let _ = c.execute("DELETE FROM sessions WHERE expires < ?", [now_ms() as i64]);
         Db { c }
     }
@@ -134,6 +154,10 @@ impl Db {
             let _ = self.c.execute("INSERT INTO items (char_id, item_id, count, slot) VALUES (?, ?, ?, ?)", params![char_id, it.item, it.count, slot]);
         }
         None
+    }
+
+    pub fn owns_char(&self, account_id: i64, id: i64) -> bool {
+        self.c.query_row("SELECT 1 FROM characters WHERE id = ? AND account_id = ?", params![id, account_id], |_| Ok(())).optional().ok().flatten().is_some()
     }
 
     pub fn delete_char(&self, account_id: i64, id: i64) {
@@ -209,4 +233,203 @@ impl Db {
         }
         tx.commit()
     }
+
+    // ------------------------------------------------------------------ clans (clans.rs keeps them in memory)
+
+    /** Every clan, the grades' privileges, every member, and the characters with a clan penalty still running. */
+    pub fn load_clans(&self) -> (Vec<ClanRow>, Vec<(i64, i64, i64)>, Vec<ClanMemberRow>, Vec<(i64, f64, f64)>) {
+        let mut clans = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, name, leader, level, rep, crest, crest_ver, ally, invite_until, ally_join_until, ally_found_until FROM clans") {
+            if let Ok(rows) = q.query_map([], |r| Ok(ClanRow {
+                id: r.get(0)?, name: r.get(1)?, leader: r.get(2)?, level: r.get(3)?, rep: r.get(4)?, crest: r.get(5)?, crest_ver: r.get(6)?, ally: r.get(7)?, invite_until: r.get::<_, i64>(8)? as f64,
+                ally_join_until: r.get::<_, i64>(9)? as f64, ally_found_until: r.get::<_, i64>(10)? as f64,
+            })) { clans.extend(rows.flatten()); }
+        }
+        let mut privs = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan_id, grade, privs FROM clan_privs") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))) { privs.extend(rows.flatten()); }
+        }
+        let mut members = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, name, level, cls, clan_id, clan_grade, title FROM characters WHERE clan_id IS NOT NULL") {
+            if let Ok(rows) = q.query_map([], |r| Ok(ClanMemberRow { char_id: r.get(0)?, name: r.get(1)?, level: r.get(2)?, cls: r.get(3)?, clan_id: r.get(4)?, grade: r.get(5)?, title: r.get(6)? })) {
+                members.extend(rows.flatten());
+            }
+        }
+        let mut pen = vec![];
+        let now = now_ms() as i64;
+        if let Ok(mut q) = self.c.prepare("SELECT id, clan_join_until, clan_found_until FROM characters WHERE clan_join_until > ? OR clan_found_until > ?") {
+            if let Ok(rows) = q.query_map(params![now, now], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as f64, r.get::<_, i64>(2)? as f64))) { pen.extend(rows.flatten()); }
+        }
+        (clans, privs, members, pen)
+    }
+
+    /** A new clan; Err when the name is taken. */
+    pub fn clan_insert(&self, name: &str, leader: i64) -> Result<i64, String> {
+        self.c.execute("INSERT INTO clans (name, leader, created) VALUES (?, ?, ?)", params![name, leader, now_ms() as i64])
+            .map(|_| self.c.last_insert_rowid())
+            .map_err(|_| "taken".to_string())
+    }
+
+    pub fn clan_save(&self, id: i64, leader: i64, level: i64, rep: i64, ally: Option<i64>, invite_until: f64) {
+        let _ = self.c.execute("UPDATE clans SET leader=?, level=?, rep=?, ally=?, invite_until=? WHERE id=?", params![leader, level, rep, ally, invite_until as i64, id]);
+    }
+
+    pub fn clan_crest(&self, id: i64, png: &[u8], ver: i64) {
+        let _ = self.c.execute("UPDATE clans SET crest=?, crest_ver=? WHERE id=?", params![png, ver, id]);
+    }
+
+    pub fn clan_privs(&self, id: i64, grade: i64, privs: i64) {
+        let _ = self.c.execute("INSERT OR REPLACE INTO clan_privs (clan_id, grade, privs) VALUES (?, ?, ?)", params![id, grade, privs]);
+    }
+
+    /** The clan's alliance penalties (ms). */
+    pub fn clan_ally_pen(&self, id: i64, join_until: f64, found_until: f64) {
+        let _ = self.c.execute("UPDATE clans SET ally_join_until=?, ally_found_until=? WHERE id=?", params![join_until as i64, found_until as i64, id]);
+    }
+
+    /** Wars declared (clan on target) and the cooldowns still running before a clan may declare on a target again. */
+    pub fn load_wars(&self) -> (Vec<(i64, i64)>, Vec<(i64, i64, f64)>) {
+        let mut wars = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan, target FROM clan_wars") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) { wars.extend(rows.flatten()); }
+        }
+        let mut cd = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan, target, until FROM clan_war_cd WHERE until > ?") {
+            if let Ok(rows) = q.query_map([now_ms() as i64], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? as f64))) { cd.extend(rows.flatten()); }
+        }
+        (wars, cd)
+    }
+
+    pub fn war_add(&self, clan: i64, target: i64) {
+        let _ = self.c.execute("INSERT OR IGNORE INTO clan_wars (clan, target, since) VALUES (?, ?, ?)", params![clan, target, now_ms() as i64]);
+    }
+
+    /** A declaration withdrawn; cd: the clan may not declare on the target again until then (0: no wait). */
+    pub fn war_del(&self, clan: i64, target: i64, cd: f64) {
+        let _ = self.c.execute("DELETE FROM clan_wars WHERE clan = ? AND target = ?", params![clan, target]);
+        if cd > 0.0 { let _ = self.c.execute("INSERT OR REPLACE INTO clan_war_cd (clan, target, until) VALUES (?, ?, ?)", params![clan, target, cd as i64]); }
+    }
+
+    pub fn load_allies(&self) -> Vec<AllyRow> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, name, leader_clan, crest, crest_ver, invite_until FROM alliances") {
+            if let Ok(rows) = q.query_map([], |r| Ok(AllyRow { id: r.get(0)?, name: r.get(1)?, leader: r.get(2)?, crest: r.get(3)?, crest_ver: r.get(4)?, invite_until: r.get::<_, i64>(5)? as f64 })) {
+                v.extend(rows.flatten());
+            }
+        }
+        v
+    }
+
+    /** A new alliance led by this clan; Err when the name is taken. */
+    pub fn ally_insert(&self, name: &str, leader_clan: i64) -> Result<i64, String> {
+        self.c.execute("INSERT INTO alliances (name, leader_clan, created) VALUES (?, ?, ?)", params![name, leader_clan, now_ms() as i64])
+            .map(|_| self.c.last_insert_rowid()).map_err(|e| e.to_string())
+    }
+
+    pub fn ally_save(&self, id: i64, invite_until: f64) {
+        let _ = self.c.execute("UPDATE alliances SET invite_until=? WHERE id=?", params![invite_until as i64, id]);
+    }
+
+    pub fn ally_crest(&self, id: i64, png: &[u8], ver: i64) {
+        let _ = self.c.execute("UPDATE alliances SET crest=?, crest_ver=? WHERE id=?", params![png, ver, id]);
+    }
+
+    /** The alliance goes; its clans are on their own again. */
+    pub fn ally_delete(&self, id: i64) {
+        let _ = self.c.execute("DELETE FROM alliances WHERE id = ?", [id]);
+        let _ = self.c.execute("UPDATE clans SET ally = NULL WHERE ally = ?", [id]);
+    }
+
+    /** Every clan's warehouse: (row id, clan, item, count, enchant); its adena is in clans.adena. */
+    pub fn load_clan_items(&self) -> Vec<(i64, i64, String, i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, clan_id, item_id, count, enchant FROM clan_items") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    /** A new warehouse row; its id. */
+    pub fn clan_item_add(&self, clan: i64, item: &str, count: i64, enchant: i64) -> i64 {
+        let _ = self.c.execute("INSERT INTO clan_items (clan_id, item_id, count, enchant) VALUES (?, ?, ?, ?)", params![clan, item, count, enchant]);
+        self.c.last_insert_rowid()
+    }
+
+    /** A warehouse row's new count (0: gone). */
+    pub fn clan_item_set(&self, id: i64, count: i64) {
+        if count <= 0 { let _ = self.c.execute("DELETE FROM clan_items WHERE id = ?", [id]); }
+        else { let _ = self.c.execute("UPDATE clan_items SET count = ? WHERE id = ?", params![count, id]); }
+    }
+
+    pub fn clan_adena(&self, clan: i64, adena: i64) {
+        let _ = self.c.execute("UPDATE clans SET adena = ? WHERE id = ?", params![adena, clan]);
+    }
+
+    /** Each clan's adena (the warehouse's). */
+    pub fn load_clan_adena(&self) -> Vec<(i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT id, adena FROM clans") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    /** A warehouse movement: dep true = deposit. */
+    pub fn clan_log(&self, clan: i64, who: &str, dep: bool, item: &str, count: i64, enchant: i64) {
+        let _ = self.c.execute("INSERT INTO clan_log (clan_id, at, who, dep, item_id, count, enchant) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            params![clan, now_ms() as i64, who, dep as i64, item, count, enchant]);
+    }
+
+    /** The latest warehouse movements of every clan, newest first: (clan, at, who, dep, item, count, enchant). */
+    pub fn load_clan_log(&self, per_clan: usize) -> Vec<(i64, f64, String, bool, String, i64, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan_id, at, who, dep, item_id, count, enchant FROM clan_log c
+            WHERE (SELECT COUNT(*) FROM clan_log n WHERE n.clan_id = c.clan_id AND n.id > c.id) < ? ORDER BY id DESC") {
+            if let Ok(rows) = q.query_map([per_clan as i64], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as f64, r.get(2)?, r.get::<_, i64>(3)? != 0, r.get(4)?, r.get(5)?, r.get(6)?))) {
+                v.extend(rows.flatten());
+            }
+        }
+        v
+    }
+
+    pub fn load_clan_skills(&self) -> Vec<(i64, String, i64)> {
+        let mut v = vec![];
+        if let Ok(mut q) = self.c.prepare("SELECT clan_id, skill, level FROM clan_skills") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))) { v.extend(rows.flatten()); }
+        }
+        v
+    }
+
+    pub fn clan_skill(&self, clan: i64, skill: &str, level: i64) {
+        let _ = self.c.execute("INSERT OR REPLACE INTO clan_skills (clan_id, skill, level) VALUES (?, ?, ?)", params![clan, skill, level]);
+    }
+
+    /** The clan goes, and every member is free again. */
+    pub fn clan_delete(&self, id: i64) {
+        let _ = self.c.execute("DELETE FROM clans WHERE id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_privs WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_wars WHERE clan = ?1 OR target = ?1", [id]);
+        let _ = self.c.execute("DELETE FROM clan_items WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_log WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_skills WHERE clan_id = ?", [id]);
+        let _ = self.c.execute("DELETE FROM clan_war_cd WHERE clan = ?1 OR target = ?1", [id]);
+        let _ = self.c.execute("UPDATE characters SET clan_id = NULL, clan_grade = 5, title = '' WHERE clan_id = ?", [id]);
+    }
+
+    /** A character's membership (None: no clan), grade and title. */
+    pub fn char_clan(&self, char_id: i64, clan: Option<i64>, grade: i64, title: &str) {
+        let _ = self.c.execute("UPDATE characters SET clan_id=?, clan_grade=?, title=? WHERE id=?", params![clan, grade, title, char_id]);
+    }
+
+    pub fn char_clan_penalty(&self, char_id: i64, join_until: f64, found_until: f64) {
+        let _ = self.c.execute("UPDATE characters SET clan_join_until=?, clan_found_until=? WHERE id=?", params![join_until as i64, found_until as i64, char_id]);
+    }
+
 }
+
+pub struct ClanRow {
+    pub id: i64, pub name: String, pub leader: i64, pub level: i64, pub rep: i64, pub crest: Option<Vec<u8>>, pub crest_ver: i64, pub ally: Option<i64>, pub invite_until: f64,
+    pub ally_join_until: f64, pub ally_found_until: f64,
+}
+pub struct AllyRow { pub id: i64, pub name: String, pub leader: i64, pub crest: Option<Vec<u8>>, pub crest_ver: i64, pub invite_until: f64 }
+pub struct ClanMemberRow { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub clan_id: i64, pub grade: i64, pub title: String }

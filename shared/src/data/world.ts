@@ -45,7 +45,8 @@ export interface NpcDef {
   name: string;
   title: string;
   x: number; z: number; ry: number;
-  kind: 'shop' | 'gatekeeper' | 'talker' | 'quest';
+  /** clan: the clan master (found, raise, dissolve; shared/src/data/clans.ts) */
+  kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan';
   shop?: string[];
   /** items this merchant makes to order (their recipe is ItemDef.craft) */
   craft?: string[];
@@ -112,6 +113,8 @@ export const NPCS: NpcDef[] = [
     greeting: 'Antes de salir a pelear, cubrite bien. Después no me vengas llorando.' },
   { id: 'gatekeeper', name: 'Roxxy', title: 'Guardiana del Portal', x: folk('gatekeeper').x, z: folk('gatekeeper').z, ry: folk('gatekeeper').ry, kind: 'gatekeeper', color: 0x8a3a8a,
     greeting: '¿A dónde te llevo? Por una módica suma, obvio.' },
+  { id: 'clan_master', name: 'Aurelio', title: 'Maestro de Clanes', x: folk('clan_master').x, z: folk('clan_master').z, ry: folk('clan_master').ry, kind: 'clan', color: 0x3a4a8a,
+    greeting: 'Un estandarte, un nombre y gente que no te deje solo. Eso es un clan.' },
   { id: 'luigi', name: 'Luigi', title: 'Anciano del Pueblo (supuestamente)', x: folk('luigi').x, z: folk('luigi').z, ry: folk('luigi').ry, kind: 'talker', color: 0x7a7468,
     greeting: '¿Eh? ¿Quién anda ahí? ¿Esto es el chat?', lines: LUIGI_LINES, look: { bald: true, beard: 0xe8e8e8, skin: 0xe0b090 } },
   { id: 'mira', name: 'Mira', title: 'Guardia de la Aldea', x: folk('mira').x, z: folk('mira').z, ry: folk('mira').ry, kind: 'quest', color: 0xc4a574,
@@ -149,6 +152,8 @@ export const NPCS: NpcDef[] = [
     greeting: 'Pociones de las fuertes. Las otras te las venden en la aldea.' },
   { id: 'dusk_gate', name: 'Tavish', title: 'Guardián del Portal', x: 159, z: -168, ry: Math.atan2(11, -2), kind: 'gatekeeper', color: 0x6a3a8a,
     greeting: 'Desde acá las zonas bravas quedan a un paso. Y a unas monedas.' },
+  { id: 'dusk_clan', name: 'Morwen', title: 'Maestra de Clanes', x: 183, z: -163.5, ry: Math.atan2(-13, -6.5), kind: 'clan', color: 0x4a2a5a,
+    greeting: 'Los clanes de verdad se forjan acá, lejos de la aldea.' },
   // one quest giver where the Gatekeeper drops you in each 20-50 zone
   { id: 'tobias', name: 'Tobías', title: 'Farero', x: 258, z: 268, ry: Math.atan2(-1, -1), kind: 'quest', color: 0x5a7a8a,
     greeting: 'La marea devuelve a los que se llevó.' },

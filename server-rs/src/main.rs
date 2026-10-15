@@ -7,6 +7,7 @@ mod admin;
 mod ai;
 mod binary;
 mod chat;
+mod clans;
 mod collision;
 mod combat;
 mod data;
@@ -26,7 +27,7 @@ mod terrain;
 mod world;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
@@ -169,6 +170,15 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
                 if tick > 10.0 { elog!("[perf] world {world}: tick {tick:.1} ms with {players} players"); }
             }
         }
+    }
+}
+
+/** A clan's (or with an 'a' before the id, an alliance's) crest PNG (clans.rs). Clients ask with ?v=<crest version>, so a new crest is a new URL: cache it for good. */
+async fn crest(Path(file): Path<String>) -> axum::response::Response {
+    use axum::http::{header, StatusCode};
+    match file.strip_suffix(".png").and_then(clans::crest_png) {
+        Some(png) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=31536000, immutable")], png).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
@@ -334,6 +344,10 @@ async fn handle(app: &App, sid: u64, t: &str, m: &Value, logging_in: &mut bool) 
             if account == 0 { return; }
             let id = m.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
             let db = app.db.lock().unwrap();
+            // a clan leader cannot be deleted (as in L2); anyone else leaves their clan first
+            if db.owns_char(account, id) && clans::on_delete(id).is_err() {
+                return send(&out, json!({ "t": "error", "msg": tr(lang, "No podés borrar al líder de un clan: transferí el liderazgo o disolvelo primero.", "You cannot delete a clan leader: hand over the leadership or dissolve the clan first.") }));
+            }
             db.delete_char(account, id);
             send(&out, json!({ "t": "chars", "list": chars_json(&db, account) }));
         }
@@ -414,7 +428,7 @@ async fn main() {
         res
     });
     let static_router = Router::new().fallback_service(static_files).layer(cache).layer(tower_http::compression::CompressionLayer::new());
-    let router = Router::new().route("/ws", get(ws_handler)).with_state(app.clone()).merge(static_router);
+    let router = Router::new().route("/ws", get(ws_handler)).route("/crest/:file", get(crest)).with_state(app.clone()).merge(static_router);
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await.expect("bind");
     log!("[server] Claudi MMO (Rust) listening on http://localhost:{port} (ws: /ws) · ready in {:?}", t0.elapsed());
 

@@ -156,6 +156,7 @@ export class Hud {
     btn('character', tx('Personaje', 'Character'), () => g.ui.character.win.toggle());
     btn('inventory', tx('Inventario', 'Inventory'), () => g.ui.inventory.win.toggle());
     btn('map', tx('Mapa', 'Map'), () => g.ui.minimap.toggleMap());
+    btn('clan', 'Clan', () => g.ui.clan.toggle());
     btn('help', tx('Ayuda', 'Help'), () => g.ui.help.toggle());
     btn('settings', tx('Opciones', 'Settings'), () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));

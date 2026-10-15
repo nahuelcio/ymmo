@@ -268,6 +268,30 @@ pub struct NodeDef { pub kind: NodeKind, pub x: f64, pub z: f64, pub r: f64, pub
 #[derive(Deserialize, Clone, Debug)]
 pub struct WaterRaw { pub cell: f64, pub half: f64, pub runs: Vec<(usize, usize, usize)> }
 
+/** Clans (shared/src/data/clans.ts). */
+#[derive(Deserialize)]
+pub struct ClanLevelDef { pub members: usize, pub adena: i64, pub mats: Vec<(String, i64)>, pub rep: i64 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClanCfg {
+    pub found_level: i64, pub crest_level: u8, pub warehouse_level: u8, pub war_level: u8, pub ally_level: u8, pub skill_level: u8,
+    pub name_min: usize, pub name_max: usize, pub title_max: usize,
+    pub leave_ms: f64, pub kick_ms: f64, pub dissolve_ms: f64, pub invite_ms: f64,
+    pub crest_w: u32, pub crest_h: u32, pub crest_bytes: usize,
+    pub max_wars: usize, pub war_cooldown_ms: f64,
+    pub ally_max: usize, pub ally_crest_w: u32, pub ally_crest_h: u32, pub ally_leave_ms: f64, pub ally_dissolve_ms: f64,
+    pub wh_slots: usize, pub wh_log: usize,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
+
 #[derive(Deserialize)]
 struct Raw {
     constants: Constants,
@@ -292,6 +316,7 @@ struct Raw {
     obstacles: Vec<ObstacleDef>,
     nodes: Vec<NodeRaw>,
     gather: GatherDefs,
+    clans: ClansDef,
     water: WaterRaw,
 }
 
@@ -322,6 +347,7 @@ pub struct Data {
     pub obstacles: Vec<ObstacleDef>,
     pub nodes: HashMap<u32, NodeDef>,
     pub gather: GatherDefs,
+    pub clans: ClansDef,
     /** deep water on a grid (cell m, from -half): true where a character swims */
     water: Vec<bool>,
     water_cell: f64,
@@ -399,6 +425,7 @@ pub fn d() -> &'static Data {
                 Some((id, NodeDef { kind, x, z, r, ry, zone }))
             }).collect(),
             gather: raw.gather,
+            clans: raw.clans,
             water_n: water_n,
             water_cell: raw.water.cell,
             water_half: raw.water.half,
