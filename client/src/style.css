@@ -107,6 +107,8 @@ input { font: inherit; user-select: text; }
 .status .bar-text { font-size: 11px; line-height: 15px; }
 .status .bar-label { line-height: 15px; }
 .status .bar-cp .bar-text, .status .bar-cp .bar-label { font-size: 8px; line-height: 8px; }
+.status .bar-xp { height: 10px; }
+.status .bar-xp .bar-text { font-size: 8px; line-height: 9px; }
 /* moved and widened by hand (ui/hud.ts makeStatusMovable): the right edge is the handle */
 .status.movable { cursor: move; user-select: none; touch-action: none; }
 .status-grip { position: absolute; top: 0; right: -4px; bottom: 0; width: 9px; cursor: ew-resize; }
@@ -121,7 +123,7 @@ input { font: inherit; user-select: text; }
 .buff.flag { width: auto; padding: 0 6px; line-height: 24px; border: 1px solid #a070ff; color: #d0a0ff; border-radius: 3px; background: #1a1028; font-weight: bold; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
 
-.party { position: absolute; left: 10px; top: 104px; width: 200px; padding: 6px 8px; }
+.party { position: absolute; left: 10px; top: 118px; width: 200px; padding: 6px 8px; }
 .quest-tracker { position: absolute; right: 10px; top: 240px; width: 180px; padding: 6px 8px; }
 .qt-bar { height: 3px; margin-top: 3px; background: #08090d; border-radius: 2px; overflow: hidden; }
 .qt-bar > div { height: 100%; background: var(--cp); }
@@ -168,12 +170,10 @@ input { font: inherit; user-select: text; }
 .slot.denied { border-color: #d04040; animation: slotDeny 0.25s; }
 @keyframes slotDeny { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 /* XP: a thin strip along the top edge of the shortcut bar */
-.shortcuts .bar-xp { position: absolute; left: 0; right: 0; bottom: 100%; height: 10px; margin: 0 0 3px; }
-.shortcuts .bar-xp .bar-text { font-size: 8px; line-height: 9px; }
 .dash-btn { margin-left: 8px; }
-/* bars 2 and 3 (ui/hud.ts): stacked over the XP strip, bar 2 nearest, twelve slots spread edge to edge with the main
+/* bars 2 and 3 (ui/hud.ts): stacked over the main bar, bar 2 nearest, twelve slots spread edge to edge with the main
    bar (its ten slots and the two buttons); a folded one is a thin strip with its arrow */
-.extra-bars { position: absolute; left: 4px; right: 4px; bottom: calc(100% + 17px); display: flex; flex-direction: column-reverse; gap: 5px; pointer-events: none; }
+.extra-bars { position: absolute; left: 4px; right: 4px; bottom: calc(100% + 5px); display: flex; flex-direction: column-reverse; gap: 5px; pointer-events: none; }
 .bar-row { position: relative; display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; pointer-events: auto; }
 .bar-row .slot { width: auto; }
 .bar-row .slot { opacity: 0.95; }
@@ -418,7 +418,7 @@ input { font: inherit; user-select: text; }
 /* no room beside the bar at all: chat and menu sit above it */
 @media (max-width: 1140px) { .chat { width: min(420px, calc(100vw - 20px)); bottom: 84px; height: 170px; } .menu { bottom: 84px; } .castbar { bottom: calc(262px + var(--xbars, 0px)); } }
 @media (max-width: 760px) {
-  .buffs { left: 10px; top: 104px; }
+  .buffs { left: 10px; top: 118px; }
   .target { top: auto; bottom: 120px; }
   .minimap { transform: scale(0.75); transform-origin: top right; }
   .chat { height: 150px; bottom: 64px; }
@@ -519,7 +519,7 @@ input { font: inherit; user-select: text; }
 .status-row { position: absolute; left: 270px; top: 44px; display: flex; gap: 3px; }
 .buff.status { display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffb0a0; background: #3a1010; border: 1px solid #a03030; border-radius: 3px; }
 .f-dot { color: #d09aff; font-size: 13px; -webkit-text-stroke-width: 2px; }
-@media (max-width: 760px) { .status-row { left: 10px; top: 142px; } }
+@media (max-width: 760px) { .status-row { left: 10px; top: 156px; } }
 .np-elite { font-size: 12px; font-weight: bold; }
 .np-elite > div:first-child { text-shadow: 0 0 6px rgba(255, 200, 60, 0.8), 0 0 3px #000; }
 
