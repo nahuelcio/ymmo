@@ -1,5 +1,5 @@
 // The clan window (N), after Lineage 2's: the clan's level, reputation and leader, its members, the grades'
-// privileges and the crest. What a member may do comes from the clan's privilege masks (shared/src/data/clans.ts).
+// privileges and the crest, its wars and its alliance. What a member may do comes from the clan's privilege masks (shared/src/data/clans.ts).
 import { CLAN, CLAN_GRADE_LEVEL, CLAN_GRADES, CLAN_LEVELS, CLAN_PRIV, MAX_CLAN_LEVEL, type ClanPriv } from '../../../shared/src/data/clans';
 import { className, itemName } from '../../../shared/src/i18n';
 import type { ClanInfo, S2C } from '../../../shared/src/protocol';
@@ -22,10 +22,10 @@ export const gradeName = (g: number) =>
 export class ClanPanel {
   win: Win;
   clan: ClanInfo | null = null;
-  private tab: 'info' | 'members' | 'privs' = 'info';
+  private tab: 'info' | 'members' | 'privs' | 'wars' | 'ally' = 'info';
 
   constructor(private g: Game, root: HTMLElement) {
-    this.win = new Win('clan', 'Clan', 300, 90, 420, root);
+    this.win = new Win('clan', 'Clan', 300, 90, 460, root);
     this.win.onShow = () => this.g.net.send({ t: 'clanGet' });
   }
 
@@ -56,13 +56,17 @@ export class ClanPanel {
     }
     this.win.titleEl.textContent = `Clan — ${c.name}`;
     const tabs = el('div', 'tabs', b);
-    for (const [id, label] of [['info', tx('Información', 'Info')], ['members', tx('Miembros', 'Members')], ['privs', tx('Privilegios', 'Privileges')]] as const) {
+    const tabList = [['info', tx('Información', 'Info')], ['members', tx('Miembros', 'Members')], ['privs', tx('Privilegios', 'Privileges')],
+      ['wars', tx('Guerras', 'Wars')], ['ally', tx('Alianza', 'Alliance')]] as const;
+    for (const [id, label] of tabList) {
       const t = el('button', `tab${this.tab === id ? ' on' : ''}`, tabs, label);
       t.onclick = () => { this.tab = id; this.render(); };
     }
     if (this.tab === 'info') this.renderInfo(c, b);
     else if (this.tab === 'members') this.renderMembers(c, b);
-    else this.renderPrivs(c, b);
+    else if (this.tab === 'privs') this.renderPrivs(c, b);
+    else if (this.tab === 'wars') this.renderWars(c, b);
+    else this.renderAlly(c, b);
   }
 
   private renderInfo(c: ClanInfo, b: HTMLElement) {
@@ -84,7 +88,7 @@ export class ClanPanel {
       const up = el('button', 'btn', r, c.cv ? tx('Cambiar emblema', 'Change crest') : tx('Subir emblema', 'Upload crest'));
       up.disabled = c.level < CLAN.crestLevel;
       if (up.disabled) up.title = tx(`El clan necesita nivel ${CLAN.crestLevel}.`, `The clan needs level ${CLAN.crestLevel}.`);
-      up.onclick = () => pickCrest((png) => this.g.net.send({ t: 'clanCrest', png }));
+      up.onclick = () => pickCrest(CLAN.crestW, CLAN.crestH, (png) => this.g.net.send({ t: 'clanCrest', png }));
     }
     const actions = el('div', 'row', b);
     if (this.me()?.grade !== 1) {
@@ -145,6 +149,97 @@ export class ClanPanel {
     }
   }
 
+  private renderWars(c: ClanInfo, b: HTMLElement) {
+    el('div', 'tt-dim', b, tx('Cuando los dos clanes se declaran la guerra, es total: sus miembros se pueden atacar sin flag, matar no da karma y cada baja suma o resta reputación.',
+      'Once both clans have declared war, it is a full war: their members may attack each other without flags, kills give no karma and each kill moves the clans\' reputation.'));
+    const canWar = this.can('war') && c.level >= CLAN.warLevel;
+    if (this.can('war')) {
+      const r = el('div', 'row', b);
+      const inp = el('input', 'grow', r);
+      inp.placeholder = tx('Nombre del clan', 'Clan name');
+      inp.addEventListener('keydown', (e) => e.stopPropagation());
+      const go = el('button', 'btn', r, tx('Declarar guerra', 'Declare war'));
+      go.disabled = !canWar;
+      if (!canWar) go.title = tx(`El clan necesita nivel ${CLAN.warLevel}.`, `The clan needs level ${CLAN.warLevel}.`);
+      go.onclick = () => {
+        const name = inp.value.trim();
+        if (name) this.g.ui.dialogs.confirm(tx(`¿Declararle la guerra al clan ${name}?`, `Declare war on the clan ${name}?`), () => this.g.net.send({ t: 'clanWar', name }));
+      };
+    }
+    if (!c.wars.length) { el('div', 'tt-dim', b, tx('Tu clan no está en guerra.', 'Your clan is not at war.')); return; }
+    const list = el('div', 'clan-members', b);
+    for (const w of [...c.wars].sort((a, z) => Number(z.ours && z.theirs) - Number(a.ours && a.theirs) || a.name.localeCompare(z.name))) {
+      const row = el('div', 'clan-war', list);
+      if (w.cv) row.appendChild(crestImg(w.id, w.cv));
+      const mutual = w.ours && w.theirs;
+      el('div', 'grow', row).innerHTML = `<b>${esc(w.name)}</b><br><span class="war-state${mutual ? ' mutual' : ' tt-dim'}">${
+        mutual ? tx('Guerra total', 'Full war') : w.ours ? tx('Declarada por tu clan', 'Declared by your clan') : tx('Les declararon la guerra', 'Declared on your clan')}</span>`;
+      if (!canWar) continue;
+      if (!w.ours) {
+        const back = el('button', 'btn small', row, tx('Declarar también', 'Declare back'));
+        back.onclick = () => this.g.ui.dialogs.confirm(tx(`¿Declararle la guerra a ${w.name}? Será una guerra total.`, `Declare war on ${w.name}? It becomes a full war.`), () => this.g.net.send({ t: 'clanWar', name: w.name }));
+      } else {
+        const end = el('button', 'btn small', row, tx('Terminar', 'End'));
+        end.onclick = () => this.g.ui.dialogs.confirm(tx(`¿Terminar la guerra con ${w.name}? No vas a poder declarársela de nuevo durante 24 horas.`, `End the war with ${w.name}? You will not be able to declare it again for 24 hours.`),
+          () => this.g.net.send({ t: 'clanWarEnd', name: w.name }));
+      }
+    }
+  }
+
+  private renderAlly(c: ClanInfo, b: HTMLElement) {
+    const leader = this.me()?.grade === 1;
+    const a = c.ally;
+    const now = Date.now();
+    if (!a) {
+      el('div', 'tt-dim', b, tx(`Tu clan no está en una alianza. El líder de un clan de nivel ${CLAN.allyLevel} puede fundar una en el Maestro de Clanes, e invitar hasta ${CLAN.allyMax - 1} clanes más.`,
+        `Your clan is not in an alliance. The leader of a level ${CLAN.allyLevel} clan can found one at the Clan Master and invite up to ${CLAN.allyMax - 1} more clans.`));
+      if (c.allyJoinUntil > now) el('div', 'tt-dim', b, tx(`Tu clan dejó una alianza hace poco: podrá entrar a otra en ${hours(c.allyJoinUntil - now)} h.`, `Your clan left an alliance recently: it may join another in ${hours(c.allyJoinUntil - now)} h.`));
+      if (c.allyFoundUntil > now) el('div', 'tt-dim', b, tx(`Tu clan disolvió una alianza hace poco: podrá fundar otra en ${hours(c.allyFoundUntil - now)} h.`, `Your clan dissolved an alliance recently: it may found another in ${hours(c.allyFoundUntil - now)} h.`));
+      return;
+    }
+    const runs = leader && a.leader === c.id;
+    const head = el('div', 'clan-head', b);
+    if (a.cv) head.appendChild(crestImg(a.id, a.cv, true)).classList.add('crest-ally-big');
+    el('div', 'clan-name', head, a.name);
+    el('div', 'tt-dim', b, tx(`${a.clans.length} de ${CLAN.allyMax} clanes. Chat de alianza: empezá el mensaje con $.`, `${a.clans.length} of ${CLAN.allyMax} clans. Alliance chat: start the line with $.`));
+    if (runs) {
+      const r = el('div', 'row', b);
+      const inp = el('input', 'grow', r);
+      inp.placeholder = tx('Líder del clan a invitar', 'Leader of the clan to invite');
+      inp.addEventListener('keydown', (e) => e.stopPropagation());
+      const go = el('button', 'btn', r, tx('Invitar', 'Invite'));
+      const blocked = a.inviteUntil > now;
+      go.disabled = blocked || a.clans.length >= CLAN.allyMax;
+      if (blocked) go.title = tx('Tu alianza expulsó a un clan hace poco y no puede invitar todavía.', 'Your alliance expelled a clan recently and cannot invite yet.');
+      go.onclick = () => inp.value.trim() && this.g.net.send({ t: 'allyInvite', name: inp.value.trim() });
+    }
+    const list = el('div', 'clan-members', b);
+    for (const ac of a.clans) {
+      const row = el('div', 'clan-war', list);
+      if (ac.cv) row.appendChild(crestImg(ac.id, ac.cv));
+      el('div', 'grow', row).innerHTML = `<b>${esc(ac.name)}</b>${ac.id === a.leader ? ` <span class="np-ptitle">${tx('líder', 'leader')}</span>` : ''}<br><span class="tt-dim">${
+        tx('Nv', 'Lv')} ${ac.level} · ${esc(ac.leader)} · ${ac.members} ${ac.members === 1 ? tx('miembro', 'member') : tx('miembros', 'members')}</span>`;
+      if (runs && ac.id !== a.leader) {
+        const k = el('button', 'btn small', row, tx('Expulsar', 'Expel'));
+        k.onclick = () => this.g.ui.dialogs.confirm(tx(`¿Expulsar al clan ${ac.name} de la alianza? La alianza no podrá invitar durante 24 horas.`, `Expel the clan ${ac.name} from the alliance? The alliance will not be able to invite for 24 hours.`),
+          () => this.g.net.send({ t: 'allyKick', name: ac.name }));
+      }
+    }
+    const actions = el('div', 'row', b);
+    if (runs) {
+      const up = el('button', 'btn', actions, a.cv ? tx('Cambiar emblema', 'Change crest') : tx('Subir emblema', 'Upload crest'));
+      up.title = tx(`Imagen de ${CLAN.allyCrestW}×${CLAN.allyCrestH}`, `${CLAN.allyCrestW}×${CLAN.allyCrestH} image`);
+      up.onclick = () => pickCrest(CLAN.allyCrestW, CLAN.allyCrestH, (png) => this.g.net.send({ t: 'allyCrest', png }));
+      const dis = el('button', 'btn', actions, tx('Disolver la alianza', 'Dissolve the alliance'));
+      dis.onclick = () => this.g.ui.dialogs.confirm(tx(`¿Disolver ${a.name}? Tu clan no podrá fundar otra alianza durante 24 horas.`, `Dissolve ${a.name}? Your clan will not be able to found another alliance for 24 hours.`),
+        () => this.g.net.send({ t: 'allyDissolve' }));
+    } else if (leader) {
+      const leave = el('button', 'btn', actions, tx('Dejar la alianza', 'Leave the alliance'));
+      leave.onclick = () => this.g.ui.dialogs.confirm(tx(`¿Sacar a tu clan de ${a.name}? No va a poder entrar a otra alianza durante 24 horas.`, `Take your clan out of ${a.name}? It will not be able to join another alliance for 24 hours.`),
+        () => this.g.net.send({ t: 'allyLeave' }));
+    }
+  }
+
   private renderPrivs(c: ClanInfo, b: HTMLElement) {
     const leader = this.me()?.grade === 1;
     el('div', 'tt-dim', b, leader ? tx('Elegí qué puede hacer cada rango.', 'Choose what each grade may do.') : tx('Solo el líder cambia los privilegios.', 'Only the leader changes privileges.'));
@@ -200,6 +295,16 @@ export function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLEle
     const up = el('button', 'btn primary', row, tx('Subir', 'Raise'));
     up.onclick = () => g.net.send({ t: 'clanLevelUp', npc: m.npc });
   } else el('div', 'tt-dim', b, tx('Tu clan tiene el nivel máximo.', 'Your clan is at the highest level.'));
+  if (!clan.ally && clan.level >= CLAN.allyLevel) {
+    const ar = el('div', 'row', b);
+    const inp = el('input', 'grow', ar);
+    inp.placeholder = tx('Nombre de la alianza', 'Alliance name');
+    inp.maxLength = CLAN.nameMax;
+    inp.addEventListener('keydown', (e) => e.stopPropagation());
+    const go = el('button', 'btn', ar, tx('Fundar alianza', 'Found alliance'));
+    go.disabled = Math.max(clan.allyJoinUntil, clan.allyFoundUntil) > Date.now();
+    go.onclick = () => inp.value.trim() && g.net.send({ t: 'allyCreate', npc: m.npc, name: inp.value.trim() });
+  }
   const r = el('div', 'row', b);
   const open = el('button', 'btn', r, tx('Ventana del clan', 'Clan window'));
   open.onclick = () => g.ui.clan.win.show();
@@ -209,9 +314,10 @@ export function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLEle
 }
 
 const itemLabel = (id: string) => itemName(id, lang);
+const hours = (ms: number) => Math.ceil(ms / 3600_000);
 
-/** Pick an image file, shrink it to the crest's size on a canvas and hand back the PNG as base64. */
-function pickCrest(done: (png: string) => void) {
+/** Pick an image file, shrink it to the crest's size (w×h) on a canvas and hand back the PNG as base64. */
+function pickCrest(w: number, h: number, done: (png: string) => void) {
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
@@ -221,11 +327,11 @@ function pickCrest(done: (png: string) => void) {
     const img = new Image();
     img.onload = () => {
       const cv = document.createElement('canvas');
-      cv.width = CLAN.crestW;
-      cv.height = CLAN.crestH;
+      cv.width = w;
+      cv.height = h;
       const ctx = cv.getContext('2d')!;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, CLAN.crestW, CLAN.crestH);
+      ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(img.src);
       done(cv.toDataURL('image/png').split(',')[1]);
     };

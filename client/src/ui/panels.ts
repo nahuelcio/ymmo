@@ -513,6 +513,14 @@ export class Dialogs {
     ]);
   }
 
+  allyInvite(from: string, clan: string, ally: string) {
+    this.show(tx(`<b>${esc(from)}</b>, del clan <b>${esc(clan)}</b>, invitó a tu clan a la alianza <b>${esc(ally)}</b>.`,
+      `<b>${esc(from)}</b>, of the clan <b>${esc(clan)}</b>, invited your clan to the alliance <b>${esc(ally)}</b>.`), [
+      [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'allyRespond', accept: true }), 'primary'],
+      [tx('Rechazar', 'Decline'), () => this.g.net.send({ t: 'allyRespond', accept: false })],
+    ]);
+  }
+
   confirm(text: string, ok: () => void) {
     this.show(esc(text), [[tx('Aceptar', 'OK'), ok, 'primary'], [tx('Cancelar', 'Cancel'), () => {}]]);
   }

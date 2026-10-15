@@ -465,7 +465,9 @@ impl World {
                     "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet")],
                     // clan, its name and crest version, and the character's title (absent without a clan)
                     "cl": p.clan_look.as_ref().map(|c| c.id), "cn": p.clan_look.as_ref().map(|c| c.name.clone()),
-                    "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()) })
+                    "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()),
+                    // alliance and its crest version (/crest/a<id>.png?v=<ac>)
+                    "ai": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.0), "ac": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.1) })
             }
             Kind::Mob(m) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "m", "n": m.tpl.name, "l": m.tpl.level, "tpl": m.tpl.id }),
             Kind::Npc(n) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "n", "n": n.def.name, "title": n.def.title, "npc": n.def.id }),

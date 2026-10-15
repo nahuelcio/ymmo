@@ -108,6 +108,15 @@ impl World {
             "clanPrivs" => self.clan_privs(pid, num(m, "grade") as u8, num(m, "privs") as u32),
             "clanTitle" => self.clan_title(pid, &s(m, "name"), &s(m, "title")),
             "clanCrest" => self.clan_crest(pid, &s(m, "png")),
+            "clanWar" => self.clan_war(pid, &s(m, "name")),
+            "clanWarEnd" => self.clan_war_end(pid, &s(m, "name")),
+            "allyCreate" => if let Some(n) = id(m, "npc") { self.ally_create(pid, n, &s(m, "name")) },
+            "allyInvite" => self.ally_invite(pid, &s(m, "name")),
+            "allyRespond" => self.ally_respond(pid, truthy(m, "accept")),
+            "allyLeave" => self.ally_leave(pid),
+            "allyKick" => self.ally_kick(pid, &s(m, "name")),
+            "allyDissolve" => self.ally_dissolve(pid),
+            "allyCrest" => self.ally_crest(pid, &s(m, "png")),
             "chooseSpec" => self.choose_spec(pid, &s(m, "spec")),
             "respawn" => {
                 // dying in a raid sends you back to the village

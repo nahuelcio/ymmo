@@ -222,6 +222,13 @@ input { font: inherit; user-select: text; }
 .ch-shout { color: #ff9a3a; }
 .ch-party { color: #6aff8a; }
 .ch-clan { color: #8ab4ff; }
+.ch-ally { color: #7fe0b0; }
+.np-war { color: #ff8a3a; font-size: 10px; margin-right: 3px; }
+.crest-ally { width: 8px; }
+.crest-ally-big { width: 16px; height: 24px; }
+.clan-war { display: flex; align-items: center; gap: 6px; padding: 5px 2px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.clan-war .war-state { font-size: 11px; }
+.clan-war .war-state.mutual { color: #ff8a3a; font-weight: bold; }
 .clan-head { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
 .clan-name { font-size: 16px; font-weight: bold; color: #ffd98a; }
 .crest-big { width: 32px; height: 24px; }
@@ -449,6 +456,8 @@ input { font: inherit; user-select: text; }
 .speech.party::after { border-top-color: rgba(214, 245, 206, 0.95); }
 .speech.clan { background: rgba(212, 226, 252, 0.95); color: #182a4a; border-color: #4a6ab0; }
 .speech.clan::after { border-top-color: rgba(212, 226, 252, 0.95); }
+.speech.ally { background: rgba(214, 246, 230, 0.95); color: #12402a; border-color: #3a9a6a; }
+.speech.ally::after { border-top-color: rgba(214, 246, 230, 0.95); }
 
 .look-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 8px; }
 .look-card { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 6px 7px; border: 1px solid #333; border-radius: 4px; cursor: pointer; color: var(--text); background: #0d0f16; min-height: 62px; }

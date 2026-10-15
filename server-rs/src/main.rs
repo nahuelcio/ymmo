@@ -173,10 +173,10 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
     }
 }
 
-/** A clan's crest PNG (clans.rs). Clients ask with ?v=<crest version>, so a new crest is a new URL: cache it for good. */
+/** A clan's (or with an 'a' before the id, an alliance's) crest PNG (clans.rs). Clients ask with ?v=<crest version>, so a new crest is a new URL: cache it for good. */
 async fn crest(Path(file): Path<String>) -> axum::response::Response {
     use axum::http::{header, StatusCode};
-    match file.strip_suffix(".png").and_then(|id| id.parse::<u32>().ok()).and_then(clans::crest_png) {
+    match file.strip_suffix(".png").and_then(clans::crest_png) {
         Some(png) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=31536000, immutable")], png).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }

@@ -4,11 +4,12 @@ import { lang, t as tx } from '../lang';
 
 // 'log' is client-side: routine system lines (gains, "not ready") that only the System tab lists
 // 'npc' is client-side too: lines villagers say out loud, which the NPC button can hide
-type Ch = 'all' | 'shout' | 'party' | 'clan' | 'whisper' | 'sys' | 'announce' | 'log' | 'npc';
+type Ch = 'all' | 'shout' | 'party' | 'clan' | 'ally' | 'whisper' | 'sys' | 'announce' | 'log' | 'npc';
 const TABS: { id: string; label: string; show: Ch[] }[] = [
-  { id: 'all', label: tx('Todo', 'All'), show: ['all', 'npc', 'shout', 'party', 'clan', 'whisper', 'sys', 'announce'] },
+  { id: 'all', label: tx('Todo', 'All'), show: ['all', 'npc', 'shout', 'party', 'clan', 'ally', 'whisper', 'sys', 'announce'] },
   { id: 'party', label: 'Party', show: ['party', 'announce'] },
-  { id: 'clan', label: 'Clan', show: ['clan', 'announce'] },
+  // the alliance's lines ('$') go with the clan's
+  { id: 'clan', label: 'Clan', show: ['clan', 'ally', 'announce'] },
   { id: 'whisper', label: tx('Susurros', 'Whispers'), show: ['whisper', 'announce'] },
   { id: 'sys', label: tx('Sistema', 'System'), show: ['sys', 'log', 'announce'] },
 ];
@@ -55,14 +56,14 @@ export class Chat {
     this.log = el('div', 'chat-log', box);
     this.input = el('input', 'chat-input', box);
     this.input.maxLength = 200;
-    this.input.placeholder = tx('Enter para chatear — !grito  #party  @clan  "nombre susurro  /help', 'Enter to chat — !shout  #party  @clan  "name whisper  /help');
+    this.input.placeholder = tx('Enter para chatear — !grito  #party  @clan  $alianza  "nombre susurro  /help', 'Enter to chat — !shout  #party  @clan  $ally  "name whisper  /help');
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Enter') {
         let text = this.input.value.trim();
         if (text) {
-          if (this.tab.id === 'party' && !/^[!#@"/]/.test(text)) text = `#${text}`;
-          if (this.tab.id === 'clan' && !/^[!#@"/]/.test(text)) text = `@${text}`;
+          if (this.tab.id === 'party' && !/^[!#@$"/]/.test(text)) text = `#${text}`;
+          if (this.tab.id === 'clan' && !/^[!#@$"/]/.test(text)) text = `@${text}`;
           if (text === '/admin') this.g.ui.admin.win.toggle();
           else this.g.net.send({ t: 'chat', text });
         }
@@ -138,7 +139,7 @@ export class Chat {
     const atBottom = this.log.scrollTop + this.log.clientHeight >= this.log.scrollHeight - 30;
     const line = el('div', `chat-line ch-${ch}`, this.log);
     if (ch === 'npc') el('span', 'chat-tag', line, 'NPC');
-    if (from) el('span', 'chat-from', line, `${ch === 'shout' ? '!' : ch === 'party' ? '#' : ch === 'clan' ? '@' : ''}${from}: `);
+    if (from) el('span', 'chat-from', line, `${ch === 'shout' ? '!' : ch === 'party' ? '#' : ch === 'clan' ? '@' : ch === 'ally' ? '$' : ''}${from}: `);
     line.appendChild(document.createTextNode(text));
     line.style.display = this.shows(ch) ? '' : 'none';
     this.lines.push({ ch, node: line });

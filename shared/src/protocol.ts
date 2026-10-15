@@ -14,14 +14,23 @@ export interface EntPlayer {
   eq: (string | null)[];
   /** clan: id, name, crest version (its PNG is /crest/<id>.png?v=<cv>), and this character's title */
   cl?: number | null; cn?: string | null; cv?: number | null; ti?: string | null;
+  /** alliance id and its crest's version (/crest/a<id>.png?v=<ac>) */
+  ai?: number | null; ac?: number | null;
 }
 
 /** One member in the clan window. */
 export interface ClanMemberInfo { name: string; level: number; cls: ClassType; grade: number; title: string; on: boolean }
 /** The clan window's data (server-rs/src/clans.rs info). privs: by grade (index 1-5), CLAN_PRIV bits. */
+/** A clan we are at war with: ours = we declared, theirs = they declared (both: a mutual war). */
+export interface ClanWarInfo { id: number; name: string; cv: number; ours: boolean; theirs: boolean }
+/** A clan of our alliance. */
+export interface AllyClanInfo { id: number; name: string; level: number; cv: number; members: number; leader: string }
+/** Our alliance: leader is the leading clan's id. */
+export interface AllyInfo { id: number; name: string; leader: number; cv: number; inviteUntil: number; clans: AllyClanInfo[] }
 export interface ClanInfo {
   id: number; name: string; level: number; rep: number; leader: string; cv: number; cap: number;
   privs: number[]; inviteUntil: number; members: ClanMemberInfo[];
+  wars: ClanWarInfo[]; ally: AllyInfo | null; allyJoinUntil: number; allyFoundUntil: number;
 }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
@@ -106,6 +115,15 @@ export type C2S =
   | { t: 'clanPrivs'; grade: number; privs: number }
   | { t: 'clanTitle'; name: string; title: string }
   | { t: 'clanCrest'; png: string }
+  | { t: 'clanWar'; name: string }
+  | { t: 'clanWarEnd'; name: string }
+  | { t: 'allyCreate'; npc: number; name: string }
+  | { t: 'allyInvite'; name: string }
+  | { t: 'allyRespond'; accept: boolean }
+  | { t: 'allyLeave' }
+  | { t: 'allyKick'; name: string }
+  | { t: 'allyDissolve' }
+  | { t: 'allyCrest'; png: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }
   | { t: 'respawn' }
@@ -143,12 +161,13 @@ export type S2C =
   | { t: 'cd'; key: string; ms: number }
   | { t: 'died'; id: number; byPlayer: boolean }
   | { t: 'levelUp'; id: number; lvl: number }
-  | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
+  | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'ally' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
   | { t: 'clan'; clan: ClanInfo | null }
   | { t: 'clanInvite'; from: string; clan: string }
+  | { t: 'allyInvite'; from: string; clan: string; ally: string }
   | { t: 'party'; members: PartyMember[] | null }
   | { t: 'teleported' }
   /** an NPC says something out loud (speech bubble + local chat) */

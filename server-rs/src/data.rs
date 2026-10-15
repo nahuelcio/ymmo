@@ -278,6 +278,8 @@ pub struct ClanCfg {
     pub name_min: usize, pub name_max: usize, pub title_max: usize,
     pub leave_ms: f64, pub kick_ms: f64, pub dissolve_ms: f64, pub invite_ms: f64,
     pub crest_w: u32, pub crest_h: u32, pub crest_bytes: usize,
+    pub max_wars: usize, pub war_cooldown_ms: f64,
+    pub ally_max: usize, pub ally_crest_w: u32, pub ally_crest_h: u32, pub ally_leave_ms: f64, pub ally_dissolve_ms: f64,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

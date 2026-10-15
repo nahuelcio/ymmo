@@ -44,6 +44,16 @@ export const CLAN = {
   crestW: 16,
   crestH: 12,
   crestBytes: 2048,
+  /** wars: how many a clan may have declared at once, and how long before declaring again on a clan it stopped fighting */
+  maxWars: 30,
+  warCooldownMs: 24 * 3600_000,
+  /** alliances: how many clans, the alliance crest's size, and the waits after leaving / being expelled (a clan may
+   * not join another alliance, the alliance may not invite) and after dissolving (the leading clan may not found another) */
+  allyMax: 3,
+  allyCrestW: 8,
+  allyCrestH: 12,
+  allyLeaveMs: 24 * 3600_000,
+  allyDissolveMs: 24 * 3600_000,
 };
 
 /** Power grades: 1 is the leader (every privilege), 2-5 get what the leader grants. */
