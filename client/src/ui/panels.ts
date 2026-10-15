@@ -42,8 +42,10 @@ export class InventoryPanel {
     }
     this.grid = el('div', 'inv-grid', this.win.body);
     this.footer = el('div', 'inv-footer', this.win.body);
-    el('div', 'hint', this.win.body, tx('Doble click o arrastrar para equipar · Click derecho para más opciones · ▲ mejora lo que llevás puesto',
-      'Double-click or drag to equip · Right-click for more options · ▲ is better than what you wear'));
+    el('div', 'hint', this.win.body, isTouchDevice()
+      ? tx('Tocá un objeto para ver qué es y sus opciones · ▲ mejora lo que llevás puesto', 'Tap an item to see what it is and what you can do · ▲ is better than what you wear')
+      : tx('Doble click o arrastrar para equipar · Click derecho para más opciones · ▲ mejora lo que llevás puesto',
+        'Double-click or drag to equip · Right-click for more options · ▲ is better than what you wear'));
     // drag a bag item onto the paper doll to wear it, or a worn item into the bag to take it off
     for (const zone of [this.doll, this.grid]) zone.ondragover = (e) => e.preventDefault();
     this.doll.ondrop = () => {
@@ -75,6 +77,45 @@ export class InventoryPanel {
   private score(it: InvItem) {
     const d = ITEMS[it.i];
     return d.type === 'weapon' ? enchanted(d, this.g.me.cls === 'mystic' ? 'mAtk' : 'pAtk', it.e) : enchanted(d, 'pDef', it.e) + enchanted(d, 'mDef', it.e);
+  }
+
+  /** Whether this piece can go up a level: below the cap, with a scroll for it in the bag. */
+  private canEnchant(it: InvItem) {
+    return (it.e ?? 0) < ENCHANT.max && this.hasScroll(it.i);
+  }
+
+  /**
+   * What can be done with an item: at the pointer (desktop right click), or, on touch screens (at = null), a sheet
+   * at the bottom that also says what the item is, since phones get no hover tooltips.
+   */
+  private itemMenu(it: InvItem, at: { x: number; y: number } | null) {
+    const g = this.g;
+    this.closeMenu();
+    hideTip();
+    const m = el('div', at ? 'ctx-menu' : 'ctx-menu sheet', document.body);
+    if (at) {
+      m.style.left = `${at.x}px`;
+      m.style.top = `${at.y}px`;
+    } else {
+      el('div', 'sheet-info', m).innerHTML = itemTip(it.i, it.c, it.e) + (it.s ? '' : this.compare(it));
+    }
+    const def = ITEMS[it.i];
+    const act = (label: string, fn: () => void, cls = '') => {
+      el('button', cls, m, label).onclick = () => {
+        this.closeMenu();
+        fn();
+      };
+    };
+    if (it.s) act(tx('Sacártelo', 'Take it off'), () => g.net.send({ t: 'unequip', slot: it.s! }));
+    else if (def.slot || def.use) act(def.slot ? tx('Equipar', 'Equip') : tx('Usar', 'Use'), () => g.net.send({ t: 'use', u: it.u }));
+    if (def.slot && this.canEnchant(it)) act(tx(`Encantar a +${(it.e ?? 0) + 1}`, `Enchant to +${(it.e ?? 0) + 1}`), () => this.askEnchant(it));
+    if (!it.s) {
+      act(tx('Destruir', 'Destroy'), () => g.ui.dialogs.confirm(
+        tx(`¿Destruir ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`, `Destroy ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`),
+        () => g.net.send({ t: 'destroy', u: it.u })), 'danger');
+    }
+    if (!at) act(tx('Cerrar', 'Close'), () => {}, 'sheet-close');
+    this.menu = m;
   }
 
   /** Whether the bag holds a scroll that enchants this piece. */
@@ -128,8 +169,9 @@ export class InventoryPanel {
         cell.ondragend = () => (this.drag = null);
         cell.ondblclick = () => g.net.send({ t: 'unequip', slot: s });
         // right click enchants what you wear, when the bag holds a scroll for it
-        cell.oncontextmenu = (e) => (e.preventDefault(), this.hasScroll(it.i) && this.askEnchant(it));
-        setTip(cell, () => itemTip(it.i, 1, it.e) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.hasScroll(it.i) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
+        cell.oncontextmenu = (e) => (e.preventDefault(), this.canEnchant(it) && this.askEnchant(it));
+        if (isTouchDevice()) cell.onclick = () => this.itemMenu(it, null);
+        setTip(cell, () => itemTip(it.i, 1, it.e) + `<br><span class="tt-dim">${tx('Doble click para sacártelo', 'Double-click to take it off')}${this.canEnchant(it) ? tx(' · Click derecho para encantar', ' · Right-click to enchant') : ''}</span>`);
       } else {
         // empty: a faint outline of what goes there
         glyph('item', itemIconId(GHOST[s]), SLOT_LABEL[s], cell).classList.add('doll-ghost');
@@ -165,31 +207,10 @@ export class InventoryPanel {
       };
       cell.oncontextmenu = (e) => {
         e.preventDefault();
-        this.closeMenu();
-        const m = el('div', 'ctx-menu', document.body);
-        m.style.left = `${e.clientX}px`;
-        m.style.top = `${e.clientY}px`;
-        const def = ITEMS[it.i];
-        if (def.slot || def.use) {
-          const b = el('button', '', m, def.slot ? tx('Equipar', 'Equip') : tx('Usar', 'Use'));
-          b.onclick = () => {
-            g.net.send({ t: 'use', u: it.u });
-            this.closeMenu();
-          };
-        }
-        if (def.slot && this.hasScroll(it.i)) {
-          el('button', '', m, tx(`Encantar a +${(it.e ?? 0) + 1}`, `Enchant to +${(it.e ?? 0) + 1}`)).onclick = () => {
-            this.closeMenu();
-            this.askEnchant(it);
-          };
-        }
-        const d = el('button', 'danger', m, tx('Destruir', 'Destroy'));
-        d.onclick = () => {
-          this.closeMenu();
-          g.ui.dialogs.confirm(tx(`¿Destruir ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`, `Destroy ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`), () => g.net.send({ t: 'destroy', u: it.u }));
-        };
-        this.menu = m;
+        this.itemMenu(it, { x: e.clientX, y: e.clientY });
       };
+      // phones: no hover and no right click, so a tap says what it is and offers the same actions
+      if (isTouchDevice()) cell.onclick = () => this.itemMenu(it, null);
       setTip(cell, () => itemTip(it.i, it.c, it.e) + this.compare(it));
     }
     for (let i = bag.length; i < 40; i++) el('div', 'inv-cell empty', this.grid);
