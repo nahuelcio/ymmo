@@ -43,6 +43,15 @@ export const CAMPS: CampDef[] = [
     mobs: [{ mob: 'yeti', count: 4 }, { mob: 'frost_giant', count: 2 }], respawn: 300000,
     chest: { adena: [45000, 70000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 4, max: 8 }, { item: 'ice_crystal', chance: 1, min: 3, max: 6 },
       { item: 'glacial_plate', chance: 0.08 }, { item: 'glacial_robe', chance: 0.08 }, { item: 'glacial_ring', chance: 0.1 }, { item: 'glacial_staff', chance: 0.05 }, { item: 'scroll_enchant_weapon', chance: 0.25 }] } },
+  // the swamp region (60-70)
+  { id: 'witch_coven', name: 'Aquelarre del Pantano', zone: 'swamp', x: 610, z: -230, level: 64, leader: 'bog_hag', banner: 0x4a2a4a,
+    mobs: [{ mob: 'bog_witch', count: 3 }, { mob: 'bog_drowned', count: 4 }], respawn: 300000,
+    chest: { adena: [60000, 95000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 4, max: 8 }, { item: 'swamp_venom', chance: 1, min: 4, max: 8 },
+      { item: 'emerald_helm', chance: 0.06 }, { item: 'emerald_boots', chance: 0.06 }, { item: 'emerald_gauntlets', chance: 0.06 }, { item: 'emerald_earring', chance: 0.05 }, { item: 'scroll_enchant_armor', chance: 0.35 }] } },
+  { id: 'tribal_village', name: 'Aldea Tribal', zone: 'jungle', x: 690, z: -470, level: 69, leader: 'tribal_chief', banner: 0x8a3a1a,
+    mobs: [{ mob: 'tribal_hunter', count: 4 }, { mob: 'jungle_raptor', count: 3 }], respawn: 330000,
+    chest: { adena: [80000, 125000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 5, max: 9 }, { item: 'ancient_bark', chance: 1, min: 4, max: 8 },
+      { item: 'emerald_greaves', chance: 0.05 }, { item: 'emerald_ring', chance: 0.05 }, { item: 'emerald_necklace', chance: 0.04 }, { item: 'emerald_blade', chance: 0.02 }, { item: 'scroll_enchant_weapon', chance: 0.3 }] } },
 ];
 
 export const CAMP_BY_ID: Record<string, CampDef> = Object.fromEntries(CAMPS.map((c) => [c.id, c]));

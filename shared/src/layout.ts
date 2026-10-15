@@ -78,7 +78,8 @@ function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | nu
   const zone = zoneOf(x, z);
   // keep hunting grounds a bit more open
   if (zone && rng() < 0.55) return null;
-  const sc = 0.7 + rng() * 0.7;
+  // trees grow half again as big in the jungle
+  const sc = (0.7 + rng() * 0.7) * (1 + 0.5 * biomeWeight('swamp', x, z));
   const rot = rng() * Math.PI * 2;
   const dead = zone?.id === 'wastes';
   let pine = false, hue = 0, light = 0;
@@ -86,6 +87,8 @@ function placeTree(rng: () => number, x: number, z: number, w: View): TreeL | nu
     // pines up high and in the orc barracks; only pines under the frost region's snow
     pine = h > 10 || zone?.id === 'barracks' ? rng() < 0.8 : rng() < 0.35;
     if (biomeWeight('frost', x, z) > 0.5) pine = true;
+    // the swamp and jungle grow broad trees only
+    if (biomeWeight('swamp', x, z) > 0.5) pine = false;
     hue = rng();
     light = rng();
   }
@@ -110,6 +113,13 @@ export function layoutTrees(): TreeL[] {
     const x = (ring() * 2 - 1) * WORLD_HALF * 0.95, z = (ring() * 2 - 1) * WORLD_HALF * 0.95;
     if (!inRing(x, z, 0.95)) continue;
     const t = placeTree(ring, x, z, NEW);
+    if (t) (trees.push(t), n++);
+  }
+  // the Ancient Jungle grows thick (after everything else, so no other tree's number moves)
+  const thick = mulberry32(9), jungle = ZONES.find((zn) => zn.id === 'jungle')!;
+  for (let i = 0, n = 0; i < 2000 && n < 450; i++) {
+    const a = thick() * Math.PI * 2, r = Math.sqrt(thick()) * (jungle.r + 25);
+    const t = placeTree(thick, jungle.x + Math.cos(a) * r, jungle.z + Math.sin(a) * r, NEW);
     if (t) (trees.push(t), n++);
   }
   return trees;

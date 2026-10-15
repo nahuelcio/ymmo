@@ -53,8 +53,8 @@ impl World {
                     self.set_pvp_mode(pid, on);
                 }
                 "help" => self.sys(pid,
-                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest|frost] (entrar o salir de una raid con tu party: la de Kaim, /raid nest para el Nido del Dragón, /raid frost para el Trono de Escarcha)",
-                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest|frost] (enter or leave a raid with your party: Kaim's, /raid nest for the Dragon's Nest, /raid frost for the Frost Throne)"),
+                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest|frost|swamp] (entrar o salir de una raid con tu party: la de Kaim, /raid nest para el Nido del Dragón, /raid frost para el Trono de Escarcha, /raid swamp para el Templo del Pantano)",
+                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off], /dance, /raid [nest|frost|swamp] (enter or leave a raid with your party: Kaim's, /raid nest for the Dragon's Nest, /raid frost for the Frost Throne, /raid swamp for the Swamp Temple)"),
                 _ => self.sys(pid, &format!("No existe el comando /{cmd}. Escribí /help."), &format!("Unknown command /{cmd}. Type /help.")),
             }
             return;

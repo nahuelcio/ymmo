@@ -81,7 +81,8 @@ function groundFactors(x: number, z: number, h: number) {
   const road = 1 - smoothstep(2.2, 4.2, roadDist(x, z));
   const town = Math.max(...TOWNS.map((t) => 1 - smoothstep(t.r - 2, t.r + 6, Math.hypot(x - t.x, z - t.z))));
   const dirt = Math.max(road * 0.85, town);
-  const frost = biomeWeight('frost', x, z), peak = smoothstep(45, 60, h);
+  const frost = biomeWeight('frost', x, z), swamp = biomeWeight('swamp', x, z), peak = smoothstep(45, 60, h);
+  const shore = (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt);
   return {
     n: fbm(x / 40 + 50, z / 40 - 20, 3),
     rock: smoothstep(14, 26, h),
@@ -89,8 +90,9 @@ function groundFactors(x: number, z: number, h: number) {
     snow: Math.max(peak, frost * 0.92),
     peak,
     road, town, dirt,
-    // pond shores: sand at the waterline (snow in the frost region), darker silt underwater
-    sand: (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt) * (1 - frost),
+    // pond shores: sand at the waterline (snow in the frost region, mud in the swamp), darker silt underwater
+    sand: shore * (1 - frost) * (1 - swamp),
+    mud: shore * swamp,
     deep: 1 - smoothstep(WATER_LEVEL - 2.5, WATER_LEVEL - 0.2, h),
   };
 }
@@ -99,6 +101,9 @@ function groundFactors(x: number, z: number, h: number) {
 export function groundColor(x: number, z: number, h: number): [number, number, number] {
   const f = groundFactors(x, z, h), n = f.n;
   let r = 0.3 + n * 0.12, g = 0.5 + n * 0.14, b = 0.2 + n * 0.06;
+  // the swamp region's dark, wet green
+  const sw = biomeWeight('swamp', x, z) * 0.85;
+  r += (0.2 + n * 0.08 - r) * sw; g += (0.3 + n * 0.1 - g) * sw; b += (0.13 + n * 0.04 - b) * sw;
   for (const zn of ZONES) {
     const w = (1 - smoothstep(zn.r * 0.5, zn.r * 1.15, Math.hypot(x - zn.x, z - zn.z))) * 0.75;
     r += (zn.tint[0] * (0.85 + n * 0.3) - r) * w;
@@ -109,6 +114,7 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   r += (0.92 - r) * f.snow; g += (0.93 - g) * f.snow; b += (0.96 - b) * f.snow;
   r += (0.6 + n * 0.08 - r) * f.dirt; g += (0.52 + n * 0.06 - g) * f.dirt; b += (0.38 + n * 0.05 - b) * f.dirt;
   r += (0.74 - r) * f.sand; g += (0.68 - g) * f.sand; b += (0.5 - b) * f.sand;
+  r += (0.27 - r) * f.mud; g += (0.25 - g) * f.mud; b += (0.16 - b) * f.mud;
   r += (0.22 - r) * f.deep; g += (0.32 - g) * f.deep; b += (0.34 - b) * f.deep;
   return [r, g, b];
 }
@@ -139,6 +145,7 @@ export function groundLayers(x: number, z: number, h: number, out: Float32Array,
   apply(1, f.road * 0.85); // roads: packed dirt
   apply(5, f.town); // towns are paved
   apply(3, f.sand);
+  apply(1, f.mud); // the swamp's banks: wet dirt
   apply(3, f.deep); // silt under the ponds reads as sand
   // steep slopes turn to bare rock (snow stays on top of the peaks; the frost region's cliffs show their stone)
   apply(2, smoothstep(0.07, 0.28, slopeAt(x, z)) * 0.85 * (1 - f.peak) * (1 - f.town));

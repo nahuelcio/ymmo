@@ -108,13 +108,15 @@ export const EN = {
   "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
   "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
-  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"]].flatMap(([p, n]) =>
+  ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"], ["emerald", "Emerald"]].flatMap(([p, n]) =>
    ["Blade", "Staff", "Helm", "Plate", "Robe", "Greaves", "Gauntlets", "Boots", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
   "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
   "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },
   "citadel_sigil": { "name": "Citadel Sigil" }, "drake_scale": { "name": "Drake Scale" }, "dragon_fang": { "name": "Dragon Fang" },
   "frost_pelt": { "name": "Frozen Pelt" }, "ice_crystal": { "name": "Ice Crystal" },
+  "swamp_venom": { "name": "Swamp Venom", "desc": "Made by the creatures of the Poison Swamp. The Emerald set is forged with it." },
+  "ancient_bark": { "name": "Ancient Bark", "desc": "From the trees and beasts of the Ancient Jungle. The Emerald set is forged with it." },
   "supreme_healing_potion": { "name": "Supreme Healing Potion", "desc": "Restores 750 HP." },
   "supreme_mana_potion": { "name": "Supreme Mana Potion", "desc": "Restores 350 MP." },
   "earring_of_focus": { "name": "Earring of Focus" },
@@ -227,7 +229,11 @@ export const EN = {
   "frost_wolf": "Frost Wolf", "tundra_raider": "Tundra Raider", "frost_wraith": "Frost Wraith", "ice_shaman": "Ice Shaman", "ice_golem": "Ice Golem",
   "yeti": "Yeti", "white_drake": "White Drake", "frost_giant": "Frost Giant", "frost_wyvern": "Frost Wyvern", "frost_knight": "Frost Knight",
   "tundra_jarl": "Tundra Jarl", "yeti_matriarch": "Yeti Matriarch", "primal_yeti": "Primal Yeti", "yeti_cub": "Yeti Cub",
-  "hrimgar": "Hrimgar, the Frost King", "frost_guard": "Frost Guard"
+  "hrimgar": "Hrimgar, the Frost King", "frost_guard": "Frost Guard",
+  "swamp_cobra": "Swamp Cobra", "mud_crab": "Mud Crab", "bog_drowned": "Bog Drowned", "bog_witch": "Bog Witch", "mire_lurker": "Mire Lurker",
+  "jungle_raptor": "Jungle Raptor", "giant_spider": "Giant Spider", "tribal_hunter": "Tribal Hunter", "corrupted_ent": "Corrupted Ent", "jungle_beast": "Jungle Beast",
+  "bog_hag": "Great Hag", "tribal_chief": "Tribal Chief", "elder_ent": "Corrupted Elder Ent", "ent_sapling": "Corrupted Sapling",
+  "ssithra": "Ssithra, the Serpent Mother", "serpent_brood": "Serpent Brood"
  },
  "skills": {
   "provoke": {
@@ -464,7 +470,22 @@ export const EN = {
    "ready": "They pulse. Literally. This confirms everything I suspected.", "doneText": "Something sleeps on the Frost Throne. And it does not like being woken." },
   "giant_slayer": { "name": "Giant Slayer", "story": "The frost giants are the Frost King's guard. While they stand, no one reaches the Frost Throne alive.",
    "offer": "Bring down 8 frost giants and I will show you the way to the throne.", "busy": "Eight giants. When they raise the hammer, get out of the circle.",
-   "ready": "The throne is unguarded. Gather your people and type /raid frost when they are ready.", "doneText": "Hrimgar awaits you on his throne. May fire go with you." }
+   "ready": "The throne is unguarded. Gather your people and type /raid frost when they are ready.", "doneText": "Hrimgar awaits you on his throne. May fire go with you." },
+  "swamp_welcome": { "name": "Fangs in the Water", "story": "Reedgreen lives off the river and the reeds, but the northern swamp is eating the road. The cobras are already biting fishermen at the very edge of town.",
+   "offer": "The swamp cobras keep everyone from fishing. Kill 15.", "busy": "Fifteen cobras. If they bite you, drink something before you go on.",
+   "ready": "The fishermen are back on the bank. Thanks from all of us.", "doneText": "The swamp always gives back something worse. Keep your eyes open." },
+  "venom_cure": { "name": "Swamp Venom", "story": "Oren brews the antidotes for the whole town, and to cut a venom he needs the venom. The swamp's creatures carry it in fangs, claws and stingers.",
+   "offer": "Bring me 15 doses of swamp venom. Cobras, crabs, lurkers: they all carry it.", "busy": "Fifteen doses. Do not touch it with your hands, please.",
+   "ready": "With this I can save half the town. And you too, if something ever stings you.", "doneText": "If something strange bites you, come here first." },
+  "drowned_bog": { "name": "The Drowned of the Swamp", "story": "Morla ferried travelers across the swamp on her raft until the water began giving back those it swallowed. Now the drowned block her way.",
+   "offer": "The drowned of the swamp will not let me cross. Sink 12 of them back.", "busy": "Twelve drowned. They rise from the mud, watch your step.",
+   "ready": "The water is still again. My raft is yours whenever you want.", "doneText": "For now the swamp sleeps. For now." },
+  "sick_jungle": { "name": "Ancient Bark", "story": "The Ancient Jungle is older than any kingdom, and something is rotting it from the inside. Ilwen wants to study the bark of the sick trees to find a cure.",
+   "offer": "I need 14 pieces of ancient bark. The ents and the jungle beasts carry it.", "busy": "Fourteen pieces. If the bark moves, it is not bark: run.",
+   "ready": "It is rotten inside, as I feared. Something big is poisoning it.", "doneText": "The heart of the jungle beats strangely. And the temple, stranger still." },
+  "ent_purge": { "name": "Purge of the Ents", "story": "The corrupted ents guard the way to the Swamp Temple, where Ssithra, the Serpent Mother, sleeps. While they stand, no one reaches her lair.",
+   "offer": "Fell 8 corrupted ents and I will open the way to the temple.", "busy": "Eight ents. When they strike the ground, get out of the circle.",
+   "ready": "The way is clear. Gather your people and type /raid swamp when they are ready.", "doneText": "Ssithra awaits you in the temple. Do not look into her eyes." }
  },
  "npcs": {
   "grocer": {
@@ -574,7 +595,17 @@ export const EN = {
   "sven": { "title": "Furrier", "greeting": "Up here the cold bites before the wolves do." },
   "astrid": { "title": "Ice Scholar", "greeting": "This cold has a will of its own. I can prove it." },
   "rurik": { "title": "Scout", "greeting": "The tundra swallows tracks in minutes." },
-  "eira": { "title": "Seer", "greeting": "The Frost King dreams, and his dream freezes the north." }
+  "eira": { "title": "Seer", "greeting": "The Frost King dreams, and his dream freezes the north." },
+  "reed_weapons": { "title": "Master Weaponsmith", "greeting": "Emerald weapons are not sold: they are forged. Bring me venom and bark." },
+  "reed_armor": { "title": "Master Armorer", "greeting": "In the jungle, whoever does not cover up ends up covered in leaves." },
+  "reed_grocer": { "title": "Alchemist", "greeting": "I have no antidotes, but strong potions I do." },
+  "reed_gate": { "title": "Gatekeeper", "greeting": "The water is slow, the portal is not. Where to?" },
+  "reed_clan": { "title": "Clan Master", "greeting": "Even the thinnest reed holds if it grows in a bed." },
+  "thalia": { "title": "Ranger", "greeting": "The swamp creeps closer every day." },
+  "oren": { "title": "Herbalist", "greeting": "Every poison has its antidote. Almost every one." },
+  "ilwen": { "title": "Druid", "greeting": "The jungle is sick. I can hear it cough." },
+  "morla": { "title": "Ferrywoman", "greeting": "The water gives back what it takes. Always." },
+  "zahir": { "title": "Serpent Hunter", "greeting": "Ssithra is no legend. I have seen her tail." }
  },
  "zones": {
   "meadows": "Windy Meadows",
@@ -592,7 +623,10 @@ export const EN = {
   "wild": "Wilderness",
   "frost": "Frost Fort",
   "tundra": "Frozen Tundra",
-  "peaks": "Frozen Peaks"
+  "peaks": "Frozen Peaks",
+  "reed": "Reedgreen",
+  "swamp": "Poison Swamp",
+  "jungle": "Ancient Jungle"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -609,7 +643,10 @@ export const EN = {
   "nest": "Dragon's Nest (Lv 45-50)",
   "frost": "Frost Fort",
   "tundra": "Frozen Tundra (Lv 50-55)",
-  "peaks": "Frozen Peaks (Lv 55-60)"
+  "peaks": "Frozen Peaks (Lv 55-60)",
+  "reed": "Reedgreen",
+  "swamp": "Poison Swamp (Lv 60-65)",
+  "jungle": "Ancient Jungle (Lv 65-70)"
  },
  "races": {
   "human": {
@@ -667,7 +704,9 @@ export const EN = {
   "orc_outpost": "Orc War Outpost",
   "crypt": "Desecrated Crypt",
   "tundra_camp": "Raiders' Camp",
-  "yeti_den": "Matriarch's Den"
+  "yeti_den": "Matriarch's Den",
+  "witch_coven": "Swamp Coven",
+  "tribal_village": "Tribal Village"
  },
  "statuses": {
   "stun": {

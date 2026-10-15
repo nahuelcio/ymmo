@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { DUSK, FROST, TOWN } from './terrain';
+import { DUSK, FROST, REED, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -671,8 +671,22 @@ const FROST_FORT = ringFort({
   smith: 'frost_weapons', alchemist: 'frost_grocer',
 });
 
+/** Juncoverde (levels 60-70): mossy stone, plaster and green thatch by the swamp, a gate toward the pass and one toward its lands. */
+const REED_FORT = ringFort({
+  id: 'reed', town: REED, roads: [[190, 30], [REED.x, REED.z - 200]],
+  stone: 0x9aa88a, wall: 0xc8c0a0, roof: 0x4a7a4a,
+  tint: { wall: 0xe0d8b8, roof: 0x5a8a4a, wood: 0x7a6a48 }, tintAlt: { wall: 0xd4ccaa, roof: 0x7a9a4a, wood: 0x6a5a3a },
+  buildings: [
+    { id: 'r-hall', w: 6, d: 8, kind: 'hall', brick: false }, { id: 'r-smithy', w: 6, d: 4, kind: 'smithy' }, { id: 'r-1', w: 4, d: 4, brick: false },
+    { id: 'r-2', w: 6, d: 4, brick: false }, { id: 'r-3', w: 4, d: 4, brick: false }, { id: 'r-4', w: 4, d: 4 },
+    { id: 'r-5', w: 6, d: 4, brick: false }, { id: 'r-6', w: 4, d: 4, brick: false },
+  ],
+  folk: ['reed_weapons', 'reed_armor', 'reed_grocer', 'reed_gate', 'reed_clan', 'thalia', 'oren', 'ilwen'],
+  smith: 'reed_weapons', alchemist: 'reed_grocer',
+});
+
 /** The Bastión and the ring's forts. */
-export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT];
+export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT, REED_FORT];
 export const fortById = (id: string) => FORTS.find((f) => f.id === id)!;
 /** A fort resident's spot and facing (shared/src/data/world.ts). */
 export function fortFolk(id: string): { x: number; z: number; ry: number } {

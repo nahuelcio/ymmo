@@ -19,17 +19,21 @@ export const RING_ROADS: [number, number, number, number][] = [
 ];
 /** The ring's towns, walled like the Bastión (shared/src/village.ts FORTS): Fuerte de Escarcha for levels 50-60. */
 export const FROST = { x: RING_SITES.north.x, z: RING_SITES.north.z, r: 34, name: 'Fuerte de Escarcha' };
+/** ...Juncoverde for 60-70, by the swamp past the east pass. */
+export const REED = { x: RING_SITES.east.x, z: RING_SITES.east.z, r: 34, name: 'Juncoverde' };
 /** Peace zones on flattened ground. TOWN is the starting village. */
-export const TOWNS = [TOWN, DUSK, FROST];
+export const TOWNS = [TOWN, DUSK, FROST, REED];
 
 /**
  * Each ring region's own ground (render/scene.ts colours and textures it, layout.ts picks its trees and grass):
  * a box with soft edges, BIOME_FADE metres wide.
  */
-export type BiomeId = 'frost';
+export type BiomeId = 'frost' | 'swamp';
 export const BIOMES: { id: BiomeId; x0: number; x1: number; z0: number; z1: number }[] = [
   // the north side of the ring, west of its town: the frost region (50-60)
   { id: 'frost', x0: -WORLD_HALF, x1: 330, z0: -WORLD_HALF, z1: -555 },
+  // the east side, from its town up to the north-east corner: the swamp and the jungle (60-70)
+  { id: 'swamp', x0: 560, x1: WORLD_HALF, z0: -WORLD_HALF, z1: 170 },
 ];
 const BIOME_FADE = 70;
 /** How much of a biome covers (x, z): 0 outside, 1 well inside. */
@@ -47,7 +51,11 @@ export function biomeWeight(id: BiomeId, x: number, z: number): number {
 export const RAID_FLOORS = {
   // Trono de Escarcha: a mesa past the frost peaks
   frost: { x: -660, z: -680, r: 26, h: 16 },
+  // Templo del Pantano: a dry clearing raised out of the north-east corner's jungle
+  swamp: { x: 660, z: -665, r: 26, h: 4 },
 };
+/** The Poison Swamp sinks into shallow channels (relief). */
+const MARSH = { x: 650, z: -200, r: 105 };
 /** On a raid floor (or within `pad` metres of it): kept clear of trees and rocks, the boss fights there. */
 export const onRaidFloor = (x: number, z: number, pad = 0) => Object.values(RAID_FLOORS).some((f) => Math.hypot(x - f.x, z - f.z) < f.r + pad);
 /** The frost peaks (Picos Helados): [x, z, radius, height]. */
@@ -138,6 +146,8 @@ function relief(x: number, z: number): number {
     const d = Math.hypot(x - px, z - pz);
     if (d < r) h += ph * Math.pow(1 - d / r, 1.25) * (0.6 + 0.8 * valueNoise(x / 12 + 7, z / 12 - 3));
   }
+  const dm = Math.hypot(x - MARSH.x, z - MARSH.z);
+  if (dm < MARSH.r) h -= 2.4 * (1 - smoothstep(MARSH.r * 0.6, MARSH.r, dm)) * (0.35 + 0.65 * valueNoise(x / 28 + 31, z / 28 - 17));
   return h;
 }
 

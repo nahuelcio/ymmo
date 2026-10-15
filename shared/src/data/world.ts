@@ -1,4 +1,4 @@
-import { FROST, TOWNS } from '../terrain';
+import { FROST, REED, TOWNS } from '../terrain';
 import { ALBA_FOLK, fortFolk } from '../village';
 
 export interface ZoneDef {
@@ -37,6 +37,11 @@ export const ZONES: ZoneDef[] = [
     spawns: [{ mob: 'frost_wolf', count: 14 }, { mob: 'tundra_raider', count: 10 }, { mob: 'frost_wraith', count: 8 }, { mob: 'ice_shaman', count: 8 }, { mob: 'ice_golem', count: 5 }] },
   { id: 'peaks', name: 'Picos Helados', x: -470, z: -650, r: 85, levels: '55-60', tint: [0.8, 0.86, 0.93],
     spawns: [{ mob: 'yeti', count: 12 }, { mob: 'white_drake', count: 10 }, { mob: 'frost_giant', count: 8 }, { mob: 'frost_wyvern', count: 7 }, { mob: 'frost_knight', count: 6 }, { mob: 'primal_yeti', count: 1 }] },
+  // the swamp region (east pass), north of Juncoverde
+  { id: 'swamp', name: 'Pantano Ponzoñoso', x: 650, z: -200, r: 85, levels: '60-65', tint: [0.3, 0.36, 0.2],
+    spawns: [{ mob: 'swamp_cobra', count: 14 }, { mob: 'mud_crab', count: 10 }, { mob: 'bog_drowned', count: 8 }, { mob: 'bog_witch', count: 8 }, { mob: 'mire_lurker', count: 5 }] },
+  { id: 'jungle', name: 'Selva Antigua', x: 650, z: -440, r: 85, levels: '65-70', tint: [0.22, 0.42, 0.18],
+    spawns: [{ mob: 'jungle_raptor', count: 12 }, { mob: 'giant_spider', count: 10 }, { mob: 'tribal_hunter', count: 8 }, { mob: 'corrupted_ent', count: 7 }, { mob: 'jungle_beast', count: 6 }, { mob: 'elder_ent', count: 1 }] },
 ];
 
 export function zoneAt(x: number, z: number): string {
@@ -105,7 +110,10 @@ export const TELEPORTS = [
   { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', x: -270, z: 103, cost: 30000 },
   { id: 'frost', name: 'Fuerte de Escarcha', x: FROST.x, z: FROST.z + 6, cost: 40000 },
   { id: 'tundra', name: 'Tundra Helada (Nv 50-55)', x: -180, z: -640, cost: 45000 },
-  { id: 'peaks', name: 'Picos Helados (Nv 55-60)', x: -400, z: -660, cost: 50000 },
+  { id: 'peaks', name: 'Picos Helados (Nv 55-60)', x: -356, z: -672, cost: 50000 },
+  { id: 'reed', name: 'Juncoverde', x: REED.x, z: REED.z + 6, cost: 60000 },
+  { id: 'swamp', name: 'Pantano Ponzoñoso (Nv 60-65)', x: 655, z: -130, cost: 65000 },
+  { id: 'jungle', name: 'Selva Antigua (Nv 65-70)', x: 655, z: -370, cost: 70000 },
 ];
 
 const folk = (id: string) => ALBA_FOLK.find((n) => n.id === id)!;
@@ -198,6 +206,31 @@ export const NPCS: NpcDef[] = [
   // where the Gatekeeper drops you in each frost zone
   { id: 'rurik', name: 'Rurik', title: 'Explorador', x: -186, z: -634, ry: Math.atan2(6, -6), kind: 'quest', color: 0x5a6a5a,
     greeting: 'La tundra se traga las huellas en minutos.' },
-  { id: 'eira', name: 'Eira', title: 'Vidente', x: -406, z: -652, ry: Math.atan2(6, -8), kind: 'quest', color: 0x6a5a9a,
+  { id: 'eira', name: 'Eira', title: 'Vidente', x: -362, z: -666, ry: Math.atan2(6, -6), kind: 'quest', color: 0x6a5a9a,
     greeting: 'El Rey Gélido sueña, y su sueño congela el norte.' },
+  // Juncoverde (levels 60-70): the Emerald set made to order from the swamp's venom and the jungle's bark
+  { id: 'reed_weapons', name: 'Tarek', title: 'Maestro Armero', ...fort('reed_weapons'), kind: 'shop', color: 0x4a7a3a,
+    shop: ['glacial_blade', 'glacial_staff'], craft: ['emerald_blade', 'emerald_staff'],
+    greeting: 'Las armas Esmeralda no se venden: se forjan. Traeme veneno y corteza.' },
+  { id: 'reed_armor', name: 'Lyra', title: 'Maestra Armadurera', ...fort('reed_armor'), kind: 'shop', color: 0x3a6a5a,
+    craft: ['helm', 'plate', 'robe', 'greaves', 'gauntlets', 'boots', 'ring', 'earring', 'necklace'].map((k) => `emerald_${k}`),
+    greeting: 'En la selva, el que no se cubre termina cubierto de hojas.' },
+  { id: 'reed_grocer', name: 'Nadia', title: 'Alquimista', ...fort('reed_grocer'), kind: 'shop', color: 0x5a8a3a,
+    shop: ['greater_healing_potion', 'supreme_healing_potion', 'greater_mana_potion', 'supreme_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
+    greeting: 'Antídotos no tengo, pero pociones fuertes sí.' },
+  { id: 'reed_gate', name: 'Kamal', title: 'Guardián del Portal', ...fort('reed_gate'), kind: 'gatekeeper', color: 0x6a4a7a,
+    greeting: 'El agua tarda, el portal no. ¿A dónde vamos?' },
+  { id: 'reed_clan', name: 'Selene', title: 'Maestra de Clanes', ...fort('reed_clan'), kind: 'clan', color: 0x3a5a4a,
+    greeting: 'Hasta el junco más fino aguanta si crece en manada.' },
+  { id: 'thalia', name: 'Thalia', title: 'Guardabosques', ...fort('thalia'), kind: 'quest', color: 0x3a7a4a,
+    greeting: 'El pantano avanza un poco cada día.' },
+  { id: 'oren', name: 'Oren', title: 'Herbolario', ...fort('oren'), kind: 'quest', color: 0x6a8a3a,
+    greeting: 'Todo veneno tiene su antídoto. Casi todo.' },
+  { id: 'ilwen', name: 'Ilwen', title: 'Druida', ...fort('ilwen'), kind: 'quest', color: 0x5a6a2a,
+    greeting: 'La selva está enferma. La escucho toser.' },
+  // where the Gatekeeper drops you in each swamp zone
+  { id: 'morla', name: 'Morla', title: 'Barquera', x: 661, z: -136, ry: Math.atan2(-6, 6), kind: 'quest', color: 0x5a6a5a,
+    greeting: 'El agua devuelve lo que se lleva. Siempre.' },
+  { id: 'zahir', name: 'Zahir', title: 'Cazador de Serpientes', x: 661, z: -376, ry: Math.atan2(-6, 6), kind: 'quest', color: 0x7a5a3a,
+    greeting: 'Ssithra no es una leyenda. Le vi la cola.' },
 ];

@@ -76,6 +76,12 @@ export const MOB_LOOK: Record<string, MobLook> = {
   tundra_jarl: { skin: 0xd0a080, hair: 0xc89050, hs: 1, beard: true, ranger: true, top: 0x6a4a3a, bottom: 0x3a2a20, helm: 'HelmD', pauldron: true, weapon: 'battle_axe', brawn: 1.2, bulk: 1.15 },
   ice_shaman: orc({ skin: 0x6a8aa0, top: 0x3a5a8a, bottom: 0x2a3a5a, hs: 4, beard: true, weapon: 'staff_of_life' }),
   frost_giant: orc({ skin: 0x8aa8c8, hair: 0xe8eef4, hs: 1, beard: true, ears: undefined, tusks: false, ranger: true, top: 0x5a6a7a, bottom: 0x3a4a5a, pauldron: true, weapon: 'war_hammer', brawn: 1.3, bulk: 1.25 }),
+  // the swamp region: the drowned and witches of the bog, the jungle's tribe
+  bog_drowned: { skin: 0x6a8a5a, hair: 0x2a3a20, hs: 1, top: 0x3a4a2a, bottom: 0x2a3420 },
+  bog_witch: { g: 'f', skin: 0x8aa070, hair: 0x2a2a1a, hs: 0, top: 0x3a4a2a, bottom: 0x2a3020, hood: 0x2a3a1a, weapon: 'staff_of_life' },
+  bog_hag: { g: 'f', skin: 0x7a9060, hair: 0xd0d0c0, hs: 0, top: 0x4a2a4a, bottom: 0x2a1a2a, hood: 0x3a1a3a, weapon: 'sages_staff' },
+  tribal_hunter: { skin: 0x9a6a40, hair: 0x1a1a10, hs: 3, ranger: true, top: 0x6a5a2a, bottom: 0x4a3a1a, weapon: ['bow', 0x5a4a2a] },
+  tribal_chief: { skin: 0x8a5a30, hair: 0x1a1a10, hs: 1, beard: true, ranger: true, top: 0x8a3a1a, bottom: 0x4a3a1a, helm: 'HelmD', pauldron: true, weapon: 'partisan', brawn: 1.2, bulk: 1.15 },
   hrimgar: { skin: 0x7a9ac0, hair: 0xe8f0f8, hs: 1, beard: true, ranger: true, top: 0x7aa0c8, bottom: 0x4a5a78, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.3, bulk: 1.3 },
 };
 
@@ -195,6 +201,18 @@ export const MOB_GLB: Record<string, GlbLook> = {
   white_drake: { model: 'drake', height: 1.5, pale: 2, dye: 0xe8f4ff },
   frost_wyvern: { model: 'wyvern', height: 1.8, tint: { Main: 0x9ac0e0, Belly: 0xf0f4f8, Wings: 0x6a90b8 }, clips: { idle: 'Fly', run: 'Fly' } },
   frost_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.7, tint: { skeleton: 0xa8d4ff, Glow: 0x60c0ff } },
+  // the swamp region
+  swamp_cobra: { model: 'cobra', height: 1.0, dye: 0x9ad070, wave: true },
+  serpent_brood: { model: 'cobra', height: 1.0, dye: 0xc0e890, wave: true },
+  ssithra: { model: 'cobra', height: 1.0, dye: 0x6ac0a0, glow: 0x0a2a1a, wave: true },
+  mud_crab: { model: 'crab', height: 0.75, pale: 1.8, dye: 0x9a8058, kind: 'spider' },
+  mire_lurker: { model: 'limule', height: 0.8, dye: 0x7a9a5a, kind: 'spider' },
+  jungle_raptor: { model: 'raptor', height: 1.25, tint: { Brown: 0x2a4a1a, LightBrown: 0x5a7a2a }, clips: { run: 'Run' } },
+  giant_spider: { model: 'spider', height: 0.9, tint: { Material: 0x1a2a10, 'Material.001': 0x7a9a20 }, kind: 'spider' },
+  corrupted_ent: { model: 'forest', height: 2.1, dye: 0x8a9a6a, glow: 0x14081a },
+  elder_ent: { model: 'forest', height: 2.1, dye: 0x9a8aa0, glow: 0x24082c },
+  ent_sapling: { model: 'forest', height: 2.1, dye: 0xb0d098 },
+  jungle_beast: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, dye: 0x9aa878 },
   frost_guard: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Small_A', pale: 1.7, tint: { skeleton: 0xc0e0ff, Glow: 0x80d0ff } },
 };
 

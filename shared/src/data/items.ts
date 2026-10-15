@@ -101,6 +101,8 @@ const list: ItemDef[] = [
   ...tier('C', 'dragon', 'del Dragón', 'del Dragón', 140, 48, 115, 45000, 0x8a1a2a, ['drake_scale', 'dragon_fang'], 'S'),
   // Levels 50-78, one set a region of the ring: Glacial (B) is sold in the Fuerte de Escarcha
   ...tier('B', 'glacial', 'Glacial', 'Glaciales', 195, 54, 145, 80000, 0x8ac8f0),
+  // Emerald (A): Juncoverde's masters make it from the swamp's venom and the jungle's bark
+  ...tier('A', 'emerald', 'Esmeralda', 'Esmeralda', 265, 62, 180, 140000, 0x3ac87a, ['swamp_venom', 'ancient_bark']),
   // Jewelry: armor without P.Def (the once-D ones sold in town, the once-C ones drop only)
   { id: 'ring_of_vigor', name: 'Anillo del Vigor', type: 'armor', slot: 'ring', grade: 'NG', look: 'D', mDef: 3, hp: 25, price: 2200, icon: '💍', color: 0xc0a040 },
   { id: 'earring_of_focus', name: 'Pendiente del Foco', type: 'armor', slot: 'earring', grade: 'NG', look: 'D', mDef: 4, mp: 30, price: 2600, icon: '✨', color: 0x6090d0 },
@@ -147,6 +149,9 @@ const list: ItemDef[] = [
   // the frost region (50-60)
   { id: 'frost_pelt', name: 'Piel Gélida', type: 'material', stack: true, price: 1000, icon: '🐺', color: 0xc8dcec },
   { id: 'ice_crystal', name: 'Cristal de Hielo', type: 'material', stack: true, price: 1250, icon: '🧊', color: 0x8ad0f0 },
+  // the swamp region (60-70)
+  { id: 'swamp_venom', name: 'Veneno del Pantano', type: 'material', stack: true, price: 1500, icon: '☠️', color: 0x7ac83a, desc: 'Lo fabrican las criaturas del Pantano Ponzoñoso. Con él se forja el set Esmeralda.' },
+  { id: 'ancient_bark', name: 'Corteza Ancestral', type: 'material', stack: true, price: 1800, icon: '🪵', color: 0x8a6a3a, desc: 'De los árboles y las bestias de la Selva Antigua. Con ella se forja el set Esmeralda.' },
 ];
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(list.map((i) => [i.id, i]));

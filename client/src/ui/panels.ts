@@ -877,6 +877,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el set Abisal, y sus maestros <b>fabrican</b> los de Ceniza y del Dragón con los materiales que sueltan las zonas de nivel 30 a 50.</p>
     <p>Cada <b>grado</b> de equipo pide un nivel para usarlo: D desde el 20, C desde el 40, B desde el 52, A desde el 61 y S desde el 75. El tope es el <b>nivel 78</b>, y pasando el 50 cada nivel cuesta bastante más.</p>
     <p>Desde el nivel 50, los pasos de la sierra llevan a las tierras de afuera. Por el paso del norte está el <b>Fuerte de Escarcha</b>, que vende el set Glacial (grado B): Tundra Helada (50-55) · Picos Helados (55-60, jefe Yeti Primigenio). Su raid es el <b>Trono de Escarcha</b> (<b>/raid frost</b>).</p>
+    <p>Por el paso del este está <b>Juncoverde</b>, cuyos maestros fabrican el set Esmeralda (grado A) con veneno del pantano y corteza ancestral: Pantano Ponzoñoso (60-65) · Selva Antigua (65-70, jefe Ent Ancestral Corrompido). Su raid es el <b>Templo del Pantano</b> (<b>/raid swamp</b>).</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
@@ -918,6 +919,7 @@ const HELP_EN = `
     <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells the Abyssal set, and its masters <b>craft</b> the Ashforged and Dragon sets from the materials dropped in the level 30 to 50 zones.</p>
     <p>Each gear <b>grade</b> asks for a level: D from 20, C from 40, B from 52, A from 61 and S from 75. The cap is <b>level 78</b>, and past 50 each level takes a good deal longer.</p>
     <p>From level 50, the passes in the ridge lead to the lands beyond. Through the north pass stands <b>Frost Fort</b>, which sells the Glacial set (grade B): Frozen Tundra (50-55) · Frozen Peaks (55-60, boss Primal Yeti). Its raid is the <b>Frost Throne</b> (<b>/raid frost</b>).</p>
+    <p>Through the east pass lies <b>Reedgreen</b>, whose masters craft the Emerald set (grade A) from swamp venom and ancient bark: Poison Swamp (60-65) · Ancient Jungle (65-70, boss Corrupted Elder Ent). Its raid is the <b>Swamp Temple</b> (<b>/raid swamp</b>).</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
