@@ -139,7 +139,7 @@ export const NPCS: NpcDef[] = [
     greeting: 'Su capitán sigue dando órdenes desde el cuartel.' },
   { id: 'mael', name: 'Mael', title: 'Hermana', x: -30, z: 160, ry: Math.atan2(15, 15), kind: 'quest', color: 0x5a3a6a,
     greeting: 'No podemos dejar que Kaim Vanul se levante.' },
-  // Bastión del Ocaso (terrain.ts DUSK): B grade over the counter, A and S made to order from what the 30-50 zones drop
+  // Bastión del Ocaso (terrain.ts DUSK): the Abyssal set over the counter, Ashforged and Dragon made to order from what the 30-50 zones drop
   { id: 'dusk_weapons', name: 'Varek', title: 'Maestro Armero', x: 178, z: -162, ry: Math.atan2(-8, -8), kind: 'shop', color: 0x7a2a2a,
     shop: ['abyssal_blade', 'abyssal_staff'], craft: ['ashforged_blade', 'ashforged_staff', 'dragon_blade', 'dragon_staff'],
     greeting: 'El acero bueno no se compra hecho. Traeme con qué forjarlo.' },

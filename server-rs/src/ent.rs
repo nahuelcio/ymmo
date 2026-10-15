@@ -82,9 +82,14 @@ impl Common {
     }
 }
 
-/** e: enchant level (+N) */
+/** e: enchant level (+N); l: legacy, worn at any level whatever its grade asks (only sent when set) */
 #[derive(Clone, Debug, serde::Serialize)]
-pub struct InvItem { pub u: u32, pub i: String, pub c: i64, pub s: Option<String>, pub e: i64 }
+pub struct InvItem {
+    pub u: u32, pub i: String, pub c: i64, pub s: Option<String>, pub e: i64,
+    #[serde(skip_serializing_if = "is_false")]
+    pub l: bool,
+}
+fn is_false(b: &bool) -> bool { !*b }
 
 #[derive(Clone, Debug)]
 pub enum Intent {

@@ -92,4 +92,4 @@ export function statMods(race: Race, g: Gender): StatMods {
 }
 
 export const START_ADENA = 500;
-export const MAX_LEVEL = 50;
+export const MAX_LEVEL = 78;

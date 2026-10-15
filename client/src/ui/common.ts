@@ -1,4 +1,4 @@
-import { enchanted, GRADE_COLOR, ITEMS, type Slot } from '../../../shared/src/data/items';
+import { enchanted, GRADE_COLOR, ITEMS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
@@ -61,7 +61,11 @@ export function skillIcon(skillId: string, parent?: HTMLElement): HTMLDivElement
   return d;
 }
 
-export function itemTip(itemId: string, count = 1, ench = 0): string {
+/** The player's level, for the "requires level" line of item tooltips (game.ts sets it). */
+let myLevel = () => 0;
+export const setTipLevel = (f: () => number) => (myLevel = f);
+
+export function itemTip(itemId: string, count = 1, ench = 0, legacy = false): string {
   const d = ITEMS[itemId];
   if (!d) return '';
   const lines: string[] = [];
@@ -70,6 +74,9 @@ export function itemTip(itemId: string, count = 1, ench = 0): string {
   const st = (k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef') => enchanted(d, k, ench);
   if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}</span>`);
   if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  const need = wearLevel(d);
+  if (d.slot && legacy) lines.push(`<span class="tt-up">${tx('Equipo heredado: sin requisito de nivel', 'Legacy gear: no level requirement')}</span>`);
+  else if (d.slot && need > 0) lines.push(`<span class="${myLevel() >= need ? 'tt-dim' : 'tt-down'}">${tx(`Requiere nivel ${need}`, `Requires level ${need}`)}</span>`);
   if (d.desc) lines.push(esc(itemDesc(itemId, lang) ?? ""));
   if (d.type !== 'currency') lines.push(`<span class="tt-dim">${tx(`Valor: ${d.price} de adena`, `Value: ${d.price} adena`)}</span>`);
   return lines.join('<br>');

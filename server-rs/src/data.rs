@@ -47,6 +47,9 @@ pub struct ItemDef {
     #[serde(rename = "type")]
     pub kind: String,
     pub slot: Option<String>,
+    pub grade: Option<String>,
+    /** the grade it was before the level 78 cap re-graded it (and is still drawn as) */
+    pub look: Option<String>,
     pub p_atk: Option<f64>,
     pub m_atk: Option<f64>,
     pub p_def: Option<f64>,
@@ -300,6 +303,8 @@ struct Raw {
     wild: Named,
     enchant: EnchantCfg,
     items: Vec<ItemDef>,
+    #[serde(rename = "gradeLevel")]
+    grade_level: HashMap<String, i64>,
     mobs: Vec<MobDef>,
     skills: Vec<SkillDef>,
     quests: Vec<QuestDef>,
@@ -348,6 +353,8 @@ pub struct Data {
     pub nodes: HashMap<u32, NodeDef>,
     pub gather: GatherDefs,
     pub clans: ClansDef,
+    /** the level a character needs to wear each grade (GRADE_LEVEL in shared/src/data/items.ts) */
+    pub grade_level: HashMap<String, i64>,
     /** deep water on a grid (cell m, from -half): true where a character swims */
     water: Vec<bool>,
     water_cell: f64,
@@ -357,6 +364,8 @@ pub struct Data {
 
 impl Data {
     pub fn item(&self, id: &str) -> Option<&ItemDef> { self.items.get(id) }
+    /** The level a character needs to wear this piece (0 for anything without a grade). */
+    pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
     pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
     pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
     pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc) }
@@ -405,6 +414,7 @@ pub fn d() -> &'static Data {
             wild: raw.wild,
             enchant: raw.enchant,
             items: raw.items.into_iter().map(|i| (i.id.clone(), i)).collect(),
+            grade_level: raw.grade_level,
             mobs: raw.mobs.into_iter().map(|m| (m.id.clone(), m)).collect(),
             skills: raw.skills,
             skill_by_id,

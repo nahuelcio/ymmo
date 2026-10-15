@@ -132,8 +132,11 @@ pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64 {
 
 pub fn xp_to_next(level: i64) -> i64 {
     if level >= d().c.max_level { return 0; }
-    jround(80.0 * (level as f64).powf(2.2)) as i64
+    jround(80.0 * (level as f64).powf(2.2) * past_50(level)) as i64
 }
+
+/** Past level 50 each level asks progressively more, as in L2: x1 at 50 up to x3 at 77. */
+fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
 
 pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * mob_mult(m, "hpMult", m.hp_mult).powf(0.85)) }
 
@@ -145,6 +148,31 @@ pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn levels_go_to_78_slower_past_50() {
+        assert_eq!(d().c.max_level, 78);
+        assert_eq!(xp_to_next(78), 0);
+        assert!(xp_to_next(77) > 0);
+        // up to 50 the curve is the one it always was
+        assert_eq!(xp_to_next(50), jround(80.0 * 50f64.powf(2.2)) as i64);
+        assert!((past_50(77) - 3.0).abs() < 1e-9);
+        for l in 1..77 { assert!(xp_to_next(l + 1) > xp_to_next(l), "{l}"); }
+    }
+
+    #[test]
+    fn grades_ask_for_a_level() {
+        let data = d();
+        let lvl = |id: &str| data.wear_level(data.item(id).unwrap());
+        assert_eq!(lvl("short_sword"), 0);
+        assert_eq!(lvl("brigandine_tunic"), 0); // once D, now NG
+        assert_eq!(lvl("samurai_longsword"), 20); // once C, now D
+        assert_eq!(lvl("abyssal_blade"), 20); // once B
+        assert_eq!(lvl("ashforged_blade"), 20); // once A
+        assert_eq!(lvl("dragon_blade"), 40); // once S, now C
+        for g in ["NG", "D", "C", "B", "A", "S"] { assert!(data.grade_level.contains_key(g), "{g}"); }
+        assert_eq!(data.grade_level["S"], 75);
+    }
 
 
     /// Pacing table for levels 1..max: `cargo test balance -- --nocapture` prints it.
@@ -159,7 +187,8 @@ mod tests {
             // weapon P.Atk a fighter needs to drop a same-level mob in 12 hits: the target for gear tiers
             let weapon = s.max_hp * s.p_def / (70.0 * level_mod(l) * 12.0) - 4.0;
             println!("lvl {l:2}  xp {:7}  kills/lvl {kills:4.1}  mob hp {:5}  weapon for 12 hits {weapon:5.0}", xp_to_next(l), s.max_hp);
-            assert!((2.0..=12.0).contains(&kills), "level {l}: {kills:.1} same-level kills to level up");
+            // up to 50, 2-12 same-level kills a level; past it the slower L2-style curve stretches that up to x3
+            assert!((2.0..=12.0 * past_50(l)).contains(&kills), "level {l}: {kills:.1} same-level kills to level up");
             assert!(xp_to_next(l) > xp_to_next(l - 1), "xp curve must grow at level {l}");
         }
         assert_eq!(xp_to_next(d().c.max_level), 0);
