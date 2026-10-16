@@ -341,6 +341,291 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.p.emit({ cell: 'flare', n: 1, at: above(head(t), 3), size: [4, 1.5], life: 1200, color: 0xffffff, bright: 1.6 });
   },
 
+  // ---- knight 55-75
+  aegis_charge: ({ f, s, t, color }) => {
+    f.projectile(chest(s, 0.5), at(t, 0.5), color, 180, 0.55, 'none'); // the shield, thrown forward with the body behind it
+    later(180, () => {
+      f.burst(chest(t), color, 1.3, 350);
+      f.ring(feet(t), color, 2.2, 450);
+      f.shards(chest(t), 0xffffff, 10, 1.4, 500);
+      f.stun(head(t), 2000);
+    });
+  },
+  iron_bulwark: ({ f, s, color }) => {
+    f.dome(feet(s), color, 1.6, 1200);
+    f.ring(feet(s), color, 1.4, 600);
+    later(150, () => f.ring(feet(s), color, 2, 700));
+    f.motes(chest(s, 0.5), 0x9aa8bc, 1100, { n: 6, r: 1.1, spin: 2, rise: 0, size: 1.4, cell: 'debris' }); // iron plates closing in
+  },
+  judgment: ({ f, t, color, aoe }) => {
+    f.pillar(feet(t), HOLY, 500, 8);
+    later(200, () => {
+      f.flash(chest(t), color, 1.2);
+      f.burst(chest(t), GOLD, 1.4, 450);
+      f.rune(feet(t), aoe * 0.6, color, 900);
+      f.ring(feet(t), color, aoe, 700);
+    });
+  },
+  shield_of_faith: ({ f, t, color, aoe }) => {
+    f.dome(feet(t), color, 1.8, 1200);
+    f.rune(feet(t), 1.6, color, 1200);
+    f.ring(feet(t), color, aoe * 0.7, 900); // reaching the party around
+    f.motes(feet(t), color, 1200, { n: 16, r: 1.2, spin: 1.5, rise: 2.4, size: 0.8 });
+  },
+  titan_slam: ({ f, s, t, color, aoe }) => {
+    f.burst(feet(s), color, 1.6, 500);
+    f.ring(feet(s), 0xd8c090, aoe, 700);
+    later(120, () => f.ring(feet(s), color, aoe * 0.6, 600));
+    f.debris(feet(s), 0x6a5a40, 24, aoe * 0.6);
+    f.smoke(feet(s), aoe * 0.5, 1400, 0x8a7a64, 10);
+    f.light(chest(s, 0.3), 0xffd090, 12, aoe * 2, 500);
+    f.stun(head(t), 2000);
+  },
+
+  // ---- gladiator 55-75
+  cross_cut: ({ f, s, t, color }) => {
+    f.slash(chest(t), chest(s).add(new THREE.Vector3(1, 0.8, 0)), color, 2, 280);
+    later(110, () => f.slash(chest(t), chest(s).add(new THREE.Vector3(-1, 0.8, 0)), color, 2, 280));
+    f.shards(chest(t), BLOOD, 12, 1.3, 700);
+  },
+  berserk: ({ f, s, color }) => {
+    f.burst(chest(s), color, 1.1, 400);
+    f.ring(feet(s), color, 2.2, 500);
+    f.flame(feet(s), 0.8, 1200, 0xff3311);
+    f.motes(feet(s), color, 1200, { n: 14, r: 0.8, spin: 4, rise: 2.4, cell: 'flare' });
+    f.p.emit({ cell: 'halo', n: 1, at: chest(s), size: [1.2, 2.6], life: 800, color, alpha: 0.7 });
+  },
+  blade_dance: ({ f, s, color, aoe }) => {
+    f.p.emit({ cell: 'slash', n: 6, at: chest(s, 0.5), shape: 'ring', r: aoe * 0.4, size: [1.2, 1.8], spin: 10, life: 450, color, bright: 1.3 });
+    f.ring(feet(s), color, aoe, 500);
+    later(150, () => f.ring(feet(s), color, aoe * 0.7, 500));
+    f.shards(chest(s, 0.5), BLOOD, 16, aoe * 0.6, 700);
+  },
+  crippling_strike: ({ f, s, t, color }) => {
+    f.slash(above(feet(t), 0.4), chest(s), color, 1.6, 300); // low, at the legs
+    f.burst(above(feet(t), 0.4), color, 0.8, 300);
+    f.debris(feet(t), 0x8a7a60, 8, 0.8);
+    f.p.emit({ cell: 'ring', n: 2, at: above(feet(t), 0.3), flat: true, size: [0.6, 1.4], life: 700, color, alpha: 0.7 });
+  },
+  decapitate: ({ f, s, t, color }) => {
+    f.slash(head(t), above(chest(s), 1.2), color, 2.6, 340);
+    f.flash(head(t), 0xff2222, 1.2);
+    f.shards(head(t), BLOOD, 18, 1.6, 800);
+    f.p.emit({ cell: 'burst', n: 1, at: head(t), size: [0.5, 2.4], life: 350, color: 0xff3030, bright: 1.5 });
+  },
+
+  // ---- sorcerer 55-75
+  chain_lightning: ({ f, s, t, color, aoe }) => {
+    f.bolt(above(chest(s), 0.5), chest(t), color, 260);
+    later(140, () => {
+      // it forks on to whatever stands near the target
+      for (let k = 0; k < 3; k++) {
+        const a = k * 2.1 + 0.4, end = chest(t).add(new THREE.Vector3(Math.cos(a) * aoe * 0.6, -0.3, Math.sin(a) * aoe * 0.6));
+        f.bolt(chest(t), end, color, 220);
+        f.burst(end, color, 0.5, 250);
+      }
+      f.stun(head(t), 1000);
+    });
+    f.light(chest(t), color, 10, 8, 400);
+  },
+  blizzard: ({ f, t, color, aoe }) => {
+    f.p.emit({ cell: 'smoke', n: 8, at: above(feet(t), 7), shape: 'disc', r: aoe * 0.7, size: [3, 4.5], life: 2000, color: 0x8aa0b8, alpha: 0.5, solid: true, fadeIn: 0.3 }); // the storm cloud
+    f.p.emit({ cell: 'streak', n: 110, at: above(feet(t), 6), shape: 'disc', r: aoe * 0.8, dir: new THREE.Vector3(0.2, -1, 0.1), speed: [8, 12], size: 0.4, life: [600, 1000], color: 0xeaf6ff, bright: 1.4, stretch: 0.06 });
+    f.p.emit({ cell: 'puff', n: 14, at: above(feet(t), 0.6), shape: 'disc', r: aoe * 0.7, size: [1.6, 2.6], life: [900, 1500], color: 0xdff0ff, alpha: 0.55 }); // swirling snow at the ground
+    later(200, () => {
+      f.frost(feet(t), aoe * 0.8, 2600);
+      f.ring(feet(t), color, aoe, 900);
+    });
+  },
+  mana_surge: ({ f, s, color }) => {
+    f.pillar(feet(s), color, 900, 5);
+    f.rune(feet(s), 1.6, color, 1200);
+    f.motes(feet(s), color, 1200, { n: 20, r: 1.3, spin: 6, rise: 2.2, size: 0.8 });
+    f.p.emit({ cell: 'halo', n: 1, at: chest(s), size: [1, 2.6], life: 800, color, alpha: 0.6 });
+  },
+  void_bolt: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 450, 0.45, 'dark');
+    later(450, () => {
+      f.burst(chest(t), 0x2a0a4a, 1.2, 500);
+      f.p.emit({ cell: 'swirl', n: 2, at: chest(t), size: [0.6, 2.2], spin: -9, life: 600, color, alpha: 0.8 });
+      f.flash(chest(t), color, 0.8);
+    });
+  },
+  apocalypse: ({ f, t, color, aoe }) => {
+    f.rune(feet(t), aoe * 0.6, FIRE, 1400);
+    // meteors fall all over the area, one after another
+    for (let k = 0; k < 7; k++) {
+      const a = k * 2.4, r = aoe * 0.75 * Math.sqrt((k + 0.5) / 7), spot = feet(t).add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      later(200 + k * 170, () => {
+        f.projectile(above(spot, 14).add(new THREE.Vector3(2, 0, 1)), () => spot, color, 600, 0.6, 'fire');
+        later(600, () => {
+          f.burst(above(spot, 0.4), FIRE, 1.2, 450);
+          f.flame(spot, 1.2, 1400, FIRE);
+          f.debris(spot, 0x4a3a30, 8, 1.2);
+        });
+      });
+    }
+    later(800, () => f.light(chest(t), FIRE, 26, aoe * 3, 2000));
+    later(1400, () => f.smoke(feet(t), aoe * 0.5, 2400, 0x2a2420, 10));
+  },
+
+  // ---- cleric 55-75
+  mass_heal: ({ f, t, color, aoe }) => {
+    f.ring(feet(t), color, aoe * 0.6, 900);
+    f.dome(feet(t), hot(color), 1.4, 1000);
+    f.motes(feet(t), color, 1500, { n: 30, r: aoe * 0.4, spin: 1, rise: 2.5, size: 0.9 });
+    f.p.emit({ cell: 'glow', n: 24, at: feet(t), shape: 'disc', r: aoe * 0.4, up: 1.6, size: [0.3, 0], life: [800, 1300], color, bright: 1.2 });
+  },
+  sanctuary: ({ f, t, color }) => {
+    f.dome(feet(t), color, 1.8, 1400);
+    f.rune(feet(t), 1.8, HOLY, 1400);
+    f.pillar(feet(t), HOLY, 900, 4);
+    f.light(chest(t), HOLY, 8, 6, 900);
+  },
+  holy_nova: ({ f, s, t, color, aoe }) => {
+    f.flash(chest(s), color, 1.5);
+    f.ring(feet(s), HOLY, aoe, 600);
+    later(120, () => f.ring(feet(s), 0xffffff, aoe * 0.6, 500));
+    f.p.emit({ cell: 'streak', n: 24, at: chest(s, 0.5), shape: 'sphere', r: 0.3, outward: true, speed: [10, 14], size: 0.4, life: 400, color, bright: 1.4, stretch: 0.06 });
+    f.stun(head(t), 1000);
+  },
+  blessing_of_ages: ({ f, t, color, aoe }) => {
+    f.p.emit({ cell: 'halo', n: 1, at: above(head(t), 0.5), size: [1, 2], life: 1200, color, bright: 1.3 });
+    f.ring(feet(t), color, aoe * 0.5, 900);
+    later(200, () => f.ring(feet(t), color, aoe * 0.75, 900));
+    f.motes(feet(t), GOLD, 1400, { n: 20, r: 1.2, spin: 2, rise: 3, size: 0.8, cell: 'star' });
+  },
+  divine_light: ({ f, t }) => {
+    f.pillar(feet(t), 0xffffff, 1400, 10);
+    f.flash(chest(t), 0xffffff, 1.4);
+    f.p.emit({ cell: 'flare', n: 1, at: above(head(t), 2.5), size: [3, 1.2], life: 1000, color: 0xffffff, bright: 1.6 });
+    f.motes(above(head(t), 1), HOLY, 1300, { n: 18, r: 0.9, spin: 1, rise: 0, fall: 1.6, cell: 'glow' });
+    f.light(chest(t), HOLY, 18, 12, 1400);
+  },
+
+  // ---- Phoenix Paladin (76-78)
+  phoenix_ward: ({ f, s, color }) => {
+    f.flame(feet(s), 1.2, 1600, 0xff7a1a);
+    f.dome(feet(s), color, 1.6, 1400);
+    f.motes(feet(s), 0xffc060, 1600, { n: 22, r: 1.1, spin: 3, rise: 3, size: 0.8, cell: 'flare' });
+    f.light(chest(s), FIRE, 14, 8, 1600);
+  },
+  phoenix_strike: ({ f, s, t, color, aoe }) => {
+    f.projectile(above(chest(s), 3), at(t), color, 350, 0.7, 'fire'); // the firebird dives
+    later(350, () => {
+      f.burst(chest(t), FIRE, 1.6, 500);
+      f.ring(feet(t), 0xffaa33, aoe, 700);
+      f.flame(feet(t), aoe * 0.4, 1600, color);
+      f.p.emit({ cell: 'swirl', n: 3, at: chest(t), size: [1, 3], spin: 7, life: 700, color: 0xffb050, alpha: 0.8 });
+      f.light(chest(t), FIRE, 18, aoe * 2.5, 900);
+    });
+  },
+  rebirth: ({ f, s }) => {
+    f.pillar(feet(s), 0xff8a2a, 1800, 9);
+    f.flame(feet(s), 1.5, 2000, FIRE);
+    f.ring(feet(s), FIRE, 3, 900);
+    later(300, () => f.ring(feet(s), 0xffd080, 4.5, 1000));
+    f.motes(feet(s), 0xffd080, 2000, { n: 30, r: 1.4, spin: 2.5, rise: 4, size: 1, cell: 'flare' });
+    f.light(chest(s), FIRE, 24, 14, 1800);
+    f.p.emit({ cell: 'flare', n: 1, at: above(head(s), 2.5), size: [4, 1.5], life: 1200, color: 0xffb040, bright: 1.6 });
+  },
+
+  // ---- Duelist (76-78)
+  riposte: ({ f, s, color }) => {
+    f.p.emit({ cell: 'slash', n: 4, at: chest(s, 0.55), shape: 'ring', r: 0.9, size: [1, 1.4], spin: 14, life: 500, color, bright: 1.3 });
+    f.ring(feet(s), color, 1.6, 400);
+    f.motes(feet(s), color, 900, { n: 14, r: 0.9, spin: 12, rise: 0.6, cell: 'glow' });
+  },
+  thousand_cuts: ({ f, s, color, aoe }) => {
+    // cut after cut all around, faster than the eye
+    for (let k = 0; k < 8; k++) {
+      later(k * 60, () => {
+        const a = k * 0.785, spot = chest(s, 0.5).add(new THREE.Vector3(Math.cos(a) * aoe * 0.5, ((k % 2) - 0.5) * 0.6, Math.sin(a) * aoe * 0.5));
+        f.slash(spot, chest(s, 0.5), color, 1.6, 240);
+      });
+    }
+    later(480, () => {
+      f.ring(feet(s), color, aoe, 600);
+      f.shards(chest(s, 0.5), BLOOD, 20, aoe * 0.7, 800);
+    });
+  },
+  final_verdict: ({ f, s, t, color }) => {
+    f.rune(feet(t), 1.4, 0x8a0a0a, 900);
+    later(250, () => {
+      f.slash(chest(t), above(chest(s), 1.5), color, 3, 380);
+      f.slash(chest(t), chest(s).add(new THREE.Vector3(1.5, 0, 0)), 0xff3030, 2.6, 380);
+      f.flash(chest(t), 0xff2020, 1.6);
+      f.burst(chest(t), 0xff4040, 1.8, 500);
+      f.stun(head(t), 2000);
+      f.light(chest(t), 0xff2020, 18, 10, 700);
+    });
+  },
+
+  // ---- Archmage (76-78)
+  arcane_mastery: ({ f, s, color }) => {
+    f.rune(feet(s), 2.2, color, 1600);
+    later(150, () => f.rune(feet(s), 1.4, hot(color), 1400));
+    f.pillar(feet(s), color, 1200, 7);
+    f.motes(chest(s, 0.5), color, 1600, { n: 10, r: 1.4, spin: 3, rise: 0, size: 1.2, cell: 'star' }); // stars in orbit
+    f.p.emit({ cell: 'halo', n: 1, at: chest(s), size: [1.2, 2.8], life: 900, color, alpha: 0.6 });
+  },
+  star_fall: ({ f, t, color, aoe }) => {
+    f.rune(feet(t), aoe * 0.6, color, 1800);
+    for (let k = 0; k < 10; k++) {
+      const a = k * 2.4, r = aoe * 0.75 * Math.sqrt((k + 0.5) / 10), spot = feet(t).add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      later(k * 140, () => {
+        f.projectile(above(spot, 16).add(new THREE.Vector3(-3, 0, 2)), () => spot, 0xd0e0ff, 500, 0.35, 'magic');
+        later(500, () => {
+          f.burst(above(spot, 0.3), color, 0.9, 400);
+          f.ring(spot, color, 1.6, 400);
+        });
+      });
+    }
+    later(600, () => f.light(chest(t), color, 16, aoe * 2.5, 1600));
+  },
+  oblivion: ({ f, t, color }) => {
+    f.p.emit({ cell: 'swirl', n: 3, at: chest(t), size: [2.4, 0.4], spin: -12, life: 900, color, alpha: 0.9 }); // a vortex closing on itself
+    f.dome(feet(t), 0x1a0a2a, 1.4, 900);
+    later(800, () => {
+      f.flash(chest(t), 0xc080ff, 1.6);
+      f.burst(chest(t), 0x2a0a3a, 1.8, 600);
+      f.ring(feet(t), color, 3, 600);
+      f.stun(head(t), 2000);
+    });
+  },
+
+  // ---- Hierophant (76-78)
+  divine_grace: ({ f, t, color, aoe }) => {
+    f.pillar(feet(t), 0xfff4c0, 1200, 7);
+    f.ring(feet(t), color, aoe * 0.6, 1000);
+    later(250, () => f.ring(feet(t), color, aoe * 0.85, 1000));
+    f.motes(above(head(t), 1), 0xffffff, 1600, { n: 24, r: 1.6, spin: 1, rise: 0, fall: 1.6, cell: 'glow' }); // feathers drifting down
+    f.p.emit({ cell: 'halo', n: 1, at: above(head(t), 0.5), size: [1.2, 2.4], life: 1400, color, bright: 1.3 });
+  },
+  sacred_judgment: ({ f, t, color, aoe }) => {
+    f.p.emit({ cell: 'smoke', n: 5, at: above(chest(t), 8), shape: 'disc', r: aoe * 0.5, size: [2.5, 3.5], life: 1000, color: 0xd8c890, alpha: 0.45, solid: true, fadeIn: 0.3 }); // the sky opens
+    later(200, () => {
+      for (let k = 0; k < 5; k++) {
+        const a = k * 1.256, spot = feet(t).add(new THREE.Vector3(Math.cos(a) * aoe * 0.5, 0, Math.sin(a) * aoe * 0.5));
+        f.pillar(spot, HOLY, 600, 9);
+      }
+      f.pillar(feet(t), 0xffffff, 700, 10);
+      f.flash(chest(t), color, 1.4);
+      f.ring(feet(t), color, aoe, 700);
+      f.stun(head(t), 1500);
+    });
+  },
+  grand_miracle: ({ f, t, aoe }) => {
+    f.pillar(feet(t), 0xffffff, 2200, 12);
+    f.rune(feet(t), aoe * 0.4, 0xfff0b0, 2200);
+    f.ring(feet(t), 0xfff0b0, aoe * 0.5, 1000);
+    later(250, () => f.ring(feet(t), 0xffb0e0, aoe * 0.8, 1200));
+    later(500, () => f.ring(feet(t), 0xb0e0ff, aoe, 1400));
+    f.motes(feet(t), 0xffffff, 2200, { n: 40, r: aoe * 0.4, spin: 2, rise: 4 });
+    f.light(chest(t), HOLY, 26, 18, 2000);
+    f.p.emit({ cell: 'flare', n: 1, at: above(head(t), 3.5), size: [5, 2], life: 1400, color: 0xffffff, bright: 1.7 });
+  },
+
   // ---- racial and gender
   second_wind: ({ f, s, color }) => {
     f.ring(feet(s), color, 1.2, 350);

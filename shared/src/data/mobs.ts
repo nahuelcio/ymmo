@@ -341,9 +341,9 @@ const list: MobDef[] = [
     drops: [{ item: 'abyss_essence', chance: 0.6, max: 2 }, { item: 'infernal_staff', chance: 0.004 }, { item: 'infernal_helm', chance: 0.006 }, { item: 'scroll_enchant_armor', chance: 0.04 }] },
   // the volcanic region's camp leaders (elite), world boss and raid
   { id: 'high_pyromancer', name: 'Sumo Piromante', level: 74, shape: 'orc', color: 0xa8301a, scale: 1.2, aggressive: true, speed: 4.5, atkInterval: 1600, range: 12, hpMult: 4.5, atkMult: 1.35, elite: true,
-    special: { r: 6, windup: 1300, mult: 2.5, every: 8000, at: 'target' }, adena: [6500, 9800], drops: [{ item: 'magma_core', chance: 1, min: 2, max: 3 }] },
+    special: { r: 6, windup: 1300, mult: 2.5, every: 8000, at: 'target' }, adena: [6500, 9800], drops: [{ item: 'magma_core', chance: 1, min: 2, max: 3 }, { item: 'awakening_shard', chance: 0.35 }] },
   { id: 'abyss_commander', name: 'Comandante Abisal', level: 78, shape: 'orc', color: 0x6a1a20, scale: 1.55, aggressive: true, speed: 5, atkInterval: 1500, range: 2.8, hpMult: 5.5, atkMult: 1.4, elite: true,
-    onHit: { id: 'bleed', ms: 5000, chance: 0.3, dot: 0.25 }, special: { r: 6, windup: 1200, mult: 2.6, every: 8000, at: 'self', stun: 1500 }, adena: [8000, 12000], drops: [{ item: 'abyss_essence', chance: 1, min: 2, max: 4 }] },
+    onHit: { id: 'bleed', ms: 5000, chance: 0.3, dot: 0.25 }, special: { r: 6, windup: 1200, mult: 2.6, every: 8000, at: 'self', stun: 1500 }, adena: [8000, 12000], drops: [{ item: 'abyss_essence', chance: 1, min: 2, max: 4 }, { item: 'awakening_shard', chance: 0.5 }] },
   { id: 'flame_lord', name: 'Señor de las Llamas', level: 75, shape: 'golem', color: 0xc84a1a, scale: 3.4, aggressive: true, speed: 4, atkInterval: 1700, range: 4.5, hpMult: 20, atkMult: 1.45, defMult: 1.3, respawn: 300000, boss: true,
     special: { r: 7, windup: 1500, mult: 2.8, every: 7000, at: 'target' },
     phases: [
@@ -352,7 +352,7 @@ const list: MobDef[] = [
     ],
     adena: [45000, 70000],
     drops: [{ item: 'infernal_blade', chance: 0.12 }, { item: 'infernal_staff', chance: 0.12 }, { item: 'infernal_plate', chance: 0.1 }, { item: 'infernal_robe', chance: 0.1 }, { item: 'infernal_necklace', chance: 0.15 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 3 }, { item: 'scroll_enchant_armor', chance: 1, min: 3, max: 6 }, { item: 'magma_core', chance: 1, min: 8, max: 15 }, { item: 'abyss_essence', chance: 1, min: 3, max: 6 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 3 }, { item: 'scroll_enchant_armor', chance: 1, min: 3, max: 6 }, { item: 'magma_core', chance: 1, min: 8, max: 15 }, { item: 'abyss_essence', chance: 1, min: 3, max: 6 }, { item: 'awakening_shard', chance: 1, min: 2, max: 3 }] },
   { id: 'fire_elemental', name: 'Elemental de Fuego', level: 72, shape: 'golem', color: 0xff7a3a, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.2, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Heart of the Abyss raid (instanced, `/raid abyss`)
   { id: 'azgaroth', name: 'Azgaroth, el Devorador', level: 78, shape: 'beast', color: 0x4a2a5a, scale: 3.8, aggressive: true, speed: 4.5, atkInterval: 1800, range: 5.5, hpMult: 30, atkMult: 1.4, defMult: 1.3, respawn: 1e12, boss: true,
@@ -366,7 +366,7 @@ const list: MobDef[] = [
     adena: [100000, 160000],
     drops: [{ item: 'infernal_blade', chance: 0.45 }, { item: 'infernal_staff', chance: 0.45 }, { item: 'infernal_plate', chance: 0.4 }, { item: 'infernal_robe', chance: 0.4 }, { item: 'infernal_helm', chance: 0.4 },
       { item: 'infernal_ring', chance: 0.4 }, { item: 'infernal_earring', chance: 0.4 }, { item: 'infernal_necklace', chance: 0.4 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 3, max: 5 }, { item: 'scroll_enchant_armor', chance: 1, min: 5, max: 10 }, { item: 'abyss_essence', chance: 1, min: 20, max: 35 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 3, max: 5 }, { item: 'scroll_enchant_armor', chance: 1, min: 5, max: 10 }, { item: 'abyss_essence', chance: 1, min: 20, max: 35 }, { item: 'awakening_shard', chance: 1, min: 3, max: 5 }] },
   { id: 'abyss_spawn', name: 'Engendro del Abismo', level: 76, shape: 'spider', color: 0x6a4a8a, scale: 1.0, aggressive: true, speed: 6, atkInterval: 1300, range: 1.8, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 

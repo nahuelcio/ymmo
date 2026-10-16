@@ -177,7 +177,8 @@ export type S2C =
   | { t: 'fx'; s: number; tg: number; skill: string }
   | { t: 'cd'; key: string; ms: number }
   | { t: 'died'; id: number; byPlayer: boolean }
-  | { t: 'levelUp'; id: number; lvl: number }
+  /** spec: the character awakened into this third specialization instead of levelling (the quest "El Despertar") */
+  | { t: 'levelUp'; id: number; lvl: number; spec?: Spec }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'ally' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }

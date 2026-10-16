@@ -1,4 +1,4 @@
-import { CLASSES, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { CLASSES, EVOLVE_LEVEL, evolutionOf, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
 import { makeMovable } from './movable';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
@@ -246,7 +246,8 @@ export class CharacterPanel {
     }
     if (m.lvl >= SPEC_LEVEL && !m.spec) {
       el('div', 'section', b, tx('Elegí tu especialización', 'Choose your specialization'));
-      for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls)) {
+      // the four of level 20; their evolutions come later, with the quest "El Despertar"
+      for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls && !SPECS[s].parent)) {
         const card = el('div', 'skill-row', b);
         const skills = allSkillsFor(m.cls, m.race, m.look.g, sp).filter((s) => s.spec).map((s) => skillName(s.id, lang)).join(' · ');
         el('div', '', card).innerHTML = `<b>${esc(specName(sp, lang))}</b><br><span class="tt-dim">${esc(specDesc(sp, lang))}<br>${esc(skills)}</span>`;
@@ -266,6 +267,20 @@ export class CharacterPanel {
         row.draggable = true;
         row.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
         row.ondragend = () => (this.g.ui.hud.drag = null);
+      }
+    }
+    // what the spec awakens into at level 76, and how
+    const evo = evolutionOf(m.spec);
+    if (evo) {
+      el('div', 'section', b, tx('Tercera especialización', 'Third specialization'));
+      const card = el('div', 'skill-row', b);
+      el('div', '', card).innerHTML = `<b>${esc(specName(evo, lang))}</b><br><span class="tt-dim">${esc(specDesc(evo, lang))}<br>${tx(`Desde el nivel ${EVOLVE_LEVEL}: la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}: the quest "The Awakening" from Veyra, in Emberdark.`)}</span>`;
+      const evoList = el('div', 'skill-list', b);
+      for (const s of allSkillsFor(m.cls, m.race, m.look.g, evo).filter((x) => x.spec === evo)) {
+        const row = el('div', 'skill-row locked', evoList);
+        skillIcon(s.id, row);
+        el('div', '', row).innerHTML = `<b>${esc(skillName(s.id, lang))}</b> <span class="tt-dim">${tx(`Nv ${s.level}`, `Lv ${s.level}`)}</span><br><span class="tt-dim">${esc(skillDesc(s.id, lang))}</span>`;
+        setTip(row, () => skillTip(s.id));
       }
     }
     el('div', 'hint', b, tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
@@ -881,6 +896,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>Desde el nivel 50, los pasos de la sierra llevan a las tierras de afuera. Por el paso del norte está el <b>Fuerte de Escarcha</b>, que vende el set Glacial (grado B): Tundra Helada (50-55) · Picos Helados (55-60, jefe Yeti Primigenio). Su raid es el <b>Trono de Escarcha</b> (<b>/raid frost</b>).</p>
     <p>Por el paso del este está <b>Juncoverde</b>, cuyos maestros fabrican el set Esmeralda (grado A) con veneno del pantano y corteza ancestral: Pantano Ponzoñoso (60-65) · Selva Antigua (65-70, jefe Ent Ancestral Corrompido). Su raid es el <b>Templo del Pantano</b> (<b>/raid swamp</b>).</p>
     <p>Por el paso del sur, la última muralla antes del Abismo es <b>Brasaoscura</b>: sus maestros fabrican el set Infernal (grado S) con núcleos de magma y esencia del abismo. Tierras Volcánicas (70-74, jefe Señor de las Llamas) · Abismo (74-78). Su raid es el <b>Corazón del Abismo</b> (<b>/raid abyss</b>).</p>
+    <p>A nivel 76, la misión <b>«El Despertar»</b> de Veyra, en Brasaoscura, despierta tu <b>tercera especialización</b>: el Caballero se vuelve Paladín del Fénix, el Gladiador Duelista, el Hechicero Archimago y el Clérigo Hierofante, con una habilidad nueva en el 76, el 77 y el 78.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
@@ -924,6 +940,7 @@ const HELP_EN = `
     <p>From level 50, the passes in the ridge lead to the lands beyond. Through the north pass stands <b>Frost Fort</b>, which sells the Glacial set (grade B): Frozen Tundra (50-55) · Frozen Peaks (55-60, boss Primal Yeti). Its raid is the <b>Frost Throne</b> (<b>/raid frost</b>).</p>
     <p>Through the east pass lies <b>Reedgreen</b>, whose masters craft the Emerald set (grade A) from swamp venom and ancient bark: Poison Swamp (60-65) · Ancient Jungle (65-70, boss Corrupted Elder Ent). Its raid is the <b>Swamp Temple</b> (<b>/raid swamp</b>).</p>
     <p>Through the south pass, the last wall before the Abyss is <b>Emberdark</b>: its masters craft the Infernal set (grade S) from magma cores and abyss essence. Volcanic Lands (70-74, boss Lord of Flames) · The Abyss (74-78). Its raid is the <b>Heart of the Abyss</b> (<b>/raid abyss</b>).</p>
+    <p>At level 76, Veyra's quest <b>"The Awakening"</b>, in Emberdark, awakens your <b>third specialization</b>: the Knight becomes a Phoenix Paladin, the Gladiator a Duelist, the Sorcerer an Archmage and the Cleric a Hierophant, with a new skill at 76, 77 and 78.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;

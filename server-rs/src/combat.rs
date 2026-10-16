@@ -226,7 +226,7 @@ impl World {
     pub fn choose_spec(&mut self, pid: u32, spec: &str) {
         let data = d();
         let p = self.pl(pid).unwrap();
-        let Some(def) = data.spec(spec).filter(|s| s.base == p.cls && p.spec.is_none() && p.level >= data.c.spec_level) else {
+        let Some(def) = data.spec(spec).filter(|s| s.parent.is_none() && s.base == p.cls && p.spec.is_none() && p.level >= data.c.spec_level) else {
             return self.sys(pid, "No podés elegir esa especialización.", "You cannot choose that specialization.");
         };
         if let Err(e) = self.db.set_spec(p.char_id, &def.id) {
@@ -437,6 +437,17 @@ impl World {
         self.send_near(x, z, json!({ "t": "cast", "s": pid, "tg": target, "skill": def.id, "dur": dur }));
     }
 
+    /**
+     * The caster's party members (the caster too) standing within `aoe` of the target, the target itself left out:
+     * who else a heal or buff with an area reaches. None without an area or a party.
+     */
+    fn party_around(&self, pid: u32, target: u32, aoe: Option<f64>) -> Vec<u32> {
+        let (Some(r), Some(ptid)) = (aoe, self.pl(pid).and_then(|p| p.party)) else { return vec![] };
+        let Some(pt) = self.parties.iter().find(|p| p.id == ptid) else { return vec![] };
+        let (tx, tz) = { let c = &self.ents[&target].c; (c.x, c.z) };
+        pt.members.iter().copied().filter(|&m| m != target && self.ents.get(&m).map_or(false, |e| !e.c.dead && (e.c.x - tx).hypot(e.c.z - tz) <= r)).collect()
+    }
+
     pub fn finish_cast(&mut self, pid: u32, now: f64) {
         let Some((skill, target, _)) = self.pl_mut(pid).unwrap().casting.take() else { return };
         let def = &crate::admin::tuned_skill(d().skill(&skill).unwrap());
@@ -487,6 +498,14 @@ impl World {
             "heal" => {
                 let m_atk = self.pl(pid).unwrap().stats.m_atk;
                 let amount = jround(def.power * (1.0 + m_atk / 100.0));
+                for ally in self.party_around(pid, target, def.aoe) {
+                    let Some(a) = self.pl_mut(ally) else { continue };
+                    let before = a.hp;
+                    a.hp = (a.hp + amount).min(a.stats.max_hp);
+                    let msg = json!({ "t": "dmg", "s": pid, "tg": ally, "v": jround(a.hp - before), "heal": true });
+                    self.send(pid, msg.clone());
+                    self.send(ally, msg);
+                }
                 let (before, after, is_player) = match &mut self.ents.get_mut(&target).unwrap().k {
                     Kind::Player(t) => { let b = t.hp; t.hp = (t.hp + amount).min(t.stats.max_hp); (b, t.hp, true) }
                     Kind::Mob(m) => { let b = m.hp; m.hp = (m.hp + amount).min(m.stats.max_hp); (b, m.hp, false) }
@@ -506,11 +525,13 @@ impl World {
             }
             "buff" => {
                 let Some(buff) = &def.buff else { return };
-                let Some(t) = self.pl_mut(target) else { return };
-                t.buffs.retain(|b| b.id != def.id);
-                t.buffs.push(Buff { id: def.id.clone(), until: now + buff.dur, mods: buff.mods.clone() });
-                t.recalc();
-                self.sys(target, &format!("Recibiste {}.", def.name), &format!("{} has been applied.", def.name_en));
+                for tg in std::iter::once(target).chain(self.party_around(pid, target, def.aoe)) {
+                    let Some(t) = self.pl_mut(tg) else { continue };
+                    t.buffs.retain(|b| b.id != def.id);
+                    t.buffs.push(Buff { id: def.id.clone(), until: now + buff.dur, mods: buff.mods.clone() });
+                    t.recalc();
+                    self.sys(tg, &format!("Recibiste {}.", def.name), &format!("{} has been applied.", def.name_en));
+                }
             }
             "taunt" => {
                 // everything around the target turns on you, and keeps a grudge

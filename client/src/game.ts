@@ -4,7 +4,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
 import { MOBS } from '../../shared/src/data/mobs';
-import { itemName, mobName, npcText, zoneName } from '../../shared/src/i18n';
+import { itemName, mobName, npcText, specName, zoneName } from '../../shared/src/i18n';
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
@@ -575,7 +575,7 @@ export class Game {
       const e = this.ents.get(m.id);
       if (e) play('levelUp', this.near(e));
       if (e) this.vfx('levelup', e);
-      if (m.id === this.me.id) this.ui.hud.banner(tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
+      if (m.id === this.me.id) this.ui.hud.banner(m.spec ? tx(`¡Despertaste! ${specName(m.spec, lang)}`, `Awakened! ${specName(m.spec, lang)}`) : tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
     n.on('chat', (m) => {
       const who = this.whoPending && m.ch === 'sys' ? WHO.exec(m.text) : null;

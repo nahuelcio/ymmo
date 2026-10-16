@@ -156,6 +156,7 @@ const list: ItemDef[] = [
   // the volcanic region (70-78)
   { id: 'magma_core', name: 'Núcleo de Magma', type: 'material', stack: true, price: 2200, icon: '🔥', color: 0xe8501a, desc: 'Late dentro de las criaturas de las Tierras Volcánicas. Con él se forja el set Infernal.' },
   { id: 'abyss_essence', name: 'Esencia del Abismo', type: 'material', stack: true, price: 2800, icon: '🌑', color: 0x8a40c8, desc: 'La sangran las criaturas del Abismo; su raid es la que más deja. Con ella se forja el set Infernal.' },
+  { id: 'awakening_shard', name: 'Fragmento del Despertar', type: 'material', stack: true, price: 5000, icon: '💎', color: 0xb8a0ff, desc: 'Un fragmento de un poder antiguo. Veyra, en Brasaoscura, sabe qué hacer con él.' },
   { id: 'ancient_bark', name: 'Corteza Ancestral', type: 'material', stack: true, price: 1800, icon: '🪵', color: 0x8a6a3a, desc: 'De los árboles y las bestias de la Selva Antigua. Con ella se forja el set Esmeralda.' },
 ];
 

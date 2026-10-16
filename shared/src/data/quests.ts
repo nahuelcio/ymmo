@@ -16,6 +16,8 @@ export interface QuestDef {
   objective: { type: 'kill'; mob: string; count: number } | { type: 'collect'; item: string; count: number };
   xp: number;
   adena: number;
+  /** turning it in evolves the character's specialization (the third specialization, classes.ts EVOLVE_LEVEL) */
+  evolve?: boolean;
 }
 
 export function questSummary(q: QuestDef): string {
@@ -280,6 +282,14 @@ const list: QuestDef[] = [
     busy: 'Ocho caballeros. No les tengas piedad: ya no se acuerdan de nada.',
     ready: 'Descansan, por fin. Juntá a los tuyos y escribí /raid abyss: Azgaroth te espera.',
     doneText: 'Si caés allá abajo, no vuelvas como ellos.' },
+  // the third specialization (level 76)
+  { id: 'awakening', npc: 'veyra', name: 'El Despertar', minLevel: 76, xp: 2000000, adena: 1500000, evolve: true,
+    objective: { type: 'collect', item: 'awakening_shard', count: 5 },
+    story: 'En lo más hondo del Abismo duermen fragmentos de un poder antiguo, el mismo que despertó a los primeros héroes. Veyra sabe leerlos: con cinco, puede despertar en vos lo que tu especialización todavía no se anima a ser.',
+    offer: 'Traeme 5 fragmentos del despertar. Los guardan los jefes de estas tierras: el comandante abisal, el sumo piromante, el Señor de las Llamas y Azgaroth.',
+    busy: 'Cinco fragmentos. Los jefes no los sueltan fácil: llevá compañía.',
+    ready: 'Laten al mismo ritmo que vos. Cerrá los ojos... y despertá.',
+    doneText: 'Ya no sos el mismo que llegó a Brasaoscura. Andá a demostrarlo.' },
 ];
 
 export const QUEST_LIST: QuestDef[] = list;

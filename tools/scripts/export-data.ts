@@ -41,7 +41,7 @@ const out = {
   gradeLevel: GRADE_LEVEL,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
-  quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena })),
+  quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false })),
   npcs: NPCS.map((n) => ({
     id: n.id, name: n.name, kind: n.kind, x: n.x, z: n.z, ry: n.ry, shop: n.shop ?? null, craft: n.craft ?? null,
     title: n.title, titleEn: npcText(n.id, 'title', 'en'), greeting: n.greeting, greetingEn: npcText(n.id, 'greeting', 'en'),
@@ -53,7 +53,7 @@ const out = {
   races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods })),
   genders: Object.entries(GENDERS).map(([id, g]) => ({ id, mods: g.mods })),
   classes: Object.entries(CLASSES).map(([id, c]) => ({ id, ...c, startItems: c.startItems.map(([item, count, equip]) => ({ item, count, equip })) })),
-  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en') })),
+  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null })),
   statuses: Object.entries(STATUSES).map(([id, s]) => ({ id, flag: s.flag })),
   raids: Object.values(RAIDS),
   // world nodes: [id, x, z, r, ry, seatY, zone]; gather rules per kind
