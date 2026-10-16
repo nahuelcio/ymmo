@@ -231,11 +231,39 @@ const RAIN_SHARE: Record<string, number> = { dawn: 0.08, dusk: 0.1, heart: 0.14,
  * ponytail: a fixed wave per region, no fronts moving across the map; a server-sent weather state is the upgrade.
  */
 export function rainAt(x: number, z: number, now = Date.now()): number {
+  const forced = (globalThis as { __rain?: number }).__rain; // a fixed shower for dev views and tests
+  if (forced !== undefined) return forced;
   const r = regionAt(x, z) ?? 'dawn', share = RAIN_SHARE[r] ?? 0;
   if (!share) return 0;
   const k = r.length * 1.7 + r.charCodeAt(0) * 0.13, t = now / 420000; // a 7-minute beat
   const w = 0.5 + 0.35 * Math.sin(t + k) + 0.15 * Math.sin(t * 2.3 + k * 3.1);
   return Math.min(1, Math.max(0, (w - (1 - share)) / 0.12));
+}
+
+/** Lightning falls only in a downpour: rainAt above this. */
+export const STORM_RAIN = 0.6;
+const STRIKE_CELL = 300;
+/** chance a cell gets a strike in a given second: with the 9 cells around the player, one every ~15 s in a downpour */
+const STRIKE_P = 1 / 135;
+const hash01 = (a: number, b: number, c: number, salt: number) => {
+  let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263) ^ Math.imul(c, 2147483647) ^ Math.imul(salt, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1103515245);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+/**
+ * The lightning strikes of second `sec` (wall clock) around (x, z). The world is cut into 300 m cells and each cell
+ * draws its own strikes from the clock, like rainAt: everyone near a cell sees the same bolt at the same moment.
+ */
+export function stormStrikes(x: number, z: number, sec: number): { x: number; z: number }[] {
+  const out: { x: number; z: number }[] = [];
+  const cx0 = Math.floor(x / STRIKE_CELL), cz0 = Math.floor(z / STRIKE_CELL);
+  for (let cx = cx0 - 1; cx <= cx0 + 1; cx++)
+    for (let cz = cz0 - 1; cz <= cz0 + 1; cz++) {
+      if (hash01(cx, cz, sec, 1) >= STRIKE_P) continue;
+      const sx = (cx + hash01(cx, cz, sec, 2)) * STRIKE_CELL, sz = (cz + hash01(cx, cz, sec, 3)) * STRIKE_CELL;
+      if (rainAt(sx, sz, sec * 1000) >= STORM_RAIN) out.push({ x: sx, z: sz });
+    }
+  return out;
 }
 
 /** Rain streaks around the player: a box of short lines falling fast, recycled to the top. */

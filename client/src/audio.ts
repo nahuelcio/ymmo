@@ -1,8 +1,9 @@
-// Procedural sound effects (Web Audio, no asset files). Each effect is a tiny
-// recipe of oscillators / filtered noise with short envelopes.
+// Sound (Web Audio): recorded effects, footsteps and weather beds where we have them (public/audio, CC0 / CC-BY,
+// see CREDITS.txt), and for every one a tiny recipe of oscillators / filtered noise that plays when its file won't load.
 import { versioned } from './assets';
 import { settings } from './settings';
 import { RAIDS } from '../../shared/src/data/raids';
+import type { Footing } from './render/scene';
 
 export type Sfx =
   | 'hit' | 'crit' | 'miss' | 'hurt' | 'cast' | 'magic' | 'heal' | 'buff' | 'levelUp' | 'death'
@@ -58,16 +59,25 @@ const TUNE: Partial<Record<Sfx, { gain: number; max: number }>> = {
   dot: { gain: 0.4, max: 0.3 },
 };
 const decoded = new Map<string, AudioBuffer>();
+const asked = new Set<string>();
+/** files that would not load or decode: their synth recipe plays instead */
+const failed = new Set<string>();
 
-function preloadSamples(c: AudioContext) {
-  const files = new Set(Object.values(SAMPLES).flatMap((l) => l ?? []));
-  for (const f of files) {
-    fetch(versioned(`/audio/${f}`))
-      .then((r) => r.arrayBuffer())
-      .then((b) => c.decodeAudioData(b))
-      .then((buf) => decoded.set(f, buf))
-      .catch(() => {}); // no sample: the synth recipe still plays
-  }
+/** Fetch and decode a sample once (decoded holds it when it's ready). */
+function want(f: string) {
+  if (asked.has(f) || !ctx) return;
+  asked.add(f);
+  const c = ctx;
+  fetch(versioned(`/audio/${f}`))
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((b) => c.decodeAudioData(b))
+    .then((buf) => decoded.set(f, buf))
+    .catch(() => failed.add(f)); // no sample: the synth recipe still plays
+}
+
+function preloadSamples(_c: AudioContext) {
+  // combat cues and footsteps are small and wanted at once; the weather beds and thunder load when first needed
+  for (const f of new Set([...Object.values(SAMPLES).flatMap((l) => l ?? []), ...Object.values(STEPS).flatMap((s) => s.files)])) want(f);
 }
 
 // browsers only allow audio after a user gesture
@@ -84,11 +94,14 @@ function loop(file: string, gain: number, dungeon: boolean) {
   return { el, gain, dungeon };
 }
 const LOOPS = [loop('exploration.ogg', 0.6, false), loop('forest.mp3', 0.5, false), loop('dungeon.ogg', 0.9, true)];
+const FOREST = LOOPS[1];
 let inDungeon = false;
+/** the forest's birds fall quiet in the rain, the snow and the ash (setWeather) */
+let forestDuck = 1;
 
 function syncLoops() {
   for (const l of LOOPS) {
-    l.el.volume = settings.s.music * l.gain;
+    l.el.volume = settings.s.music * l.gain * (l === FOREST ? forestDuck : 1);
     // play() rejects until the first user gesture (and on browsers without Ogg): the gesture listeners retry
     if (l.el.volume > 0 && l.dungeon === inDungeon) void l.el.play().catch(() => {});
     else l.el.pause();
@@ -101,6 +114,9 @@ export function ambience(zone: string) {
   inDungeon = Object.values(RAIDS).some((r) => r.name === zone);
   syncLoops();
 }
+
+/** In a raid instance, which is indoors: no weather there. */
+export const indoors = () => inDungeon;
 
 function tone(type: OscillatorType, f0: number, f1: number, t0: number, dur: number, vol: number, out: AudioNode) {
   const c = ctx!;
@@ -247,4 +263,214 @@ export function play(name: Sfx, gain = 1) {
       hiss(t, 0.06, 0.15, 1500, 800, 2, out);
       break;
   }
+}
+
+// ---------------------------------------------------------------- footsteps
+const steps = (name: string, n: number) => Array.from({ length: n }, (_, i) => `steps/${name}${i + 1}.ogg`);
+/** Footfalls per ground (CC0 recordings, see public/audio/CREDITS.txt): the files, how loud, and their pitch. */
+const STEPS: Record<Footing, { files: string[]; gain: number; rate?: number }> = {
+  grass: { files: steps('grass', 5), gain: 0.45 },
+  leaves: { files: [...steps('leaves', 2), 'steps/grass1.ogg', 'steps/grass3.ogg'], gain: 0.45 },
+  dirt: { files: [...steps('dirt', 2), ...steps('soft', 5)], gain: 0.5 },
+  stone: { files: steps('stone', 6), gain: 0.4 },
+  gravel: { files: ['steps/gravel1.ogg', ...steps('stone', 3)], gain: 0.45, rate: 0.9 },
+  sand: { files: steps('soft', 5), gain: 0.4, rate: 0.85 },
+  snow: { files: steps('snow', 5), gain: 0.5 },
+  mud: { files: steps('mud', 4), gain: 0.5 },
+  water: { files: steps('water', 4), gain: 0.22, rate: 1.25 },
+};
+
+/** One footfall on `on` (render/scene.ts footingAt). gain: by distance and body size; rate: pitch (big bodies lower). */
+export function step(on: Footing, gain = 1, rate = 1) {
+  const s = STEPS[on], vol = settings.s.volume * gain * s.gain;
+  if (vol <= 0.001) return;
+  const c = audio();
+  if (!c || c.state !== 'running' || !master) return;
+  const out = c.createGain();
+  out.gain.value = vol;
+  out.connect(master);
+  const t = c.currentTime + 0.005, r = rate * (s.rate ?? 1) * (0.92 + Math.random() * 0.16);
+  const ready = s.files.filter((f) => decoded.has(f));
+  if (ready.length) {
+    const src = c.createBufferSource(), g = c.createGain(), max = on === 'water' ? 0.45 : 0.35;
+    src.buffer = decoded.get(ready[Math.floor(Math.random() * ready.length)])!;
+    src.playbackRate.value = r;
+    g.gain.setValueAtTime(1, t + max - 0.06);
+    g.gain.linearRampToValueAtTime(0, t + max);
+    src.connect(g).connect(out);
+    src.start(t, 0, max);
+    src.onended = () => out.disconnect();
+    return;
+  }
+  setTimeout(() => out.disconnect(), 1000);
+  switch (on) {
+    case 'grass':
+    case 'leaves':
+      hiss(t, 0.08, 0.3, 2400 * r, 1200, 0.8, out);
+      if (on === 'leaves') hiss(t + 0.02, 0.1, 0.15, 5000 * r, 3000, 1.5, out);
+      break;
+    case 'dirt':
+    case 'sand':
+      tone('triangle', 90 * r, 50, t, 0.06, 0.25, out);
+      hiss(t, on === 'sand' ? 0.1 : 0.06, 0.2, 900 * r, 400, 1, out, 'lowpass');
+      break;
+    case 'stone':
+    case 'gravel':
+      tone('triangle', 160 * r, 90, t, 0.04, 0.3, out);
+      hiss(t, on === 'gravel' ? 0.11 : 0.04, 0.25, 3000 * r, 1800, 1.5, out);
+      break;
+    case 'snow':
+      hiss(t, 0.14, 0.3, 1200 * r, 3000, 1.2, out);
+      break;
+    case 'mud':
+      tone('sine', 120 * r, 60, t, 0.1, 0.3, out);
+      hiss(t, 0.12, 0.2, 700 * r, 300, 2, out, 'lowpass');
+      break;
+    case 'water':
+      hiss(t, 0.18, 0.25, 900 * r, 2400, 0.9, out);
+      break;
+  }
+}
+
+// ---------------------------------------------------------------- weather
+/**
+ * Weather beds: CC0 loops (see public/audio/CREDITS.txt) under the music & ambience volume, like the forest. Light
+ * and heavy rain are two recordings crossfaded by how hard it rains. A bed whose file won't load plays filtered noise.
+ */
+type Bed = { file: string; level: number; gain: GainNode | null; src: AudioScheduledSourceNode | null; target: number; quietSince: number; synth: (c: AudioContext, out: AudioNode) => AudioScheduledSourceNode };
+const noiseLoop = (c: AudioContext) => {
+  const s = c.createBufferSource();
+  s.buffer = noise;
+  s.loop = true;
+  return s;
+};
+const bed = (file: string, level: number, synth: Bed['synth']): Bed => ({ file, level, synth, gain: null, src: null, target: 0, quietSince: 0 });
+const BEDS: Record<'rainLight' | 'rainHeavy' | 'wind', Bed> = {
+  rainLight: bed('weather/rain-light.ogg', 0.5, (c, out) => {
+    const s = noiseLoop(c), f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 3500;
+    f.Q.value = 0.4;
+    s.connect(f).connect(out);
+    return s;
+  }),
+  rainHeavy: bed('weather/rain-heavy.ogg', 0.6, (c, out) => {
+    const s = noiseLoop(c), f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2200;
+    s.connect(f).connect(out);
+    return s;
+  }),
+  wind: bed('weather/wind.ogg', 0.5, (c, out) => {
+    // low noise whose cutoff drifts slowly: gusts
+    const s = noiseLoop(c), f = c.createBiquadFilter(), lfo = c.createOscillator(), depth = c.createGain();
+    f.type = 'lowpass';
+    f.frequency.value = 450;
+    lfo.frequency.value = 0.13;
+    depth.gain.value = 250;
+    lfo.connect(depth).connect(f.frequency);
+    lfo.start();
+    s.onended = () => lfo.stop();
+    s.connect(f).connect(out);
+    return s;
+  }),
+};
+let ambient: GainNode | null = null;
+/** thunder-long.ogg is 44 s of rain with one long roll from 21 s, fading by 37 s: only that part plays */
+const THUNDER = [{ file: 'weather/thunder1.ogg', at: 0, dur: 6 }, { file: 'weather/thunder-long.ogg', at: 20.6, dur: 16 }];
+
+function startBed(b: Bed, c: AudioContext) {
+  const buf = decoded.get(b.file);
+  if (!buf && !failed.has(b.file)) return want(b.file); // still loading: quiet until it arrives
+  if (!b.gain) {
+    b.gain = c.createGain();
+    b.gain.gain.value = 0;
+    b.gain.connect(ambient!);
+  }
+  if (buf) {
+    const s = c.createBufferSource();
+    s.buffer = buf;
+    s.loop = true;
+    s.connect(b.gain);
+    s.start(0, Math.random() * buf.duration); // not every player's shower starts on the same bar
+    b.src = s;
+  } else (b.src = b.synth(c, b.gain)).start();
+}
+
+/**
+ * Per frame, where the player stands: rain 0..1 (atmos.ts rainAt), wind 0..1, and harsh 0..1 (snow or ash in the
+ * air). The beds ease toward them; the forest's birds fall quiet under them. Raids are indoors: no weather there.
+ */
+export function setWeather(rain: number, wind: number, harsh: number) {
+  const duck = (1 - rain * 0.7) * (1 - harsh * 0.8);
+  if (Math.abs(duck - forestDuck) > 0.02) {
+    forestDuck = duck;
+    FOREST.el.volume = settings.s.music * FOREST.gain * duck;
+  }
+  const c = ctx;
+  if (!c || c.state !== 'running' || !master) return;
+  if (!ambient) (ambient = c.createGain()).connect(master);
+  // the music & ambience volume, not the effects one (master carries no volume of its own)
+  ambient.gain.value = settings.s.music;
+  const on = inDungeon ? 0 : 1, now = performance.now();
+  const heavy = Math.min(1, Math.max(0, (rain - 0.4) / 0.5));
+  const levels = { rainLight: on * Math.min(1, rain * 2.5) * (1 - heavy * 0.6), rainHeavy: on * heavy, wind: on * wind };
+  for (const [k, b] of Object.entries(BEDS) as [keyof typeof BEDS, Bed][]) {
+    const target = levels[k] * b.level;
+    if (target > 0.001) {
+      b.quietSince = 0;
+      if (!b.src) startBed(b, c);
+    } else if (!b.quietSince) b.quietSince = now;
+    else if (b.src && now - b.quietSince > 15000) {
+      // silent for a while: stop playing a loop nobody hears
+      b.src.stop();
+      b.src = null;
+    }
+    if (b.gain && Math.abs(target - b.target) > 0.004) {
+      b.target = target;
+      b.gain.gain.setTargetAtTime(target, c.currentTime, 0.6);
+    }
+  }
+  if (rain > 0.4) for (const s of THUNDER) want(s.file); // a storm may be coming: have the thunder ready
+}
+
+/** Thunder from a strike `dist` metres away: late by the sound's travel, quieter and duller the farther it fell. */
+export function thunder(dist: number) {
+  const vol = settings.s.volume * Math.max(0.12, 1 - dist / 700);
+  if (vol <= 0.001) return;
+  const c = audio();
+  if (!c || c.state !== 'running' || !master) return;
+  const t = c.currentTime + Math.min(6, dist / 343);
+  const lp = c.createBiquadFilter(), out = c.createGain();
+  lp.type = 'lowpass';
+  lp.frequency.value = 500 + 7000 * Math.max(0, 1 - dist / 500);
+  out.gain.value = vol;
+  lp.connect(out).connect(master);
+  const ready = THUNDER.filter((s) => decoded.has(s.file));
+  if (ready.length) {
+    const s = ready[Math.floor(Math.random() * ready.length)], buf = decoded.get(s.file)!;
+    const at = Math.min(s.at, Math.max(0, buf.duration - 1)), dur = Math.min(s.dur, buf.duration - at);
+    const src = c.createBufferSource(), g = c.createGain();
+    src.buffer = buf;
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    g.gain.setValueAtTime(1, t + Math.max(0, dur - 1.5));
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    src.connect(g).connect(lp);
+    src.start(t, at, dur);
+    src.onended = () => out.disconnect();
+    return;
+  }
+  for (const s of THUNDER) want(s.file);
+  // synth: a crack when it is close, then a long low rumble
+  if (dist < 200) hiss(t, 0.25, 0.6, 3000, 600, 0.7, lp);
+  const s = noiseLoop(c), f = c.createBiquadFilter(), g = c.createGain();
+  f.type = 'lowpass';
+  f.frequency.value = 220;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.9, t + 0.15);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 3.5);
+  s.connect(f).connect(g).connect(lp);
+  s.start(t);
+  s.stop(t + 3.6);
+  s.onended = () => out.disconnect();
 }
