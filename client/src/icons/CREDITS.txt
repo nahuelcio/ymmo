@@ -14,3 +14,14 @@ skill: shield_bash <- lorc/shield-bounces, challenge <- lorc/screaming, fortress
   arcane_power <- lorc/magic-swirl, lightning <- lorc/focused-lightning, meteor <- lorc/meteor-impact, soul_drain <- lorc/spectre,
   inferno <- lorc/fire-ring, divine_heal <- sbed/health-increase, holy_shield <- lorc/bordered-shield, smite <- lorc/sunbeams,
   might <- delapouite/biceps, restoration <- lorc/heart-bottle, haste <- lorc/wingfoot, miracle <- lorc/angel-wings
+
+Added for the level 55-78 skills and the third specialization (same source and licence), file <- original:
+skill: aegis_charge <- delapouite/charging-bull, iron_bulwark <- delapouite/brick-wall, judgment <- lorc/scales,
+  shield_of_faith <- delapouite/templar-shield, titan_slam <- lorc/hammer-drop, cross_cut <- lorc/crossed-sabres,
+  berserk <- delapouite/enrage, blade_dance <- lorc/spinning-sword, crippling_strike <- lorc/foot-trip, decapitate <- lorc/guillotine,
+  chain_lightning <- lorc/lightning-branches, blizzard <- lorc/snowing, mana_surge <- lorc/magic-palm, void_bolt <- lorc/black-hole-bolas,
+  apocalypse <- lorc/burning-meteor, mass_heal <- delapouite/heart-wings, sanctuary <- delapouite/church, holy_nova <- lorc/sun-radiations,
+  blessing_of_ages <- delapouite/scroll-quill, divine_light <- lorc/beams-aura, phoenix_ward <- lorc/fire-shield,
+  phoenix_strike <- lorc/fire-dash, rebirth <- lorc/fire-silhouette, riposte <- lorc/sword-clash, thousand_cuts <- lorc/lightning-slashes,
+  final_verdict <- delapouite/executioner-hood, arcane_mastery <- lorc/crystal-ball, star_fall <- delapouite/falling-star,
+  oblivion <- lorc/portal, divine_grace <- lorc/angel-outfit, sacred_judgment <- lorc/justice-star, grand_miracle <- lorc/rainbow-star
