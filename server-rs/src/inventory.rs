@@ -28,14 +28,14 @@ pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
             if p.inv.len() >= INV_MAX { return false; }
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: count, s: None, e: 0, l: false });
+            p.inv.push(InvItem { u, i: item.into(), c: count, s: None, e: 0, l: false, m: false });
         }
     } else {
         if p.inv.len() + count as usize > INV_MAX { return false; }
         for _ in 0..count {
             let u = p.next_uid;
             p.next_uid += 1;
-            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None, e: 0, l: false });
+            p.inv.push(InvItem { u, i: item.into(), c: 1, s: None, e: 0, l: false, m: false });
         }
     }
     p.inv_dirty = true;
@@ -240,6 +240,14 @@ impl World {
         for (m, c) in &rec.mats { take_items(p, m, *c); }
         p.adena -= rec.adena;
         p.inv_dirty = true;
+        // gear sometimes comes out a Masterwork, more often when a dwarf has it made; gear never stacks, so it is the
+        // row add_item just pushed
+        let mw = &d().masterwork;
+        if def.slot.is_some() && rnd() < if p.race == "dwarf" { mw.dwarf_chance } else { mw.chance } {
+            p.inv.last_mut().unwrap().m = true;
+            self.send(pid, json!({ "t": "masterwork", "item": item }));
+            return self.sys(pid, &format!("¡Obra Maestra! Te fabricaron {} (Obra Maestra).", def.name), &format!("Masterwork! {} (Masterwork) was made for you.", def.name_en));
+        }
         self.sys(pid, &format!("Te fabricaron {}.", def.name), &format!("{} was made for you.", def.name_en));
     }
 
@@ -274,7 +282,7 @@ impl World {
         let id = self.new_id();
         let mut c = Common::new(id, x + a.cos() * r, z + a.sin() * r);
         c.ry = rnd() * std::f64::consts::TAU;
-        self.add(Ent { c, k: Kind::Item(GroundItem { item: item.into(), count, enchant: 0, owners, owner_until: now + 15000.0, expire_at: now + 60000.0, camp_id: None }) });
+        self.add(Ent { c, k: Kind::Item(GroundItem { item: item.into(), count, enchant: 0, legacy: false, mw: false, owners, owner_until: now + 15000.0, expire_at: now + 60000.0, camp_id: None }) });
         id
     }
 
@@ -340,9 +348,10 @@ impl World {
         if it.s.is_some() { self.ents.get_mut(&pid).unwrap().c.av += 1; }
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         let gid = self.spawn_ground(x, z, &it.i, it.c, None, now);
-        if let Some(Ent { k: Kind::Item(g), .. }) = self.ents.get_mut(&gid) { g.enchant = it.e; }
+        if let Some(Ent { k: Kind::Item(g), .. }) = self.ents.get_mut(&gid) { (g.enchant, g.legacy, g.mw) = (it.e, it.l, it.m); }
         let def = d().item(&it.i).unwrap();
-        self.sys(pid, &format!("¡Al morir se te cayó {}!", def.name), &format!("You dropped {} upon death!", def.name_en));
+        let (mw, mw_en) = if it.m { (" (Obra Maestra)", " (Masterwork)") } else { ("", "") };
+        self.sys(pid, &format!("¡Al morir se te cayó {}{mw}!", def.name), &format!("You dropped {}{mw_en} upon death!", def.name_en));
     }
 
     pub fn pickup(&mut self, pid: u32, gid: u32, now: f64) {
@@ -351,17 +360,21 @@ impl World {
             if now < g.owner_until && !o.contains(&pid) { return self.sys(pid, "Ese objeto es de otra persona.", "That item belongs to someone else."); }
         }
         if g.item == "camp_chest" { return self.open_chest(pid, gid, now); }
-        let (item, count, enchant) = (g.item.clone(), g.count, g.enchant);
+        let (item, count, enchant, legacy, mw) = (g.item.clone(), g.count, g.enchant, g.legacy, g.mw);
         let p = self.pl_mut(pid).unwrap();
         if !add_item(p, &item, count) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
-        // an enchanted piece never stacks, so it is the row add_item just pushed
-        if enchant > 0 { p.inv.last_mut().unwrap().e = enchant; }
+        // a marked piece is gear, which never stacks, so it is the row add_item just pushed
+        if enchant > 0 || legacy || mw {
+            let it = p.inv.last_mut().unwrap();
+            (it.e, it.l, it.m) = (enchant, legacy, mw);
+        }
         self.remove(gid);
         let def = d().item(&item).unwrap();
         if item == "adena" {
             self.sys(pid, &format!("Juntaste {count} de adena."), &format!("You picked up {count} adena."));
         } else {
-            self.sys(pid, &format!("Conseguiste {}{}.", qty_prefix(count), def.name), &format!("You obtained {}{}.", qty_prefix(count), def.name_en));
+            let (m, m_en) = if mw { (" (Obra Maestra)", " (Masterwork)") } else { ("", "") };
+            self.sys(pid, &format!("Conseguiste {}{}{m}.", qty_prefix(count), def.name), &format!("You obtained {}{}{m_en}.", qty_prefix(count), def.name_en));
         }
     }
 }

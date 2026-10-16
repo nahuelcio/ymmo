@@ -32,13 +32,13 @@ impl World {
         };
         // worn pieces the level no longer allows (grades ask for a level since the 78 cap) go back to the bag
         let mut took_off: Vec<&'static str> = vec![];
-        for (i, c, mut s, e, l) in items {
+        for (i, c, mut s, e, l, m) in items {
             let u = p.next_uid;
             p.next_uid += 1;
             if let (Some(_), Some(def)) = (&s, d().item(&i)) {
                 if !l && p.level < d().wear_level(def) { s = None; took_off.push(if p.lang.en() { def.name_en.as_str() } else { def.name.as_str() }); }
             }
-            p.inv.push(InvItem { u, i, c, s, e, l });
+            p.inv.push(InvItem { u, i, c, s, e, l, m });
         }
         prime_quest_notices(&mut p);
         p.recalc();

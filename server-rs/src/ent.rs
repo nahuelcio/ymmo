@@ -82,12 +82,14 @@ impl Common {
     }
 }
 
-/** e: enchant level (+N); l: legacy, worn at any level whatever its grade asks (only sent when set) */
+/** e: enchant level (+N); l: legacy, worn at any level whatever its grade asks; m: Masterwork (both only sent when set) */
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct InvItem {
     pub u: u32, pub i: String, pub c: i64, pub s: Option<String>, pub e: i64,
     #[serde(skip_serializing_if = "is_false")]
     pub l: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    pub m: bool,
 }
 fn is_false(b: &bool) -> bool { !*b }
 
@@ -194,7 +196,7 @@ impl Player {
     pub fn equipped_in(&self, slot: &str) -> Option<&InvItem> { self.inv.iter().find(|i| i.s.as_deref() == Some(slot)) }
     pub fn recalc(&mut self) {
         let data = d();
-        let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e))).collect();
+        let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
         let (s, m) = (&mut self.stats, &self.clan_mods);
@@ -272,6 +274,9 @@ pub struct GroundItem {
     pub item: String,
     pub count: i64,
     pub enchant: i64,
+    /** a piece dropped by a player keeps its legacy and Masterwork marks for whoever picks it up */
+    pub legacy: bool,
+    pub mw: bool,
     pub owners: Option<HashSet<u32>>,
     pub owner_until: f64,
     pub expire_at: f64,

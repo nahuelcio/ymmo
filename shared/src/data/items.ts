@@ -1,3 +1,5 @@
+import { RACES, type ClassType, type Race } from './classes';
+
 export type Slot = 'weapon' | 'head' | 'chest' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
 // ponytail: one ring, so an item's slot is always where it is worn; a second ring needs ring1/ring2 and a "first free" rule in equip
 export const SLOTS: Slot[] = ['head', 'weapon', 'chest', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
@@ -177,6 +179,28 @@ export const enchanted = (d: ItemDef, k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef', e = 
  */
 export const GRADE_LEVEL: Record<Grade, number> = { NG: 0, D: 20, C: 40, B: 52, A: 61, S: 75 };
 export const wearLevel = (d: ItemDef) => (d.grade ? GRADE_LEVEL[d.grade] : 0);
+
+/**
+ * Masterwork: a crafted piece of gear comes out a Masterwork `chance` of the time (`dwarfChance` when a dwarf has it
+ * made: dwarves are the craftsmen). It gives `weapon` (a weapon) or `piece` (armor, jewels) as the wearer's race
+ * says (RACES[r].mw), whatever its grade.
+ */
+export const MASTERWORK = { chance: 0.03, dwarfChance: 0.12, weapon: 0.06, piece: 0.01 };
+export interface MasterworkBonus { atkSpd: number; castSpd: number; cdr: number }
+/**
+ * What one Masterwork piece gives a wearer (fractions: 0.06 = 6%). A speed the class does not use turns into the one it
+ * does (a fighter's cast speed is attack speed, a mystic's attack speed is cast speed); a human gets half of it in
+ * the class's speed and half in cooldown cut. Mirrored by masterwork_bonus in server-rs/src/formulas.rs.
+ */
+export function masterworkBonus(race: Race, cls: ClassType, isWeapon: boolean): MasterworkBonus {
+  const v = isWeapon ? MASTERWORK.weapon : MASTERWORK.piece;
+  const speed = (f: number): MasterworkBonus => (cls === 'mystic' ? { atkSpd: 0, castSpd: f, cdr: 0 } : { atkSpd: f, castSpd: 0, cdr: 0 });
+  switch (RACES[race].mw) {
+    case 'cdr': return { atkSpd: 0, castSpd: 0, cdr: v };
+    case 'mix': return { ...speed(v / 2), cdr: v / 2 };
+    default: return speed(v);
+  }
+}
 /** The grade a piece is drawn as (render/models.ts). */
 export const lookGrade = (d: ItemDef | null | undefined): Grade | undefined => (d ? d.look ?? d.grade : undefined);
 

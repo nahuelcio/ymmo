@@ -530,9 +530,10 @@ export class Hud {
     }
   }
 
-  banner(text: string, big = false) {
+  /** kind: an extra class for the banner's look ('mw': gold, for a Masterwork) */
+  banner(text: string, big = false, kind = '') {
     this.bannerEl.textContent = text;
-    this.bannerEl.className = `banner show${big ? ' big' : ''}`;
+    this.bannerEl.className = `banner show${big ? ' big' : ''}${kind ? ` ${kind}` : ''}`;
     clearTimeout(this.bannerTimer);
     this.bannerTimer = window.setTimeout(() => (this.bannerEl.className = 'banner'), 2600);
   }

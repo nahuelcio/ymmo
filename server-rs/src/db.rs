@@ -96,6 +96,9 @@ impl Db {
         // legacy: a piece worn at any level, whatever its grade asks (the old S set, below)
         let _ = c.execute("ALTER TABLE items ADD COLUMN legacy INTEGER NOT NULL DEFAULT 0", []);
         let _ = c.execute("ALTER TABLE clan_items ADD COLUMN legacy INTEGER NOT NULL DEFAULT 0", []);
+        // mw: a Masterwork piece (shared/src/data/items.ts MASTERWORK)
+        let _ = c.execute("ALTER TABLE items ADD COLUMN mw INTEGER NOT NULL DEFAULT 0", []);
+        let _ = c.execute("ALTER TABLE clan_items ADD COLUMN mw INTEGER NOT NULL DEFAULT 0", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
@@ -183,7 +186,7 @@ impl Db {
     }
 
     /** items come back as (item id, count, slot, enchant) */
-    pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64, bool)>, Vec<(String, i64, bool)>)> {
+    pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64, bool, bool)>, Vec<(String, i64, bool)>)> {
         let row = self.c.query_row(
             "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec, hotbar FROM characters WHERE id = ? AND account_id = ?",
             params![id, account_id],
@@ -194,8 +197,8 @@ impl Db {
             }),
         ).optional().ok().flatten()?;
         let data = d();
-        let mut st = self.c.prepare_cached("SELECT item_id, count, slot, enchant, legacy FROM items WHERE char_id = ? ORDER BY id").unwrap();
-        let items = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)? != 0)))
+        let mut st = self.c.prepare_cached("SELECT item_id, count, slot, enchant, legacy, mw FROM items WHERE char_id = ? ORDER BY id").unwrap();
+        let items = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, i64>(3)?, r.get::<_, i64>(4)? != 0, r.get::<_, i64>(5)? != 0)))
             .map(|it| it.filter_map(Result::ok).filter(|r| data.item(&r.0).is_some()).collect()).unwrap_or_default();
         let mut st = self.c.prepare_cached("SELECT quest_id, progress, done FROM quests WHERE char_id = ?").unwrap();
         let quests = st.query_map([id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)? != 0)))
@@ -239,7 +242,7 @@ impl Db {
         let tx = self.c.transaction()?;
         tx.execute("UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?", params![level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, id])?;
         tx.execute("DELETE FROM items WHERE char_id = ?", [id])?;
-        for it in inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant, legacy) VALUES (?, ?, ?, ?, ?, ?)", params![id, it.i, it.c, it.s, it.e, it.l as i64])?; }
+        for it in inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant, legacy, mw) VALUES (?, ?, ?, ?, ?, ?, ?)", params![id, it.i, it.c, it.s, it.e, it.l as i64, it.m as i64])?; }
         tx.execute("DELETE FROM quests WHERE char_id = ?", [id])?;
         for q in quests {
             if d().quest(&q.0).is_some() { tx.execute("INSERT INTO quests (char_id, quest_id, progress, done) VALUES (?, ?, ?, ?)", params![id, q.0, q.1, q.2 as i64])?; }
@@ -353,18 +356,18 @@ impl Db {
         let _ = self.c.execute("UPDATE clans SET ally = NULL WHERE ally = ?", [id]);
     }
 
-    /** Every clan's warehouse: (row id, clan, item, count, enchant); its adena is in clans.adena. */
-    pub fn load_clan_items(&self) -> Vec<(i64, i64, String, i64, i64, bool)> {
+    /** Every clan's warehouse: (row id, clan, item, count, enchant, legacy, Masterwork); its adena is in clans.adena. */
+    pub fn load_clan_items(&self) -> Vec<(i64, i64, String, i64, i64, bool, bool)> {
         let mut v = vec![];
-        if let Ok(mut q) = self.c.prepare("SELECT id, clan_id, item_id, count, enchant, legacy FROM clan_items") {
-            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get::<_, i64>(5)? != 0))) { v.extend(rows.flatten()); }
+        if let Ok(mut q) = self.c.prepare("SELECT id, clan_id, item_id, count, enchant, legacy, mw FROM clan_items") {
+            if let Ok(rows) = q.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get::<_, i64>(5)? != 0, r.get::<_, i64>(6)? != 0))) { v.extend(rows.flatten()); }
         }
         v
     }
 
     /** A new warehouse row; its id. */
-    pub fn clan_item_add(&self, clan: i64, item: &str, count: i64, enchant: i64, legacy: bool) -> i64 {
-        let _ = self.c.execute("INSERT INTO clan_items (clan_id, item_id, count, enchant, legacy) VALUES (?, ?, ?, ?, ?)", params![clan, item, count, enchant, legacy as i64]);
+    pub fn clan_item_add(&self, clan: i64, item: &str, count: i64, enchant: i64, legacy: bool, mw: bool) -> i64 {
+        let _ = self.c.execute("INSERT INTO clan_items (clan_id, item_id, count, enchant, legacy, mw) VALUES (?, ?, ?, ?, ?, ?)", params![clan, item, count, enchant, legacy as i64, mw as i64]);
         self.c.last_insert_rowid()
     }
 

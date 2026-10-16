@@ -2,7 +2,7 @@
 // client keep one source of truth. English names are resolved here, so Rust needs no overlay logic.
 //   npm run export-data   (also run by the Docker builds)
 import { writeFileSync } from 'node:fs';
-import { ENCHANT, ITEMS, GRADE_LEVEL } from '../../shared/src/data/items';
+import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
 import { SKILLS } from '../../shared/src/data/skills';
 import { QUEST_LIST } from '../../shared/src/data/quests';
@@ -39,6 +39,7 @@ const out = {
   enchant: ENCHANT,
   items: Object.values(ITEMS).map((i) => ({ ...i, nameEn: itemName(i.id, 'en') })),
   gradeLevel: GRADE_LEVEL,
+  masterwork: MASTERWORK,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
   quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false })),
@@ -50,7 +51,7 @@ const out = {
   zones: ZONES.map((z) => ({ id: z.id, name: z.name, nameEn: zoneName(z.name, 'en'), x: z.x, z: z.z, r: z.r, spawns: z.spawns })),
   teleports: TELEPORTS.map((t) => ({ ...t, nameEn: teleportName(t.id, 'en') })),
   camps: CAMPS.map((c) => ({ ...c, nameEn: campName(c.id, 'en') })),
-  races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods })),
+  races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods, mw: r.mw })),
   genders: Object.entries(GENDERS).map(([id, g]) => ({ id, mods: g.mods })),
   classes: Object.entries(CLASSES).map(([id, c]) => ({ id, ...c, startItems: c.startItems.map(([item, count, equip]) => ({ item, count, equip })) })),
   specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null })),

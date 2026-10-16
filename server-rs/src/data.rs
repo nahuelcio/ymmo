@@ -74,6 +74,11 @@ pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
 #[serde(rename_all = "camelCase")]
 pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub chance: f64, pub max: i64, pub fail_destroys: bool }
 
+/** MASTERWORK in shared/src/data/items.ts: how often a crafted piece comes out a Masterwork, and what one gives */
+#[derive(Deserialize, Clone, Copy, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterworkCfg { pub chance: f64, pub dwarf_chance: f64, pub weapon: f64, pub piece: f64 }
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusApply { pub id: String, pub ms: f64, pub chance: Option<f64>, pub dot: Option<f64> }
@@ -211,7 +216,8 @@ pub struct StatMods {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-pub struct RaceDef { pub id: String, pub classes: Vec<String>, pub mods: StatMods }
+/** mw: what a Masterwork piece gives this race ("atk", "cast", "cdr" or "mix", formulas.rs masterwork_bonus) */
+pub struct RaceDef { pub id: String, pub classes: Vec<String>, pub mods: StatMods, pub mw: String }
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct GenderDef { pub id: String, pub mods: StatMods }
@@ -305,6 +311,7 @@ struct Raw {
     items: Vec<ItemDef>,
     #[serde(rename = "gradeLevel")]
     grade_level: HashMap<String, i64>,
+    masterwork: MasterworkCfg,
     mobs: Vec<MobDef>,
     skills: Vec<SkillDef>,
     quests: Vec<QuestDef>,
@@ -355,6 +362,7 @@ pub struct Data {
     pub clans: ClansDef,
     /** the level a character needs to wear each grade (GRADE_LEVEL in shared/src/data/items.ts) */
     pub grade_level: HashMap<String, i64>,
+    pub masterwork: MasterworkCfg,
     /** deep water on a grid (cell m, from -half): true where a character swims */
     water: Vec<bool>,
     water_cell: f64,
@@ -420,6 +428,7 @@ pub fn d() -> &'static Data {
             enchant: raw.enchant,
             items: raw.items.into_iter().map(|i| (i.id.clone(), i)).collect(),
             grade_level: raw.grade_level,
+            masterwork: raw.masterwork,
             mobs: raw.mobs.into_iter().map(|m| (m.id.clone(), m)).collect(),
             skills: raw.skills,
             skill_by_id,

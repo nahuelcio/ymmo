@@ -37,11 +37,12 @@ export interface ClanInfo {
   skills: Record<string, number>;
 }
 /** A clan warehouse row (id: its row), and a logged movement (dep: a deposit). */
-export interface ClanWhItem { id: number; i: string; c: number; e: number; l?: boolean }
+export interface ClanWhItem { id: number; i: string; c: number; e: number; l?: boolean; m?: boolean }
 export interface ClanWhLog { at: number; who: string; dep: boolean; i: string; c: number; e: number }
 export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; f: number }
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
-export interface EntItem { id: number; k: 'i'; x: number; z: number; ry: number; item: string; c: number; hp: number; f: number }
+/** m: a Masterwork piece (its label is gold) */
+export interface EntItem { id: number; k: 'i'; x: number; z: number; ry: number; item: string; c: number; hp: number; f: number; m?: boolean }
 export type EntAdd = EntPlayer | EntMob | EntNpc | EntItem;
 
 /** Compact update: [id, x, z, ry, hpPct, flags] */
@@ -58,16 +59,16 @@ export const F_SITTING = 2048;
 /** felling, mining or picking (the node comes in the 'gather' event) */
 export const F_GATHER = 4096;
 
-/** e: enchant level (+N) of a piece of gear */
-/** e: enchant level; l: legacy, worn at any level whatever its grade asks */
-export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number; l?: boolean }
+/** e: enchant level; l: legacy, worn at any level whatever its grade asks; m: Masterwork (data/items.ts MASTERWORK) */
+export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number; l?: boolean; m?: boolean }
 
 export interface SelfState {
   id: number; name: string; race: Race; cls: ClassType; spec?: Spec | null; look: Look;
   lvl: number; xp: number; xpNeed: number;
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
-  atkSpd: number; speed: number; cdr: number;
+  /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time) */
+  atkSpd: number; castSpd: number; speed: number; cdr: number;
   adena: number; karma: number; pk: number; pvp: number; flagged: boolean; pvpOn: boolean;
   skills: string[];
   buffs: { id: string; rem: number }[];
@@ -179,6 +180,8 @@ export type S2C =
   | { t: 'died'; id: number; byPlayer: boolean }
   /** spec: the character awakened into this third specialization instead of levelling (the quest "El Despertar") */
   | { t: 'levelUp'; id: number; lvl: number; spec?: Spec }
+  /** a piece just crafted came out a Masterwork */
+  | { t: 'masterwork'; item: string }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'ally' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
