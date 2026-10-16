@@ -704,7 +704,8 @@ export class Minimap {
     ctx.setLineDash([]);
     ctx.font = 'bold 9px Tahoma, sans-serif';
     ctx.textAlign = 'center';
-    stops.forEach((s, i) => {
+    // the stops the player picked (a long trip's legs are only on the way)
+    stops.filter((s) => !s.leg).forEach((s, i) => {
       const [x, y] = at(s.x, s.z);
       ctx.fillStyle = '#ffe07a';
       ctx.strokeStyle = '#1a1206';

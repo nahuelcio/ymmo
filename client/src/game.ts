@@ -13,7 +13,7 @@ import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, type Node
 import { layoutRocks, layoutTrees } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
 import { MELEE_RANGE } from '../../shared/src/formulas';
-import { dashEnd, findPath, navGrid, pushOut } from '../../shared/src/collision';
+import { dashEnd, findPath, navGrid, pushOut, tripLegs } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
@@ -276,11 +276,17 @@ export class Game {
   private nodeTip = false;
   private lights!: LocalLights;
   private sunScreen = new THREE.Vector3();
-  /** Destinations picked on the world map, walked in order; route[0] is where we are heading now. */
-  route: { x: number; z: number }[] = [];
+  /**
+   * Destinations picked on the world map, walked in order; route[0] is where we are heading now. leg: a stop placed
+   * along a long trip (shared/src/collision.ts tripLegs), not one the player picked.
+   */
+  route: { x: number; z: number; leg?: boolean }[] = [];
   private routeMovedAt = 0;
+  /** the walk to route[0] was planned again once after stopping short (a second stop gives the route up) */
+  private routeRetried = false;
   /** Client-side predicted move destination for our own character. */
-  private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number } } | null = null;
+  /** best / progressAt: the closest it has got to (x, z) and when (no headway for a while ends the prediction) */
+  private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number }; best?: number; progressAt?: number } | null = null;
   private holdMove = false;
   private lastHoldSend = 0;
   private teleportPending = true;
@@ -1300,8 +1306,15 @@ export class Game {
   /** Walk to a point on the world map; `append` queues it after the stops already set. */
   travel(x: number, z: number, append: boolean) {
     if (!append) this.route.length = 0;
+    const idle = !this.route.length;
+    // a long trip goes in legs: every search (here and on the server) stays short
+    const self = this.self, from = this.route[this.route.length - 1] ?? (self ? { x: self.pos.x, z: self.pos.z } : { x, z });
+    for (const p of tripLegs(from.x, from.z, x, z)) this.route.push({ ...p, leg: true });
     this.route.push({ x, z });
-    if (this.route.length === 1) this.walkRoute();
+    if (idle) {
+      this.routeRetried = false;
+      this.walkRoute();
+    }
   }
 
   private walkRoute() {
@@ -1799,9 +1812,12 @@ export class Game {
       const dx = wp.x - c.pos.x, dz = wp.z - c.pos.z;
       const d = Math.hypot(dx, dz);
       let moving = false;
-      if (d > 0.05 && step) {
-        const k = Math.min(1, step / d);
-        const np = pushOut(c.pos.x + dx * k, c.pos.z + dz * k);
+      const k = d > 0.05 && step ? Math.min(1, step / d) : 0;
+      const np = k ? pushOut(c.pos.x + dx * k, c.pos.z + dz * k) : c.pos;
+      // held where we are on the last stretch: the point lies closer to an obstacle than our radius, so this is as
+      // close as it gets (the server's step_toward stops there too); walking on was walking in place until the next click
+      const held = k > 0 && !pr.chase && pr.path.length === 1 && d < 1 && Math.hypot(np.x - c.pos.x, np.z - c.pos.z) < Math.min(step, d) * 0.1;
+      if (k && !held) {
         c.pos.x = np.x;
         c.pos.z = np.z;
         let dr = Math.atan2(dx, dz) - c.ry;
@@ -1812,6 +1828,15 @@ export class Game {
       // hand back to the server once it caught up, or if we drifted too far from it
       const err = Math.hypot(srv.x - c.pos.x, srv.z - c.pos.z);
       const srvDone = Math.hypot(srv.x - pr.x, srv.z - pr.z) < 0.3;
+      // no headway for a while (held back towards a server that stopped short or went another way): hand back to the
+      // server rather than walk on the spot, turning, pulled both ways
+      if (!pr.chase && moving) {
+        // what is left of the path (a detour round an obstacle may lead away from its end for a while)
+        let left = Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z);
+        for (let i = 1; i < pr.path.length; i++) left += Math.hypot(pr.path[i].x - pr.path[i - 1].x, pr.path[i].z - pr.path[i - 1].z);
+        if (pr.best === undefined || left < pr.best - 0.3) (pr.best = left), (pr.progressAt = now);
+        else if (now - (pr.progressAt ?? now) > 800) this.predict = null;
+      }
       // TEMP debug (rubber-banding): log every time the server pulls us back
       // ponytail: small steady disagreement (paths around trees differ slightly) is eased away, no snap
       if (err > PREDICT_SOFT_ERR) { const k = Math.min(1, dt * 2); c.pos.x += (srv.x - c.pos.x) * k; c.pos.z += (srv.z - c.pos.z) * k; }
@@ -2048,11 +2073,20 @@ export class Game {
     if (self && this.route.length) {
       // reached a stop: on to the next one. Standing still for a while (blocked, dead, busy) drops the route.
       const wp = this.route[0];
-      if (Math.hypot(wp.x - self.pos.x, wp.z - self.pos.z) < 1.5) {
+      // a leg's stop is only on the way: no need to step onto it
+      if (Math.hypot(wp.x - self.pos.x, wp.z - self.pos.z) < (wp.leg ? 4 : 1.5)) {
         this.route.shift();
+        this.routeRetried = false;
         if (this.route.length) this.walkRoute();
       } else if (this.predict || self.flags & F_MOVING) this.routeMovedAt = now;
-      else if (now - this.routeMovedAt > 1500) this.route.length = 0;
+      else if (now - this.routeMovedAt > 1500) {
+        // stopped short: plan this walk again from here once, then give up
+        if (this.routeRetried) this.route.length = 0;
+        else {
+          this.routeRetried = true;
+          this.walkRoute();
+        }
+      }
     }
     if (self) {
       this.cam.update(dt, self.root.position); // follows the body (it floats over deep water)
