@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { animate, playerModel, type AnimState, type Rig } from './models';
+import { contactPhases, crossed } from './footfalls';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 
 /**
@@ -35,6 +36,8 @@ const families: THREE.Matrix4[][] = [];
 const armature: Partial<Record<Gender, THREE.Object3D>> = {};
 const tusks: Partial<Record<Gender, THREE.Mesh>> = {};
 const clips: Record<string, THREE.AnimationClip> = {};
+/** the moments (0..1) the feet land in Jog_Fwd_Loop, measured once it loads */
+let jogSteps: number[] = [0, 0.5];
 /**
  * Helmets modelled in Fiend directly in the head bone's space, at real size ([up, forward, scale] stay
  * for nudging): the head spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
@@ -167,6 +170,9 @@ export function loadQ(): Promise<void> {
       const t = (tusks[g] = get('tusks'));
       t.material = new THREE.MeshLambertMaterial({ color: 0xf0ecd8 });
     }
+    // when the feet land in the jog, for the footsteps (render/footfalls.ts), measured on a spare copy of the bones
+    const spare = armature.m!.clone(true);
+    if (clips.Jog_Fwd_Loop) jogSteps = contactPhases(spare, clips.Jog_Fwd_Loop, ['foot_l', 'foot_r'].map((n) => spare.getObjectByName(n)!));
     ready = true;
   })());
 }
@@ -344,7 +350,8 @@ export function qPlayer(o: QOpts): Rig {
 }
 
 const ATK_MS = 700;
-export function animateQ(q: QAnim, s: AnimState) {
+/** Pose the character for this frame. Returns how many feet landed in it (footsteps). */
+export function animateQ(q: QAnim, s: AnimState): number {
   const dt = Math.min(0.1, Math.max(0, s.t - q.t));
   q.t = s.t;
   const atk = q.armed ? 'Sword_Attack' : 'Punch_Jab';
@@ -386,13 +393,17 @@ export function animateQ(q: QAnim, s: AnimState) {
     else if (w > 0.997) w = 1;
     q.acts[n].setEffectiveWeight((q.w[n] = w));
   }
+  const jog = q.acts.Jog_Fwd_Loop, jog0 = jog?.time ?? 0;
   q.mixer.update(dt);
+  // the jog's clock runs at any weight: a foot lands when it passes one of the clip's landing moments
+  const steps = jog && cur === 'Jog_Fwd_Loop' && q.w.Jog_Fwd_Loop > 0.5 ? crossed(jog0 / jog.getClip().duration, jog.time / jog.getClip().duration, jogSteps) : 0;
   // Sitting on the floor: there is no floor-sit clip, so the chair sit is lowered to the ground (game.ts) and its
   // knees straightened back toward the bind pose: legs out in front instead of shins sunk into the ground.
   const floor = s.floorSit && (cur === 'Sitting_Enter' || cur === 'Sitting_Idle_Loop') ? 1 : 0;
   q.floor += (floor - q.floor) * Math.min(1, dt * 8);
   if (q.floor < 0.01) q.floor = 0;
   if (q.floor > 0) for (const l of q.legs) l.bone.quaternion.slerp(l.rest, q.floor);
+  return steps;
 }
 
 /** Dev gallery (?q=1): every race and gender in each gear tier, with the animation states. No server needed. */
