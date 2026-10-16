@@ -1,26 +1,15 @@
 import * as THREE from 'three';
-import { preloadSteps, setStepFiles, step, stepGrains } from '../audio';
+import { preloadSteps, setStepFiles, step, stepFiles, stepGrains } from '../audio';
 import { animate, playerModel } from './models';
 import { loadQ } from './quaternius';
 import type { Footing } from './scene';
 
-const steps = (name: string, n: number) => Array.from({ length: n }, (_, i) => `steps/${name}${i + 1}.ogg`);
-const tryF = (...names: string[]) => names.map((n) => `steps-try/${n}`);
-const fz = (kind: 'sand' | 'stone') => ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'].map((s) => `steps-try/fz-${kind}-${s}.ogg`);
-
-/** The recordings to choose from for each ground: what plays now first, then the candidates (client/public/audio/steps-try). */
-const OPTIONS: Record<Footing, [string, string[]][]> = {
-  grass: [['actual (Kenney)', steps('grass', 5)], ['Fantozzi', fz('sand')], ['sfxmint: paso', tryF('sfx-grass-step.ogg')], ['sfxmint: corrida', tryF('sfx-grass-run.ogg')]],
-  leaves: [['actual (TinyWorlds + Kenney)', [...steps('leaves', 2), 'steps/grass1.ogg', 'steps/grass3.ogg']], ['Fantozzi', fz('sand')], ['sfxmint: corrida en pasto', tryF('sfx-grass-run.ogg')]],
-  dirt: [['actual (rubberduck + alfombra)', [...steps('dirt', 2), ...steps('soft', 5)]], ['sfxmint: tierra 1', tryF('sfx-dirt-1.ogg')], ['sfxmint: tierra 2', tryF('sfx-dirt-2.ogg')],
-    ['sfxmint: grava suelta', tryF('sfx-gravel-step.ogg')], ['Fantozzi: arena', fz('sand')], ['Fantozzi: piedra', fz('stone')]],
-  stone: [['actual (Kenney + TinyWorlds)', steps('stone', 6)], ['Fantozzi: piedra', fz('stone')], ['sfxmint: paso', tryF('sfx-concrete-step.ogg')], ['sfxmint: corrida', tryF('sfx-concrete-run.ogg')]],
-  gravel: [['actual (TinyWorlds + Kenney)', ['steps/gravel1.ogg', ...steps('stone', 3)]], ['sfxmint: paso', tryF('sfx-gravel-step.ogg')], ['sfxmint: botas 1', tryF('sfx-gravel-boots1.ogg')], ['sfxmint: botas 2', tryF('sfx-gravel-boots2.ogg')]],
-  sand: [['actual (alfombra)', steps('soft', 5)], ['Fantozzi: arena', fz('sand')], ['sfxmint: arena 1', tryF('sfx-sand-1.mp3')], ['sfxmint: arena 2', tryF('sfx-sand-2.mp3')]],
-  snow: [['actual (Kenney)', steps('snow', 5)], ['sfxmint: nieve', tryF('sfx-snow.ogg')]],
-  mud: [['actual (TinyWorlds + rubberduck)', steps('mud', 4)], ['sfxmint: bota en barro', tryF('sfx-mud.ogg')]],
-  water: [['actual (rubberduck)', steps('water', 4)], ['sfxmint: charco', tryF('sfx-puddle.ogg')]],
-};
+const GROUNDS: Footing[] = ['grass', 'leaves', 'dirt', 'stone', 'gravel', 'sand', 'snow', 'mud', 'water'];
+/**
+ * The recordings to choose from for each ground: what plays now first. To try others, add them here as further
+ * options (put the files in client/public/audio/steps-try, which stays out of the repo).
+ */
+const OPTIONS = Object.fromEntries(GROUNDS.map((k) => [k, [['en uso', stepFiles(k)]]])) as Record<Footing, [string, string[]][]>;
 const NAMES: Record<Footing, string> = { grass: 'pasto', leaves: 'hojas (bosque)', dirt: 'tierra / camino / pueblo', stone: 'piedra', gravel: 'grava (volcán)', sand: 'arena', snow: 'nieve', mud: 'barro', water: 'agua baja' };
 
 /**

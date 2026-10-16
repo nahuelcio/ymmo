@@ -10,10 +10,15 @@ Combat sound effects (from OpenGameArt.org, licenses as noted):
   combat/spell-*.wav                                "Basic Spell Impacts" by lentikula (fire, ice, lightning, water), CC0    https://lentikula.itch.io/freecc0-basic-spell-impacts-sfx
 
 Footsteps (steps/), all CC0:
-  steps/grass*.ogg, stone1-5.ogg, snow*.ogg, soft*.ogg   footstep_grass/concrete/snow/carpet_000-004 from "Impact Sounds" by Kenney (www.kenney.nl)   https://kenney.nl/assets/impact-sounds
-  steps/stone6.ogg, gravel1.ogg, mud1.ogg, leaves*.ogg    "Different steps on wood, stone, leaves, gravel and mud" by TinyWorlds   https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud
-  steps/dirt*.ogg, mud2-4.ogg                              sfx100v2_footstep_01-02 / footstep_wet_01-03 from "100 CC0 SFX #2" by rubberduck   https://opengameart.org/content/100-cc0-sfx-2
-  steps/water*.ogg                                         splash_09/10/14/15 from "40 CC0 water / splash / slime SFX" by rubberduck   https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+  steps/snow*.ogg       footstep_snow_000-004 from "Impact Sounds" by Kenney (www.kenney.nl)   https://kenney.nl/assets/impact-sounds
+  steps/leaves*.ogg     Sand L1-3 / R1-3 from "Fantozzi's Footsteps (Grass/Sand & Stone)" by Fantozzi (submitted by qubodup)   https://opengameart.org/content/fantozzis-footsteps-grasssand-stone
+  steps/grass.ogg       "Grass Single Footstep 01" from sfxmint   https://sfxmint.com/sounds/footsteps-single-01
+  steps/dirt.ogg        "Dirt Path Single Footstep" from sfxmint   https://sfxmint.com/sounds/growth-63374398e9e5d4d7a4431de7-retry
+  steps/stone.ogg       "Concrete Single Footstep 12" from sfxmint   https://sfxmint.com/sounds/footsteps-single-12
+  steps/gravel.ogg      "Heavy Boots Footsteps On Gravel 54" from sfxmint   https://sfxmint.com/sounds/footsteps-gravel-54
+  steps/sand.mp3        "Footsteps Sand 01" from sfxmint   https://sfxmint.com/sounds/footsteps-sand-01
+  steps/mud.ogg         "Boot Step in Mud" from sfxmint   https://sfxmint.com/sounds/growth-9a527dcb0a80480354da0c63-retry
+  steps/water.ogg       "Shallow Puddle Water Splash 40" from sfxmint   https://sfxmint.com/sounds/water-splash-40
 
 Weather (weather/), all CC0:
   weather/rain-light.ogg     loop_rain from "40 CC0 water / splash / slime SFX" by rubberduck   https://opengameart.org/content/40-cc0-water-splash-slime-sfx

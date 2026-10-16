@@ -301,17 +301,19 @@ export function play(name: Sfx, gain = 1) {
 const steps = (name: string, n: number) => Array.from({ length: n }, (_, i) => `steps/${name}${i + 1}.ogg`);
 /** Footfalls per ground (CC0 recordings, see public/audio/CREDITS.txt): the files, how loud, and their pitch. */
 const STEPS: Record<Footing, { files: string[]; gain: number; rate?: number }> = {
-  grass: { files: steps('grass', 5), gain: 0.45 },
-  leaves: { files: [...steps('leaves', 2), 'steps/grass1.ogg', 'steps/grass3.ogg'], gain: 0.45 },
-  dirt: { files: [...steps('dirt', 2), ...steps('soft', 5)], gain: 0.5 },
-  stone: { files: steps('stone', 6), gain: 0.4 },
-  gravel: { files: ['steps/gravel1.ogg', ...steps('stone', 3)], gain: 0.45, rate: 0.9 },
-  sand: { files: steps('soft', 5), gain: 0.4, rate: 0.85 },
+  grass: { files: ['steps/grass.ogg'], gain: 0.45 },
+  leaves: { files: steps('leaves', 6), gain: 0.45 },
+  dirt: { files: ['steps/dirt.ogg'], gain: 0.5 },
+  stone: { files: ['steps/stone.ogg'], gain: 0.4 },
+  gravel: { files: ['steps/gravel.ogg'], gain: 0.45, rate: 0.9 },
+  sand: { files: ['steps/sand.mp3'], gain: 0.4, rate: 0.85 },
   snow: { files: steps('snow', 5), gain: 0.5 },
-  mud: { files: steps('mud', 4), gain: 0.5 },
-  water: { files: steps('water', 4), gain: 0.22, rate: 1.25 },
+  mud: { files: ['steps/mud.ogg'], gain: 0.5 },
+  water: { files: ['steps/water.ogg'], gain: 0.22, rate: 1.25 },
 };
 
+/** The recordings a ground uses now. */
+export const stepFiles = (on: Footing) => [...STEPS[on].files];
 /** The footfall gallery (?steps=1): swap the recordings a ground uses, to try them by ear. */
 export function setStepFiles(on: Footing, files: string[]) {
   STEPS[on].files = files;
