@@ -181,11 +181,11 @@ export const GRADE_LEVEL: Record<Grade, number> = { NG: 0, D: 20, C: 40, B: 52, 
 export const wearLevel = (d: ItemDef) => (d.grade ? GRADE_LEVEL[d.grade] : 0);
 
 /**
- * Masterwork: a crafted piece of gear comes out a Masterwork `chance` of the time (`dwarfChance` when a dwarf has it
- * made: dwarves are the craftsmen). It gives `weapon` (a weapon) or `piece` (armor, jewels) as the wearer's race
- * says (RACES[r].mw), whatever its grade.
+ * Masterwork: a piece of gear a master crafts for a dwarf comes out a Masterwork `dwarfChance` of the time; for anyone
+ * else, `chance` (none: only the craftsmen make them, anyone can wear them). It gives `weapon` (a weapon) or `piece`
+ * (armor, jewels) as the wearer's race says (RACES[r].mw), whatever its grade.
  */
-export const MASTERWORK = { chance: 0.03, dwarfChance: 0.12, weapon: 0.06, piece: 0.01 };
+export const MASTERWORK = { chance: 0, dwarfChance: 0.06, weapon: 0.06, piece: 0.01 };
 export interface MasterworkBonus { atkSpd: number; castSpd: number; cdr: number }
 /**
  * What one Masterwork piece gives a wearer (fractions: 0.06 = 6%). A speed the class does not use turns into the one it

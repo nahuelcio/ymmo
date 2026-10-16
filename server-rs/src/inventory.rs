@@ -240,7 +240,7 @@ impl World {
         for (m, c) in &rec.mats { take_items(p, m, *c); }
         p.adena -= rec.adena;
         p.inv_dirty = true;
-        // gear sometimes comes out a Masterwork, more often when a dwarf has it made; gear never stacks, so it is the
+        // gear sometimes comes out a Masterwork when a dwarf has it made (MASTERWORK: never for anyone else); gear never stacks, so it is the
         // row add_item just pushed
         let mw = &d().masterwork;
         if def.slot.is_some() && rnd() < if p.race == "dwarf" { mw.dwarf_chance } else { mw.chance } {
