@@ -75,6 +75,9 @@ export interface SelfState {
   zone: string;
 }
 
+/** One side of a trade: what is in it (u: that player's bag row; e, l, m: enchant, legacy, Masterwork), the adena, confirmed or not. */
+export interface TradeOffer { items: { u: number; i: string; c: number; e: number; l: boolean; m: boolean }[]; adena: number; ok: boolean }
+
 export interface PartyMember { id: number; name: string; lvl: number; cls: ClassType; spec?: Spec | null; hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number; leader: boolean }
 
 // Messages are plain JSON objects with a `t` discriminator.
@@ -111,6 +114,13 @@ export type C2S =
   | { t: 'partyInvite'; name: string }
   | { t: 'partyRespond'; accept: boolean }
   | { t: 'partyLeave' }
+  /** trades (server-rs/src/trade.rs): ask a player (by entity id, or name), answer, put in a bag row / adena, confirm, cancel */
+  | { t: 'tradeRequest'; id?: number; name?: string }
+  | { t: 'tradeRespond'; accept: boolean }
+  | { t: 'tradeAdd'; u: number; c: number }
+  | { t: 'tradeAdena'; amount: number }
+  | { t: 'tradeConfirm' }
+  | { t: 'tradeCancel' }
   | { t: 'clanGet' }
   | { t: 'clanCreate'; npc: number; name: string }
   | { t: 'clanInvite'; name: string }
@@ -186,6 +196,10 @@ export type S2C =
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
   | { t: 'partyInvite'; from: string }
+  | { t: 'tradeRequest'; from: string }
+  /** the whole trade, after every change: your offer and the other player's */
+  | { t: 'trade'; with: string; mine: TradeOffer; theirs: TradeOffer }
+  | { t: 'tradeEnd'; done: boolean }
   | { t: 'clan'; clan: ClanInfo | null }
   | { t: 'clanInvite'; from: string; clan: string }
   | { t: 'allyInvite'; from: string; clan: string; ally: string }

@@ -336,6 +336,8 @@ impl World {
             t.recalc();
             (e.c.x, e.c.z)
         };
+        // a trade in progress ends with nothing changing hands, before anything drops
+        self.trade_cancel(tid, Some(("El comercio se canceló.".into(), "The trade has been cancelled.".into())));
         let by_player = self.pl(killer).is_some() && killer != tid;
         self.send_near(x, z, json!({ "t": "died", "id": tid, "byPlayer": by_player }));
         let (t_name, t_karma, t_flag, t_level, t_xp) = { let t = self.pl(tid).unwrap(); (t.name.clone(), t.karma, t.pvp_until > now, t.level, t.xp) };

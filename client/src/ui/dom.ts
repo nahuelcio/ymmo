@@ -119,6 +119,8 @@ export class Win {
   body: HTMLDivElement;
   titleEl: HTMLSpanElement;
   onShow: (() => void) | null = null;
+  /** the player closed it (× or Esc), not just hidden (a phone hides one window for another) */
+  onClose: (() => void) | null = null;
 
   constructor(public id: string, title: string, x: number, y: number, width: number, parent: HTMLElement) {
     this.root = el('div', 'win', parent);
@@ -126,7 +128,7 @@ export class Win {
     const bar = el('div', 'win-title', this.root);
     this.titleEl = el('span', '', bar, title);
     const close = el('button', 'win-close', bar, '×');
-    close.onclick = () => this.hide();
+    close.onclick = () => this.close();
     this.body = el('div', 'win-body', this.root);
     const pos = loadPos(id);
     this.home = { x, y };
@@ -183,6 +185,12 @@ export class Win {
     this.root.style.display = '';
     this.front();
     this.onShow?.();
+  }
+
+  /** Closed by the player: onClose, then hidden. */
+  close() {
+    this.onClose?.();
+    this.hide();
   }
 
   hide() {

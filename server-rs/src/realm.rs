@@ -2,6 +2,7 @@
 //! (port of server/src/realm.ts plus the raid enter/exit logic of index.ts and raid/worker.ts).
 use crate::collision::P;
 use crate::data::d;
+use crate::db::CharSave;
 use crate::ent::*;
 use crate::formulas::{rnd, Stats};
 use crate::quests::{prime_quest_notices, send_quests};
@@ -25,7 +26,7 @@ impl World {
         let mut p = Player {
             sid: m.sid, god: false, out: m.out, lang: m.lang, stats: Stats::default(), buffs: vec![], target: None, intent: None, next_attack: 0.0, casting: None,
             cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, auto_loot: false, dodge_until: 0.0, rtt: 80.0,
-            saved_at: crate::world::now_ms() - rnd() * 60000.0, look: row.look, last_combat: 0.0, escape_at: 0.0, party: None, pending_invite: None, pending_clan: None, pending_ally: None, clan_look: None, clan_mods: ClanMods::default(),
+            saved_at: crate::world::now_ms() - rnd() * 60000.0, look: row.look, last_combat: 0.0, escape_at: 0.0, party: None, pending_invite: None, trade: None, pending_trade: None, pending_clan: None, pending_ally: None, clan_look: None, clan_mods: ClanMods::default(),
             talking_to: None, sitting: None, stand_until: 0.0, gather: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(), hotbar: row.hotbar,
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
@@ -59,16 +60,20 @@ impl World {
         Some(id)
     }
 
-    pub fn save_player(&mut self, pid: u32, at: Option<P>) {
-        let (x, z) = { let c = &self.ents[&pid].c; at.map_or((c.x, c.z), |p| (p.x, p.z)) };
+    /** What a save writes of this player, standing where they are (or at `at`). */
+    pub fn char_save(&self, pid: u32, at: Option<P>) -> CharSave {
+        let c = &self.ents[&pid].c;
+        let (x, z) = at.map_or((c.x, c.z), |p| (p.x, p.z));
         let p = self.ents[&pid].player().unwrap();
-        let r = {
-            let (id, level, xp, hp, mp, cp, adena, karma, pk, pvp) = (p.char_id, p.level, p.xp, p.hp.max(1.0), p.mp, p.cp, p.adena, p.karma, p.pk, p.pvp);
-            let inv = p.inv.clone();
-            let quests = p.quests.clone();
-            self.db.save_char(id, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, &inv, &quests)
-        };
-        if let Err(e) = r { elog!("[world] save failed: {e}"); }
+        CharSave {
+            id: p.char_id, level: p.level, xp: p.xp, x, z, hp: p.hp.max(1.0), mp: p.mp, cp: p.cp,
+            adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, inv: p.inv.clone(), quests: p.quests.clone(),
+        }
+    }
+
+    pub fn save_player(&mut self, pid: u32, at: Option<P>) {
+        let c = self.char_save(pid, at);
+        if let Err(e) = self.db.save_char(&c) { elog!("[world] save failed: {e}"); }
     }
 
     /** Socket gone (or moving worlds): save and drop the character. Returns who it was. */
@@ -83,6 +88,9 @@ impl World {
         } else {
             self.save_player(pid, at);
         }
+        // a trade in progress ends with nothing changing hands
+        let name = self.pl(pid).unwrap().name.clone();
+        self.trade_cancel(pid, Some((format!("{name} se fue: el comercio se canceló."), format!("{name} left: the trade has been cancelled."))));
         self.party_leave(pid, true);
         self.stand_up(pid); // frees the seat
         let (cid, lvl) = { let p = self.pl(pid).unwrap(); (p.char_id, p.level) };

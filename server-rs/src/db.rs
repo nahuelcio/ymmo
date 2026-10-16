@@ -2,10 +2,30 @@
 //! so the existing game.db keeps working when switching servers.
 use crate::data::d;
 use crate::ent::{InvItem, Look};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
 
 pub struct Db { pub c: Connection }
+
+/** What a save writes of a character (realm.rs char_save). */
+pub struct CharSave {
+    pub id: i64, pub level: i64, pub xp: i64, pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64,
+    pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub inv: Vec<InvItem>, pub quests: Vec<(String, i64, bool)>,
+}
+
+/** A finished trade, for the trade_log table: who gave what (JSON lists of { i, c, e, l, m }) and how much adena. */
+pub struct TradeLog { pub a_id: i64, pub a_name: String, pub a_gave: String, pub a_adena: i64, pub b_id: i64, pub b_name: String, pub b_gave: String, pub b_adena: i64 }
+
+fn write_char(tx: &Transaction, c: &CharSave) -> rusqlite::Result<()> {
+    tx.execute("UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?", params![c.level, c.xp, c.x, c.z, c.hp, c.mp, c.cp, c.adena, c.karma, c.pk, c.pvp, c.id])?;
+    tx.execute("DELETE FROM items WHERE char_id = ?", [c.id])?;
+    for it in &c.inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant, legacy, mw) VALUES (?, ?, ?, ?, ?, ?, ?)", params![c.id, it.i, it.c, it.s, it.e, it.l as i64, it.m as i64])?; }
+    tx.execute("DELETE FROM quests WHERE char_id = ?", [c.id])?;
+    for q in &c.quests {
+        if d().quest(&q.0).is_some() { tx.execute("INSERT INTO quests (char_id, quest_id, progress, done) VALUES (?, ?, ?, ?)", params![c.id, q.0, q.1, q.2 as i64])?; }
+    }
+    Ok(())
+}
 
 pub struct CharRow {
     pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub xp: i64,
@@ -100,6 +120,8 @@ impl Db {
         let _ = c.execute("ALTER TABLE items ADD COLUMN mw INTEGER NOT NULL DEFAULT 0", []);
         let _ = c.execute("ALTER TABLE clan_items ADD COLUMN mw INTEGER NOT NULL DEFAULT 0", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)", []);
+        // every finished player trade (trade.rs): what each side gave, for sorting out a "I never got it"
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS trade_log (id INTEGER PRIMARY KEY, at INTEGER NOT NULL, a_id INTEGER NOT NULL, a_name TEXT NOT NULL, a_gave TEXT NOT NULL, a_adena INTEGER NOT NULL, b_id INTEGER NOT NULL, b_name TEXT NOT NULL, b_gave TEXT NOT NULL, b_adena INTEGER NOT NULL)", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -237,16 +259,21 @@ impl Db {
 
     pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn save_char(&mut self, id: i64, level: i64, xp: i64, x: f64, z: f64, hp: f64, mp: f64, cp: f64, adena: i64, karma: i64, pk: i64, pvp: i64, inv: &[InvItem], quests: &[(String, i64, bool)]) -> rusqlite::Result<()> {
+    pub fn save_char(&mut self, c: &CharSave) -> rusqlite::Result<()> {
         let tx = self.c.transaction()?;
-        tx.execute("UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?", params![level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, id])?;
-        tx.execute("DELETE FROM items WHERE char_id = ?", [id])?;
-        for it in inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant, legacy, mw) VALUES (?, ?, ?, ?, ?, ?, ?)", params![id, it.i, it.c, it.s, it.e, it.l as i64, it.m as i64])?; }
-        tx.execute("DELETE FROM quests WHERE char_id = ?", [id])?;
-        for q in quests {
-            if d().quest(&q.0).is_some() { tx.execute("INSERT INTO quests (char_id, quest_id, progress, done) VALUES (?, ?, ?, ?)", params![id, q.0, q.1, q.2 as i64])?; }
-        }
+        write_char(&tx, c)?;
+        tx.commit()
+    }
+
+    /** Both sides of a trade and its log line in one transaction: a crash keeps all of it or none (no item twice, none lost). */
+    pub fn save_trade(&mut self, a: &CharSave, b: &CharSave, log: &TradeLog) -> rusqlite::Result<()> {
+        let tx = self.c.transaction()?;
+        write_char(&tx, a)?;
+        write_char(&tx, b)?;
+        tx.execute(
+            "INSERT INTO trade_log (at, a_id, a_name, a_gave, a_adena, b_id, b_name, b_gave, b_adena) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![crate::world::now_ms() as i64, log.a_id, log.a_name, log.a_gave, log.a_adena, log.b_id, log.b_name, log.b_gave, log.b_adena],
+        )?;
         tx.commit()
     }
 

@@ -24,6 +24,7 @@ mod quests;
 mod raid;
 mod realm;
 mod terrain;
+mod trade;
 mod world;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -242,6 +243,11 @@ async fn client(socket: WebSocket, app: App) {
     // world for a while: the client reconnects and re-enters, which takes it over (see "enter") without a
     // logout in between. Only once nobody came back is it saved and removed.
     let in_world = app.hub.lock().unwrap().sessions.get(&sid).map_or(false, |s| s.world.is_some());
+    if in_world {
+        // a trade in progress does not wait that out: it ends now, nothing changing hands (trade.rs)
+        let hub = &mut *app.hub.lock().unwrap();
+        if let Some(w) = hub.sessions.get(&sid).and_then(|s| s.world) { to_world(hub, w, WorldCmd::Msg { sid, msg: serde_json::json!({ "t": "tradeCancel", "gone": true }) }); }
+    }
     if in_world { tokio::time::sleep(LINKDEAD).await; }
     {
         let hub = &mut *app.hub.lock().unwrap();

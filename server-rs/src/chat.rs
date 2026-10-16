@@ -18,6 +18,7 @@ impl World {
             match cmd.as_str() {
                 "invite" => self.party_invite(pid, &arg),
                 "leave" => self.party_leave(pid, false),
+                "trade" => self.trade_request_named(pid, &arg),
                 "w" | "whisper" => {
                     let mut it = arg.splitn(2, ' ');
                     let to = it.next().unwrap_or("").to_string();

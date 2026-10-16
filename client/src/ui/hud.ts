@@ -750,6 +750,9 @@ export class Hud {
     if (r.k === 'p' && r.id !== this.g.me.id) {
       const inv = el('button', 'btn small', this.tActions, tx('Invitar a la party', 'Invite to party'));
       inv.onclick = () => this.g.net.send({ t: 'partyInvite', name: r.n });
+      // a trade already open (hidden for another window on a phone) comes back instead of asking again
+      const trade = el('button', 'btn small', this.tActions, tx('Comerciar', 'Trade'));
+      trade.onclick = () => (this.g.ui.trade.active ? this.g.ui.trade.win.show() : this.g.net.send({ t: 'tradeRequest', id: r.id }));
       const wh = el('button', 'btn small', this.tActions, tx('Susurrar', 'Whisper'));
       wh.onclick = () => this.g.ui.chat.prefill(`"${r.n} `);
     }

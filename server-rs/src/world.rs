@@ -50,6 +50,9 @@ pub struct World {
     pub mobs: Vec<u32>,
     pub parties: Vec<Party>,
     pub next_party: u32,
+    /** trades in progress between two players of this world (trade.rs) */
+    pub trades: Vec<crate::trade::Trade>,
+    pub next_trade: u32,
     pub camps: Vec<CampState>,
     grid: HashMap<(i64, i64), Vec<u32>>,
     pub now: f64,
@@ -74,7 +77,7 @@ pub struct World {
 impl World {
     pub fn new(db: Db, raid: Option<(&'static RaidDef, usize)>) -> World {
         let mut w = World {
-            ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, camps: vec![], grid: HashMap::new(),
+            ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
             sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
         };

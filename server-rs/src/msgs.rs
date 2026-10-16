@@ -95,6 +95,17 @@ impl World {
             "partyInvite" => self.party_invite(pid, &s(m, "name")),
             "partyRespond" => self.party_respond(pid, truthy(m, "accept")),
             "partyLeave" => self.party_leave(pid, false),
+            "tradeRequest" => match id(m, "id") { Some(t) => self.trade_request(pid, t), None => self.trade_request_named(pid, &s(m, "name")) },
+            "tradeRespond" => self.trade_respond(pid, truthy(m, "accept")),
+            "tradeAdd" => if let Some(u) = id(m, "u") { self.trade_add(pid, u, num(m, "c")) },
+            "tradeAdena" => self.trade_adena(pid, num(m, "amount")),
+            "tradeConfirm" => self.trade_confirm(pid),
+            // gone: the socket dropped (main.rs), the character lingers a while but the trade ends now
+            "tradeCancel" => {
+                let name = self.pl(pid).unwrap().name.clone();
+                let why = truthy(m, "gone").then(|| (format!("{name} se desconectó: el comercio se canceló."), format!("{name} disconnected: the trade has been cancelled.")));
+                self.trade_cancel(pid, why)
+            }
             "clanGet" => self.clan_send(pid),
             "clanCreate" => if let Some(n) = id(m, "npc") { self.clan_create(pid, n, &s(m, "name")) },
             "clanInvite" => self.clan_invite(pid, &s(m, "name")),

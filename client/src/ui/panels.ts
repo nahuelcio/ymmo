@@ -556,6 +556,16 @@ export class Dialogs {
     ]);
   }
 
+  /** A trade request (server-rs/src/trade.rs): it lapses after 15 s, and so does the question. */
+  trade(from: string) {
+    this.show(tx(`<b>${esc(from)}</b> quiere comerciar con vos.`, `<b>${esc(from)}</b> wants to trade with you.`), [
+      [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'tradeRespond', accept: true }), 'primary'],
+      [tx('Rechazar', 'Decline'), () => this.g.net.send({ t: 'tradeRespond', accept: false })],
+    ]);
+    const asked = this.root.firstElementChild;
+    setTimeout(() => this.open && this.root.firstElementChild === asked && this.close(), 15000);
+  }
+
   clanInvite(from: string, clan: string) {
     this.show(tx(`<b>${esc(from)}</b> te invitó al clan <b>${esc(clan)}</b>.`, `<b>${esc(from)}</b> invited you to the clan <b>${esc(clan)}</b>.`), [
       [tx('Aceptar', 'Accept'), () => this.g.net.send({ t: 'clanRespond', accept: true }), 'primary'],
@@ -913,6 +923,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
     matar a un jugador sin flag te suma karma y te pone en <span style="color:#ff4040">rojo</span>, y a los rojos se les pueden caer objetos al morir.</p>
+    <p>Para <b>comerciar</b>, seleccioná a un jugador cercano → <b>Comerciar</b> (o <code>/trade</code>). Cada uno agrega objetos y adena a su oferta: lo que se agrega no se puede sacar (para arrepentirse, se cancela), y apenas uno de los dos confirma ya nadie puede agregar nada más. Cuando confirman los dos, se intercambia todo junto.</p>
     <h4>Ventanas</h4>
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
   </div>`;
@@ -958,6 +969,7 @@ const HELP_EN = `
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives karma and turns you <span style="color:#ff4040">red</span>, and red players can drop items on death.</p>
+    <p>To <b>trade</b>, select a nearby player → <b>Trade</b> (or <code>/trade</code>). Each of you adds items and adena to your offer: what goes in cannot come back out (cancel instead), and once either of you confirms nobody can add anything more. When both confirm, everything changes hands at once.</p>
     <h4>Windows</h4>
     <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>O</b> options · <b>Enter</b> chat · <b>Esc</b> close / clear target</p>
   </div>`;
