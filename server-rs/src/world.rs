@@ -270,7 +270,17 @@ impl World {
         let wd = { let h = dx.hypot(dz); if h == 0.0 { 1e-4 } else { h } };
         let step = budget.min((wd - wstop).max(0.0));
         e.c.ry = dx.atan2(dz);
-        let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, e.c.radius);
+        // players walk with the walk grid's radius, like the client's prediction: with their own (0.5 against 0.45)
+        // a gap the paths go through held the server back while the client walked on
+        let r = if e.player().is_some() { d().c.walk_radius } else { e.c.radius };
+        let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, r);
+        // Held where it is on the last stretch: the point lies closer to an obstacle than the walker's radius, so
+        // this is as close as it gets. Walking on was walking in place until the next click (the client the same).
+        if wx == tx && wz == tz && dd < 1.0 && step > 1e-4 && (np.x - e.c.x).hypot(np.z - e.c.z) < step * 0.1 {
+            e.c.moving = false;
+            e.c.nav = None;
+            return true;
+        }
         e.c.moving = true;
         self.set_pos(id, np.x, np.z);
         false

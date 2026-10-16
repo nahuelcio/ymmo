@@ -195,7 +195,7 @@ function scratch() {
  * Straight line when clear; A* on the nav grid + string pulling otherwise.
  * If the target is inside an obstacle, walks to the closest free spot.
  */
-export function findPath(sx: number, sz: number, tx: number, tz: number): { x: number; z: number }[] {
+export function findPath(sx: number, sz: number, tx: number, tz: number, maxNodes = MAX_NODES): { x: number; z: number }[] {
   if (lineClear(sx, sz, tx, tz)) return [{ x: tx, z: tz }];
   const s = nearestFree(toCell(sx), toCell(sz));
   const g = nearestFree(toCell(tx), toCell(tz));
@@ -262,7 +262,7 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
   gScore[start] = 0;
   push(h(start), start);
   let found = false, best = start, bestH = h(start), expanded = 0;
-  while (size && expanded < MAX_NODES) {
+  while (size && expanded < maxNodes) {
     const cur = pop();
     if (closed[cur] === stamp) continue;
     if (cur === goal) { found = true; break; }
@@ -317,6 +317,152 @@ export function findPath(sx: number, sz: number, tx: number, tz: number): { x: n
     if (lineClear(px, pz, out[k + 1].x, out[k + 1].z)) out.splice(k, 1);
   }
   return out;
+}
+
+// ---------------------------------------------------------------- long trips
+// The walk grid is 1 m and a search stops at MAX_NODES: since the world grew to ±2000, a trip of hundreds of metres (a
+// click on the world map) came back partial, and a different part on the client and on the server, which then pulled
+// each other round in circles. A long trip goes in legs instead, placed along a path on a coarse grid, so every search
+// (the client's and the server's) is a short one.
+const CRES = 4; // world units per coarse cell
+const CN = Math.ceil((PLAYABLE_HALF * 2) / CRES) + 1;
+const COARSE_NODES = 200000;
+let coarse: Uint8Array | null = null;
+/** 1 where a coarse cell's centre is blocked on the walk grid (thin walls slip through: the legs go round them). */
+function coarseGrid(): Uint8Array {
+  if (coarse) return coarse;
+  coarse = new Uint8Array(CN * CN);
+  for (let cz = 0; cz < CN; cz++)
+    for (let cx = 0; cx < CN; cx++)
+      if (blockedCell(toCell(cx * CRES - PLAYABLE_HALF), toCell(cz * CRES - PLAYABLE_HALF))) coarse[cz * CN + cx] = 1;
+  return coarse;
+}
+const toCoarse = (v: number) => Math.max(0, Math.min(CN - 1, Math.round((v + PLAYABLE_HALF) / CRES)));
+
+/** World points of a path on the coarse grid from s to t (A*, no corner cutting); null when there is none. */
+function coarsePath(sx: number, sz: number, tx: number, tz: number): { x: number; z: number }[] | null {
+  const grid = coarseGrid();
+  const free = (cx: number, cz: number) => cx >= 0 && cz >= 0 && cx < CN && cz < CN && grid[cz * CN + cx] === 0;
+  const near = (cx: number, cz: number): number | null => {
+    for (let rad = 0; rad <= 4; rad++)
+      for (let dx = -rad; dx <= rad; dx++)
+        for (let dz = -rad; dz <= rad; dz++) if (Math.max(Math.abs(dx), Math.abs(dz)) === rad && free(cx + dx, cz + dz)) return (cz + dz) * CN + cx + dx;
+    return null;
+  };
+  const start = near(toCoarse(sx), toCoarse(sz)), goal = near(toCoarse(tx), toCoarse(tz));
+  if (start === null || goal === null) return null;
+  const gx = goal % CN, gz = (goal / CN) | 0;
+  const h = (n: number) => {
+    const dx = Math.abs((n % CN) - gx), dz = Math.abs(((n / CN) | 0) - gz);
+    return dx > dz ? dx + 0.4142 * dz : dz + 0.4142 * dx;
+  };
+  const g = new Map<number, number>([[start, 0]]), came = new Map<number, number>(), closed = new Set<number>();
+  // a binary heap of [f, node]
+  const heap: number[][] = [[h(start), start]];
+  const push = (f: number, n: number) => {
+    heap.push([f, n]);
+    for (let i = heap.length - 1; i > 0; ) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= f) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let i = 0; ; ) {
+        const l = i * 2 + 1, r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
+      }
+    }
+    return top[1];
+  };
+  let found = false;
+  while (heap.length && closed.size < COARSE_NODES) {
+    const cur = pop();
+    if (closed.has(cur)) continue;
+    if (cur === goal) { found = true; break; }
+    closed.add(cur);
+    const cx = cur % CN, cz = (cur / CN) | 0, gc = g.get(cur)!;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++) {
+        if ((!dx && !dz) || !free(cx + dx, cz + dz)) continue;
+        if (dx && dz && (!free(cx + dx, cz) || !free(cx, cz + dz))) continue;
+        const n = (cz + dz) * CN + cx + dx;
+        const ng = gc + (dx && dz ? 1.4142 : 1);
+        if (closed.has(n) || ng >= (g.get(n) ?? Infinity)) continue;
+        g.set(n, ng);
+        came.set(n, cur);
+        push(ng + h(n), n);
+      }
+  }
+  if (!found) return null;
+  const out: { x: number; z: number }[] = [];
+  for (let n = goal; n !== start; n = came.get(n)!) out.push({ x: (n % CN) * CRES - PLAYABLE_HALF, z: ((n / CN) | 0) * CRES - PLAYABLE_HALF });
+  return out.reverse();
+}
+
+/**
+ * Stops about every `leg` metres along a coarse path from (sx,sz) to (tx,tz), neither end included, each on a free
+ * cell of the walk grid: walked one after another, every search between them is short. A trip under 1.5 legs needs
+ * none; with no coarse path the stops go along the straight line.
+ */
+export function tripLegs(sx: number, sz: number, tx: number, tz: number, leg = 50): { x: number; z: number }[] {
+  if (Math.hypot(tx - sx, tz - sz) < leg * 1.5) return [];
+  const pts = coarsePath(sx, sz, tx, tz) ?? [{ x: tx, z: tz }];
+  const out: { x: number; z: number }[] = [];
+  let px = sx, pz = sz, run = 0;
+  for (const p of pts) {
+    let seg = Math.hypot(p.x - px, p.z - pz);
+    while (seg > 0 && run + seg >= leg) {
+      const k = (leg - run) / seg;
+      px += (p.x - px) * k;
+      pz += (p.z - pz) * k;
+      out.push({ x: px, z: pz });
+      seg = Math.hypot(p.x - px, p.z - pz);
+      run = 0;
+    }
+    run += seg;
+    px = p.x;
+    pz = p.z;
+  }
+  // none right before the end
+  while (out.length && Math.hypot(tx - out[out.length - 1].x, tz - out[out.length - 1].z) < leg * 0.5) out.pop();
+  const stops = out.map((p) => {
+    const c = nearestFree(toCell(p.x), toCell(p.z));
+    return c ? { x: toWorld(c[0]), z: toWorld(c[1]) } : p;
+  });
+  // A leg the walk grid can't do in one search crosses what the coarse grid missed (a thin wall: its centres fall either
+  // side of it). Find the way round once, with a wider search, and put stops along it every half leg.
+  const legs: { x: number; z: number }[] = [];
+  let ax = sx, az = sz;
+  for (const [i, st] of [...stops, { x: tx, z: tz }].entries()) {
+    const p = findPath(ax, az, st.x, st.z), e = p[p.length - 1];
+    if (Math.hypot(e.x - st.x, e.z - st.z) > 2) {
+      const wide = findPath(ax, az, st.x, st.z, MAX_NODES * 8);
+      let qx = ax, qz = az, run = 0;
+      for (const w of wide.slice(0, -1)) {
+        run += Math.hypot(w.x - qx, w.z - qz);
+        if (run >= leg / 2) (legs.push(w), (run = 0));
+        qx = w.x;
+        qz = w.z;
+      }
+      // where the wide search got to, if it is not the stop itself (an unreachable destination)
+      const we = wide[wide.length - 1];
+      if (i < stops.length || Math.hypot(we.x - st.x, we.z - st.z) > 2) legs.push(we);
+    }
+    if (i < stops.length) legs.push(st);
+    ax = st.x;
+    az = st.z;
+  }
+  return legs;
 }
 
 export const DASH_DIST = 6;
