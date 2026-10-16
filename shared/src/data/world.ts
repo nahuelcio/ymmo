@@ -261,6 +261,8 @@ export const NPCS: NpcDef[] = [
     greeting: 'Mi forja tiene hambre. Y la tuya también, si querés armas de verdad.' },
   { id: 'nyx', name: 'Nyx', title: 'Exorcista', ...fort('nyx'), kind: 'quest', color: 0x5a3a7a,
     greeting: 'El Abismo susurra. Yo le contesto con sellos.' },
+  { id: 'veyra', name: 'Veyra', title: 'Guardiana del Despertar', ...fort('veyra'), kind: 'quest', color: 0x9a7ad8,
+    greeting: 'Hay un poder dormido en vos. Lo veo. ¿Querés despertarlo?' },
   // where the Gatekeeper drops you in each volcanic zone
   { id: 'ignis', name: 'Ignis', title: 'Monje de Ceniza', x: 171, z: 639, ry: Math.atan2(-6, 6), kind: 'quest', color: 0x6a5a50,
     greeting: 'Yo también adoré a las llamas. Me quemaron igual.' },

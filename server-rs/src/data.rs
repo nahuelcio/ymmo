@@ -167,7 +167,7 @@ impl Objective {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64 }
+pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64, /** turning it in evolves the character's specialization */ #[serde(default)] pub evolve: bool }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -225,7 +225,7 @@ pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub bas
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SpecDef { pub id: String, pub base: String, pub name: String, pub name_en: String }
+pub struct SpecDef { pub id: String, pub base: String, pub name: String, pub name_en: String, /** an evolution (the third specialization) of this spec */ pub parent: Option<String> }
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct StatusDef { pub id: String, pub flag: u16 }
@@ -374,6 +374,8 @@ impl Data {
     pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
 
     pub fn spec(&self, id: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.id == id) }
+    /** The evolution a specialization grows into (the quest with `evolve`), if it has one. */
+    pub fn evolution_of(&self, spec: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.parent.as_deref() == Some(spec)) }
 
     /** Deep water at (x, z): swimming there (shared/src/terrain.ts isDeep). */
     pub fn is_deep(&self, x: f64, z: f64) -> bool {
@@ -387,7 +389,10 @@ impl Data {
     }
 
     pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool {
-        s.cls.as_deref().map_or(true, |c| c == cls) && s.spec.as_deref().map_or(true, |x| Some(x) == spec) && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
+        // an evolution keeps its parent's skills
+        let parent = spec.and_then(|sp| self.spec(sp)).and_then(|d| d.parent.as_deref());
+        s.cls.as_deref().map_or(true, |c| c == cls) && s.spec.as_deref().map_or(true, |x| Some(x) == spec || Some(x) == parent)
+            && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
     }
 
     /** skillsFor(): learned skills, sorted by level (stable, data order otherwise) */

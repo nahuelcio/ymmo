@@ -62,17 +62,28 @@ export const CLASSES: Record<ClassType, ClassDef> = {
   },
 };
 
-/** Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. */
-export type Spec = 'knight' | 'gladiator' | 'sorcerer' | 'cleric';
-export interface SpecDef { name: string; base: ClassType; desc: string }
+/**
+ * Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. At EVOLVE_LEVEL the
+ * quest "El Despertar" (shared/src/data/quests.ts) turns it into its evolution (`parent`), which keeps its skills.
+ */
+export type Spec = 'knight' | 'gladiator' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'archmage' | 'hierophant';
+export interface SpecDef { name: string; base: ClassType; desc: string; parent?: Spec }
 export const SPEC_LEVEL = 20;
+export const EVOLVE_LEVEL = 76;
 
 export const SPECS: Record<Spec, SpecDef> = {
   knight: { name: 'Caballero', base: 'fighter', desc: 'Tanque. Aguanta, aturde y mantiene a los enemigos encima suyo.' },
   gladiator: { name: 'Gladiador', base: 'fighter', desc: 'Daño cuerpo a cuerpo. Golpes brutales, sangrados y furia.' },
   sorcerer: { name: 'Hechicero', base: 'mystic', desc: 'Daño mágico. Fuego, hielo y rayos sobre grupos enteros.' },
   cleric: { name: 'Clérigo', base: 'mystic', desc: 'Sanador. Curaciones grandes y bendiciones para el grupo.' },
+  // the third specialization (level 76)
+  phoenix_knight: { name: 'Paladín del Fénix', base: 'fighter', parent: 'knight', desc: 'Caballero renacido del fuego: su escudo arde y sus heridas se cierran solas.' },
+  duelist: { name: 'Duelista', base: 'fighter', parent: 'gladiator', desc: 'Gladiador que hizo de la pelea un arte: rápido, preciso y letal.' },
+  archmage: { name: 'Archimago', base: 'mystic', parent: 'sorcerer', desc: 'Hechicero que domina todas las escuelas: su poder no tiene techo.' },
+  hierophant: { name: 'Hierofante', base: 'mystic', parent: 'cleric', desc: 'Clérigo que habla con los dioses: sus milagros alcanzan a todo el grupo.' },
 };
+/** The evolution a specialization grows into at EVOLVE_LEVEL (none for an evolution). */
+export const evolutionOf = (s: Spec | null | undefined): Spec | undefined => (s ? (Object.keys(SPECS) as Spec[]).find((e) => SPECS[e].parent === s) : undefined);
 
 export interface GenderDef { name: string; mods: StatMods; desc: string }
 

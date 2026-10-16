@@ -115,6 +115,7 @@ export const EN = {
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },
   "citadel_sigil": { "name": "Citadel Sigil" }, "drake_scale": { "name": "Drake Scale" }, "dragon_fang": { "name": "Dragon Fang" },
   "frost_pelt": { "name": "Frozen Pelt" }, "ice_crystal": { "name": "Ice Crystal" },
+  "awakening_shard": { "name": "Awakening Shard", "desc": "A shard of an ancient power. Veyra, in Emberdark, knows what to do with it." },
   "magma_core": { "name": "Magma Core", "desc": "It pulses inside the creatures of the Volcanic Lands. The Infernal set is forged with it." },
   "abyss_essence": { "name": "Abyss Essence", "desc": "The creatures of the Abyss bleed it; its raid leaves the most. The Infernal set is forged with it." },
   "swamp_venom": { "name": "Swamp Venom", "desc": "Made by the creatures of the Poison Swamp. The Emerald set is forged with it." },
@@ -353,7 +354,39 @@ export const EN = {
   "might": { "name": "Might", "desc": "P.Atk and M.Atk +20%, Atk.Spd +10% for 3 min." },
   "restoration": { "name": "Restoration", "desc": "Restores 700 HP." },
   "haste": { "name": "Haste", "desc": "Speed and Atk.Spd +20% for 2 min." },
-  "miracle": { "name": "Miracle", "desc": "Restores 1500 HP." }
+  "miracle": { "name": "Miracle", "desc": "Restores 1500 HP." },
+  "aegis_charge": { "name": "Aegis Charge", "desc": "You charge shield first. 360% damage and a 2s stun." },
+  "iron_bulwark": { "name": "Iron Bulwark", "desc": "P.Def and M.Def +45% for 30s, at the cost of 15% speed." },
+  "judgment": { "name": "Judgment", "desc": "400% damage to the target and those near it, slowing them for 4s." },
+  "shield_of_faith": { "name": "Shield of Faith", "desc": "P.Def and M.Def +25% for 2 min, to you or an ally and the party near them." },
+  "titan_slam": { "name": "Titan Slam", "desc": "360% damage to everything around you and a 2s stun." },
+  "cross_cut": { "name": "Cross Cut", "desc": "Two slashes in a cross. 400% damage and bleeding for 6s." },
+  "berserk": { "name": "Berserk", "desc": "P.Atk +40% and Atk.Spd +20% for 40s, but P.Def -15%." },
+  "blade_dance": { "name": "Blade Dance", "desc": "320% damage to every enemy around you, leaving them bleeding." },
+  "crippling_strike": { "name": "Crippling Strike", "desc": "380% damage and a 6s slow." },
+  "decapitate": { "name": "Decapitate", "desc": "A cut meant for necks. 700% damage." },
+  "chain_lightning": { "name": "Chain Lightning", "desc": "300% damage to the target and those near it, and a 1s stun." },
+  "blizzard": { "name": "Blizzard", "desc": "An ice storm over a wide area: 260% damage and a 5s slow." },
+  "mana_surge": { "name": "Mana Surge", "desc": "M.Atk +45% for 45s." },
+  "void_bolt": { "name": "Void Bolt", "desc": "A bolt of pure darkness. 440% damage." },
+  "apocalypse": { "name": "Apocalypse", "desc": "Fire rains on a huge area: 500% damage, and it burns for 8s." },
+  "mass_heal": { "name": "Mass Heal", "desc": "Restores 900 HP to you or an ally and the party near them." },
+  "sanctuary": { "name": "Sanctuary", "desc": "P.Def and M.Def +40% for 3 min." },
+  "holy_nova": { "name": "Holy Nova", "desc": "A burst of light around you: 300% damage and a 1s stun." },
+  "blessing_of_ages": { "name": "Blessing of Ages", "desc": "P.Atk and M.Atk +20%, Atk.Spd and Speed +10% for 3 min, to you or an ally and the party near them." },
+  "divine_light": { "name": "Divine Light", "desc": "Restores 2500 HP." },
+  "phoenix_ward": { "name": "Phoenix Ward", "desc": "Your shield burns: P.Def and M.Def +70% for 20s." },
+  "phoenix_strike": { "name": "Phoenix Strike", "desc": "500% damage to the target and those near it, leaving them burning for 6s." },
+  "rebirth": { "name": "Rebirth from the Ashes", "desc": "You rise from your ashes: 3000 HP restored at once." },
+  "riposte": { "name": "Riposte", "desc": "Atk.Spd +35% and P.Atk +20% for 30s." },
+  "thousand_cuts": { "name": "Thousand Cuts", "desc": "480% damage to everything around you and a strong bleed for 8s." },
+  "final_verdict": { "name": "Final Verdict", "desc": "The last blow. 900% damage and a 2s stun." },
+  "arcane_mastery": { "name": "Arcane Mastery", "desc": "M.Atk +60% for 40s." },
+  "star_fall": { "name": "Starfall", "desc": "The stars fall on a huge area: 460% damage and a 4s slow." },
+  "oblivion": { "name": "Oblivion", "desc": "Erases the target from existence. 750% damage and a 2s stun." },
+  "divine_grace": { "name": "Divine Grace", "desc": "P.Atk and M.Atk +15%, P.Def and M.Def +20% and Speed +10% for 3 min, to you or an ally and the party near them." },
+  "sacred_judgment": { "name": "Sacred Judgment", "desc": "420% damage to the target and those near it, and a 1.5s stun." },
+  "grand_miracle": { "name": "Grand Miracle", "desc": "Restores 5000 HP to you or an ally and the whole party near them." }
  },
  "quests": {
   "pest_control": {
@@ -506,7 +539,10 @@ export const EN = {
    "ready": "With this I can seal three cracks. A thousand remain.", "doneText": "The heart of the Abyss beats louder every day. I hear it in my dreams." },
   "abyss_guard": { "name": "The Abyss Guard", "story": "Seraphel swore to protect the world from Azgaroth, the Devourer, and lost his whole order trying. His fallen knights now guard the heart of the Abyss for their new master.",
    "offer": "Free 8 abyss knights. They were my brothers.", "busy": "Eight knights. Show them no mercy: they remember nothing anymore.",
-   "ready": "They rest, at last. Gather your people and type /raid abyss: Azgaroth awaits you.", "doneText": "If you fall down there, do not come back like them." }
+   "ready": "They rest, at last. Gather your people and type /raid abyss: Azgaroth awaits you.", "doneText": "If you fall down there, do not come back like them." },
+  "awakening": { "name": "The Awakening", "story": "Deep in the Abyss sleep shards of an ancient power, the same one that awakened the first heroes. Veyra can read them: with five, she can awaken in you what your specialization does not yet dare to be.",
+   "offer": "Bring me 5 awakening shards. The bosses of these lands keep them: the abyssal commander, the high pyromancer, the Lord of Flames and Azgaroth.", "busy": "Five shards. The bosses do not give them up easily: bring company.",
+   "ready": "They beat in time with you. Close your eyes... and awaken.", "doneText": "You are not the one who came to Emberdark. Go and prove it." }
  },
  "npcs": {
   "grocer": {
@@ -635,6 +671,7 @@ export const EN = {
   "varga": { "title": "Commander", "greeting": "The gates hold. For now." },
   "brunhilda": { "title": "Forgemaster", "greeting": "My forge is hungry. And so is yours, if you want real weapons." },
   "nyx": { "title": "Exorcist", "greeting": "The Abyss whispers. I answer it with seals." },
+  "veyra": { "title": "Keeper of the Awakening", "greeting": "There is a power asleep in you. I can see it. Do you want to wake it?" },
   "ignis": { "title": "Ash Monk", "greeting": "I worshipped the flames too. They burned me all the same." },
   "seraphel": { "title": "Fallen Paladin", "greeting": "My order fell here. I have not, yet." }
  },
@@ -715,7 +752,11 @@ export const EN = {
   "knight": { "name": "Knight", "desc": "Tank. Soaks damage, stuns and keeps enemies on himself." },
   "gladiator": { "name": "Gladiator", "desc": "Melee damage. Brutal hits, bleeds and fury." },
   "sorcerer": { "name": "Sorcerer", "desc": "Magic damage. Fire, ice and lightning over whole groups." },
-  "cleric": { "name": "Cleric", "desc": "Healer. Big heals and blessings for the party." }
+  "cleric": { "name": "Cleric", "desc": "Healer. Big heals and blessings for the party." },
+  "phoenix_knight": { "name": "Phoenix Paladin", "desc": "A knight reborn from fire: his shield burns and his wounds close on their own." },
+  "duelist": { "name": "Duelist", "desc": "A gladiator who made fighting an art: fast, precise and deadly." },
+  "archmage": { "name": "Archmage", "desc": "A sorcerer who masters every school: there is no ceiling to their power." },
+  "hierophant": { "name": "Hierophant", "desc": "A cleric who speaks with the gods: their miracles reach the whole party." }
  },
  "genders": {
   "m": {

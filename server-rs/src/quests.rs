@@ -78,6 +78,9 @@ impl World {
             None => {}
         }
         if p.level < q.min_level { return self.sys(pid, &format!("Necesitás ser nivel {}.", q.min_level), &format!("You need to be level {}.", q.min_level)); }
+        if q.evolve && p.spec.as_deref().and_then(|s| d().evolution_of(s)).is_none() {
+            return self.sys(pid, "Primero necesitás una especialización que pueda despertar.", "You first need a specialization that can awaken.");
+        }
         p.quests.push((q.id.clone(), 0, false));
         self.sys(pid, &format!("Aceptaste \"{}\".", q.name), &format!("You have accepted \"{}\".", q.name_en));
         send_quests(self.pl(pid).unwrap());
@@ -111,8 +114,30 @@ impl World {
         p.inv_dirty = true;
         self.sys(pid, &format!("Completaste \"{}\" y recibiste {} de adena.", q.name, fmt_int(q.adena, Lang::Es)), &format!("You have completed \"{}\" and received {} adena.", q.name_en, fmt_int(q.adena, Lang::En)));
         send_quests(self.pl(pid).unwrap());
+        if q.evolve { self.evolve(pid); }
         self.open_quest(pid, nid);
         q.xp
+    }
+
+    /** The third specialization: the character's spec becomes its evolution, which keeps every skill it had. */
+    fn evolve(&mut self, pid: u32) {
+        let data = d();
+        let p = self.pl(pid).unwrap();
+        let Some(evo) = p.spec.as_deref().and_then(|s| data.evolution_of(s)) else { return };
+        if let Err(e) = self.db.set_spec(p.char_id, &evo.id) {
+            elog!("[world] set_spec failed: {e}");
+            return self.sys(pid, "No se pudo guardar. Probá de nuevo.", "Could not save. Try again.");
+        }
+        let (lvl, race, g, cls, name) = (p.level, p.race.clone(), p.look.gender(), p.cls.clone(), p.name.clone());
+        self.pl_mut(pid).unwrap().spec = Some(evo.id.clone());
+        self.ents.get_mut(&pid).unwrap().c.av += 1;
+        let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        self.send_near(x, z, json!({ "t": "levelUp", "id": pid, "lvl": lvl, "spec": evo.id }));
+        self.sys(pid, &format!("¡Despertaste! Ahora sos {}.", evo.name), &format!("You have awakened! You are now a {}.", evo.name_en));
+        for sk in data.skills_for(&cls, Some(&evo.id), lvl, &race, g) {
+            if sk.spec.as_deref() == Some(evo.id.as_str()) { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
+        }
+        log!("[world] {name} awakened as {}", evo.id);
     }
 
     pub fn credit_kill(&mut self, mob: &str, players: &[u32]) {
