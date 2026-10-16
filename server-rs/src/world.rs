@@ -93,7 +93,7 @@ impl World {
             let id = w.new_id();
             let mut c = Common::new(id, def.x, def.z);
             c.ry = def.ry;
-            w.add(Ent { c, k: Kind::Npc(Npc { def, next_chatter: 0.0 }) });
+            w.add(Ent { c, k: Kind::Npc(Npc { def, next_chatter: 0.0, fwd: true, rest_until: 0.0 }) });
         }
         w.spawn_mobs();
         w
@@ -582,6 +582,7 @@ impl World {
             if !self.ents[&mid].c.statuses.is_empty() { self.tick_statuses(mid, now); }
             self.update_mob(mid, dt, now);
         }
+        self.walk_travelers(dt, now);
         let expired: Vec<u32> = self.ents.iter().filter_map(|(id, e)| match &e.k { Kind::Item(g) if now >= g.expire_at => Some(*id), _ => None }).collect();
         for id in expired { self.remove(id); }
         for pid in self.players.clone() { self.send_snapshot(pid, now); }
@@ -607,6 +608,25 @@ impl World {
                 p.inv_dirty = false;
                 p.send(json!({ "t": "inv", "items": p.inv, "adena": p.adena }));
                 self.on_inventory_changed(pid);
+            }
+        }
+    }
+
+    /** Travelers stroll their road end to end, rest a bit, and turn back; they stop while someone is talking to them up close. */
+    fn walk_travelers(&mut self, dt: f64, now: f64) {
+        let walkers: Vec<(u32, [f64; 4], bool)> = self.ents.iter().filter_map(|(id, e)| match &e.k {
+            Kind::Npc(n) if now >= n.rest_until => n.def.road.as_ref().map(|r| (*id, [r[0], r[1], r[2], r[3]], n.fwd)),
+            _ => None,
+        }).collect();
+        for (id, r, fwd) in walkers {
+            let (x, z) = { let c = &self.ents[&id].c; (c.x, c.z) };
+            if self.near_players(x, z, 2.5).len() > 0 {
+                self.ents.get_mut(&id).unwrap().c.moving = false;
+                continue;
+            }
+            let (tx, tz) = if fwd { (r[2], r[3]) } else { (r[0], r[1]) };
+            if self.step_toward(id, tx, tz, 1.7, dt, 0.5) {
+                if let Some(Kind::Npc(n)) = self.ents.get_mut(&id).map(|e| &mut e.k) { n.fwd = !fwd; n.rest_until = now + 4000.0 + rnd() * 8000.0; }
             }
         }
     }

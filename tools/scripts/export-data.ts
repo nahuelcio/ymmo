@@ -46,7 +46,7 @@ const out = {
   npcs: NPCS.map((n) => ({
     id: n.id, name: n.name, kind: n.kind, x: n.x, z: n.z, ry: n.ry, shop: n.shop ?? null, craft: n.craft ?? null,
     title: n.title, titleEn: npcText(n.id, 'title', 'en'), greeting: n.greeting, greetingEn: npcText(n.id, 'greeting', 'en'),
-    lines: npcLines(n.id, 'es'), linesEn: npcLines(n.id, 'en'),
+    lines: npcLines(n.id, 'es'), linesEn: npcLines(n.id, 'en'), road: n.road ?? null,
   })),
   zones: ZONES.map((z) => ({ id: z.id, name: z.name, nameEn: zoneName(z.name, 'en'), x: z.x, z: z.z, r: z.r, spawns: z.spawns })),
   teleports: TELEPORTS.map((t) => ({ ...t, nameEn: teleportName(t.id, 'en') })),

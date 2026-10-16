@@ -11,22 +11,24 @@
 - level_mod · function · L27-L27 — Global +10%-per-level scaling factor applied to attack and defense formulas so higher levels always hit harder.
 - stat_mods · function · L29-L38 — Fuses race and gender modifiers into one StatMods, multiplying the percentage stats and adding the flat ones.
 - enchant_chance · function · L41-L44 — Probability that enchanting succeeds: guaranteed below the safe point, then decaying by a fixed step per level above it.
-- compute_stats · function · L47-L100 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats
-- mob_mult · function · L103-L103 — fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
-- mob_stats · function · L105-L118 — Derives a mob's combat stats purely from its level, scaled by hp/atk/def multipliers that make elite variants stronger.
-- rnd · function · L120-L120 — Uniform [0,1) random source all combat rolls go through.
-- rand_range · function · L121-L121 — Uniform random float in [a, b] used for damage variance rolls.
-- hit_chance · function · L123-L123 — Chance an attack lands, rising with accuracy over evasion around a baseline and clamped to a fair 60-98% window.
-- phys_damage · function · L125-L127 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
-- magic_damage · function · L129-L131 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
-- xp_to_next · function · L133-L136 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
-- past_50 · function · L139-L139 — fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
-- mob_xp · function · L141-L141 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
-- level_penalty · function · L143-L146 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
-- tests · module · L149-L244 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
-- levels_go_to_78_slower_past_50 · function · L153-L161 — fn levels_go_to_78_slower_past_50()
-- grades_ask_for_a_level · function · L164-L175 — fn grades_ask_for_a_level()
-- balance_table · function · L180-L195 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
-- data_refs · function · L199-L222 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
-- enchant · function · L225-L234 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
-- cdr_sums_and_caps · function · L237-L243 — fn cdr_sums_and_caps()
+- masterwork_bonus · function · L51-L60 — pub fn masterwork_bonus(race: &str, cls: &str, is_weapon: bool) -> (f64, f64, f64)
+- compute_stats · function · L63-L123 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64, bool)], buffs: &[&BuffMods], gender: &str) -> Stats
+- mob_mult · function · L126-L126 — fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
+- mob_stats · function · L128-L141 — Derives a mob's combat stats purely from its level, scaled by hp/atk/def multipliers that make elite variants stronger.
+- rnd · function · L143-L143 — Uniform [0,1) random source all combat rolls go through.
+- rand_range · function · L144-L144 — Uniform random float in [a, b] used for damage variance rolls.
+- hit_chance · function · L146-L146 — Chance an attack lands, rising with accuracy over evasion around a baseline and clamped to a fair 60-98% window.
+- phys_damage · function · L148-L150 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
+- magic_damage · function · L152-L154 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
+- xp_to_next · function · L156-L159 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
+- past_50 · function · L162-L162 — fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
+- mob_xp · function · L164-L164 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
+- level_penalty · function · L166-L169 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
+- tests · module · L172-L294 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
+- levels_go_to_78_slower_past_50 · function · L176-L184 — fn levels_go_to_78_slower_past_50()
+- grades_ask_for_a_level · function · L187-L198 — fn grades_ask_for_a_level()
+- balance_table · function · L203-L218 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
+- data_refs · function · L222-L245 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
+- enchant · function · L248-L257 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
+- cdr_sums_and_caps · function · L260-L266 — fn cdr_sums_and_caps()
+- masterwork_by_race · function · L269-L293 — fn masterwork_by_race()

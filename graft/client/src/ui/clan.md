@@ -24,7 +24,7 @@
 - set · method · L365-L369 — set(m: Extract<S2C, { t: 'clanWh' }>)
 - onInv · method · L372-L372 — onInv()
 - render · method · L374-L428 — private render()
-- itemRow · method · L430-L436 — private itemRow(list: HTMLElement, id: string, c: number, e: number, legacy = false)
+- itemRow · method · L430-L436 — private itemRow(list: HTMLElement, id: string, c: number, e: number, legacy = false, mw = false)
 - qty · method · L438-L447 — private qty(row: HTMLElement, max: number)
 - clampQty · function · L450-L450 — clampQty = (q: HTMLInputElement, max: number)
 - hours · function · L451-L451 — hours = (ms: number)

@@ -545,6 +545,12 @@ export const EN = {
    "ready": "They beat in time with you. Close your eyes... and awaken.", "doneText": "You are not the one who came to Emberdark. Go and prove it." }
  },
  "npcs": {
+  "trav_merchant": { "title": "Wandering Merchant", "greeting": "If the cart holds, I'll reach the next village before nightfall.", "lines": ["Cloth, spices, nails... no, I'm out of nails.", "Watch out for the wolves past the bridge.", "A coin for today's gossip. Fine, free: goblins in the hills."] },
+  "trav_pilgrim": { "title": "Pilgrim", "greeting": "Every stone on this road holds a prayer.", "lines": ["Walking clears the head. And the blisters, the soul.", "May the light find you before the keltirs do.", "I've lost count of the leagues."] },
+  "trav_hunter": { "title": "Trapper", "greeting": "Fresh tracks. Something big came through last night.", "lines": ["Pelts sell well in Alba.", "If you see a deer, don't run. I do, but you don't.", "This road used to be quieter."] },
+  "trav_bard": { "title": "Minstrel", "greeting": "A song? You can pay me later.", "lines": ["♪ Down the road there comes the hero, no potions and no faith... ♪", "I'm writing a ballad about you. Not sure yet if it ends well.", "Nothing rhymes with 'goblin'."] },
+  "trav_guard": { "title": "Road Patrol", "greeting": "Road's safe, citizen. Mostly.", "lines": ["All quiet. Well, one wolf.", "If you see bandits, tell me. If you see a lot, run.", "Twelve hours on patrol and not a crumb of bread."] },
+  "trav_farmer": { "title": "Farmer", "greeting": "Taking turnips to market. Want one? Kidding, they're all sold.", "lines": ["The harvest looks good this year.", "My hens fear goblins more than I do.", "Ugh, these slopes are killing me."] },
   "grocer": {
    "title": "Grocer",
    "greeting": "Potions and scrolls! Everything an adventurer needs."

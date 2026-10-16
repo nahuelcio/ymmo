@@ -24,7 +24,8 @@ import { BRAZIER_FIRES, createWorldScene, lightSources, type WorldScene } from '
 import { UI } from './ui';
 import { glyph, setTipLevel, setTipSelf } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
-import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
+import { ATMOS, Critters, LocalLights, Motes, Rain, tickWind } from './render/atmos';
+import { Wildlife } from './render/wildlife';
 import { PostFX } from './render/post';
 import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
@@ -264,6 +265,9 @@ export class Game {
   /** Set while the benchmark runs: called every frame with its real duration (bench.ts). */
   benchHook: ((frameMs: number, tSec: number) => void) | null = null;
   private motes = new Motes();
+  private critters = new Critters();
+  private rain = new Rain();
+  private wildlife = new Wildlife();
   /** felled trees, mined rocks, picked bushes (render/nodes.ts) */
   nodes!: NodeVisuals;
   /** the world node under the cursor */
@@ -316,7 +320,7 @@ export class Game {
     this.post.sun = this.world.sun;
     // the path grid takes ~100 ms to build: do it while idle, not on the first click that needs it
     (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 500)))(() => navGrid());
-    this.world.scene.add(this.motes.points);
+    this.world.scene.add(this.motes.points, this.critters.group, this.rain.lines, this.wildlife.group);
     try {
       this.untracked = new Set(JSON.parse(localStorage.getItem(`untracked:${this.me.name}`) ?? '[]') as string[]);
     } catch {
@@ -2051,6 +2055,9 @@ export class Game {
       this.world.follow(self.pos);
       tickWind(dt);
       this.motes.update(self.pos, dt, tSec);
+      this.critters.update(self.pos, dt, tSec);
+      this.rain.update(self.pos, dt);
+      this.wildlife.update(self.pos, dt, performance.now());
       this.lights.update(self.pos, tSec);
       // light shafts: where the sun sits on screen, fading out as it leaves the view or sets
       const sv = this.sunScreen.copy(this.camera.position).addScaledVector(ATMOS.sunDir, 500).project(this.camera);

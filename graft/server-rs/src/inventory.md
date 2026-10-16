@@ -18,12 +18,12 @@ The bag/economy module of the game server: granting and removing items, equipmen
 - npc_in_range · function · L183-L192 — Resolves an NPC's definition only if the player stands within interaction range, otherwise rejects the trade with a 'too far' message.
 - open_npc · function · L194-L212 — Sends the player the NPC dialog payload: a random chatter line or scripted greeting, plus the shop listing or teleport destinations depending on the NPC kind.
 - buy · function · L214-L228 — Executes a shop purchase, enforcing shop stock, quantity caps (999 stackable / 10 per-item), adena cost, and bag space before charging the player.
-- craft · function · L231-L244 — pub fn craft(&mut self, pid: u32, nid: u32, item: &str)
-- sell · function · L246-L259 — Pays the player half the item's price for unequipped copies, removing them from the bag and crediting adena.
-- gatekeeper · function · L261-L270 — Charges the adena fee for the chosen teleport destination and moves the player there with a small random position jitter.
-- spawn_ground · function · L272-L279 — Creates a ground-item entity scattered at a random nearby offset, with a 15-second owner lock and a 60-second expiry before it despawns.
-- auto_looter · function · L282-L287 — Chooses which living, nearby (within AUTOLOOT_RANGE) drop-owner with auto-loot enabled receives a mob drop directly.
-- open_chest · function · L290-L315 — Rolls a camp chest's adena and chance-based loot straight into the opener's bag, spilling any loot that doesn't fit onto the ground as owner-locked items.
-- drop_loot · function · L317-L331 — On mob death, rolls the template's adena range and per-drop chances, spawning ground items that an auto-looting nearby owner immediately tries to pick up (a full bag leaves the item on the ground).
-- drop_from_player · function · L333-L346 — Enforces the death penalty by removing one random item from the victim's bag and dropping it on the ground, refreshing stats if it was equipped.
-- pickup · function · L348-L366 — Grants a ground item to the player after enforcing the 15-second owner lock, routing camp chests to open_chest instead, and rejecting the pickup when the bag is full.
+- craft · function · L231-L252 — pub fn craft(&mut self, pid: u32, nid: u32, item: &str)
+- sell · function · L254-L267 — Pays the player half the item's price for unequipped copies, removing them from the bag and crediting adena.
+- gatekeeper · function · L269-L278 — Charges the adena fee for the chosen teleport destination and moves the player there with a small random position jitter.
+- spawn_ground · function · L280-L287 — Creates a ground-item entity scattered at a random nearby offset, with a 15-second owner lock and a 60-second expiry before it despawns.
+- auto_looter · function · L290-L295 — Chooses which living, nearby (within AUTOLOOT_RANGE) drop-owner with auto-loot enabled receives a mob drop directly.
+- open_chest · function · L298-L323 — Rolls a camp chest's adena and chance-based loot straight into the opener's bag, spilling any loot that doesn't fit onto the ground as owner-locked items.
+- drop_loot · function · L325-L339 — On mob death, rolls the template's adena range and per-drop chances, spawning ground items that an auto-looting nearby owner immediately tries to pick up (a full bag leaves the item on the ground).
+- drop_from_player · function · L341-L355 — Enforces the death penalty by removing one random item from the victim's bag and dropping it on the ground, refreshing stats if it was equipped.
+- pickup · function · L357-L379 — Grants a ground item to the player after enforcing the 15-second owner lock, routing camp chests to open_chest instead, and rejecting the pickup when the bag is full.

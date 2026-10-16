@@ -10,8 +10,17 @@ Atmosphere module that makes the world read differently by the hour: a wall-cloc
 - Motes · class · L170-L223 — A cloud of ~70 additive points that meanders in world space near the player, reading as dust in daylight and fireflies at night.
 - constructor · method · L177-L194 — Creates the mote geometry with random starting positions and a hand-drawn soft round sprite texture so the points glow as dots instead of squares.
 - update · method · L196-L222 — Drifts each mote on its own sine path in world space, wrapping only those left behind (or too high/low) back into the box around the player, then restyles color, size, and opacity for firefly-like blinking at night.
-- LightSource · interface · L226-L226 — Plain record of a world-space local light (a lamp post or campfire) plus a flag for whether it should flicker like fire.
-- LocalLights · class · L232-L310 — Keeps a small fixed pool of real point lights in the scene and reassigns them each frame to the sources nearest the player, since real point lights are too expensive to give every light source in view.
-- constructor · method · L244-L244 — One-line constructor that just stores the scene and the list of light sources for later updates.
-- flash · method · L247-L252 — flash(p: THREE.Vector3, color: number, power: number, range: number, ms: number)
-- update · method · L254-L309 — Syncs the pool's existence with the local-lights setting (recompiles happen only on that switch), then hands each pooled light to the nearest source within range and sets its color, fire flicker, and night-scaled intensity.
+- rainAt · function · L233-L239 — function rainAt(x: number, z: number, now = Date.now()): number
+- Rain · class · L242-L277 — class Rain
+- constructor · method · L249-L260 — constructor()
+- update · method · L262-L276 — update(center: THREE.Vector3, dt: number)
+- wingGeo · function · L281-L286 — function wingGeo(): THREE.BufferGeometry
+- Critters · class · L293-L393 — class Critters
+- constructor · method · L308-L324 — constructor()
+- put · method · L326-L329 — private put(im: THREE.InstancedMesh, i: number, x: number, y: number, z: number, yaw: number, flap: number, sc: number, side: 1 | -1)
+- update · method · L331-L392 — update(center: THREE.Vector3, dt: number, t: number)
+- LightSource · interface · L396-L396 — Plain record of a world-space local light (a lamp post or campfire) plus a flag for whether it should flicker like fire.
+- LocalLights · class · L402-L480 — Keeps a small fixed pool of real point lights in the scene and reassigns them each frame to the sources nearest the player, since real point lights are too expensive to give every light source in view.
+- constructor · method · L414-L414 — One-line constructor that just stores the scene and the list of light sources for later updates.
+- flash · method · L417-L422 — flash(p: THREE.Vector3, color: number, power: number, range: number, ms: number)
+- update · method · L424-L479 — Syncs the pool's existence with the local-lights setting (recompiles happen only on that switch), then hands each pooled light to the nearest source within range and sets its color, fire flicker, and night-scaled intensity.

@@ -29,8 +29,8 @@
 - layoutTown · function · L216-L250 — function layoutTown(): TownL
 - at · function · L228-L228 — at = (lx: number, lz: number)
 - covers · function · L229-L236 — covers = (x: number, z: number)
-- layoutZoneProps · function · L253-L281 — function layoutZoneProps(): ZonePropsL
+- layoutZoneProps · function · L253-L301 — function layoutZoneProps(): ZonePropsL
 - at · function · L257-L260 — at = (zn: (typeof ZONES)[number], maxR: number, minR = 0)
-- clear · function · L278-L278 — clear = <T extends { x: number; z: number }>(l: T[])
-- CampL · interface · L283-L289 — interface CampL
-- layoutCamps · function · L293-L310 — function layoutCamps(): CampL[]
+- clear · function · L298-L298 — clear = <T extends { x: number; z: number }>(l: T[])
+- CampL · interface · L303-L309 — interface CampL
+- layoutCamps · function · L313-L330 — function layoutCamps(): CampL[]

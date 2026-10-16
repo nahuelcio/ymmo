@@ -620,7 +620,7 @@ export class AdminPanel {
     };
   }
 
-  private poll(extra: { pass?: string; kick?: number; announce?: string; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } } = {}) {
+  private poll(extra: { pass?: string; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } } = {}) {
     this.g.net.send({ t: 'admin', since: this.since, ...extra });
   }
 
@@ -675,6 +675,11 @@ export class AdminPanel {
     show(false);
     const b = pState;
     this.stats = el('div', 'stat-grid', b);
+    const godRow = el('label', 'adm-row', b);
+    const god = el('input', '', godRow);
+    god.type = 'checkbox';
+    el('span', '', godRow, tx('Modo dios (sin daño, HP/MP infinitos, doble velocidad)', 'God mode (no damage, endless HP/MP, double speed)'));
+    god.onchange = () => this.poll({ god: god.checked });
     el('div', 'section', b, tx('Mundos', 'Worlds'));
     this.worlds = el('table', 'adm-table', b);
     el('div', 'section', b, tx('Jugadores', 'Players'));

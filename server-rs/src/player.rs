@@ -16,6 +16,7 @@ impl World {
         p.hp = (p.hp + s.hp_regen * dt * regen).min(s.max_hp);
         p.mp = (p.mp + s.mp_regen * dt * regen).min(s.max_mp);
         p.cp = (p.cp + s.cp_regen * dt).min(s.max_cp);
+        if p.god { (p.hp, p.mp, p.cp) = (s.max_hp, s.max_mp, s.max_cp); }
 
         if p.buffs.iter().any(|b| b.until <= now) {
             p.buffs.retain(|b| b.until > now);

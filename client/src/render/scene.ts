@@ -9,7 +9,7 @@ import { buildVillage, vReady } from './village';
 import { buildNatureTown, dropNodeInstances, natureDetailCell, NATURE_DETAIL_DRAWS, natureReady, natureTile } from './nature';
 import { setCharAniso } from './quaternius';
 import { settings } from '../settings';
-import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
+import { ATMOS, rainAt, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 import { WaterReflection } from './reflect';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
@@ -46,13 +46,16 @@ const SKIES: Record<string, SkyPal> = {
   valley: { top: 0x4a6e70, horizon: 0xa8c0a8, ground: 0x34402c, sun: 0xf0f0d0, sunI: 2.0, hemi: 1.4, cloud: 0xc8d4c8 },
   nest: { top: 0x3a2438, horizon: 0x9a6a6a, ground: 0x2a1c22, sun: 0xff9a70, sunI: 1.7, hemi: 1.0, cloud: 0x7a5058 },
   // whole regions (biomeWeight), so their towns and the land between zones get the sky too
-  dusk: { top: 0x5a78b0, horizon: 0xf0c8a0, ground: 0x5a3a28, sun: 0xffd8a0, sunI: 2.4, hemi: 1.5, cloud: 0xf8dcc0 },
+  dusk: { top: 0x3a7ad8, horizon: 0xe2ddd0, ground: 0x5a4a30, sun: 0xffe2b0, sunI: 2.5, hemi: 1.6, cloud: 0xfff4e8 },
   heart: { top: 0x3a84d0, horizon: 0xc4e0d0, ground: 0x3a5a30, sun: 0xfff4d0, sunI: 2.6, hemi: 1.7, cloud: 0xffffff, near: 0.3 },
   dragon: { top: 0x52506e, horizon: 0xb09a90, ground: 0x3a2a24, sun: 0xffc8a0, sunI: 2.1, hemi: 1.3, cloud: 0xc0a8a0, near: 0.18 },
   frost: { top: 0x6a90b8, horizon: 0xe4ecf2, ground: 0xb8c4cc, sun: 0xf0f6ff, sunI: 2.2, hemi: 1.8, cloud: 0xf4f8fc, near: 0.12 },
   swamp: { top: 0x3e4c34, horizon: 0x8a9670, ground: 0x2a3020, sun: 0xd8e0a0, sunI: 1.5, hemi: 1.2, cloud: 0x7a8466, near: 0.03 },
   ash: { top: 0x1e1210, horizon: 0x7a4a34, ground: 0x2a1810, sun: 0xff7a40, sunI: 1.5, hemi: 0.9, cloud: 0x4a3430, near: 0.06 },
 };
+
+/** the sky under a shower (rainAt), blended over the region's */
+const STORM: SkyPal = { top: 0x5a6470, horizon: 0x9aa4ac, ground: 0x3a3c38, sun: 0xc8ccd0, sunI: 0.9, hemi: 1.3, cloud: 0x8a9098, near: 0.08 };
 
 const SkyShader = {
   uniforms: {
@@ -116,7 +119,13 @@ function groundFactors(x: number, z: number, h: number) {
 /** Ground colour (sRGB 0..1) used by both terrain mesh and minimap. */
 export function groundColor(x: number, z: number, h: number): [number, number, number] {
   const f = groundFactors(x, z, h), n = f.n;
-  let r = 0.3 + n * 0.12, g = 0.5 + n * 0.14, b = 0.2 + n * 0.06;
+  let r = 0.3 + n * 0.12, g = 0.47 + n * 0.14, b = 0.2 + n * 0.06;
+  // meadow patchwork: broad sun-dried golden fields and deep lush hollows, plus fine mottling
+  const p = valueNoise(x / 95 + 11, z / 95 - 4), m = (valueNoise(x / 9 - 3, z / 9 + 8) - 0.5) * 0.06;
+  const dry = smoothstep(0.65, 0.85, p) * 0.3, lush = (1 - smoothstep(0.3, 0.55, p)) * 0.7;
+  r += (0.52 + n * 0.08 - r) * dry; g += (0.52 + n * 0.08 - g) * dry; b += (0.24 - b) * dry;
+  r += (0.2 + n * 0.06 - r) * lush; g += (0.52 + n * 0.1 - g) * lush; b += (0.14 - b) * lush;
+  r += m; g += m * 1.3; b += m * 0.5;
   // the swamp region's dark, wet green
   const sw = biomeWeight('swamp', x, z) * 0.85;
   r += (0.2 + n * 0.08 - r) * sw; g += (0.3 + n * 0.1 - g) * sw; b += (0.13 + n * 0.04 - b) * sw;
@@ -124,7 +133,7 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   const as = f.ash * 0.9;
   r += (0.14 + n * 0.05 - r) * as; g += (0.12 + n * 0.03 - g) * as; b += (0.115 + n * 0.03 - b) * as;
   // the midlands: dusk's dry olive autumn, the Heart's lush green, the dragon's scorched brown
-  const du = biomeWeight('dusk', x, z) * 0.55, he = biomeWeight('heart', x, z) * 0.45, dr = biomeWeight('dragon', x, z) * 0.5;
+  const du = biomeWeight('dusk', x, z) * 0.3, he = biomeWeight('heart', x, z) * 0.45, dr = biomeWeight('dragon', x, z) * 0.5;
   r += (0.46 + n * 0.1 - r) * du; g += (0.46 + n * 0.08 - g) * du; b += (0.2 + n * 0.04 - b) * du;
   r += (0.24 + n * 0.08 - r) * he; g += (0.46 + n * 0.12 - g) * he; b += (0.15 + n * 0.05 - b) * he;
   r += (0.34 + n * 0.08 - r) * dr; g += (0.36 + n * 0.06 - g) * dr; b += (0.22 + n * 0.04 - b) * dr;
@@ -309,6 +318,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       if (p) blend(p, w);
     }
     for (const id of ['frost', 'swamp', 'ash'] as const) blend(SKIES[id], biomeWeight(id, x, z));
+    // a shower greys the sky, dims the sun and pulls the fog in
+    const rain = rainAt(x, z);
+    if (rain > 0) blend(STORM, rain * 0.8);
   };
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
   sun.castShadow = true;

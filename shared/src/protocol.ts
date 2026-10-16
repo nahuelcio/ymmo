@@ -83,7 +83,7 @@ export type C2S =
   | { t: 'login'; user: string; pass: string; register: boolean; remember?: boolean }
   | { t: 'resume'; token: string }
   /** admin window (/admin): asks for the server state; pass logs this socket in, kick/announce are the actions */
-  | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } }
+  | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }

@@ -128,6 +128,8 @@ pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver:
 
 pub struct Player {
     pub sid: u64,
+    /** admin god mode: takes no damage, never runs out of HP/MP, runs twice as fast */
+    pub god: bool,
     pub out: Outbox,
     pub lang: Lang,
     pub stats: Stats,
@@ -199,6 +201,7 @@ impl Player {
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
+        if self.god { self.stats.speed *= 2.0; }
         let (s, m) = (&mut self.stats, &self.clan_mods);
         if *m != ClanMods::default() {
             s.max_hp = jround(s.max_hp * (1.0 + m.max_hp));
@@ -268,7 +271,7 @@ impl Mob {
     pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
 }
 
-pub struct Npc { pub def: &'static crate::data::NpcDef, pub next_chatter: f64 }
+pub struct Npc { pub def: &'static crate::data::NpcDef, pub next_chatter: f64, /** travelers: heading to the road's far end, and when they set off again after a rest */ pub fwd: bool, pub rest_until: f64 }
 
 pub struct GroundItem {
     pub item: String,

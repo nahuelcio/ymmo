@@ -11,7 +11,7 @@
 - P_RANKS · constant · L34-L34 — pub const P_RANKS: u32 = 64;
 - ALL_PRIVS · constant · L35-L35 — const ALL_PRIVS: u32 = 0x7f;
 - ClanMember · struct · L37-L37 — pub struct ClanMember { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub grade: u8, pub title: String }
-- WhItem · struct · L39-L39 — pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64, pub legacy: bool }
+- WhItem · struct · L39-L39 — pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64, pub legacy: bool, pub mw: bool }
 - WhLog · struct · L41-L41 — pub struct WhLog { pub at: f64, pub who: String, pub dep: bool, pub item: String, pub count: i64, pub enchant: i64 }
 - Clan · struct · L43-L67 — pub struct Clan
 - member · function · L70-L70 — pub fn member(&self, char_id: i64) -> Option<&ClanMember> { self.members.iter().find(|m| m.char_id == char_id) }
@@ -89,16 +89,16 @@
 - wh_send · function · L978-L985 — fn wh_send(&self, pid: u32, clan_id: u32)
 - clan_wh_open · function · L987-L989 — pub fn clan_wh_open(&mut self, pid: u32, nid: u32)
 - clan_wh_deposit · function · L992-L1022 — pub fn clan_wh_deposit(&mut self, pid: u32, nid: u32, uid: u32, qty: f64)
-- clan_wh_withdraw · function · L1025-L1062 — pub fn clan_wh_withdraw(&mut self, pid: u32, nid: u32, row: i64, qty: f64)
-- clan_wh_adena · function · L1065-L1089 — pub fn clan_wh_adena(&mut self, pid: u32, nid: u32, amount: f64)
-- clan_skill · function · L1094-L1117 — pub fn clan_skill(&mut self, pid: u32, nid: u32, skill: &str)
-- wh_label · function · L1121-L1125 — fn wh_label(item: &str, count: i64, enchant: i64, en: bool) -> String
-- wait · function · L1128-L1132 — fn wait(ms: f64, en: bool) -> String
-- tests · module · L1135-L1221 — mod tests
-- png · function · L1138-L1145 — fn png(w: u32, h: u32, len: usize) -> Vec<u8>
-- crest_checks_size_and_signature · function · L1148-L1155 — fn crest_checks_size_and_signature()
-- names_are_letters_and_digits · function · L1158-L1164 — fn names_are_letters_and_digits()
-- leader_holds_every_privilege · function · L1167-L1182 — fn leader_holds_every_privilege()
-- clan · function · L1184-L1190 — fn clan(id: u32, ally: Option<u32>, member: i64) -> Clan
-- only_a_mutual_war_makes_enemies_and_allies_are_friends · function · L1193-L1209 — fn only_a_mutual_war_makes_enemies_and_allies_are_friends()
-- clan_skills_add_up_by_level · function · L1212-L1220 — fn clan_skills_add_up_by_level()
+- clan_wh_withdraw · function · L1025-L1063 — pub fn clan_wh_withdraw(&mut self, pid: u32, nid: u32, row: i64, qty: f64)
+- clan_wh_adena · function · L1066-L1090 — pub fn clan_wh_adena(&mut self, pid: u32, nid: u32, amount: f64)
+- clan_skill · function · L1095-L1118 — pub fn clan_skill(&mut self, pid: u32, nid: u32, skill: &str)
+- wh_label · function · L1122-L1126 — fn wh_label(item: &str, count: i64, enchant: i64, en: bool) -> String
+- wait · function · L1129-L1133 — fn wait(ms: f64, en: bool) -> String
+- tests · module · L1136-L1222 — mod tests
+- png · function · L1139-L1146 — fn png(w: u32, h: u32, len: usize) -> Vec<u8>
+- crest_checks_size_and_signature · function · L1149-L1156 — fn crest_checks_size_and_signature()
+- names_are_letters_and_digits · function · L1159-L1165 — fn names_are_letters_and_digits()
+- leader_holds_every_privilege · function · L1168-L1183 — fn leader_holds_every_privilege()
+- clan · function · L1185-L1191 — fn clan(id: u32, ally: Option<u32>, member: i64) -> Clan
+- only_a_mutual_war_makes_enemies_and_allies_are_friends · function · L1194-L1210 — fn only_a_mutual_war_makes_enemies_and_allies_are_friends()
+- clan_skills_add_up_by_level · function · L1213-L1221 — fn clan_skills_add_up_by_level()

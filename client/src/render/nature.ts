@@ -4,8 +4,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { biomeWeight, heightAt, mulberry32, regionAt, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
-import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
+import { biomeWeight, heightAt, valueNoise, mulberry32, regionAt, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { fertile, layoutBushes, roadDist, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
 import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
 
@@ -40,6 +40,8 @@ const BASALT = new THREE.Color(0.35, 0.32, 0.32);
 const MIRE = new THREE.Color(0.55, 0.62, 0.42);
 /** the swamp's grass, dark and wet */
 const BOGGY = new THREE.Color(0.6, 0.7, 0.46);
+/** wildflower petals: white, butter yellow, pink, poppy red, lilac */
+const PETALS = [new THREE.Color(1, 1, 0.96), new THREE.Color(1, 0.86, 0.25), new THREE.Color(1, 0.55, 0.72), new THREE.Color(0.95, 0.22, 0.18), new THREE.Color(0.72, 0.55, 1)];
 const BUSHES = ['Bush_Small', 'Bush', 'Bush_Large'] as const;
 const BUSH_FLOWERS = ['Bush_Small_Flowers', 'Bush_Flowers'] as const;
 
@@ -77,7 +79,7 @@ export function dropNodeInstances(meshes: THREE.Object3D[]) {
 
 const CHUNK = 200;
 const DETAIL_CHUNK = 40;
-const DETAIL_PER_CELL = 360;
+const DETAIL_PER_CELL = 440;
 /** Pack bushes are about twice the old icosahedron clusters. */
 const BUSH_FIT = 0.55;
 
@@ -162,6 +164,19 @@ function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial {
     depthWrite: true,
   });
   if (def.sway) sway(m, def.sway);
+  if (mode === 'flower') {
+    // the pack's petals are all one teal: grey them out and let the instance colour paint them, stems keep their green
+    const base = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      base.call(m, sh, r);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', /* glsl */ `
+        #if defined(USE_COLOR) || defined(USE_INSTANCING_COLOR)
+          float petal = smoothstep(0.04, 0.2, diffuseColor.b - diffuseColor.r);
+          float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vColor * (0.35 + lum * 1.6), petal);
+        #endif`);
+    };
+  }
   m.customProgramCacheKey = () => `nature|${mode}|${def.sway}`;
   mats.set(key, m);
   return m;
@@ -316,22 +331,39 @@ export const NATURE_DETAIL_DRAWS = DETAIL_PER_CELL * 5;
 export function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[] {
   const items: Item[] = [];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
-  const rng = mulberry32(seed);
+  const rng = mulberry32(seed), c2 = new THREE.Color();
   {
       // ponytail: fewer candidates per cell (was 520) cuts blade count ~30%; the look changes slightly, the cost ceiling is this constant
       for (let i = 0; i < DETAIL_PER_CELL; i++) {
         const x = x0 + rng() * DETAIL_CHUNK, z = z0 + rng() * DETAIL_CHUNK, h = heightAt(x, z);
         const r1 = rng(), r2 = rng(), r3 = rng();
         if (!fertile(x, z, h)) continue;
+        // clumping: thick tussocks where the noise is high, near-bare ground where it is low
+        const dens = valueNoise(x / 16 + 3, z / 16 - 9);
+        if ((r2 * 13) % 1 > dens * 1.3 + 0.1) continue;
+        // wildflower patches: a few meadows burst into bloom instead of a flower here and there
+        const verge = roadDist(x, z), edge = verge > 3.8 && verge < 7 ? 0.5 : 0; // roads get flowered verges
+        const bloom = Math.max(edge, Math.min(1, Math.max(0, (valueNoise(x / 34 - 21, z / 34 + 6) - 0.6) * 5)));
         const zone = zoneOf(x, z)?.id;
         const sc = 0.7 + r1 * 0.9;
         const m = m4.compose(p.set(x, h - 0.05, z), q.setFromAxisAngle(up, r2 * 6.3), sv.set(sc, sc, sc)).clone();
-        if (r3 < (zone === 'meadows' ? 0.09 : zone ? 0.015 : 0.04) && zone !== 'wastes') {
-          items.push(...spawn(r1 < 0.5 ? 'Flower_1_Clump' : 'Flower_3_Clump', m, x, z));
+        // the odd shrub and pebble inside the thick patches, so the grass is not the only thing at your feet
+        if (dens > 0.62 && r3 > 0.985 && zone !== 'wastes') {
+          items.push(...spawn(r1 < 0.4 ? 'Bush_Small_Flowers' : 'Bush_Small', m4.compose(p.set(x, h - 0.1, z), q.setFromAxisAngle(up, r2 * 6.3), sv.setScalar(0.35 + r1 * 0.3)).clone(), x, z));
+          continue;
+        }
+        if (r3 < 0.006) {
+          items.push(...spawn(r1 < 0.5 ? 'Rock_1' : 'Rock_2', m4.compose(p.set(x, h - 0.08, z), q.setFromAxisAngle(up, r2 * 6.3), sv.setScalar(0.12 + r1 * 0.15)).clone(), x, z));
+          continue;
+        }
+        if (r3 < (zone === 'meadows' ? 0.09 : zone ? 0.015 : 0.04) + bloom * 0.3 && zone !== 'wastes') {
+          // one colour per patch, so a meadow reads as drifts of white or red rather than confetti
+          const hue = PETALS[Math.floor(valueNoise(x / 9 + 40, z / 9 - 17) * PETALS.length * 1.999) % PETALS.length];
+          items.push(...spawn(r1 < 0.5 ? 'Flower_1_Clump' : 'Flower_3_Clump', m, x, z, hue));
         } else {
           const dry = zone === 'wastes' ? 1 : zone === 'barracks' ? 0.5 : 0;
           const tint = zone === 'steppes' ? GOLDEN : dry === 1 ? DRY : dry === 0.5 ? PARCHED : biomeWeight('swamp', x, z) > 0.5 ? BOGGY : regionAt(x, z) === 'dusk' ? PARCHED : WHITE;
-          items.push(...spawn(r1 > 0.72 ? 'Grass_Large' : 'Grass_Small', m, x, z, c.copy(tint).clone()));
+          items.push(...spawn(r1 > 0.72 ? 'Grass_Large' : 'Grass_Small', m, x, z, c.copy(tint).multiplyScalar(0.82 + dens * 0.3).add(c2.setRGB((1 - dens) * 0.12, (1 - dens) * 0.06, 0)).clone()));
         }
       }
     }

@@ -22,7 +22,7 @@
 - set_cast · function · L123-L133 — fn set_cast(app: &App, skill: &str, ms: Option<f64>) -> bool
 - ct_eq · function · L136-L138 — fn ct_eq(a: &[u8], b: &[u8]) -> bool
 - rss · function · L141-L144 — fn rss() -> Option<u64>
-- handle · function · L147-L203 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
-- tests · module · L206-L231 — mod tests
-- log_ring_and_password_compare · function · L210-L219 — fn log_ring_and_password_compare()
-- balance_fallback_and_whitelist · function · L222-L230 — fn balance_fallback_and_whitelist()
+- handle · function · L147-L209 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
+- tests · module · L212-L237 — mod tests
+- log_ring_and_password_compare · function · L216-L225 — fn log_ring_and_password_compare()
+- balance_fallback_and_whitelist · function · L228-L236 — fn balance_fallback_and_whitelist()

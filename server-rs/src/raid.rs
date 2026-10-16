@@ -19,6 +19,8 @@ pub enum WorldCmd {
     Lang { sid: u64, lang: Lang },
     /** admin panel: server-wide announcement */
     Announce(String),
+    /** admin panel: god mode on/off for that session's character */
+    God { sid: u64, on: bool },
     Shutdown,
 }
 
@@ -70,6 +72,12 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                         if let Some(&pid) = w.sessions.get(&sid) { if let Some(p) = w.pl_mut(pid) { p.lang = lang; } }
                     }
                     WorldCmd::Announce(text) => w.announce(|_| text.clone()),
+                    WorldCmd::God { sid, on } => {
+                        if let Some(&pid) = w.sessions.get(&sid) {
+                            if let Some(p) = w.pl_mut(pid) { p.god = on; p.recalc(); }
+                            w.sys(pid, if on { "Modo dios activado." } else { "Modo dios desactivado." }, if on { "God mode on." } else { "God mode off." });
+                        }
+                    }
                     WorldCmd::Shutdown => {
                         for sid in w.sessions.keys().copied().collect::<Vec<_>>() { w.quit(sid); }
                         break;

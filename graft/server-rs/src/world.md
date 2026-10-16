@@ -42,12 +42,13 @@
 - update_camps · function · L354-L382 — fn update_camps(&mut self, now: f64)
 - mob_killed · function · L385-L420 — pub fn mob_killed(&mut self, mid: u32, now: f64)
 - dash · function · L424-L461 — pub fn dash(&mut self, pid: u32, x: f64, z: f64, dx: f64, dz: f64, now: f64)
-- ent_record · function · L465-L485 — pub fn ent_record(&self, id: u32, now: f64) -> Value
-- send_snapshot · function · L487-L533 — fn send_snapshot(&mut self, pid: u32, now: f64)
-- self_state · function · L535-L551 — pub fn self_state(&self, pid: u32) -> Value
-- send_self · function · L553-L561 — fn send_self(&mut self, pid: u32)
-- tick · function · L565-L608 — pub fn tick(&mut self)
-- npc_chatter · function · L611-L618 — fn npc_chatter(&mut self, now: f64)
-- npc_say · function · L621-L631 — pub fn npc_say(&self, nid: u32, r: f64)
-- round2 · function · L635-L635 — pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }
-- town_near · function · L638-L643 — pub fn town_near(c: Option<(f64, f64)>) -> P
+- ent_record · function · L465-L489 — pub fn ent_record(&self, id: u32, now: f64) -> Value
+- send_snapshot · function · L491-L537 — fn send_snapshot(&mut self, pid: u32, now: f64)
+- self_state · function · L539-L555 — pub fn self_state(&self, pid: u32) -> Value
+- send_self · function · L557-L565 — fn send_self(&mut self, pid: u32)
+- tick · function · L569-L613 — pub fn tick(&mut self)
+- walk_travelers · function · L616-L632 — fn walk_travelers(&mut self, dt: f64, now: f64)
+- npc_chatter · function · L635-L642 — fn npc_chatter(&mut self, now: f64)
+- npc_say · function · L645-L655 — pub fn npc_say(&self, nid: u32, r: f64)
+- round2 · function · L659-L659 — pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }
+- town_near · function · L662-L667 — pub fn town_near(c: Option<(f64, f64)>) -> P

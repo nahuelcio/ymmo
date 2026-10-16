@@ -106,6 +106,19 @@ export function layoutTrees(): TreeL[] {
       trees.push(t), mine.push(t), n++;
     }
   }
+  // groves: small clumps of 5-12 trees scattered over the open country, so the plains are not one even sprinkle.
+  // Appended last on purpose: every tree above keeps its index, so the gathering nodes keep their ids.
+  const grove = mulberry32(13), GROVES = 700;
+  for (let g = 0; g < GROVES; g++) {
+    const c = landSpot(grove);
+    if (!c || forestAt(c[0], c[1]) > 0.2) continue;
+    const n = 5 + Math.floor(grove() * 8), r = 6 + grove() * 9;
+    for (let i = 0; i < n; i++) {
+      const a = grove() * Math.PI * 2, d = Math.sqrt(grove()) * r;
+      const t = placeTree(grove, c[0] + Math.cos(a) * d, c[1] + Math.sin(a) * d);
+      if (t) trees.push(t);
+    }
+  }
   return trees;
 }
 
@@ -275,6 +288,26 @@ export function layoutZoneProps(): ZonePropsL {
     }
     if (zn.id === 'hills') for (let i = 0; i < 8; i++) zp.huts.push(at(zn, zn.r * 0.8));
   }
+  // waysides: every ~170 m of road, a little off to one side, a travelers' camp, a hut or a ring of old pillars
+  // (own rng, so the zones' props above keep their places)
+  const wr = mulberry32(12);
+  ROADS.forEach(([ax, az, bx, bz], si) => {
+    const len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len;
+    for (let d = 60; d < len - 40; d += 150 + wr() * 60) {
+      const side = (si + d) % 2 < 1 ? 1 : -1, off = 13 + wr() * 6, t = d / len;
+      const x = ax + (bx - ax) * t + nx * off * side, z = az + (bz - az) * t + nz * off * side;
+      const kind = wr();
+      if (inTown(x, z) || heightAt(x, z) < WATER_LEVEL + 1 || roadDist(x, z) < 9) continue;
+      if (kind < 0.4) {
+        zp.tents.push({ x, z }, { x: x + nx * 6 * side + (bx - ax) / len * 4, z: z + nz * 6 * side + (bz - az) / len * 4 });
+      } else if (kind < 0.7) zp.huts.push({ x, z });
+      else for (let k = 0; k < 7; k++) {
+        if (wr() < 0.25) continue; // a fallen one here and there
+        const a = (k / 7) * Math.PI * 2;
+        zp.ruins.push({ x: x + Math.cos(a) * 6, z: z + Math.sin(a) * 6, h: 1.5 + wr() * 4, tilt: (wr() - 0.5) * 0.25 });
+      }
+    }
+  });
   const clear = <T extends { x: number; z: number }>(l: T[]) => l.filter((p) => !nearCamp(p.x, p.z, 19));
   zp.tents = clear(zp.tents); zp.totems = clear(zp.totems); zp.ruins = clear(zp.ruins); zp.graves = clear(zp.graves); zp.huts = clear(zp.huts);
   return (zoneProps = zp);

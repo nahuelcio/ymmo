@@ -11,7 +11,8 @@ Implements the quest lifecycle — accepting quests from NPCs, tracking kill/col
 - qname · function · L45-L45 — Returns a quest's name localized to the player's language (English or Spanish).
 - quest_npc · function · L48-L57 — Gatekeeps quest interactions by verifying the target entity is a quest NPC within range, otherwise telling the player they are too far away.
 - open_quest · function · L59-L68 — Opens the quest NPC's dialogue, sending greeting, title, and the player's current status/progress on that NPC's quest.
-- accept_quest · function · L70-L85 — Lets a player start a quest after rejecting repeats, already-active quests, and level-locked quests.
-- turn_in_quest · function · L88-L116 — Completes an active, finished quest — confiscating collect items, paying adena, and returning the XP reward for the caller to grant — while rejecting incomplete or already-done quests.
-- credit_kill · function · L118-L143 — Credits a mob kill to every involved player's matching kill-quest, bumping counters and announcing progress or completion.
-- on_inventory_changed · function · L145-L165 — Re-evaluates collect-objective quests after inventory changes to announce when a quest becomes ready (or un-ready) to turn in.
+- accept_quest · function · L70-L88 — Lets a player start a quest after rejecting repeats, already-active quests, and level-locked quests.
+- turn_in_quest · function · L91-L120 — Completes an active, finished quest — confiscating collect items, paying adena, and returning the XP reward for the caller to grant — while rejecting incomplete or already-done quests.
+- evolve · function · L123-L141 — fn evolve(&mut self, pid: u32)
+- credit_kill · function · L143-L168 — Credits a mob kill to every involved player's matching kill-quest, bumping counters and announcing progress or completion.
+- on_inventory_changed · function · L170-L190 — Re-evaluates collect-objective quests after inventory changes to announce when a quest becomes ready (or un-ready) to turn in.

@@ -120,9 +120,11 @@ const PAINTERS: Record<LayerName, () => Painter> = {
     return (u, v, o) => {
       const c = clumps(u, v);
       const b = bladesA(u, v) * 0.6 + bladesB(u, v) * 0.4;
-      o[0] = 0.78 + c * 0.32 + (b - 0.5) * 0.3;
+      // dark soil peeking between clumps, sunlit tips on the tallest blades
+      const gap = 1 - sstep(0.22, 0.42, c), tip = sstep(0.72, 0.9, b) * c;
+      o[0] = (0.78 + c * 0.32 + (b - 0.5) * 0.42 + tip * 0.2) * (1 - gap * 0.3);
       o[1] = clamp01(c * 0.7 + b * 0.3);
-      o[2] = (hue(u, v) - 0.5) * 2;
+      o[2] = Math.min(1, (hue(u, v) - 0.5) * 2 + tip * 0.6);
     };
   },
   dirt() {

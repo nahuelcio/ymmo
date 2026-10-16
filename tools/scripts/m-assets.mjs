@@ -17,7 +17,7 @@ if (!SRC.length || !SRC.every((d) => fs.existsSync(d))) throw new Error('usage: 
 const OUT = path.resolve('client/public/m');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'm-assets-'));
 
-const ANIMALS = { wolf: 'Wolf.glb', fox: 'Fox.glb' };
+const ANIMALS = { wolf: 'Wolf.glb', fox: 'Fox.glb', stag: 'Stag.glb', horse: 'Horse.glb', donkey: 'Donkey.glb', alpaca: 'Alpaca.glb', bull: 'Bull.glb', cow: 'Cow.glb' };
 /** output name -> source file and its clips (source name -> the short name the client uses) */
 const CREATURES = {
   spider: { file: 'Spider.glb', clips: { 'SpiderArmature|Spider_Idle': 'Idle', 'SpiderArmature|Spider_Walk': 'Walk', 'SpiderArmature|Spider_Attack': 'Attack', 'SpiderArmature|Spider_Death': 'Death' } },
@@ -31,7 +31,7 @@ const CREATURES = {
   werewolf: { file: 'werewolf.glb', clips: { 'idle-loop': 'Idle', 'run-loop': 'Run', attack: 'Attack', death: 'Death' } },
   forest: { file: 'forest.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Dying: 'Death' } },
 };
-const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Attack', 'Death'];
+const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Eating', 'Attack', 'Death'];
 const SKELETONS = ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Mage'];
 const WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Shield_Large_A', 'Skeleton_Shield_Small_A'];
 /** Rig_Medium animation file -> clips kept from it */
@@ -158,7 +158,7 @@ editGlb(anims, (g) => {
 finish(anims, 'skeleton_anims.glb');
 
 fs.writeFileSync(path.join(OUT, 'CREDITS.txt'), `Mob models, CC0 1.0 (public domain) unless noted: https://creativecommons.org/publicdomain/zero/1.0/
-wolf.glb, fox.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
+wolf.glb, fox.glb, stag.glb, horse.glb, donkey.glb, alpaca.glb, bull.glb, cow.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
 skeleton_*.glb: KayKit Character Pack: Skeletons 1.1 by Kay Lousberg (kaylousberg.com)
 skeleton_anims.glb: KayKit Character Animations 1.1 by Kay Lousberg (kaylousberg.com)
 spider.glb, wyvern.glb: Spider and Dragon by Quaternius (quaternius.com), via poly.pizza

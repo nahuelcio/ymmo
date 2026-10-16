@@ -164,8 +164,14 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
             }
         }
         if !s.admin { return deny(); }
+        let s_world = s.world;
         if let Some(k) = m["kick"].as_u64() {
             if let Some(o) = hub.sessions.get(&k) { o.kick.notify_one(); log!("[admin] kicked session {k}"); }
+        }
+        // god mode for the admin's own character (the session that gave the password, never anyone else's)
+        if let (Some(on), Some(w)) = (m["god"].as_bool(), s_world) {
+            if let Some(tx) = hub.worlds.get(&w) { let _ = tx.send(WorldCmd::God { sid, on }); }
+            log!("[admin] god mode {} for session {sid}", if on { "on" } else { "off" });
         }
         let text: String = m["announce"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(200).collect();
         if !text.is_empty() {

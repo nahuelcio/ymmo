@@ -96,9 +96,9 @@ float texBump;
              + b3 * s3.r / uTexMean[3] + b4 * s4.r / uTexMean[4] + b5 * s5.r / uTexMean[5]) / bs;
   float tint = (b0 * s0.b + b1 * s1.b + b2 * s2.b + b3 * s3.b + b4 * s4.b + b5 * s5.b) / bs;
   // fade out with distance: far away the texels only shimmer
-  float k = uTexStrength * (1.0 - smoothstep(140.0, 340.0, length(vViewPosition)));
+  float k = uTexStrength * (1.0 - smoothstep(180.0, 420.0, length(vViewPosition)));
   lum = 1.0 + (lum - 1.0) * uTexContrast;
-  vec3 detail = lum * (vec3(1.0) + (tint - 0.5) * vec3(0.12, 0.07, -0.08));
+  vec3 detail = lum * (vec3(1.0) + (tint - 0.5) * vec3(0.2, 0.12, -0.1));
   diffuseColor.rgb *= mix(vec3(1.0), detail, k);
   // relief depth in world units, bumped into the normal after <normal_fragment_maps>
   texBump = (b0 * s0.g + b1 * s1.g + b2 * s2.g + b3 * s3.g + b4 * s4.g + b5 * s5.g) / bs * k * 0.06;

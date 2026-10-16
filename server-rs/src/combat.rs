@@ -134,6 +134,7 @@ impl World {
 
     pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool) {
         if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
+        if self.pl(tid).is_some_and(|p| p.god) { return; }
         let mut msg = json!({ "t": "dmg", "s": src, "tg": tid, "v": dmg, "crit": crit });
         if dot { msg["dot"] = json!(true); }
         let src_player = self.pl(src).map(|p| p.cls == "fighter");

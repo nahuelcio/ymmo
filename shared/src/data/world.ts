@@ -1,4 +1,4 @@
-import { DUSK, EMBER, FROST, REED, TOWN, TOWNS } from '../terrain';
+import { DUSK, EMBER, FROST, REED, ROAD_SEGS, TOWN, TOWNS } from '../terrain';
 import { ALBA_FOLK, fortFolk } from '../village';
 
 export interface ZoneDef {
@@ -70,6 +70,8 @@ export interface NpcDef {
   /** talkers: random lines said on click and, now and then, out loud */
   lines?: string[];
   look?: { bald?: boolean; beard?: number; skin?: number };
+  /** travelers: walk back and forth along this road segment [ax, az, bx, bz] */
+  road?: [number, number, number, number];
 }
 
 const LUIGI_LINES = [
@@ -135,6 +137,30 @@ export const TELEPORTS = [
 /** Alba's residents stand at spots authored around the village centre. */
 const folk = (id: string) => { const n = ALBA_FOLK.find((f) => f.id === id)!; return { ...n, x: TOWN.x + n.x, z: TOWN.z + n.z }; };
 const fort = (id: string) => { const n = fortFolk(id); return { x: n.x, z: n.z, ry: n.ry }; };
+
+
+/** Travelers: talkers who walk the roads near Alba back and forth, so the land between towns is not empty. */
+const walker = (i: number) => { const r = ROAD_SEGS[i]; return { x: r[0], z: r[1], ry: 0, road: r }; };
+const TRAVELERS: NpcDef[] = [
+  { id: 'trav_merchant', name: 'Oswin', title: 'Mercader Ambulante', ...walker(0), kind: 'talker', color: 0x8a6a2a,
+    greeting: 'Si el carro aguanta, llego a la próxima aldea antes del anochecer.',
+    lines: ['Telas, especias, clavos... no, clavos no me quedan.', 'Ojo con los lobos más allá del puente.', 'Una moneda por el chisme del día. Bueno, gratis: hay goblins en las colinas.'] },
+  { id: 'trav_pilgrim', name: 'Edda', title: 'Peregrina', ...walker(26), kind: 'talker', color: 0xd8d0b8,
+    greeting: 'Cada piedra de este camino tiene una plegaria.',
+    lines: ['Caminar despeja la cabeza. Y las ampollas, el alma.', 'Que la luz te encuentre antes que los keltirs.', 'Ya perdí la cuenta de las leguas.'] },
+  { id: 'trav_hunter', name: 'Brok', title: 'Trampero', ...walker(24), kind: 'talker', color: 0x4a5a2a,
+    greeting: 'Huellas frescas. Algo grande pasó por acá anoche.',
+    lines: ['Las pieles se pagan bien en Alba.', 'Si ves un ciervo, no corras. Yo sí, pero vos no.', 'Este camino era más tranquilo antes.'] },
+  { id: 'trav_bard', name: 'Lirio', title: 'Juglar', ...walker(25), kind: 'talker', color: 0x9a3a6a,
+    greeting: '¿Una canción? Te la cobro después.',
+    lines: ['♪ Por el camino viene el héroe, sin pociones y sin fe... ♪', 'Estoy componiendo una balada sobre vos. Todavía no sé si termina bien.', 'La rima con "goblin" me tiene loco.'] },
+  { id: 'trav_guard', name: 'Teodor', title: 'Patrulla del Camino', ...walker(1), kind: 'talker', color: 0x5a6a8a,
+    greeting: 'Camino seguro, ciudadano. Más o menos.',
+    lines: ['Sin novedad en el frente. Bueno, un lobo.', 'Si ves bandidos, avisá. Si ves muchos, corré.', 'Doce horas de ronda y ni un pan.'] },
+  { id: 'trav_farmer', name: 'Greta', title: 'Granjera', ...walker(2), kind: 'talker', color: 0x7a8a3a,
+    greeting: 'Llevo nabos al mercado. ¿Querés uno? Es broma, son todos vendidos.',
+    lines: ['La cosecha viene buena este año.', 'Mis gallinas le tienen más miedo a los goblins que yo.', 'Uf, estas cuestas me matan.'] },
+];
 
 export const NPCS: NpcDef[] = [
   { id: 'grocer', name: 'Lia', title: 'Almacenera', x: folk('grocer').x, z: folk('grocer').z, ry: folk('grocer').ry, kind: 'shop', color: 0x4a8a3a,
@@ -277,4 +303,5 @@ export const NPCS: NpcDef[] = [
     greeting: 'Yo también adoré a las llamas. Me quemaron igual.' },
   { id: 'seraphel', name: 'Seraphel', title: 'Paladín Caído', ...drop('abyss', 6, -6), ry: Math.atan2(-6, 6), kind: 'quest', color: 0xc8b070,
     greeting: 'Mi orden cayó acá. Yo todavía no.' },
+  ...TRAVELERS,
 ];

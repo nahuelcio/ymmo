@@ -191,6 +191,9 @@ pub struct NpcDef {
     pub greeting_en: String,
     pub lines: Vec<String>,
     pub lines_en: Vec<String>,
+    /** travelers walk back and forth along this road segment [ax, az, bx, bz] */
+    #[serde(default)]
+    pub road: Option<Vec<f64>>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

@@ -22,7 +22,7 @@ export interface TextureSet {
 /** Terrain covers the whole screen, so it gets the resolution; props never cover much of it. */
 const SIZES: Record<TextureQuality, { terrain: number; props: number; maxAniso: number }> = {
   low: { terrain: 256, props: 128, maxAniso: 1 },
-  high: { terrain: 512, props: 256, maxAniso: 4 },
+  high: { terrain: 1024, props: 512, maxAniso: 8 },
 };
 
 let worker: Worker | null = null;

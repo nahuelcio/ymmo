@@ -3,7 +3,7 @@
 // screen-space light shafts / tilt-shift shaders. Every piece has its own switch in Options.
 import * as THREE from 'three';
 import { settings } from '../settings';
-import { biomeWeight, heightAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, heightAt, regionAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { waterRipple } from './propTex';
 
 /** Length of a full day. It runs off the wall clock, so every player sees the same hour without the server. */
@@ -219,6 +219,176 @@ export class Motes {
     this.mat.blending = fall > 0.3 ? THREE.NormalBlending : THREE.AdditiveBlending;
     this.mat.size = 0.14 + night * 0.08 + fall * 0.1;
     this.mat.opacity = 0.25 + night * (0.35 + 0.15 * Math.sin(t * 3)) + fall * 0.45;
+  }
+}
+
+// ---------------------------------------------------------------- weather
+/** How often each region rains (share of the time). Frost snows and ash rains ash already (Motes). */
+const RAIN_SHARE: Record<string, number> = { dawn: 0.08, dusk: 0.1, heart: 0.14, dragon: 0.08, swamp: 0.3 };
+/**
+ * Rain at (x, z) now, 0..1. It runs off the wall clock like the day, so everyone in a region sees the
+ * same shower; each region has its own phase, so it can pour in the swamp while the Heart is dry.
+ * ponytail: a fixed wave per region, no fronts moving across the map; a server-sent weather state is the upgrade.
+ */
+export function rainAt(x: number, z: number, now = Date.now()): number {
+  const r = regionAt(x, z) ?? 'dawn', share = RAIN_SHARE[r] ?? 0;
+  if (!share) return 0;
+  const k = r.length * 1.7 + r.charCodeAt(0) * 0.13, t = now / 420000; // a 7-minute beat
+  const w = 0.5 + 0.35 * Math.sin(t + k) + 0.15 * Math.sin(t * 2.3 + k * 3.1);
+  return Math.min(1, Math.max(0, (w - (1 - share)) / 0.12));
+}
+
+/** Rain streaks around the player: a box of short lines falling fast, recycled to the top. */
+export class Rain {
+  readonly lines: THREE.LineSegments;
+  private pos: Float32Array;
+  private mat: THREE.LineBasicMaterial;
+  private readonly N = 1400;
+  private readonly BOX = 28;
+
+  constructor() {
+    this.pos = new Float32Array(this.N * 6);
+    for (let i = 0; i < this.N; i++) {
+      const x = (Math.random() * 2 - 1) * this.BOX, y = Math.random() * 24, z = (Math.random() * 2 - 1) * this.BOX;
+      this.pos.set([x, y, z, x + 0.05, y + 0.7, z + 0.03], i * 6);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    this.mat = new THREE.LineBasicMaterial({ color: 0xaab8c8, transparent: true, opacity: 0, depthWrite: false });
+    this.lines = new THREE.LineSegments(geo, this.mat);
+    this.lines.frustumCulled = false;
+  }
+
+  update(center: THREE.Vector3, dt: number) {
+    const rain = settings.s.particles ? rainAt(center.x, center.z) : 0;
+    this.lines.visible = rain > 0.01;
+    if (!this.lines.visible) return;
+    this.lines.geometry.setDrawRange(0, Math.round(this.N * rain) * 2);
+    this.lines.position.set(center.x, center.y - 4, center.z);
+    const p = this.pos, fall = 22 * dt;
+    for (let i = 0; i < this.N * 6; i += 6) {
+      p[i + 1] -= fall;
+      p[i + 4] -= fall;
+      if (p[i + 1] < 0) (p[i + 1] += 24), (p[i + 4] += 24);
+    }
+    this.lines.geometry.attributes.position.needsUpdate = true;
+    this.mat.opacity = 0.35 * rain;
+  }
+}
+
+// ---------------------------------------------------------------- critters
+/** One wing: a flat quad hinged on the body (x = 0), pointing +x, nose towards +z. */
+function wingGeo(): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0.35, 1, 0, 0.45, 0.85, 0, -0.5, 0, 0, 0.35, 0.85, 0, -0.5, 0, 0, -0.3], 3));
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * Butterflies over the grass by day and a few birds wheeling overhead: things that move, so the land
+ * never looks frozen. Each critter is two instanced wings flapped through its matrix.
+ * ponytail: purely cosmetic and local (every player sees their own); no shadows, no collision.
+ */
+export class Critters {
+  readonly group = new THREE.Group();
+  private bfL: THREE.InstancedMesh;
+  private bfR: THREE.InstancedMesh;
+  private bdL: THREE.InstancedMesh;
+  private bdR: THREE.InstancedMesh;
+  private region: string | null | undefined = undefined;
+  private bf = Array.from({ length: 22 }, (_, i) => ({ x: 0, z: 0, yaw: 0, ph: i * 2.39, live: false }));
+  private birds = Array.from({ length: 7 }, (_, i) => ({ a: i * 0.9, r: 14 + (i % 3) * 7, h: 24 + (i % 4) * 5, ph: i * 1.7, cx: 0, cz: 0, live: false }));
+  private m = new THREE.Matrix4();
+  private q = new THREE.Quaternion();
+  private e = new THREE.Euler();
+  private v = new THREE.Vector3();
+  private s = new THREE.Vector3();
+
+  constructor() {
+    const geo = wingGeo();
+    const bfMat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, emissive: 0x222222 });
+    const birdMat = new THREE.MeshLambertMaterial({ color: 0x2a2622, side: THREE.DoubleSide });
+    this.bfL = new THREE.InstancedMesh(geo, bfMat, this.bf.length);
+    this.bfR = new THREE.InstancedMesh(geo, bfMat, this.bf.length);
+    this.bdL = new THREE.InstancedMesh(geo, birdMat, this.birds.length);
+    this.bdR = new THREE.InstancedMesh(geo, birdMat, this.birds.length);
+    const hues = [0xffd23a, 0xffffff, 0xff8a3d, 0x6fb8ff, 0xd88cff, 0xff5a7a];
+    const c = new THREE.Color();
+    this.bf.forEach((_, i) => {
+      c.setHex(hues[i % hues.length]);
+      this.bfL.setColorAt(i, c);
+      this.bfR.setColorAt(i, c);
+    });
+    for (const im of [this.bfL, this.bfR, this.bdL, this.bdR]) (im.frustumCulled = false), this.group.add(im);
+  }
+
+  private put(im: THREE.InstancedMesh, i: number, x: number, y: number, z: number, yaw: number, flap: number, sc: number, side: 1 | -1) {
+    this.q.setFromEuler(this.e.set(0, yaw, flap * side, 'YXZ'));
+    im.setMatrixAt(i, this.m.compose(this.v.set(x, y, z), this.q, this.s.set(sc * side, sc, sc)));
+  }
+
+  update(center: THREE.Vector3, dt: number, t: number) {
+    const on = settings.s.particles;
+    this.group.visible = on;
+    if (!on) return;
+    const harsh = Math.max(biomeWeight('frost', center.x, center.z), biomeWeight('ash', center.x, center.z));
+    // butterflies: only in daylight and away from snow and ash; each zig-zags and is recycled ahead of the player once left behind
+    const region = regionAt(center.x, center.z), wet = rainAt(center.x, center.z);
+    const swampy = region === 'swamp', night = ATMOS.day < 0.3;
+    // the region's fauna: dragonflies over the swamp, butterflies elsewhere (in daylight, dry weather, off the snow and ash)
+    const bfOn = ATMOS.day > 0.45 && harsh < 0.4 && wet < 0.3;
+    if (region !== this.region) {
+      this.region = region;
+      const pal = swampy ? [0x3fd0c0, 0x4a90ff, 0x9ae05a]
+        : region === 'dusk' ? [0xff8a3d, 0xffc23a, 0xc84a2a, 0xfff0c0]
+        : region === 'heart' ? [0x6fb8ff, 0xd88cff, 0xffffff, 0xff5a7a]
+        : [0xffd23a, 0xffffff, 0xff8a3d, 0x6fb8ff, 0xd88cff, 0xff5a7a];
+      const c = new THREE.Color();
+      this.bf.forEach((_, i) => {
+        c.setHex(pal[i % pal.length]);
+        this.bfL.setColorAt(i, c);
+        this.bfR.setColorAt(i, c);
+      });
+      this.bfL.instanceColor!.needsUpdate = this.bfR.instanceColor!.needsUpdate = true;
+      // overhead: gulls in the Heart's river country, crows over the dragon's land and the ash, pale birds in the frost
+      (this.bdL.material as THREE.MeshLambertMaterial).color.setHex(region === 'frost' ? 0xe8eef4 : region === 'heart' ? 0xf4f4f0 : region === 'dragon' || region === 'ash' ? 0x141214 : 0x2a2622);
+    }
+    // bats at night: small, fast and fluttering instead of gliding
+    const birdSc = night ? 0.3 : region === 'dragon' ? 0.9 : 0.55, flapHz = night ? 16 : 7, birdLow = night ? 0.45 : 1;
+    this.bfL.visible = this.bfR.visible = bfOn;
+    if (bfOn) {
+      this.bf.forEach((b, i) => {
+        if (!b.live || Math.hypot(b.x - center.x, b.z - center.z) > 26) {
+          const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 18;
+          Object.assign(b, { x: center.x + Math.cos(a) * r, z: center.z + Math.sin(a) * r, yaw: Math.random() * 6.3, live: true });
+        }
+        b.yaw += Math.sin(t * 1.3 + b.ph) * 2.2 * dt;
+        const sp = swampy ? 3.2 : 1.3;
+        b.x += Math.sin(b.yaw) * sp * dt;
+        b.z += Math.cos(b.yaw) * sp * dt;
+        const g = heightAt(b.x, b.z);
+        if (g < WATER_LEVEL) b.live = false;
+        const y = g + (swampy ? 0.7 : 0.5) + Math.abs(Math.sin(t * 1.1 + b.ph)) * (swampy ? 0.3 : 0.9);
+        const flap = swampy ? 0.2 + Math.sin(t * 60 + b.ph) * 0.25 : Math.sin(t * 22 + b.ph) * 1.1;
+        this.put(this.bfR, i, b.x, y, b.z, b.yaw, flap, 0.11, 1);
+        this.put(this.bfL, i, b.x, y, b.z, b.yaw, flap, 0.11, -1);
+      });
+      this.bfL.instanceMatrix.needsUpdate = this.bfR.instanceMatrix.needsUpdate = true;
+    }
+    // birds: a loose flock circling over a spot near the player, flapping then gliding
+    this.birds.forEach((b, i) => {
+      if (!b.live || Math.hypot(b.cx - center.x, b.cz - center.z) > 90) Object.assign(b, { cx: center.x + (Math.random() - 0.5) * 60, cz: center.z + (Math.random() - 0.5) * 60, live: true });
+      b.a += (6 / b.r) * dt;
+      const x = b.cx + Math.cos(b.a) * b.r, z = b.cz + Math.sin(b.a) * b.r;
+      const glide = night ? 1 : Math.sin(t * 0.45 + b.ph) > 0.2 ? 0.12 : 1;
+      const flap = 0.15 + Math.sin(t * flapHz + b.ph) * 0.6 * glide;
+      const y = Math.max(heightAt(b.cx, b.cz), WATER_LEVEL) + b.h * birdLow + Math.sin(t * (night ? 2.1 : 0.3) + b.ph) * 2;
+      const yaw = Math.atan2(-Math.sin(b.a), Math.cos(b.a));
+      this.put(this.bdR, i, x, y, z, yaw, flap, birdSc, 1);
+      this.put(this.bdL, i, x, y, z, yaw, flap, birdSc, -1);
+    });
+    this.bdL.instanceMatrix.needsUpdate = this.bdR.instanceMatrix.needsUpdate = true;
   }
 }
 

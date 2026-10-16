@@ -9,4 +9,4 @@
 - above · function · L13-L13 — above = (p: THREE.Vector3, h: number)
 - later · function · L14-L14 — later = (ms: number, fn: () => void)
 - at · function · L16-L16 — at = (e: Ent, k = 0.6)
-- hot · function · L381-L383 — function hot(c: number)
+- hot · function · L666-L668 — function hot(c: number)
