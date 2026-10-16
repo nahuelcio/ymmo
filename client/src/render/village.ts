@@ -5,15 +5,12 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
 import { bumpNormal, relief } from './textures';
 import { plazaBenches } from '../../../shared/src/layout';
-import { albaCurtain, BELL_TOWER, fortCurtain, fortProps, FORTS, type PropInst, type PropName, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
+import { albaCurtain, BELL_TOWER, fortCurtain, fortProps, FORTS, type PropName, groundInstances, houseInstances, V_PIECES, type CurtainDraw, type VPiece } from '../../../shared/src/village';
 
 /**
- * Static kit meshes for settlements. Each glTF primitive (one material) is instanced
- * per 200 m chunk so the frustum can drop a whole district. Assets: client/public/v.
+ * Static kit meshes for settlements, batched per material (buildVillage), each piece culled on its own.
+ * Assets: client/public/v.
  */
-
-const CHUNK = 200;
-const chunkKey = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
 
 interface Prim { geo: THREE.BufferGeometry; map: THREE.Texture | null }
 const prims = new Map<VPiece, Prim[]>();
@@ -74,6 +71,19 @@ function kitRelief(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
     );
 }
 
+/**
+ * The piece's own matrix in the vertex shader: the town draws its pieces as BatchedMesh (batchingMatrix, declared in
+ * <batching_vertex>, after <uv_vertex>, which is why the UV hooks below go there), an InstancedMesh would have instanceMatrix.
+ */
+const PIECE_MATRIX = `
+  #if defined(USE_BATCHING)
+    mat4 pieceMatrix = batchingMatrix;
+  #elif defined(USE_INSTANCING)
+    mat4 pieceMatrix = instanceMatrix;
+  #else
+    mat4 pieceMatrix = mat4(1.0);
+  #endif`;
+
 /** World metres covered by one repeat of the plaza paving. */
 const FLOOR_TILE = 3;
 
@@ -84,11 +94,10 @@ const FLOOR_TILE = 3;
  */
 function kitFloor(shader: Parameters<THREE.Material['onBeforeCompile']>[0]) {
   shader.vertexShader = shader.vertexShader.replace(
-    '#include <uv_vertex>',
-    `#include <uv_vertex>
-     #ifdef USE_INSTANCING
-       vMapUv = mat2(0.8, -0.6, 0.6, 0.8) * (modelMatrix * instanceMatrix * vec4(position, 1.0)).xz / ${FLOOR_TILE.toFixed(1)};
-     #endif`,
+    '#include <batching_vertex>',
+    `#include <batching_vertex>
+     ${PIECE_MATRIX}
+     vMapUv = mat2(0.8, -0.6, 0.6, 0.8) * (modelMatrix * pieceMatrix * vec4(position, 1.0)).xz / ${FLOOR_TILE.toFixed(1)};`,
   );
   shader.fragmentShader = shader.fragmentShader.replace(
     '#include <map_fragment>',
@@ -175,20 +184,19 @@ function curtainLambert(map: THREE.Texture, tint = 0xffffff): THREE.MeshLambertM
     kitRelief(shader);
     if (dye) kitDye(shader);
     shader.vertexShader = shader.vertexShader.replace(
-      '#include <uv_vertex>',
-      `#include <uv_vertex>
-       #ifdef USE_INSTANCING
+      '#include <batching_vertex>',
+      `#include <batching_vertex>
+       ${PIECE_MATRIX}
          {
-           float sx = length(instanceMatrix[0].xyz);
-           float sy = length(instanceMatrix[1].xyz);
-           float sz = length(instanceMatrix[2].xyz);
+           float sx = length(pieceMatrix[0].xyz);
+           float sy = length(pieceMatrix[1].xyz);
+           float sz = length(pieceMatrix[2].xyz);
            vec3 m = vec3(position.x * sx, position.y * sy, position.z * sz);
            vec3 n = abs(normal);
            bool top = n.y >= n.x && n.y >= n.z;
            vec2 boxUv = top ? m.xz : n.x >= n.z ? vec2(m.z, m.y) : vec2(m.x, m.y);
            vMapUv = boxUv / vec2(2.0, top ? 2.0 : 3.0);
-         }
-       #endif`,
+         }`,
     );
   };
   curtainMats.set(key, mat);
@@ -294,38 +302,33 @@ export function loadV(): Promise<void> {
   })());
 }
 
+/** Geometries can share a BatchedMesh only with the same attributes (name, size, type) and both indexed or not. */
+function layout(geo: THREE.BufferGeometry): string {
+  const a = Object.entries(geo.attributes).map(([k, v]) => `${k}:${v.itemSize}:${(v as THREE.BufferAttribute).array.constructor.name}:${v.normalized}`);
+  return `${a.sort().join()}|${geo.index ? 'i' : 'n'}`;
+}
+
 /** Both towns' kit buildings, paving and curtain walls, and Alba's bell tower. No-op until loadV() finishes. */
 export function buildVillage(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'village';
   if (!ready) return g;
-  const items = [...groundInstances(), ...houseInstances()];
-  const buckets = new Map<string, { piece: VPiece; prim: number; tint: number; list: { x: number; y: number; z: number; rot: number }[] }>();
-  for (const it of items) {
-    const tint = it.tint ?? 0xffffff;
-    const key = `${it.piece}|${chunkKey(it.x, it.z)}|${tint}`;
-    const n = prims.get(it.piece)?.length ?? 0;
-    for (let p = 0; p < n; p++) {
-      const k = `${key}|${p}`;
-      let b = buckets.get(k);
-      if (!b) buckets.set(k, (b = { piece: it.piece, prim: p, tint, list: [] }));
-      b.list.push(it);
-    }
-  }
+  // Every piece goes into one BatchedMesh per material (and vertex layout): a few dozen draws for both towns where an
+  // InstancedMesh per piece, chunk and tint took ~480. Each instance is frustum-culled on its own.
+  const batches = new Map<string, { mat: THREE.Material; list: { geo: THREE.BufferGeometry; m: THREE.Matrix4 }[] }>();
+  const put = (geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4) => {
+    const key = `${mat.uuid}|${layout(geo)}`;
+    let b = batches.get(key);
+    if (!b) batches.set(key, (b = { mat, list: [] }));
+    b.list.push({ geo, m: m.clone() });
+  };
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(1, 1, 1);
   const up = new THREE.Vector3(0, 1, 0);
-  for (const b of buckets.values()) {
-    const prim = prims.get(b.piece)![b.prim];
-    const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, b.tint, b.piece === 'Floor_UnevenBrick'), b.list.length);
-    b.list.forEach((it, i) => {
-      q.setFromAxisAngle(up, it.rot);
-      pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
-      mesh.setMatrixAt(i, m4.compose(pos, q, scl));
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.computeBoundingSphere();
-    g.add(mesh);
+  for (const it of [...groundInstances(), ...houseInstances()]) {
+    q.setFromAxisAngle(up, it.rot);
+    pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
+    m4.compose(pos, q, scl);
+    for (const prim of prims.get(it.piece) ?? []) put(prim.geo, lambert(prim.map, it.tint ?? 0xffffff, it.piece === 'Floor_UnevenBrick'), m4);
   }
   if (bell) {
     const t = bell.clone();
@@ -336,56 +339,44 @@ export function buildVillage(): THREE.Group {
   }
   if (benchGeo) {
     // the ring the coloured planters used to occupy, backs to the bell tower (shared: they are seats too)
-    const benches = plazaBenches();
-    const mesh = new THREE.InstancedMesh(benchGeo, lambert(null, benchColor), benches.length);
     const benchScale = new THREE.Vector3(BENCH_SCALE, BENCH_SCALE, BENCH_SCALE);
-    benches.forEach((b, i) => {
+    for (const b of plazaBenches()) {
       q.setFromAxisAngle(up, Math.atan2(-Math.cos(b.a), -Math.sin(b.a)));
       pos.set(b.x, TOWN_HEIGHT + 0.02, b.z);
-      mesh.setMatrixAt(i, m4.compose(pos, q, benchScale));
-    });
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.computeBoundingSphere();
-    g.add(mesh);
-  }
-  // the forts' props, instanced per fort, prop and primitive (one fort's bounds, so the far ones are culled)
-  for (const fort of FORTS) {
-    const byName = new Map<PropName, PropInst[]>();
-    for (const pr of fortProps(fort)) byName.set(pr.name, [...(byName.get(pr.name) ?? []), pr]);
-    for (const [name, list] of byName) for (const prim of propPrims.get(name) ?? []) {
-      const mesh = new THREE.InstancedMesh(prim.geo, lambert(prim.map, PROP_DYE[name] ?? 0xffffff), list.length);
-      list.forEach((it, i) => {
-        q.setFromAxisAngle(up, it.rot);
-        pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
-        scl.setScalar(it.s);
-        mesh.setMatrixAt(i, m4.compose(pos, q, scl));
-      });
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.computeBoundingSphere();
-      g.add(mesh);
+      put(benchGeo, lambert(null, benchColor), m4.compose(pos, q, benchScale));
     }
   }
+  for (const fort of FORTS) for (const it of fortProps(fort)) for (const prim of propPrims.get(it.name) ?? []) {
+    q.setFromAxisAngle(up, it.rot);
+    pos.set(it.x, TOWN_HEIGHT + it.y, it.z);
+    scl.setScalar(it.s);
+    put(prim.geo, lambert(prim.map, PROP_DYE[it.name] ?? 0xffffff), m4.compose(pos, q, scl));
+  }
   for (const curtain of [albaCurtain().draw, ...FORTS.map((f) => fortCurtain(f).draw)]) for (const kind of ['wall', 'gate', 'tower'] as const) {
-    const primList = curtainPrims[kind];
     const list = curtain.filter((d) => d.kind === kind);
-    if (!list.length || !primList.length) continue;
+    if (!list.length) continue;
     const tint = list[0].tint ?? 0xffffff;
-    for (const prim of primList) {
+    for (const prim of curtainPrims[kind]) {
       const map = curtainMap(prim.color);
-      const mesh = new THREE.InstancedMesh(prim.geo, map ? curtainLambert(map, tint) : lambert(null, new THREE.Color(prim.color).multiply(new THREE.Color(tint)).getHex()), list.length);
-      list.forEach((it, i) => {
+      const mat = map ? curtainLambert(map, tint) : lambert(null, new THREE.Color(prim.color).multiply(new THREE.Color(tint)).getHex());
+      for (const it of list) {
         q.setFromAxisAngle(up, it.rot);
         pos.set(it.x, TOWN_HEIGHT + 0.02, it.z);
         scl.set(it.sx, it.sy, it.sz);
-        mesh.setMatrixAt(i, m4.compose(pos, q, scl));
-      });
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.computeBoundingSphere();
-      g.add(mesh);
+        put(prim.geo, mat, m4.compose(pos, q, scl));
+      }
     }
+  }
+  for (const { mat, list } of batches.values()) {
+    const geos = [...new Set(list.map((e) => e.geo))];
+    const verts = geos.reduce((n, x) => n + x.getAttribute('position').count, 0);
+    const index = geos.reduce((n, x) => n + (x.index?.count ?? 0), 0);
+    const mesh = new THREE.BatchedMesh(list.length, verts, index, mat);
+    const ids = new Map(geos.map((x) => [x, mesh.addGeometry(x)]));
+    for (const e of list) mesh.setMatrixAt(mesh.addInstance(ids.get(e.geo)!), e.m);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    g.add(mesh);
   }
   return g;
 }

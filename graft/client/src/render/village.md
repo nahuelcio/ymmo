@@ -1,21 +1,22 @@
 # client/src/render/village.ts
 
-- chunkKey · function · L16-L16 — chunkKey = (x: number, z: number)
-- Prim · interface · L18-L18 — interface Prim
-- vReady · function · L26-L26 — vReady = ()
-- bakePiece · function · L28-L45 — function bakePiece(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
-- texKey · function · L47-L51 — function texKey(map: THREE.Texture | null): string
-- rememberTex · function · L53-L57 — function rememberTex(map: THREE.Texture | null)
-- kitRelief · function · L63-L75 — function kitRelief(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
-- kitFloor · function · L85-L98 — function kitFloor(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
-- kitDye · function · L102-L110 — function kitDye(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
-- lambert · function · L112-L129 — function lambert(map: THREE.Texture | null, color = 0xffffff, floor = false): THREE.MeshLambertMaterial
-- CurtainKind · type · L144-L144 — type CurtainKind = CurtainDraw['kind'];
-- kitTexture · function · L151-L151 — kitTexture = (file: string): THREE.Texture | null
-- curtainMap · function · L154-L160 — function curtainMap(color: number): THREE.Texture | null
-- curtainLambert · function · L167-L196 — function curtainLambert(map: THREE.Texture, tint = 0xffffff): THREE.MeshLambertMaterial
-- flatPrims · function · L198-L210 — function flatPrims(root: THREE.Object3D, skip?: (mesh: THREE.Mesh) => boolean): { geo: THREE.BufferGeometry; color: number }[]
-- dropFlagpoles · function · L213-L230 — function dropFlagpoles(geo: THREE.BufferGeometry): THREE.BufferGeometry
-- pole · function · L219-L222 — pole = (i: number)
-- loadV · function · L232-L295 — function loadV(): Promise<void>
-- buildVillage · function · L298-L391 — function buildVillage(): THREE.Group
+- Prim · interface · L15-L15 — interface Prim
+- vReady · function · L23-L23 — vReady = ()
+- bakePiece · function · L25-L42 — function bakePiece(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
+- texKey · function · L44-L48 — function texKey(map: THREE.Texture | null): string
+- rememberTex · function · L50-L54 — function rememberTex(map: THREE.Texture | null)
+- kitRelief · function · L60-L72 — function kitRelief(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
+- kitFloor · function · L95-L107 — function kitFloor(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
+- kitDye · function · L111-L119 — function kitDye(shader: Parameters<THREE.Material['onBeforeCompile']>[0])
+- lambert · function · L121-L138 — function lambert(map: THREE.Texture | null, color = 0xffffff, floor = false): THREE.MeshLambertMaterial
+- CurtainKind · type · L153-L153 — type CurtainKind = CurtainDraw['kind'];
+- kitTexture · function · L160-L160 — kitTexture = (file: string): THREE.Texture | null
+- curtainMap · function · L163-L169 — function curtainMap(color: number): THREE.Texture | null
+- curtainLambert · function · L176-L204 — function curtainLambert(map: THREE.Texture, tint = 0xffffff): THREE.MeshLambertMaterial
+- flatPrims · function · L206-L218 — function flatPrims(root: THREE.Object3D, skip?: (mesh: THREE.Mesh) => boolean): { geo: THREE.BufferGeometry; color: number }[]
+- dropFlagpoles · function · L221-L238 — function dropFlagpoles(geo: THREE.BufferGeometry): THREE.BufferGeometry
+- pole · function · L227-L230 — pole = (i: number)
+- loadV · function · L240-L303 — function loadV(): Promise<void>
+- layout · function · L306-L309 — function layout(geo: THREE.BufferGeometry): string
+- buildVillage · function · L312-L382 — function buildVillage(): THREE.Group
+- put · function · L319-L324 — put = (geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4)

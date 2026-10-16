@@ -195,7 +195,8 @@ function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }
       }
     });
     mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    // ponytail: cutout foliage casts shadows but does not receive them: leaf cards shadowing each other stamped crisp dark leaf blotches all over the crowns. Upgrade path: soft per-tree shading instead.
+    mesh.receiveShadow = !prim.mat.alphaTest;
     mesh.computeBoundingSphere();
     // every chunk size gets its center so follow() can hide the far ones
     const [ix, iz] = k.split('|')[0].split(',').map(Number);

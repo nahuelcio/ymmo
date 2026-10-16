@@ -19,7 +19,8 @@ import { VolumetricPass } from './volumetric';
 class GTAO extends GTAOPass {
   _overrideVisibility() {
     const cache = (this as unknown as { _visibilityCache: THREE.Object3D[] })._visibilityCache;
-    const seeThrough = (m: THREE.Material) => (m.transparent && !m.depthWrite) || m.blending === THREE.AdditiveBlending;
+    // ponytail: cutout foliage (alphaTest) is skipped too: the override material draws its leaf cards as solid quads, so AO stamped dark squares inside the crowns. Leaves lose AO; trunks keep it.
+    const seeThrough = (m: THREE.Material) => (m.transparent && !m.depthWrite) || m.blending === THREE.AdditiveBlending || m.alphaTest > 0;
     this.scene.traverse((o) => {
       if (!o.visible) return;
       const x = o as THREE.Object3D & { isPoints?: boolean; isLine?: boolean; isLine2?: boolean; isMesh?: boolean; material?: THREE.Material | THREE.Material[] };
