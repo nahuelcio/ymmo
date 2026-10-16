@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Clouds, cloudShadow } from './clouds';
 import { fortLanterns, FORTS } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { biomeWeight, fbm, heightAt, inTown, mulberry32, valueNoise, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, VOLCANO, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, fbm, forestAt, heightAt, inTown, mulberry32, onRaidFloor, valueNoise, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, VOLCANO, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf, detailCells, layoutBushes } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
@@ -155,6 +155,28 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   return [r, g, b];
 }
 
+/** What a foot lands on (audio.ts step). */
+export type Footing = 'grass' | 'leaves' | 'dirt' | 'stone' | 'gravel' | 'sand' | 'snow' | 'mud' | 'water';
+
+/**
+ * The ground under (x, z) for footsteps: its strongest cover from groundFactors, taken in the order groundColor paints
+ * them (a later one covers an earlier one), so the step sounds like the ground looks.
+ */
+export function footingAt(x: number, z: number): Footing {
+  const h = heightAt(x, z);
+  if (h < WATER_LEVEL) return 'water'; // wading: deeper is swimming, which splashes on its own
+  if (onRaidFloor(x, z)) return 'stone';
+  const f = groundFactors(x, z, h);
+  let on: Footing = biomeWeight('swamp', x, z) > 0.5 ? 'mud' : forestAt(x, z) > 0.5 ? 'leaves' : 'grass';
+  if (f.ash > 0.5) on = 'gravel';
+  if (f.rock > 0.5) on = 'stone';
+  if (f.snow > 0.5) on = 'snow';
+  if (f.dirt > 0.5) on = 'dirt';
+  if (f.sand > 0.5) on = 'sand';
+  if (f.mud > 0.5) on = 'mud';
+  return on;
+}
+
 /** Steepness 0 (flat) .. 1 (cliff) from the analytic height field: continuous across terrain chunks. */
 export function slopeAt(x: number, z: number): number {
   const e = 1;
@@ -226,6 +248,8 @@ export interface WorldScene {
   sky: THREE.Mesh;
   /** per-frame: keep the sky around the camera and blend its palette by region */
   updateSky(camera: THREE.Camera, far: number, dt: number): void;
+  /** a lightning strike lights up the whole sky for a moment; power 0..1 (weaker the farther it fell) */
+  flashSky(power: number): void;
   follow(p: THREE.Vector3): void;
   /** ground textures: off, low or high (render/terrainTex.ts) */
   setTextureQuality(q: TerrainTexQuality): void;
@@ -268,6 +292,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const envScene = pmrem ? new THREE.Scene() : null;
   if (envScene) envScene.add(sky.clone());
   let envRT: THREE.WebGLRenderTarget | null = null, lastBake = -1e9;
+  // the last lightning strike (flashSky) and how bright it was
+  let flashAt = -1e9, flashPow = 0;
   const baked = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), night: 0, dir: new THREE.Vector3(9, 9, 9) };
   /** total channel distance between two colours, the drift unit below */
   const cd = (a: THREE.Color, b: THREE.Color) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
@@ -413,6 +439,13 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       const dusk = (1 - smoothstep(0, 0.42, Math.abs(el))) * smoothstep(-0.3, 0, el); // low sun: warm light
       A.top.copy(tmp.set(0x0a1230)).lerp(cur.top, day);
       A.horizon.copy(tmp.set(0x223258)).lerp(cur.horizon, day).lerp(tmp.set(0xff9450), dusk * 0.55);
+      // a lightning strike (flashSky): two quick pulses of white over the sky, the fog and the sky light
+      const fs = (performance.now() - flashAt) / 1000;
+      const flash = fs < 0.5 ? flashPow * Math.max(0, 1 - Math.abs(fs - 0.04) / 0.07, 0.7 * (1 - Math.abs(fs - 0.24) / 0.09)) : 0;
+      if (flash > 0) {
+        A.top.lerp(tmp.set(0xdfe8ff), flash * 0.5);
+        A.horizon.lerp(tmp.set(0xdfe8ff), flash * 0.55);
+      }
       const u = skyMat.uniforms;
       u.top.value.copy(A.top); u.horizon.value.copy(A.horizon);
       u.ground.value.copy(cur.ground).multiplyScalar(0.2 + 0.8 * day);
@@ -430,7 +463,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // nights stay playable: moonlight and a floor of sky light keep the ground readable
       const nb = settings.s.nightBrightness;
       sun.intensity = up ? cur.sunI * smoothstep(-0.06, 0.24, el) : 1.9 * nb * smoothstep(0.08, 0.3, -el);
-      hemi.intensity = cur.hemi * (nb + (1 - nb) * day) * (pmrem ? HEMI_KEEP : 1);
+      hemi.intensity = cur.hemi * (nb + (1 - nb) * day) * (pmrem ? HEMI_KEEP : 1) + flash * 2.2;
       hemi.color.copy(A.horizon).lerp(tmp.set(0xffffff), 0.4 * day);
       // water follows the setting and the light
       const fancy = settings.s.fancyWater;
@@ -450,8 +483,12 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       cloudShade.copy(cloudLit).multiplyScalar(0.5).lerp(A.top, 0.25);
       cloudRim.copy(up ? u.sunColor.value : tmp.set(0x8fa6e8)).multiplyScalar(up ? 1 : 0.35);
       clouds.update(camera.position, A.lightDir, cloudLit, cloudShade, cloudRim, A.horizon, day);
-      // the IBL trails the visible sky: first frame bakes (lastBake starts at -inf), then only on real drift
-      if (pmrem && performance.now() - lastBake > ENV_MIN_MS && skyDrift() > ENV_EPS) bakeEnv();
+      // the IBL trails the visible sky: first frame bakes (lastBake starts at -inf), then only on real drift (never a flash)
+      if (pmrem && !flash && performance.now() - lastBake > ENV_MIN_MS && skyDrift() > ENV_EPS) bakeEnv();
+    },
+    flashSky(power) {
+      flashAt = performance.now();
+      flashPow = Math.min(1, power);
     },
     follow(p) {
       // snap to whole shadow texels in light space: the map then moves in steps, so edges don't shimmer while walking

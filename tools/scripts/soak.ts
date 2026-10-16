@@ -10,6 +10,7 @@
 // --chrome   browser executable (default: Chrome, then Edge, in their usual Windows places)
 // --profile  N: record a CPU profile over N seconds of play instead, and list the hottest functions
 // --mobile   WxH: a phone or tablet of that CSS size (touch screen, mobile viewport), for the touch HUD
+// --audio    sound on without a click first, muted at the speakers (for --eval scripts that check what plays)
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,6 +36,8 @@ const SNAPS = arg('snaps', '');
 const NOLOGIN = process.argv.includes('--nologin');
 /** --mobile WxH: emulate a touch device of that size (390x844 a phone held upright, 844x390 the same phone sideways) */
 const MOBILE = arg('mobile', '');
+/** --audio: let the page's sound start without a click, muted (for --eval scripts that check what plays) */
+const AUDIO = process.argv.includes('--audio');
 const EVAL =((e) => (e.startsWith('@') ? readFileSync(e.slice(1), 'utf8') : e))(arg('eval', '')); // @file reads it from a file
 const PORT = 9333;
 const CHROME = arg('chrome', [
@@ -50,7 +53,10 @@ const browser = spawn(CHROME, [
   // keep rendering at full speed even when the window is covered or unfocused
   '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
   // exact heap numbers and a gc() to call before each sample, so the heap reads retained memory, not garbage
-  '--enable-precise-memory-info', '--js-flags=--expose-gc', '--window-size=1600,900', 'about:blank',
+  '--enable-precise-memory-info', '--js-flags=--expose-gc', '--window-size=1600,900',
+  // --audio: the page's sound runs with no click first (an --eval script can check what plays), muted at the speakers
+  ...(AUDIO ? ['--autoplay-policy=no-user-gesture-required', '--mute-audio'] : []),
+  'about:blank',
 ], { stdio: 'ignore' });
 
 async function target(): Promise<string> {

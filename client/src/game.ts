@@ -8,7 +8,7 @@ import { itemName, mobName, npcText, specName, zoneName } from '../../shared/src
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
-import { heightAt, isDeep, isDeepCell, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
+import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
 import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
@@ -20,15 +20,15 @@ import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
-import { BRAZIER_FIRES, createWorldScene, lightSources, type WorldScene } from './render/scene';
+import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph, setTipLevel, setTipSelf } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
-import { ATMOS, Critters, LocalLights, Motes, Rain, tickWind } from './render/atmos';
+import { ATMOS, Critters, LocalLights, Motes, Rain, rainAt, stormStrikes, tickWind } from './render/atmos';
 import { PostFX } from './render/post';
 import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
-import { ambience, play, type Sfx } from './audio';
+import { ambience, indoors, play, setWeather, step, thunder, type Sfx } from './audio';
 import { SLOW_MUL, STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
@@ -90,6 +90,9 @@ export interface CEnt {
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
   splashAt?: number;
+  /** footsteps: where the body was last frame and the ground covered since the last footfall */
+  stepFrom?: { x: number; z: number };
+  stepDist?: number;
 }
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
@@ -1086,6 +1089,51 @@ export class Game {
     return Math.max(0, 1 - c.pos.distanceTo(self.pos) / 45);
   }
 
+  /** others' footsteps heard in the last 150 ms: a few at a time, or a crowd in town drowns everything */
+  private stepsHeard = { at: 0, n: 0 };
+  /**
+   * A footfall for every stride of ground c covers, so the steps keep pace with any speed and stop with the body; the
+   * ground under it picks the sound (render/scene.ts footingAt). Ours always; others' within 15 m, quieter.
+   */
+  private footfall(c: CEnt, isSelf: boolean, now: number) {
+    const from = (c.stepFrom ??= { x: c.pos.x, z: c.pos.z });
+    const d = Math.hypot(c.pos.x - from.x, c.pos.z - from.z);
+    from.x = c.pos.x;
+    from.z = c.pos.z;
+    // a snap or a teleport is no walk, nor is a roll, a swim (it splashes) or a body sliding into place
+    if (d > 3 || c.flags & F_DEAD || c.roll || (c.rollAt && now - c.rollAt < ROLL_MS) || isDeep(c.pos.x, c.pos.z)) return void (c.stepDist = 0);
+    const size = c.height / 1.8, stride = Math.min(2.5, Math.max(0.6, 1.1 * size));
+    c.stepDist = (c.stepDist ?? 0) + d;
+    if (c.stepDist < stride) return;
+    c.stepDist %= stride;
+    const rate = Math.min(1.3, Math.max(0.6, 1 / Math.sqrt(size))); // big bodies land lower
+    if (isSelf) return step(footingAt(c.pos.x, c.pos.z), 1, rate);
+    const self = this.self, heard = this.stepsHeard;
+    if (!self || c.pos.distanceTo(self.pos) > 15) return;
+    if (now - heard.at > 150) (heard.at = now), (heard.n = 0);
+    if (heard.n >= 4) return;
+    heard.n++;
+    step(footingAt(c.pos.x, c.pos.z), this.near(c) * 0.35 * Math.min(1.6, Math.max(0.7, size)), rate);
+  }
+
+  private stormSec = 0;
+  /**
+   * Lightning in a downpour (render/atmos.ts stormStrikes: the same strikes for everyone nearby): the sky flashes,
+   * the bolt shows when it falls within sight, and the thunder follows by the time its sound takes to arrive.
+   */
+  private storms(p: THREE.Vector3) {
+    const sec = Math.floor(Date.now() / 1000);
+    if (sec === this.stormSec) return;
+    this.stormSec = sec;
+    if (indoors()) return;
+    for (const s of stormStrikes(p.x, p.z, sec)) {
+      const dist = Math.hypot(s.x - p.x, s.z - p.z), g = heightAt(s.x, s.z);
+      this.world.flashSky(Math.max(0.15, 1 - dist / 700));
+      if (dist < this.camera.far * 0.9) this.fx.bolt(new THREE.Vector3(s.x, g + 90, s.z), new THREE.Vector3(s.x, g, s.z), 0xcfe0ff, 260);
+      thunder(dist);
+    }
+  }
+
   /** Brief white flash on a model when it takes a hit. */
   private flash(c: CEnt) {
     const meshes: THREE.Mesh[] = [];
@@ -1937,6 +1985,7 @@ export class Game {
         d = Math.atan2(Math.sin(d), Math.cos(d));
         c.ry += d * Math.min(1, dt * 14);
       }
+      if (c.rig) this.footfall(c, c === self, now);
       c.root.position.copy(c.pos);
       // in deep water the body floats at the swimming line; sitting on the ground sinks the hips to it
       const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
@@ -2096,6 +2145,10 @@ export class Game {
       this.motes.update(self.pos, dt, tSec);
       this.critters.update(self.pos, dt, tSec);
       this.rain.update(self.pos, dt);
+      // the weather for the ears: rain, and wind (stronger up high, in the snow and the ash, and in a shower)
+      const rain = rainAt(self.pos.x, self.pos.z), harsh = Math.max(biomeWeight('frost', self.pos.x, self.pos.z), biomeWeight('ash', self.pos.x, self.pos.z));
+      setWeather(rain, Math.min(1, 0.12 + smoothstep(20, 50, self.pos.y) * 0.4 + harsh * 0.5 + rain * 0.3), harsh);
+      this.storms(self.pos);
       this.lights.update(self.pos, tSec);
       // light shafts: where the sun sits on screen, fading out as it leaves the view or sets
       const sv = this.sunScreen.copy(this.camera.position).addScaledVector(ATMOS.sunDir, 500).project(this.camera);

@@ -8,3 +8,16 @@ Combat sound effects (from OpenGameArt.org, licenses as noted):
   combat/hit*.wav, combat/crit*.wav, combat/hurt*.wav, combat/death*.wav   "Medieval sound effects - Weapon impacts" by Ben Jaszczak & Brian Nelson   https://opengameart.org/node/146863
   combat/clash*.wav, combat/miss*.wav, combat/slam*.wav, combat/dot*.wav   "Fantasy Sound Effects (Tinysized SFX)" by Jan Schupke              https://opengameart.org/content/fantasy-sound-effects-tinysized-sfx
   combat/spell-*.wav                                "Basic Spell Impacts" by lentikula (fire, ice, lightning, water), CC0    https://lentikula.itch.io/freecc0-basic-spell-impacts-sfx
+
+Footsteps (steps/), all CC0:
+  steps/grass*.ogg, stone1-5.ogg, snow*.ogg, soft*.ogg   footstep_grass/concrete/snow/carpet_000-004 from "Impact Sounds" by Kenney (www.kenney.nl)   https://kenney.nl/assets/impact-sounds
+  steps/stone6.ogg, gravel1.ogg, mud1.ogg, leaves*.ogg    "Different steps on wood, stone, leaves, gravel and mud" by TinyWorlds   https://opengameart.org/content/different-steps-on-wood-stone-leaves-gravel-and-mud
+  steps/dirt*.ogg, mud2-4.ogg                              sfx100v2_footstep_01-02 / footstep_wet_01-03 from "100 CC0 SFX #2" by rubberduck   https://opengameart.org/content/100-cc0-sfx-2
+  steps/water*.ogg                                         splash_09/10/14/15 from "40 CC0 water / splash / slime SFX" by rubberduck   https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+
+Weather (weather/), all CC0:
+  weather/rain-light.ogg     loop_rain from "40 CC0 water / splash / slime SFX" by rubberduck   https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+  weather/rain-heavy.ogg     "Rain (loopable)" (2.ogg) by Ylmir   https://opengameart.org/content/rain-loopable
+  weather/wind.ogg           "Wind whoosh loop" by SketchMan3   https://opengameart.org/content/wind-whoosh-loop
+  weather/thunder1.ogg       sfx100v2_thunder_01 from "100 CC0 SFX #2" by rubberduck   https://opengameart.org/content/100-cc0-sfx-2
+  weather/thunder-long.ogg   "Rain + Long Thunder" by WuxiaScrub   https://opengameart.org/content/rain-long-thunder
