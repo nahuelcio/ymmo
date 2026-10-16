@@ -74,7 +74,11 @@ export class Minimap {
   private mapDrag: { x: number; y: number; cx: number; cz: number; moved: boolean } | null = null;
   private detail: HTMLCanvasElement | null = null;
   private detailKey = '';
+  /** CSS pixels of the world map. Overlays are drawn in this space; the bitmap is device pixels. */
+  private mapS = RES;
   private lastDraw = 0;
+  /** Last wheel zoom: the sharp re-sample waits until the wheel settles (update() redraws every 150 ms). */
+  private wheelAt = 0;
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
   private raidBtn: HTMLButtonElement;
@@ -106,9 +110,14 @@ export class Minimap {
       this.raidBtn.textContent = this.raidBtn.textContent === sure ? leave : sure;
     };
 
-    this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 200, 60, 540, root);
+    // The overview is already RES px (~2 m). Squashing it into 512 and smoothing made the whole map soft.
+    // fits .win-body (max-height 100vh - 120, 8px padding) with the hint line: a scrollbar would toggle
+    // the canvas width every frame, and every new width re-samples the whole terrain (the map ran at 1 FPS)
+    const side = Math.min(RES, Math.max(320, innerHeight - 160));
+    this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 160, 28, side + 18, root);
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
-    this.bigCanvas.width = this.bigCanvas.height = 512;
+    this.bigCanvas.width = this.bigCanvas.height = side;
+    this.bigCanvas.style.width = this.bigCanvas.style.height = `${side}px`;
     // click walks there; a drag pans once zoomed in; Ctrl+click adds a stop; right click clears the route
     this.bigCanvas.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
@@ -141,6 +150,7 @@ export class Minimap {
       const [wx, wz] = this.worldAt(e.offsetX, e.offsetY);
       const next = Math.min(8, Math.max(1, this.mapZoom * (e.deltaY < 0 ? 1.28 : 1 / 1.28)));
       this.mapZoom = next;
+      this.wheelAt = performance.now();
       const span = this.mapSpan();
       const w = this.bigCanvas.clientWidth || 512;
       const h = this.bigCanvas.clientHeight || 512;
@@ -177,15 +187,40 @@ export class Minimap {
     return [this.mapCx - span / 2 + (px / w) * span, this.mapCz - span / 2 + (py / h) * span];
   }
 
-  /** World XZ → big-canvas pixel. */
+  /** World XZ → big-canvas CSS pixel. */
   private toBig(x: number, z: number): [number, number] {
     const span = this.mapSpan();
-    const S = 512;
+    const S = this.mapS;
     return [((x - (this.mapCx - span / 2)) / span) * S, ((z - (this.mapCz - span / 2)) / span) * S];
+  }
+
+  /** Match the bitmap to the window and device pixels. Drawing stays in CSS pixels. Returns 0 before layout. */
+  private syncBig(): number {
+    const css = this.bigCanvas.clientWidth;
+    if (css < 2) return 0;
+    const px = Math.max(1, Math.round(css * Math.min(devicePixelRatio || 1, 2)));
+    if (this.bigCanvas.width !== px) {
+      this.bigCanvas.width = this.bigCanvas.height = px;
+      this.detailKey = '';
+    }
+    const ctx = this.bigCanvas.getContext('2d')!;
+    ctx.setTransform(px / css, 0, 0, px / css, 0, 0);
+    this.mapS = css;
+    return css;
+  }
+
+  /** Copy a terrain sample into the window. Skip filtering when it is already one pixel per device pixel. */
+  private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number) {
+    ctx.imageSmoothingEnabled = src.width !== this.bigCanvas.width;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(src, 0, 0, S, S);
   }
 
   /** Re-sample the height field for the visible window so zoom shows real terrain, not a stretched bitmap. */
   private renderWindow(): HTMLCanvasElement {
+    // ponytail: 480 px caps the synchronous re-sample at ~1/4 of RES² (922² took ~900 ms and froze the game);
+    // a worker would allow full resolution
+    const RES = Math.min(480, this.bigCanvas.width);
     const c = document.createElement('canvas');
     c.width = c.height = RES;
     const ctx = c.getContext('2d')!;
@@ -219,28 +254,29 @@ export class Minimap {
 
   private drawBig() {
     if (!this.mapWin.visible) return;
+    const S = this.syncBig();
+    if (!S) return;
     const ctx = this.bigCanvas.getContext('2d')!;
     const zoomed = this.mapZoom > 1.08;
-    const dragging = !!this.mapDrag?.moved;
+    const dragging = !!this.mapDrag?.moved || performance.now() - this.wheelAt < 250;
     if (zoomed && !dragging) {
-      const key = `${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
+      const key = `${this.bigCanvas.width}:${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
       if (this.detailKey !== key) {
         this.detailKey = key;
         this.detail = this.renderWindow();
       }
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(this.detail!, 0, 0);
+      this.blitMap(ctx, this.detail!, S);
     } else if (zoomed) {
       // while panning, crop the overview so the drag stays smooth; the sharp sample lands on release
       const src = (this.mapSpan() / (2 * WORLD_HALF)) * RES;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, 512, 512);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, S, S);
     } else {
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(this.img, 0, 0, 512, 512);
+      this.blitMap(ctx, this.img, S);
     }
-    const pxPer = 512 / this.mapSpan();
-    if (zoomed) this.drawStructures(ctx, pxPer);
+    const pxPer = S / this.mapSpan();
+    if (zoomed) this.drawStructures(ctx, pxPer, S);
     ctx.font = 'bold 12px Tahoma, sans-serif';
     ctx.textAlign = 'center';
     for (const z of ZONES) {
@@ -251,7 +287,7 @@ export class Minimap {
       ctx.arc(x, y, z.r * pxPer, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      if (x > -80 && y > -20 && x < 592 && y < 532) this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, x, y);
+      if (x > -80 && y > -20 && x < S + 80 && y < S + 20) this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, x, y);
     }
     ctx.fillStyle = '#ffd966';
     for (const t of TOWNS) {
@@ -303,8 +339,8 @@ export class Minimap {
   }
 
   /** Houses, walls and trees, drawn as shapes so they stay sharp once the map is zoomed in. */
-  private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number) {
-    const seen = (x: number, y: number, m = 8) => x > -m && y > -m && x < 512 + m && y < 512 + m;
+  private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number) {
+    const seen = (x: number, y: number, m = 8) => x > -m && y > -m && x < S + m && y < S + m;
     if (this.mapZoom >= 2.2) {
       ctx.fillStyle = 'rgba(20, 58, 26, 0.85)';
       for (const t of layoutTrees()) {

@@ -1,0 +1,104 @@
+# server-rs/src/clans.rs
+
+- LEADER · constant · L25-L25 — pub const LEADER: u8 = 1;
+- MEMBER · constant · L26-L26 — pub const MEMBER: u8 = 5;
+- P_INVITE · constant · L28-L28 — pub const P_INVITE: u32 = 1;
+- P_DISMISS · constant · L29-L29 — pub const P_DISMISS: u32 = 2;
+- P_TITLE · constant · L30-L30 — pub const P_TITLE: u32 = 4;
+- P_WAREHOUSE · constant · L31-L31 — pub const P_WAREHOUSE: u32 = 8;
+- P_CREST · constant · L32-L32 — pub const P_CREST: u32 = 16;
+- P_WAR · constant · L33-L33 — pub const P_WAR: u32 = 32;
+- P_RANKS · constant · L34-L34 — pub const P_RANKS: u32 = 64;
+- ALL_PRIVS · constant · L35-L35 — const ALL_PRIVS: u32 = 0x7f;
+- ClanMember · struct · L37-L37 — pub struct ClanMember { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub grade: u8, pub title: String }
+- WhItem · struct · L39-L39 — pub struct WhItem { pub id: i64, pub item: String, pub count: i64, pub enchant: i64, pub legacy: bool }
+- WhLog · struct · L41-L41 — pub struct WhLog { pub at: f64, pub who: String, pub dep: bool, pub item: String, pub count: i64, pub enchant: i64 }
+- Clan · struct · L43-L67 — pub struct Clan
+- member · function · L70-L70 — pub fn member(&self, char_id: i64) -> Option<&ClanMember> { self.members.iter().find(|m| m.char_id == char_id) }
+- member_mut · function · L71-L71 — fn member_mut(&mut self, char_id: i64) -> Option<&mut ClanMember> { self.members.iter_mut().find(|m| m.char_id == char_id) }
+- by_name · function · L72-L72 — fn by_name(&self, name: &str) -> Option<&ClanMember> { let l = name.to_lowercase(); self.members.iter().find(|m| m.name.to_lowercase() == l) }
+- can · function · L74-L77 — pub fn can(&self, char_id: i64, privilege: u32) -> bool
+- capacity · function · L78-L78 — pub fn capacity(&self) -> usize { d().clans.levels[self.level as usize].members }
+- mods · function · L80-L92 — pub fn mods(&self) -> ClanMods
+- log · function · L93-L96 — fn log(&mut self, l: WhLog)
+- Ally · struct · L100-L108 — pub struct Ally
+- Clans · struct · L111-L121 — pub struct Clans
+- Rel · enum · L125-L125 — pub enum Rel { None, Friend, War }
+- of · function · L128-L128 — pub fn of(&self, char_id: i64) -> Option<&Clan> { self.by_char.get(&char_id).and_then(|id| self.clans.get(id)) }
+- mutual · function · L129-L129 — pub fn mutual(&self, a: u32, b: u32) -> bool { self.wars.contains(&(a, b)) && self.wars.contains(&(b, a)) }
+- allied · function · L131-L133 — pub fn allied(&self, a: u32, b: u32) -> bool
+- ally_clans · function · L134-L138 — pub fn ally_clans(&self, ally: u32) -> Vec<u32>
+- clan_named · function · L139-L139 — pub fn clan_named(&self, name: &str) -> Option<u32> { self.clans.values().find(|c| c.name.eq_ignore_ascii_case(name.trim())).map(|c| c.id) }
+- fighting · function · L142-L142 — pub fn fighting(&self, id: u32) -> bool { self.wars.iter().any(|&(a, _)| a == id) }
+- relation · function · L143-L149 — pub fn relation(&self, a_char: i64, b_char: i64) -> Rel
+- relation · function · L153-L153 — pub fn relation(a_char: i64, b_char: i64) -> Rel { reg().read().unwrap().relation(a_char, b_char) }
+- REG · constant · L155-L155 — static REG: OnceLock<RwLock<Clans>> = OnceLock::new();
+- ONLINE · constant · L156-L156 — static ONLINE: OnceLock<RwLock<HashMap<i64, (Outbox, Lang)>>> = OnceLock::new();
+- VERSION · constant · L158-L158 — static VERSION: AtomicU64 = AtomicU64::new(1);
+- reg · function · L160-L160 — pub fn reg() -> &'static RwLock<Clans> { REG.get_or_init(|| RwLock::new(load(&Db::open()))) }
+- online · function · L161-L161 — fn online() -> &'static RwLock<HashMap<i64, (Outbox, Lang)>> { ONLINE.get_or_init(|| RwLock::new(HashMap::new())) }
+- version · function · L162-L162 — pub fn version() -> u64 { VERSION.load(Ordering::Relaxed) }
+- changed · function · L163-L163 — fn changed() { VERSION.fetch_add(1, Ordering::Relaxed); }
+- load · function · L165-L207 — fn load(db: &Db) -> Clans
+- cast · function · L210-L215 — fn cast(clan: &Clan, f: impl Fn(Lang) -> Value)
+- cast_except · function · L217-L222 — fn cast_except(clan: &Clan, skip: i64, f: impl Fn(Lang) -> Value)
+- cast_sys · function · L223-L225 — fn cast_sys(clan: &Clan, es: &str, en: &str)
+- to_char · function · L226-L226 — fn to_char(char_id: i64, v: Value) { if let Some((out, _)) = online().read().unwrap().get(&char_id) { out.value(&v); } }
+- info · function · L229-L252 — fn info(r: &Clans, clan: &Clan) -> Value
+- push · function · L254-L254 — fn push(r: &Clans, clan: &Clan) { let v = json!({ "t": "clan", "clan": info(r, clan) }); cast(clan, |_| v.clone()); }
+- push_id · function · L256-L256 — fn push_id(r: &Clans, id: u32) { if let Some(c) = r.clans.get(&id) { push(r, c); } }
+- push_ally · function · L258-L258 — fn push_ally(r: &Clans, ally: u32) { for id in r.ally_clans(ally) { push(r, &r.clans[&id]); } }
+- cast_ally_sys · function · L260-L260 — fn cast_ally_sys(r: &Clans, ally: u32, es: &str, en: &str) { for id in r.ally_clans(ally) { cast_sys(&r.clans[&id], es, en); } }
+- crest_png · function · L263-L269 — pub fn crest_png(file: &str) -> Option<Vec<u8>>
+- on_delete · function · L272-L283 — pub fn on_delete(char_id: i64) -> Result<(), ()>
+- valid_name · function · L286-L290 — fn valid_name(name: &str) -> bool
+- valid_crest · function · L293-L297 — pub fn valid_crest(png: &[u8], w: u32, h: u32, max: usize) -> bool
+- SIG · constant · L294-L294 — const SIG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+- clan_online · function · L303-L319 — pub fn clan_online(&mut self, pid: u32, from_select: bool)
+- clan_offline · function · L322-L329 — pub fn clan_offline(&mut self, char_id: i64, level: i64)
+- refresh_clan_look · function · L332-L350 — fn refresh_clan_look(&mut self, pid: u32) -> bool
+- refresh_clan_looks · function · L353-L360 — pub fn refresh_clan_looks(&mut self)
+- my_clan · function · L362-L362 — fn my_clan(&self, pid: u32) -> Option<u32> { reg().read().unwrap().by_char.get(&self.pl(pid)?.char_id).copied() }
+- clan_create · function · L366-L406 — pub fn clan_create(&mut self, pid: u32, nid: u32, name: &str)
+- clan_invite · function · L408-L435 — pub fn clan_invite(&mut self, pid: u32, name: &str)
+- clan_respond · function · L437-L456 — pub fn clan_respond(&mut self, pid: u32, accept: bool)
+- clan_leave · function · L458-L479 — pub fn clan_leave(&mut self, pid: u32)
+- clan_kick · function · L481-L512 — pub fn clan_kick(&mut self, pid: u32, name: &str)
+- clan_transfer · function · L515-L534 — pub fn clan_transfer(&mut self, pid: u32, name: &str)
+- clan_dissolve · function · L536-L562 — pub fn clan_dissolve(&mut self, pid: u32, nid: u32)
+- clan_level_up · function · L566-L588 — pub fn clan_level_up(&mut self, pid: u32, nid: u32)
+- clan_grade · function · L591-L608 — pub fn clan_grade(&mut self, pid: u32, name: &str, grade: u8)
+- clan_privs · function · L611-L620 — pub fn clan_privs(&mut self, pid: u32, grade: u8, privs: u32)
+- clan_title · function · L622-L636 — pub fn clan_title(&mut self, pid: u32, name: &str, title: &str)
+- clan_crest · function · L639-L658 — pub fn clan_crest(&mut self, pid: u32, b64: &str)
+- clan_rep · function · L661-L674 — pub fn clan_rep(&mut self, pids: &[u32], amount: i64, es: &str, en: &str)
+- clan_chat · function · L677-L683 — pub fn clan_chat(&mut self, pid: u32, msg: &str)
+- clan_send · function · L686-L690 — pub fn clan_send(&self, pid: u32)
+- clan_war · function · L695-L727 — pub fn clan_war(&mut self, pid: u32, name: &str)
+- clan_war_end · function · L730-L746 — pub fn clan_war_end(&mut self, pid: u32, name: &str)
+- clan_war_kill · function · L749-L765 — pub fn clan_war_kill(&mut self, killer: u32, victim: u32)
+- ally_create · function · L770-L796 — pub fn ally_create(&mut self, pid: u32, nid: u32, name: &str)
+- ally_invite · function · L799-L832 — pub fn ally_invite(&mut self, pid: u32, name: &str)
+- ally_respond · function · L834-L852 — pub fn ally_respond(&mut self, pid: u32, accept: bool)
+- ally_leave · function · L855-L876 — pub fn ally_leave(&mut self, pid: u32)
+- ally_kick · function · L879-L905 — pub fn ally_kick(&mut self, pid: u32, name: &str)
+- ally_dissolve · function · L908-L930 — pub fn ally_dissolve(&mut self, pid: u32)
+- ally_crest · function · L933-L952 — pub fn ally_crest(&mut self, pid: u32, b64: &str)
+- ally_chat · function · L955-L961 — pub fn ally_chat(&mut self, pid: u32, msg: &str)
+- wh_clan · function · L966-L975 — fn wh_clan(&self, pid: u32, nid: u32) -> Option<u32>
+- wh_send · function · L978-L985 — fn wh_send(&self, pid: u32, clan_id: u32)
+- clan_wh_open · function · L987-L989 — pub fn clan_wh_open(&mut self, pid: u32, nid: u32)
+- clan_wh_deposit · function · L992-L1022 — pub fn clan_wh_deposit(&mut self, pid: u32, nid: u32, uid: u32, qty: f64)
+- clan_wh_withdraw · function · L1025-L1062 — pub fn clan_wh_withdraw(&mut self, pid: u32, nid: u32, row: i64, qty: f64)
+- clan_wh_adena · function · L1065-L1089 — pub fn clan_wh_adena(&mut self, pid: u32, nid: u32, amount: f64)
+- clan_skill · function · L1094-L1117 — pub fn clan_skill(&mut self, pid: u32, nid: u32, skill: &str)
+- wh_label · function · L1121-L1125 — fn wh_label(item: &str, count: i64, enchant: i64, en: bool) -> String
+- wait · function · L1128-L1132 — fn wait(ms: f64, en: bool) -> String
+- tests · module · L1135-L1221 — mod tests
+- png · function · L1138-L1145 — fn png(w: u32, h: u32, len: usize) -> Vec<u8>
+- crest_checks_size_and_signature · function · L1148-L1155 — fn crest_checks_size_and_signature()
+- names_are_letters_and_digits · function · L1158-L1164 — fn names_are_letters_and_digits()
+- leader_holds_every_privilege · function · L1167-L1182 — fn leader_holds_every_privilege()
+- clan · function · L1184-L1190 — fn clan(id: u32, ally: Option<u32>, member: i64) -> Clan
+- only_a_mutual_war_makes_enemies_and_allies_are_friends · function · L1193-L1209 — fn only_a_mutual_war_makes_enemies_and_allies_are_friends()
+- clan_skills_add_up_by_level · function · L1212-L1220 — fn clan_skills_add_up_by_level()

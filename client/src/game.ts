@@ -29,7 +29,7 @@ import { PostFX } from './render/post';
 import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
-import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
+import { SLOW_MUL, STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -1757,9 +1757,11 @@ export class Game {
       const dx = wp.x - c.pos.x, dz = wp.z - c.pos.z;
       const d = Math.hypot(dx, dz);
       // swimming is slower: predict it with the server's own water cells, or it pulls us back every few metres
-      const step = (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1);
+      // and so are slowed walkers, and stunned ones don't move: the server's step_toward/update_player do the same
+      const step = c.flags & STATUSES.stun.flag ? 0
+        : (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1) * (c.flags & STATUSES.slow.flag ? SLOW_MUL : 1);
       let moving = false;
-      if (d > 0.05) {
+      if (d > 0.05 && step) {
         const k = Math.min(1, step / d);
         const np = pushOut(c.pos.x + dx * k, c.pos.z + dz * k);
         c.pos.x = np.x;

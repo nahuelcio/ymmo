@@ -7,50 +7,55 @@
 - F_PURPLE · constant · L15-L15 — Flag bit for a purple name, shown while a player's PvP timer is active.
 - F_RED · constant · L16-L16 — Flag bit for a red name, shown on karma-carrying (PK) players.
 - F_PVP · constant · L17-L17 — Flag bit that marks a player who has PvP mode toggled on.
-- SLOW_MUL · constant · L18-L18 — Movement-speed multiplier (0.6) applied to entities affected by the 'slow' status.
-- Out · enum · L20-L20 — The two payload kinds a server can push to a client socket: text (JSON) messages or binary snapshots.
-- Outbox · struct · L24-L27 — A player's outbound message queue plus a pending counter used to detect and shed load from slow clients.
-- text · function · L29-L32 — Enqueues a text (JSON) message for a client, counting it toward the congestion backlog.
-- bin · function · L33-L36 — Enqueues a binary (snapshot) payload for a client, counting it toward the congestion backlog.
-- value · function · L38-L40 — pub fn value(&self, v: &Value)
-- congested · function · L42-L42 — Backpressure guard: reports a client as congested once more than 48 messages are queued, letting the loop skip sending it snapshots.
-- ActiveStatus · struct · L46-L46 — One live status effect on an entity: its expiry time, source attacker, damage per tick, and next tick time.
-- Nav · struct · L49-L49 — Movement state for a pathing entity: grid goal, step arrival time, and the remaining path waypoints.
-- Common · struct · L51-L65 — State shared by every world entity regardless of kind: position, heading, dead/hidden/moving flags, spatial cell, pathing, and active statuses.
-- new · function · L67-L69 — Creates default entity state with a sentinel cell so the first tick forces the entity into the spatial grid.
-- has · function · L70-L70 — Tells whether a named status effect is currently active by checking its expiry against game time.
-- speed_mul · function · L71-L71 — Returns the movement-speed multiplier for an entity, cutting it to 0.6x while slowed.
-- base_flags · function · L72-L78 — Builds the base client-visible flag word for an entity: dead/moving bits plus a bit for every status still unexpired.
-- InvItem · struct · L83-L83 — A single inventory entry: unique instance id, item definition, stack count, and the slot it is equipped in (if any).
-- Intent · enum · L86-L92 — The set of actions a player can have queued for the tick loop: move, attack, skill, pickup, or talk.
-- Buff · struct · L94-L94 — A timed buff on a player, carrying its stat modifiers until it expires.
-- Look · struct · L97-L97 — Character appearance data: gender, hair style, and hair color.
-- gender · function · L99-L99 — Maps the appearance gender char to the 'f'/'m' string that stat computation expects.
-- sanitize · function · L100-L105 — Turns client-supplied appearance JSON into a safe Look, rejecting out-of-range hair style/color values and defaulting them to 0.
-- Player · struct · L108-L154 — Full runtime state of a player character: connection/output, combat and cast timers, party and quest tracking, interest-management caches, inventory, and persistent character fields.
-- one_way · function · L157-L157 — Estimates the player's one-way network latency (half RTT, capped at 150 ms) for lag-aware combat validation.
-- send · function · L158-L158 — Serializes a JSON value and queues it as a text message on the player's outbox.
-- equipped_in · function · L159-L159 — Finds the inventory item currently equipped in a given slot, if any.
-- recalc · function · L160-L168 — Recomputes the player's stats from race/class/level, equipped items, and buffs, then clamps current hp/mp/cp to the new maxima.
-- hp_pct · function · L169-L169 — The player's current HP as a rounded percentage of max HP, used for client health bars and thresholds.
-- name_color · function · L170-L170 — Name-color rule: red (2) for karma carriers, purple (1) while the PvP timer is active, otherwise normal (0).
-- quest · function · L171-L171 — Looks up the player's state entry for a quest by id.
-- quest_mut · function · L172-L172 — Mutable lookup of a quest entry by id so quest progress can be updated in place.
-- Mob · struct · L175-L199 — Monster runtime state: its static template and stats, combat targets with hate/threat lists, AI timers (taunt, wander, special, respawn), and its spawn-home position.
-- map_get · function · L202-L202 — Reads an attacker's hate/threat value from the insertion-ordered list that mimics a JS Map.
-- map_add · function · L203-L205 — Accumulates hate/threat for an attacker, creating the entry if it does not exist yet.
-- map_set · function · L206-L208 — Overwrites an attacker's hate/threat value, creating the entry if missing (e.g. after taunt).
-- map_del · function · L209-L209 — Removes an attacker's hate/threat entry when it leaves combat or dies.
-- new · function · L212-L219 — Spawns a mob from its template at full HP with empty hate lists, remembering the spawn point as its home for leashing.
-- hp_pct · function · L220-L220 — The mob's HP as a rounded percentage of max, used for aggro phase changes and client bars.
-- Npc · struct · L223-L223 — Non-hostile NPC state: its static definition plus the next time it may emit chatter.
-- GroundItem · struct · L225-L233 — A loot drop lying on the world floor, with its item/count, optional owner-pickup lock and expiry, and camp ownership.
-- Kind · enum · L235-L235 — Discriminates which concrete kind of world entity (player, mob, npc, or ground item) an Ent wraps.
-- Ent · struct · L237-L237 — The universal world entity pairing shared positional/state data with its kind-specific payload.
-- player · function · L240-L240 — Downcasts the entity to its Player payload when it is a player.
-- player_mut · function · L241-L241 — Mutable downcast to the Player payload so systems can mutate player state.
-- mob · function · L242-L242 — Downcasts the entity to its Mob payload when it is a monster.
-- mob_mut · function · L243-L243 — Mutable downcast to the Mob payload so combat/AI systems can mutate monster state.
-- is_fighter · function · L244-L244 — Tells whether the entity can participate in combat (players and mobs, but not NPCs or ground items).
-- hp_pct · function · L245-L247 — An entity's HP percentage for combat logic, delegating to the player/mob value and defaulting to 100 for non-fighters.
-- flags · function · L248-L259 — Computes the full client-visible flag word: base dead/moving/status bits plus kind-specific ones (casting, combat window, name color, PvP for players; combat while a mob has a target).
+- F_SITTING · constant · L19-L19 — pub const F_SITTING: u16 = 2048;
+- F_GATHER · constant · L21-L21 — pub const F_GATHER: u16 = 4096;
+- SLOW_MUL · constant · L22-L22 — Movement-speed multiplier (0.6) applied to entities affected by the 'slow' status.
+- Out · enum · L24-L24 — The two payload kinds a server can push to a client socket: text (JSON) messages or binary snapshots.
+- Outbox · struct · L28-L31 — A player's outbound message queue plus a pending counter used to detect and shed load from slow clients.
+- text · function · L33-L36 — Enqueues a text (JSON) message for a client, counting it toward the congestion backlog.
+- bin · function · L37-L40 — Enqueues a binary (snapshot) payload for a client, counting it toward the congestion backlog.
+- value · function · L42-L44 — pub fn value(&self, v: &Value)
+- congested · function · L46-L46 — Backpressure guard: reports a client as congested once more than 48 messages are queued, letting the loop skip sending it snapshots.
+- ActiveStatus · struct · L50-L50 — One live status effect on an entity: its expiry time, source attacker, damage per tick, and next tick time.
+- Nav · struct · L53-L53 — Movement state for a pathing entity: grid goal, step arrival time, and the remaining path waypoints.
+- Common · struct · L55-L69 — State shared by every world entity regardless of kind: position, heading, dead/hidden/moving flags, spatial cell, pathing, and active statuses.
+- new · function · L71-L73 — Creates default entity state with a sentinel cell so the first tick forces the entity into the spatial grid.
+- has · function · L74-L74 — Tells whether a named status effect is currently active by checking its expiry against game time.
+- speed_mul · function · L75-L75 — Returns the movement-speed multiplier for an entity, cutting it to 0.6x while slowed.
+- base_flags · function · L76-L82 — Builds the base client-visible flag word for an entity: dead/moving bits plus a bit for every status still unexpired.
+- InvItem · struct · L87-L91 — A single inventory entry: unique instance id, item definition, stack count, and the slot it is equipped in (if any).
+- is_false · function · L92-L92 — fn is_false(b: &bool) -> bool { !*b }
+- Intent · enum · L95-L103 — The set of actions a player can have queued for the tick loop: move, attack, skill, pickup, or talk.
+- Buff · struct · L105-L105 — A timed buff on a player, carrying its stat modifiers until it expires.
+- Look · struct · L108-L108 — Character appearance data: gender, hair style, and hair color.
+- gender · function · L110-L110 — Maps the appearance gender char to the 'f'/'m' string that stat computation expects.
+- sanitize · function · L111-L116 — Turns client-supplied appearance JSON into a safe Look, rejecting out-of-range hair style/color values and defaulting them to 0.
+- ClanMods · struct · L121-L121 — pub struct ClanMods { pub max_hp: f64, pub max_mp: f64, pub p_def: f64, pub m_def: f64, pub p_atk: f64, pub m_atk: f64, pub speed: f64, pub mp_regen: f64 }
+- ClanLook · struct · L125-L125 — pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver: u32, /** alliance id and crest version */ pub ally: Option<(u32, u32)> }
+- Player · struct · L127-L189 — Full runtime state of a player character: connection/output, combat and cast timers, party and quest tracking, interest-management caches, inventory, and persistent character fields.
+- one_way · function · L192-L192 — Estimates the player's one-way network latency (half RTT, capped at 150 ms) for lag-aware combat validation.
+- send · function · L193-L193 — Serializes a JSON value and queues it as a text message on the player's outbox.
+- equipped_in · function · L194-L194 — Finds the inventory item currently equipped in a given slot, if any.
+- recalc · function · L195-L214 — Recomputes the player's stats from race/class/level, equipped items, and buffs, then clamps current hp/mp/cp to the new maxima.
+- hp_pct · function · L215-L215 — The player's current HP as a rounded percentage of max HP, used for client health bars and thresholds.
+- name_color · function · L216-L216 — Name-color rule: red (2) for karma carriers, purple (1) while the PvP timer is active, otherwise normal (0).
+- quest · function · L217-L217 — Looks up the player's state entry for a quest by id.
+- quest_mut · function · L218-L218 — Mutable lookup of a quest entry by id so quest progress can be updated in place.
+- Mob · struct · L221-L245 — Monster runtime state: its static template and stats, combat targets with hate/threat lists, AI timers (taunt, wander, special, respawn), and its spawn-home position.
+- map_get · function · L248-L248 — Reads an attacker's hate/threat value from the insertion-ordered list that mimics a JS Map.
+- map_add · function · L249-L251 — Accumulates hate/threat for an attacker, creating the entry if it does not exist yet.
+- map_set · function · L252-L254 — Overwrites an attacker's hate/threat value, creating the entry if missing (e.g. after taunt).
+- map_del · function · L255-L255 — Removes an attacker's hate/threat entry when it leaves combat or dies.
+- new · function · L258-L265 — Spawns a mob from its template at full HP with empty hate lists, remembering the spawn point as its home for leashing.
+- hp_pct · function · L266-L266 — The mob's HP as a rounded percentage of max, used for aggro phase changes and client bars.
+- Npc · struct · L269-L269 — Non-hostile NPC state: its static definition plus the next time it may emit chatter.
+- GroundItem · struct · L271-L279 — A loot drop lying on the world floor, with its item/count, optional owner-pickup lock and expiry, and camp ownership.
+- Kind · enum · L281-L281 — Discriminates which concrete kind of world entity (player, mob, npc, or ground item) an Ent wraps.
+- Ent · struct · L283-L283 — The universal world entity pairing shared positional/state data with its kind-specific payload.
+- player · function · L286-L286 — Downcasts the entity to its Player payload when it is a player.
+- player_mut · function · L287-L287 — Mutable downcast to the Player payload so systems can mutate player state.
+- mob · function · L288-L288 — Downcasts the entity to its Mob payload when it is a monster.
+- mob_mut · function · L289-L289 — Mutable downcast to the Mob payload so combat/AI systems can mutate monster state.
+- is_fighter · function · L290-L290 — Tells whether the entity can participate in combat (players and mobs, but not NPCs or ground items).
+- hp_pct · function · L291-L293 — An entity's HP percentage for combat logic, delegating to the player/mob value and defaulting to 100 for non-fighters.
+- flags · function · L294-L306 — Computes the full client-visible flag word: base dead/moving/status bits plus kind-specific ones (casting, combat window, name color, PvP for players; combat while a mob has a target).

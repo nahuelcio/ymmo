@@ -1,0 +1,31 @@
+# client/src/ui/clan.ts
+
+- gradeName · function · L20-L21 — gradeName = (g: number)
+- ClanPanel · class · L23-L270 — class ClanPanel
+- constructor · method · L28-L31 — constructor(private g: Game, root: HTMLElement)
+- toggle · method · L33-L33 — toggle()
+- set · method · L35-L39 — set(c: ClanInfo | null)
+- me · method · L42-L42 — me()
+- can · method · L43-L47 — can(p: ClanPriv): boolean
+- render · method · L49-L71 — private render()
+- renderInfo · method · L73-L105 — private renderInfo(c: ClanInfo, b: HTMLElement)
+- row · function · L79-L79 — row = (k: string, v: string)
+- renderMembers · method · L107-L156 — private renderMembers(c: ClanInfo, b: HTMLElement)
+- renderWars · method · L158-L193 — private renderWars(c: ClanInfo, b: HTMLElement)
+- renderAlly · method · L195-L247 — private renderAlly(c: ClanInfo, b: HTMLElement)
+- renderPrivs · method · L249-L269 — private renderPrivs(c: ClanInfo, b: HTMLElement)
+- renderClanNpc · function · L273-L339 — function renderClanNpc(g: Game, m: Extract<S2C, { t: 'npc' }>, b: HTMLElement)
+- itemLabel · function · L341-L341 — itemLabel = (id: string)
+- skillLabel · function · L342-L342 — skillLabel = (s: ClanSkill)
+- bonusText · function · L347-L347 — bonusText = (s: ClanSkill, lv: number)
+- ClanWarehouse · class · L350-L448 — class ClanWarehouse
+- constructor · method · L356-L358 — constructor(private g: Game, root: HTMLElement)
+- open · method · L360-L363 — open(npc: number)
+- set · method · L365-L369 — set(m: Extract<S2C, { t: 'clanWh' }>)
+- onInv · method · L372-L372 — onInv()
+- render · method · L374-L428 — private render()
+- itemRow · method · L430-L436 — private itemRow(list: HTMLElement, id: string, c: number, e: number, legacy = false)
+- qty · method · L438-L447 — private qty(row: HTMLElement, max: number)
+- clampQty · function · L450-L450 — clampQty = (q: HTMLInputElement, max: number)
+- hours · function · L451-L451 — hours = (ms: number)
+- pickCrest · function · L454-L475 — function pickCrest(w: number, h: number, done: (png: string) => void)
