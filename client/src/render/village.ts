@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
 import { bumpNormal, relief } from './textures';
@@ -230,7 +231,7 @@ function dropFlagpoles(geo: THREE.BufferGeometry): THREE.BufferGeometry {
 
 export function loadV(): Promise<void> {
   return (loading ??= (async () => {
-    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
     const gltfs = await Promise.all(V_PIECES.map((f) => loader.loadAsync(`v/${f}.gltf`)));
     const sources = new Map<string, THREE.Texture['source']>();
     V_PIECES.forEach((name, i) => {

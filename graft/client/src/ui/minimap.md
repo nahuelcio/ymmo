@@ -6,31 +6,31 @@
 - hAt · function · L39-L39 — Clamped lookup into the precomputed height grid so the relief shading can sample neighboring pixels without falling off the map edges.
 - css · function · L57-L57 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
 - toMap · function · L59-L59 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
-- Minimap · class · L61-L633 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
-- constructor · method · L84-L163 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
-- mapSpan · method · L166-L168 — private mapSpan()
-- clampMap · method · L170-L174 — private clampMap(v: number)
-- worldAt · method · L177-L182 — private worldAt(px: number, py: number): [number, number]
-- toBig · method · L185-L189 — private toBig(x: number, z: number): [number, number]
-- syncBig · method · L192-L204 — private syncBig(): number
-- blitMap · method · L207-L211 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
-- renderWindow · method · L214-L239 — private renderWindow(): HTMLCanvasElement
-- at · function · L221-L221 — at = (i: number)
-- hAt · function · L224-L224 — hAt = (i: number, j: number)
-- toggleMap · method · L241-L244 — Opens or closes the big world-map window and repaints it when shown.
-- drawBig · method · L246-L330 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
-- drawStructures · method · L333-L393 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
-- seen · function · L334-L334 — seen = (x: number, y: number, m = 8)
-- strokeWall · function · L349-L356 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L362-L372 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
-- campIcon · method · L396-L411 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
-- drawRoute · method · L414-L447 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
-- label · method · L449-L454 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
-- arrow · method · L456-L473 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
-- update · method · L475-L632 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
-- toC · function · L500-L500 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
-- seen · function · L502-L502 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
-- strokeWall · function · L515-L522 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L528-L538 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
-- disc · function · L549-L557 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
-- questMob · function · L596-L596 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.
+- Minimap · class · L61-L642 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
+- constructor · method · L86-L169 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
+- mapSpan · method · L172-L174 — private mapSpan()
+- clampMap · method · L176-L180 — private clampMap(v: number)
+- worldAt · method · L183-L188 — private worldAt(px: number, py: number): [number, number]
+- toBig · method · L191-L195 — private toBig(x: number, z: number): [number, number]
+- syncBig · method · L198-L210 — private syncBig(): number
+- blitMap · method · L213-L217 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
+- renderWindow · method · L220-L248 — private renderWindow(): HTMLCanvasElement
+- at · function · L230-L230 — at = (i: number)
+- hAt · function · L233-L233 — hAt = (i: number, j: number)
+- toggleMap · method · L250-L253 — Opens or closes the big world-map window and repaints it when shown.
+- drawBig · method · L255-L339 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
+- drawStructures · method · L342-L402 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
+- seen · function · L343-L343 — seen = (x: number, y: number, m = 8)
+- strokeWall · function · L358-L365 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L371-L381 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
+- campIcon · method · L405-L420 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
+- drawRoute · method · L423-L456 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
+- label · method · L458-L463 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
+- arrow · method · L465-L482 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
+- update · method · L484-L641 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
+- toC · function · L509-L509 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
+- seen · function · L511-L511 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
+- strokeWall · function · L524-L531 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L537-L547 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
+- disc · function · L558-L566 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
+- questMob · function · L605-L605 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.

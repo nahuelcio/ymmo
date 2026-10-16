@@ -3,6 +3,7 @@
 // hash of its content instead (computed at build time, client/vite.config.ts), so a changed file is a new URL and
 // the server can let browsers keep each version for good. Imported first thing by main.ts.
 import * as THREE from 'three';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 
 declare const __ASSET_HASHES__: Record<string, string>;
 const HASHES: Record<string, string> = __ASSET_HASHES__;
@@ -20,3 +21,20 @@ export function versioned(url: string): string {
 
 // every three.js loader (glTF, its .bin buffers and textures) goes through the default manager
 THREE.DefaultLoadingManager.setURLModifier(versioned);
+
+let ktx2: KTX2Loader | null = null;
+/**
+ * The KTX2 loader the glTF loaders hand compressed colour maps to (tools/scripts/ktx2.mjs). Its WASM Basis
+ * transcoder (client/public/basis, copied from three/examples/jsm/libs/basis) picks the format this GPU reads
+ * compressed: ASTC or ETC2 on phones, BC7/DXT on PCs, plain RGBA as the last resort. The models load before the
+ * game's renderer exists, so support is read off a throwaway context.
+ */
+export function basis(): KTX2Loader {
+  if (!ktx2) {
+    const r = new THREE.WebGLRenderer();
+    ktx2 = new KTX2Loader().setTranscoderPath(`${import.meta.env.BASE_URL}basis/`).detectSupport(r);
+    r.dispose();
+    r.forceContextLoss();
+  }
+  return ktx2;
+}

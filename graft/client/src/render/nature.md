@@ -1,23 +1,23 @@
 # client/src/render/nature.ts
 
-- Mode · type · L32-L32 — type Mode = 'bark' | 'leaves' | 'bush' | 'grass' | 'flower' | 'rock';
-- Prim · interface · L42-L42 — interface Prim
-- natureReady · function · L49-L49 — natureReady = ()
-- pick · function · L61-L63 — function pick<T>(list: readonly T[], u: number): T
-- fileOf · function · L65-L68 — function fileOf(map: THREE.Texture): string
-- modeOf · function · L70-L77 — function modeOf(piece: string, matName: string): Mode
-- bake · function · L79-L94 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
-- ground · function · L97-L108 — function ground(list: Prim[])
-- fitRock · function · L111-L121 — function fitRock(geo: THREE.BufferGeometry)
-- material · function · L123-L144 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
-- loadNature · function · L146-L168 — function loadNature(): Promise<void>
-- Item · interface · L170-L170 — interface Item
-- chunked · function · L173-L206 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
-- spawn · function · L213-L219 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number): Item[]
-- buildNatureTrees · function · L221-L235 — function buildNatureTrees(): THREE.Group
-- buildNatureRocks · function · L237-L247 — function buildNatureRocks(): THREE.Group
-- buildNatureBushes · function · L251-L261 — function buildNatureBushes(): THREE.Group
-- natureDetailCell · function · L266-L289 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
-- buildNatureTown · function · L292-L334 — function buildNatureTown(): THREE.Group
-- place · function · L295-L298 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
-- world · function · L299-L302 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)
+- Mode · type · L33-L33 — type Mode = 'bark' | 'leaves' | 'bush' | 'grass' | 'flower' | 'rock';
+- Prim · interface · L43-L43 — interface Prim
+- natureReady · function · L50-L50 — natureReady = ()
+- pick · function · L62-L64 — function pick<T>(list: readonly T[], u: number): T
+- fileOf · function · L66-L69 — function fileOf(map: THREE.Texture): string
+- modeOf · function · L71-L78 — function modeOf(piece: string, matName: string): Mode
+- bake · function · L80-L95 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
+- ground · function · L98-L109 — function ground(list: Prim[])
+- fitRock · function · L112-L122 — function fitRock(geo: THREE.BufferGeometry)
+- material · function · L124-L145 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
+- loadNature · function · L147-L169 — function loadNature(): Promise<void>
+- Item · interface · L171-L171 — interface Item
+- chunked · function · L174-L207 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
+- spawn · function · L214-L220 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number): Item[]
+- buildNatureTrees · function · L222-L236 — function buildNatureTrees(): THREE.Group
+- buildNatureRocks · function · L238-L248 — function buildNatureRocks(): THREE.Group
+- buildNatureBushes · function · L252-L262 — function buildNatureBushes(): THREE.Group
+- natureDetailCell · function · L267-L290 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
+- buildNatureTown · function · L293-L335 — function buildNatureTown(): THREE.Group
+- place · function · L296-L299 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
+- world · function · L300-L303 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)

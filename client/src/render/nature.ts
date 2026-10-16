@@ -2,6 +2,7 @@
 // Assets: client/public/n (tools/scripts/n-assets.ts). Procedural props stay as the fallback.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { biomeWeight, heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
@@ -145,7 +146,7 @@ function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial {
 
 export function loadNature(): Promise<void> {
   return (loading ??= (async () => {
-    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
     const gltfs = await Promise.all(PIECES.map((f) => loader.loadAsync(`n/${f}.gltf`)));
     PIECES.forEach((name, i) => {
       const root = gltfs[i].scene;

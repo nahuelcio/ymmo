@@ -1,0 +1,188 @@
+# client/public/basis/basis_transcoder.js
+
+- ___cxa_is_pointer_type · function · L9-L9 — ___cxa_is_pointer_type=a0
+- ___cxa_throw · function · L9-L9 — ___cxa_throw=(ptr,type,destructor)
+- ___getTypeName · function · L9-L9 — ___getTypeName=a0
+- ___wasm_call_ctors · function · L9-L9 — ___wasm_call_ctors=()
+- __abort_js · function · L9-L9 — __abort_js=()
+- __embind_finalize_value_object · function · L9-L9 — __embind_finalize_value_object=structType
+- __embind_register_bigint · function · L9-L9 — __embind_register_bigint=(primitiveType,name,size,minRange,maxRange)
+- __embind_register_bool · function · L9-L9 — __embind_register_bool=(rawType,name,trueValue,falseValue)
+- __embind_register_class · function · L9-L9 — __embind_register_class=(rawType,rawPointerType,rawConstPointerType,baseClassRawType,getActualTypeSignature,getActualType,upcastSignature,upcast,downcastSignature,downcast,name,destructorSignature,rawDestructor)
+- __embind_register_class_constructor · function · L9-L9 — __embind_register_class_constructor=(rawClassType,argCount,rawArgTypesAddr,invokerSignature,invoker,rawConstructor)
+- __embind_register_class_function · function · L9-L9 — __embind_register_class_function=(rawClassType,methodName,argCount,rawArgTypesAddr,invokerSignature,rawInvoker,context,isPureVirtual,isAsync)
+- __embind_register_constant · function · L9-L9 — __embind_register_constant=(name,type,value)
+- __embind_register_emval · function · L9-L9 — __embind_register_emval=rawType
+- __embind_register_enum · function · L9-L9 — __embind_register_enum=(rawType,name,size,isSigned)
+- __embind_register_enum_value · function · L9-L9 — __embind_register_enum_value=(rawEnumType,name,enumValue)
+- __embind_register_float · function · L9-L9 — __embind_register_float=(rawType,name,size)
+- __embind_register_function · function · L9-L9 — __embind_register_function=(name,argCount,rawArgTypesAddr,signature,rawInvoker,fn,isAsync)
+- __embind_register_integer · function · L9-L9 — __embind_register_integer=(primitiveType,name,size,minRange,maxRange)
+- __embind_register_memory_view · function · L9-L9 — __embind_register_memory_view=(rawType,dataTypeIndex,name)
+- __embind_register_std_string · function · L9-L9 — __embind_register_std_string=(rawType,name)
+- __embind_register_std_wstring · function · L9-L9 — __embind_register_std_wstring=(rawType,charSize,name)
+- __embind_register_value_object · function · L9-L9 — __embind_register_value_object=(rawType,name,constructorSignature,rawConstructor,destructorSignature,rawDestructor)
+- __embind_register_value_object_field · function · L9-L9 — __embind_register_value_object_field=(structType,fieldName,getterReturnType,getterSignature,getter,getterContext,setterArgumentType,setterSignature,setter,setterContext)
+- __embind_register_void · function · L9-L9 — __embind_register_void=(rawType,name)
+- __emscripten_memcpy_js · function · L9-L9 — __emscripten_memcpy_js=(dest,src,num)
+- __emval_as · function · L9-L9 — __emval_as=(handle,returnType,destructorsRef)
+- __emval_call · function · L9-L9 — __emval_call=(caller,handle,destructorsRef,args)
+- __emval_call_method · function · L9-L9 — __emval_call_method=(caller,objHandle,methodName,destructorsRef,args)
+- __emval_decref · function · L9-L9 — __emval_decref=handle
+- __emval_get_global · function · L9-L9 — __emval_get_global=name
+- __emval_get_method_caller · function · L9-L9 — __emval_get_method_caller=(argCount,argTypes,kind)
+- __emval_get_module_property · function · L9-L9 — __emval_get_module_property=name
+- __emval_get_property · function · L9-L9 — __emval_get_property=(handle,key)
+- __emval_incref · function · L9-L9 — __emval_incref=handle
+- __emval_new_cstring · function · L9-L9 — __emval_new_cstring=v
+- __emval_run_destructors · function · L9-L9 — __emval_run_destructors=handle
+- _emscripten_resize_heap · function · L9-L9 — _emscripten_resize_heap=requestedSize
+- _fd_close · function · L9-L9 — _fd_close=fd
+- _fd_seek · function · L9-L9 — function _fd_seek(fd,offset_low,offset_high,whence,newOffset)
+- _fd_write · function · L9-L9 — _fd_write=(fd,iov,iovcnt,pnum)
+- _free · function · L9-L9 — _free=a0
+- _malloc · function · L9-L9 — _malloc=a0
+- abort · function · L9-L9 — function abort(what)
+- addOnInit · function · L9-L9 — function addOnInit(cb)
+- addOnPostRun · function · L9-L9 — function addOnPostRun(cb)
+- addOnPreRun · function · L9-L9 — function addOnPreRun(cb)
+- addRunDependency · function · L9-L9 — function addRunDependency(id)
+- alignUp · function · L9-L9 — alignUp=(x,multiple)
+- attachFinalizer · function · L9-L9 — attachFinalizer=handle
+- callRuntimeCallbacks · function · L9-L9 — callRuntimeCallbacks=callbacks
+- checkAssertions · function · L9-L9 — checkAssertions=(value,toTypeName)
+- ClassHandle · function · L9-L9 — function ClassHandle()
+- clone · method · L9-L9 — clone()
+- constNoSmartPtrRawPointerToWireType · function · L9-L9 — function constNoSmartPtrRawPointerToWireType(destructors,handle)
+- constructor · method · L9-L9 — constructor(excPtr)
+- constructor · method · L9-L9 — constructor(message)
+- constructor · method · L9-L9 — constructor(message)
+- convertI32PairToI53Checked · function · L9-L9 — convertI32PairToI53Checked=(lo,hi)
+- count_emval_handles · function · L9-L9 — count_emval_handles=()
+- craftInvokerFunction · function · L9-L9 — function craftInvokerFunction(humanName,argTypes,classType,cppInvokerFunc,cppTargetFunc,isAsync)
+- createJsInvoker · function · L9-L9 — function createJsInvoker(argTypes,isClassMethodFunc,returns,isAsync)
+- createNamedFunction · function · L9-L9 — createNamedFunction=(name,body)
+- createWasm · function · L9-L9 — function createWasm()
+- ctor · function · L9-L9 — function ctor()
+- decodeMemoryView · function · L9-L9 — function decodeMemoryView(handle)
+- delete · method · L9-L9 — delete()
+- deleteLater · method · L9-L9 — deleteLater()
+- destructor · method · L9-L9 — destructor(ptr)
+- destructorFunction · method · L9-L9 — destructorFunction(ptr)
+- destructorFunction · method · L9-L9 — destructorFunction(ptr)
+- detachFinalizer · function · L9-L9 — detachFinalizer=handle
+- doRun · function · L9-L9 — function doRun()
+- downcastPointer · function · L9-L9 — downcastPointer=(ptr,ptrClass,desiredClass)
+- dynCall · function · L9-L9 — dynCall=(sig,ptr,args=[])
+- dynCallLegacy · function · L9-L9 — dynCallLegacy=(sig,ptr,args)
+- embind__requireFunction · function · L9-L9 — embind__requireFunction=(signature,rawFunction)
+- embind_init_charCodes · function · L9-L9 — embind_init_charCodes=()
+- embindRepr · function · L9-L9 — embindRepr=v
+- emval_addMethodCaller · function · L9-L9 — emval_addMethodCaller=caller
+- emval_get_global · function · L9-L9 — emval_get_global=()
+- emval_lookupTypes · function · L9-L9 — emval_lookupTypes=(argCount,argTypes)
+- emval_returnValue · function · L9-L9 — emval_returnValue=(returnType,destructorsRef,handle)
+- ensureOverloadTable · function · L9-L9 — ensureOverloadTable=(proto,methodName,humanName)
+- enumReadValueFromPointer · function · L9-L9 — enumReadValueFromPointer=(name,width,signed)
+- ExceptionInfo · class · L9-L9 — class ExceptionInfo
+- exposePublicSymbol · function · L9-L9 — exposePublicSymbol=(name,value,numArguments)
+- extendError · function · L9-L9 — extendError=(baseErrorType,errorName)
+- findWasmBinary · function · L9-L9 — function findWasmBinary()
+- floatReadValueFromPointer · function · L9-L9 — floatReadValueFromPointer=(name,width)
+- flushPendingDeletes · function · L9-L9 — flushPendingDeletes=()
+- fromWireType · function · L9-L9 — fromWireType=value
+- fromWireType · method · L9-L9 — fromWireType(value)
+- genericPointerToWireType · function · L9-L9 — function genericPointerToWireType(destructors,handle)
+- get_adjusted_ptr · method · L9-L9 — get_adjusted_ptr()
+- get_caught · method · L9-L9 — get_caught()
+- get_destructor · method · L9-L9 — get_destructor()
+- get_exception_ptr · method · L9-L9 — get_exception_ptr()
+- get_rethrown · method · L9-L9 — get_rethrown()
+- get_type · method · L9-L9 — get_type()
+- getBasestPointer · function · L9-L9 — getBasestPointer=(class_,ptr)
+- getBinaryPromise · function · L9-L9 — function getBinaryPromise(binaryFile)
+- getBinarySync · function · L9-L9 — function getBinarySync(file)
+- getDynCaller · function · L9-L9 — getDynCaller=(sig,ptr)
+- getFunctionName · function · L9-L9 — getFunctionName=signature
+- getHeapMax · function · L9-L9 — getHeapMax=()
+- getInheritedInstance · function · L9-L9 — getInheritedInstance=(class_,ptr)
+- getInheritedInstanceCount · function · L9-L9 — getInheritedInstanceCount=()
+- getInstanceTypeName · function · L9-L9 — function getInstanceTypeName(handle)
+- getLiveInheritedInstances · function · L9-L9 — getLiveInheritedInstances=()
+- getPointee · method · L9-L9 — getPointee(ptr)
+- getStringOrSymbol · function · L9-L9 — getStringOrSymbol=address
+- getTypeName · function · L9-L9 — getTypeName=type
+- getWasmImports · function · L9-L9 — function getWasmImports()
+- getWasmTableEntry · function · L9-L9 — getWasmTableEntry=funcPtr
+- growMemory · function · L9-L9 — growMemory=size
+- heap32VectorToArray · function · L9-L9 — heap32VectorToArray=(count,firstElement)
+- init · method · L9-L9 — init(type,destructor)
+- init_ClassHandle · function · L9-L9 — init_ClassHandle=()
+- init_embind · function · L9-L9 — init_embind=()
+- init_emval · function · L9-L9 — init_emval=()
+- init_RegisteredPointer · function · L9-L9 — init_RegisteredPointer=()
+- initRuntime · function · L9-L9 — function initRuntime()
+- instantiateArrayBuffer · function · L9-L9 — function instantiateArrayBuffer(binaryFile,imports,receiver)
+- instantiateAsync · function · L9-L9 — function instantiateAsync(binary,binaryFile,imports,callback)
+- integerReadValueFromPointer · function · L9-L9 — integerReadValueFromPointer=(name,width,signed)
+- isAliasOf · method · L9-L9 — isAliasOf(other)
+- isDataURI · function · L9-L9 — isDataURI=filename
+- isDeleted · method · L9-L9 — isDeleted()
+- isFileURI · function · L9-L9 — isFileURI=filename
+- lengthBytesUTF16 · function · L9-L9 — lengthBytesUTF16=str
+- lengthBytesUTF32 · function · L9-L9 — lengthBytesUTF32=str
+- lengthBytesUTF8 · function · L9-L9 — lengthBytesUTF8=str
+- locateFile · function · L9-L9 — function locateFile(path)
+- makeClassHandle · function · L9-L9 — makeClassHandle=(prototype,record)
+- makeDefaultHandle · function · L9-L9 — function makeDefaultHandle()
+- makeDynCaller · function · L9-L9 — function makeDynCaller()
+- makeLegalFunctionName · function · L9-L9 — makeLegalFunctionName=name
+- newFunc · function · L9-L9 — function newFunc(constructor,argumentList)
+- nonConstNoSmartPtrRawPointerToWireType · function · L9-L9 — function nonConstNoSmartPtrRawPointerToWireType(destructors,handle)
+- onComplete · function · L9-L9 — function onComplete(typeConverters)
+- postRun · function · L9-L9 — function postRun()
+- preRun · function · L9-L9 — function preRun()
+- printChar · function · L9-L9 — printChar=(stream,curr)
+- quit_ · function · L9-L9 — quit_=(status,toThrow)
+- readLatin1String · function · L9-L9 — readLatin1String=ptr
+- readPointer · function · L9-L9 — function readPointer(pointer)
+- receiveInstance · function · L9-L9 — function receiveInstance(instance,module)
+- receiveInstantiationResult · function · L9-L9 — function receiveInstantiationResult(result)
+- RegisteredClass · function · L9-L9 — function RegisteredClass(name,constructor,instancePrototype,rawDestructor,baseClass,getActualType,upcast,downcast)
+- RegisteredPointer · function · L9-L9 — function RegisteredPointer(name,registeredClass,isReference,isConst,isSmartPointer,pointeeType,sharingPolicy,rawGetPointee,rawConstructor,rawShare,rawDestructor)
+- RegisteredPointer_fromWireType · function · L9-L9 — function RegisteredPointer_fromWireType(ptr)
+- registerType · function · L9-L9 — function registerType(rawType,registeredInstance,options={})
+- releaseClassHandle · function · L9-L9 — releaseClassHandle=$$
+- removeRunDependency · function · L9-L9 — function removeRunDependency(id)
+- replacePublicSymbol · function · L9-L9 — replacePublicSymbol=(name,value,numArguments)
+- requireRegisteredType · function · L9-L9 — requireRegisteredType=(rawType,humanName)
+- run · function · L9-L9 — function run()
+- runDestructor · function · L9-L9 — runDestructor=$$
+- runDestructors · function · L9-L9 — runDestructors=destructors
+- set_adjusted_ptr · method · L9-L9 — set_adjusted_ptr(adjustedPtr)
+- set_caught · method · L9-L9 — set_caught(caught)
+- set_destructor · method · L9-L9 — set_destructor(destructor)
+- set_rethrown · method · L9-L9 — set_rethrown(rethrown)
+- set_type · method · L9-L9 — set_type(type)
+- setDelayFunction · function · L9-L9 — setDelayFunction=fn
+- shallowCopyInternalPointer · function · L9-L9 — shallowCopyInternalPointer=o
+- sharedRegisterType · function · L9-L9 — function sharedRegisterType(rawType,registeredInstance,options={})
+- stringToUTF16 · function · L9-L9 — stringToUTF16=(str,outPtr,maxBytesToWrite)
+- stringToUTF32 · function · L9-L9 — stringToUTF32=(str,outPtr,maxBytesToWrite)
+- stringToUTF8 · function · L9-L9 — stringToUTF8=(str,outPtr,maxBytesToWrite)
+- stringToUTF8Array · function · L9-L9 — stringToUTF8Array=(str,heap,outIdx,maxBytesToWrite)
+- throwBindingError · function · L9-L9 — throwBindingError=message
+- throwInstanceAlreadyDeleted · function · L9-L9 — throwInstanceAlreadyDeleted=obj
+- throwInternalError · function · L9-L9 — throwInternalError=message
+- throwUnboundTypeError · function · L9-L9 — throwUnboundTypeError=(message,types)
+- toWireType · method · L9-L9 — toWireType(destructors,value)
+- unboundTypesHandler · function · L9-L9 — function unboundTypesHandler()
+- upcastPointer · function · L9-L9 — upcastPointer=(ptr,ptrClass,desiredClass)
+- updateMemoryViews · function · L9-L9 — function updateMemoryViews()
+- usesDestructorStack · function · L9-L9 — function usesDestructorStack(argTypes)
+- UTF16ToString · function · L9-L9 — UTF16ToString=(ptr,maxBytesToRead)
+- UTF32ToString · function · L9-L9 — UTF32ToString=(ptr,maxBytesToRead)
+- UTF8ArrayToString · function · L9-L9 — UTF8ArrayToString=(heapOrArray,idx,maxBytesToRead)
+- UTF8ToString · function · L9-L9 — UTF8ToString=(ptr,maxBytesToRead)
+- visit · function · L9-L9 — function visit(type)
+- whenDependentTypesAreResolved · function · L9-L9 — whenDependentTypesAreResolved=(myTypes,dependentTypes,getTypeConverters)
