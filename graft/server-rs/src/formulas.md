@@ -20,10 +20,13 @@
 - phys_damage · function · L125-L127 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
 - magic_damage · function · L129-L131 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
 - xp_to_next · function · L133-L136 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
-- mob_xp · function · L138-L138 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
-- level_penalty · function · L140-L143 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
-- tests · module · L146-L212 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
-- balance_table · function · L151-L165 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
-- data_refs · function · L169-L192 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
-- enchant · function · L195-L202 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
-- cdr_sums_and_caps · function · L205-L211 — fn cdr_sums_and_caps()
+- past_50 · function · L139-L139 — fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
+- mob_xp · function · L141-L141 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
+- level_penalty · function · L143-L146 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
+- tests · module · L149-L244 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
+- levels_go_to_78_slower_past_50 · function · L153-L161 — fn levels_go_to_78_slower_past_50()
+- grades_ask_for_a_level · function · L164-L175 — fn grades_ask_for_a_level()
+- balance_table · function · L180-L195 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
+- data_refs · function · L199-L222 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
+- enchant · function · L225-L234 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
+- cdr_sums_and_caps · function · L237-L243 — fn cdr_sums_and_caps()

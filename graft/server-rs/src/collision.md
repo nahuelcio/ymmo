@@ -18,10 +18,11 @@ Server-authoritative static collision and pathfinding for the game world: a lazi
 - to_world · function · L128-L128 — Inverse mapping from a nav-grid index back to world coordinates when turning path cells into waypoints.
 - blocked · function · L130-L133 — The single walkability rule for pathing: a cell is impassable if it falls outside the grid or was stamped unwalkable by the nav build.
 - line_clear · function · L135-L143 — Decides whether a straight segment is walkable by sampling points roughly every 0.5 m along it and rejecting the segment if any sample is blocked — the shortcut test for both direct paths and string pulling.
-- nearest_free · function · L145-L156 — Recovers a usable path endpoint by expanding concentric rings around a blocked cell until the closest walkable cell is found (giving up after radius 12).
-- Node · struct · L159-L159 — Binary-heap entry pairing an A* f-score with a cell index for the open set.
-- partial_cmp · function · L161-L161 — Required trait shim that forwards Node's partial ordering to its Ord implementation so the heap can compare NaN-free floats.
-- cmp · function · L164-L164 — Reverses the f-score comparison so Rust's max-heap BinaryHeap pops the lowest-f node first, i.e. behaves as a min-heap.
-- Scratch · struct · L167-L167 — Reusable per-thread A* working arrays (g-scores, parent links, seen/closed stamps) that avoid reallocating megabytes of state on every path query.
-- find_path · function · L174-L268 — Plans walking waypoints between two world points: returns a direct path when the line is clear, otherwise runs grid A* (8-way, diagonal cost 1.414, no corner cutting, node-capped, best-effort fallback) over stamp-cleared scratch buffers and then simplifies the route via string pulling.
-- dash_end · function · L271-L279 — Predicts a dodge roll's final position by repeatedly stepping 0.5 m along the roll direction and stopping as soon as push_out stops the body from advancing, mirroring the client's own prediction.
+- approach_point · function · L149-L161 — pub fn approach_point(tx: f64, tz: f64, reach: f64, fx: f64, fz: f64) -> Option<P>
+- nearest_free · function · L163-L174 — Recovers a usable path endpoint by expanding concentric rings around a blocked cell until the closest walkable cell is found (giving up after radius 12).
+- Node · struct · L177-L177 — Binary-heap entry pairing an A* f-score with a cell index for the open set.
+- partial_cmp · function · L179-L179 — Required trait shim that forwards Node's partial ordering to its Ord implementation so the heap can compare NaN-free floats.
+- cmp · function · L182-L182 — Reverses the f-score comparison so Rust's max-heap BinaryHeap pops the lowest-f node first, i.e. behaves as a min-heap.
+- Scratch · struct · L185-L185 — Reusable per-thread A* working arrays (g-scores, parent links, seen/closed stamps) that avoid reallocating megabytes of state on every path query.
+- find_path · function · L192-L286 — Plans walking waypoints between two world points: returns a direct path when the line is clear, otherwise runs grid A* (8-way, diagonal cost 1.414, no corner cutting, node-capped, best-effort fallback) over stamp-cleared scratch buffers and then simplifies the route via string pulling.
+- dash_end · function · L289-L297 — Predicts a dodge roll's final position by repeatedly stepping 0.5 m along the roll direction and stopping as soon as push_out stops the body from advancing, mirroring the client's own prediction.

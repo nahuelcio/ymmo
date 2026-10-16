@@ -1,25 +1,36 @@
 # shared/src/layout.ts
 
-- distToSegment · function · L18-L22 — function distToSegment(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number])
-- roadDist · function · L24-L28 — function roadDist(x: number, z: number): number
-- nearCamp · function · L31-L33 — function nearCamp(x: number, z: number, r: number): boolean
-- zoneOf · function · L35-L37 — function zoneOf(x: number, z: number)
-- TreeL · interface · L39-L39 — interface TreeL
-- RockL · interface · L40-L40 — interface RockL
-- HouseL · interface · L42-L42 — interface HouseL
-- StallL · interface · L43-L43 — interface StallL
-- WallL · interface · L45-L45 — interface WallL
-- PillarL · interface · L46-L46 — interface PillarL
-- TownL · interface · L47-L47 — interface TownL
-- ZonePropsL · interface · L48-L54 — interface ZonePropsL
-- layoutTrees · function · L57-L82 — function layoutTrees(): TreeL[]
-- layoutRocks · function · L85-L99 — function layoutRocks(): RockL[]
-- layoutTown · function · L102-L149 — function layoutTown(): TownL
-- angDiff · function · L106-L106 — angDiff = (a: number, b: number)
-- at · function · L116-L116 — at = (lx: number, lz: number)
-- covers · function · L117-L124 — covers = (x: number, z: number)
-- layoutZoneProps · function · L152-L180 — function layoutZoneProps(): ZonePropsL
-- at · function · L156-L159 — at = (zn: (typeof ZONES)[number], maxR: number, minR = 0)
-- clear · function · L177-L177 — clear = <T extends { x: number; z: number }>(l: T[])
-- CampL · interface · L182-L188 — interface CampL
-- layoutCamps · function · L192-L209 — function layoutCamps(): CampL[]
+- distToSegment · function · L11-L15 — function distToSegment(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number])
+- landSpot · function · L18-L21 — landSpot = (rng: () => number): [number, number] | null
+- roadDist · function · L23-L27 — function roadDist(x: number, z: number): number
+- nearCamp · function · L30-L32 — function nearCamp(x: number, z: number, r: number): boolean
+- zoneOf · function · L34-L36 — function zoneOf(x: number, z: number)
+- TreeL · interface · L38-L38 — interface TreeL
+- RockL · interface · L39-L39 — interface RockL
+- HouseL · interface · L41-L41 — interface HouseL
+- StallL · interface · L42-L42 — interface StallL
+- WallL · interface · L44-L44 — interface WallL
+- PillarL · interface · L45-L45 — interface PillarL
+- TownL · interface · L46-L46 — interface TownL
+- ZonePropsL · interface · L47-L53 — interface ZonePropsL
+- placeTree · function · L56-L81 — function placeTree(rng: () => number, x: number, z: number, forest = false, giant = false): TreeL | null
+- layoutTrees · function · L84-L110 — function layoutTrees(): TreeL[]
+- detailCells · function · L116-L129 — function detailCells(chunk: number, draws: number): { x0: number; z0: number; seed: number }[]
+- at · function · L120-L120 — at = (seed: number, i: number)
+- land · function · L122-L122 — land = (x: number, z: number)
+- fertile · function · L132-L135 — function fertile(x: number, z: number, h: number): boolean
+- spotHash · function · L138-L141 — function spotHash(x: number, z: number): number
+- BushL · interface · L147-L147 — interface BushL
+- layoutBushes · function · L150-L166 — function layoutBushes(): BushL[]
+- plazaBenches · function · L169-L174 — function plazaBenches(): { x: number; z: number; a: number }[]
+- SeatL · interface · L180-L180 — interface SeatL
+- layoutSeats · function · L183-L194 — function layoutSeats(): SeatL[]
+- layoutRocks · function · L197-L213 — function layoutRocks(): RockL[]
+- layoutTown · function · L216-L250 — function layoutTown(): TownL
+- at · function · L228-L228 — at = (lx: number, lz: number)
+- covers · function · L229-L236 — covers = (x: number, z: number)
+- layoutZoneProps · function · L253-L281 — function layoutZoneProps(): ZonePropsL
+- at · function · L257-L260 — at = (zn: (typeof ZONES)[number], maxR: number, minR = 0)
+- clear · function · L278-L278 — clear = <T extends { x: number; z: number }>(l: T[])
+- CampL · interface · L283-L289 — interface CampL
+- layoutCamps · function · L293-L310 — function layoutCamps(): CampL[]

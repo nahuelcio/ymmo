@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { layoutBushes, layoutTrees } from '../../../shared/src/layout';
 import { allNodes, nodeById, nodeIndex, type NodeDef } from '../../../shared/src/nodes';
 import { heightAt } from '../../../shared/src/terrain';
-import { natureReady, nodeInstances } from './nature';
+import { natureReady, nodeHooks, nodeInstances } from './nature';
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 const FALL_MS = 1400;
@@ -52,6 +52,10 @@ export class NodeVisuals {
     });
     this.berries.computeBoundingSphere();
     this.berries.castShadow = false;
+    // a felled/mined node whose tile streamed back in shows its fresh instances: knock it down again (no animation)
+    nodeHooks.built = (ids) => {
+      for (const id of ids) if (this.gone.delete(id)) this.setGone(id, true);
+    };
     for (const o of [this.stumps, this.berries]) {
       o.matrixAutoUpdate = false;
       o.updateMatrix();
@@ -111,6 +115,7 @@ export class NodeVisuals {
 
   private showStump(n: NodeDef, on: boolean) {
     if (on) {
+      if (this.stumpSlot.has(n.id)) return;
       const i = this.freeStumps.pop();
       if (i === undefined) return;
       this.stumpSlot.set(n.id, i);

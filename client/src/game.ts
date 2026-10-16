@@ -29,7 +29,7 @@ import { PostFX } from './render/post';
 import { relief } from './render/textures';
 import { settings, textureQuality, type Action, type Settings } from './settings';
 import { ambience, play, type Sfx } from './audio';
-import { STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
+import { SLOW_MUL, STATUS_IDS, STATUS_MASK, STATUSES } from '../../shared/src/status';
 
 export const F_PURPLE = 16;
 export const F_RED = 32;
@@ -134,7 +134,9 @@ const flashMat = (o: THREE.Mesh) => {
 /** How long to wait for the server to confirm arrival before trusting it again. */
 const PREDICT_SETTLE_MS = 600;
 /** Local prediction is discarded beyond this much disagreement with the server. */
-const PREDICT_MAX_ERR = 4;
+const PREDICT_MAX_ERR = 12;
+/** Beyond this, the prediction is eased toward the server each frame instead of snapping. */
+const PREDICT_SOFT_ERR = 1;
 /** Dodge roll animation length. */
 const ROLL_MS = 280;
 
@@ -234,7 +236,8 @@ export class Game {
   ctrl = false;
   private raycaster = new THREE.Raycaster();
   private targetRing: THREE.Mesh;
-  private clickMarker: THREE.Mesh;
+  private clickMarker: THREE.Group;
+  private clickMat!: THREE.MeshBasicMaterial;
   private clickAt = 0;
   private hoverRing: THREE.Mesh;
   private post: PostFX;
@@ -301,6 +304,8 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.3, 700);
     this.world = createWorldScene({
       maxAnisotropy: this.renderer.capabilities.getMaxAnisotropy(),
+      // the sky is baked into the scene environment (IBL): PMREM needs the renderer
+      renderer: this.renderer,
       // texture shaders compile in the background (KHR_parallel_shader_compile) before they are swapped in
       precompile: (o) => this.post.compileAsync(o),
     });
@@ -333,8 +338,16 @@ export class Game {
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 40), glow(0xff4444));
     this.targetRing.rotation.x = -Math.PI / 2;
     this.targetRing.visible = false;
-    this.clickMarker = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 24), glow(0x66ff88));
-    this.clickMarker.rotation.x = -Math.PI / 2;
+    // the walk-to marker: a thin gold ring closing in with four chevrons pointing at the spot (flat on the ground)
+    this.clickMat = Object.assign(glow(0xffd36a), { blending: THREE.AdditiveBlending });
+    this.clickMarker = new THREE.Group();
+    this.clickMarker.add(new THREE.Mesh(new THREE.RingGeometry(0.5, 0.56, 40).rotateX(-Math.PI / 2), this.clickMat));
+    const chev = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-0.12, 0.16), new THREE.Vector2(0, 0), new THREE.Vector2(0.12, 0.16), new THREE.Vector2(0, 0.08)])).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 4; i++) {
+      const c = new THREE.Mesh(chev, this.clickMat);
+      c.rotation.y = (i * Math.PI) / 2;
+      this.clickMarker.add(c);
+    }
     this.clickMarker.visible = false;
     this.hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), glow(0xffffff));
     this.hoverRing.rotation.x = -Math.PI / 2;
@@ -1753,13 +1766,24 @@ export class Game {
     }
     if (this.predict && pr) {
       while (pr.path.length > 1 && Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z) < 0.15) pr.path.shift();
+      // swimming is slower: predict it with the server's own water cells, or it pulls us back every few metres
+      // and so are slowed walkers, and stunned ones don't move: the server's step_toward/update_player do the same
+      let step = c.flags & STATUSES.stun.flag ? 0
+        : (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1) * (c.flags & STATUSES.slow.flag ? SLOW_MUL : 1);
+      // carry the step across waypoints, like the server's step_toward
+      while (pr.path.length > 1) {
+        const h = Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z);
+        if (h > step) break;
+        step -= h;
+        c.pos.x = pr.path[0].x;
+        c.pos.z = pr.path[0].z;
+        pr.path.shift();
+      }
       const wp = pr.path[0];
       const dx = wp.x - c.pos.x, dz = wp.z - c.pos.z;
       const d = Math.hypot(dx, dz);
-      // swimming is slower: predict it with the server's own water cells, or it pulls us back every few metres
-      const step = (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1);
       let moving = false;
-      if (d > 0.05) {
+      if (d > 0.05 && step) {
         const k = Math.min(1, step / d);
         const np = pushOut(c.pos.x + dx * k, c.pos.z + dz * k);
         c.pos.x = np.x;
@@ -1772,6 +1796,10 @@ export class Game {
       // hand back to the server once it caught up, or if we drifted too far from it
       const err = Math.hypot(srv.x - c.pos.x, srv.z - c.pos.z);
       const srvDone = Math.hypot(srv.x - pr.x, srv.z - pr.z) < 0.3;
+      // TEMP debug (rubber-banding): log every time the server pulls us back
+      // ponytail: small steady disagreement (paths around trees differ slightly) is eased away, no snap
+      if (err > PREDICT_SOFT_ERR) { const k = Math.min(1, dt * 2); c.pos.x += (srv.x - c.pos.x) * k; c.pos.z += (srv.z - c.pos.z) * k; }
+      if (err > PREDICT_MAX_ERR) console.warn('[snap]', { err: +err.toFixed(1), me: [+c.pos.x.toFixed(1), +c.pos.z.toFixed(1)], srv: [+srv.x.toFixed(1), +srv.z.toFixed(1)], srvAge: Math.round(now - srv.t), dt: Math.round(dt * 1000) });
       if (err > PREDICT_MAX_ERR || (pr.arrivedAt && (srvDone || now - pr.arrivedAt > PREDICT_SETTLE_MS))) this.predict = null;
       c.pos.y = heightAt(c.pos.x, c.pos.z);
       return moving;
@@ -2046,10 +2074,13 @@ export class Game {
       (this.hoverRing.material as THREE.MeshBasicMaterial).color.set(0xffd966);
     } else this.hoverRing.visible = false;
     if (this.clickMarker.visible) {
-      const k = (now - this.clickAt) / 400;
+      const k = (now - this.clickAt) / 550;
       this.clickMarker.visible = k < 1;
-      this.clickMarker.scale.setScalar(1 + k);
-      (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      const e = 1 - (1 - Math.min(1, k * 1.6)) ** 3; // ease out: snaps in, then holds while it fades
+      const [ring, ...chevs] = this.clickMarker.children;
+      ring.scale.setScalar(1.5 - 0.8 * e);
+      chevs.forEach((c) => c.position.set(0, 0, 0).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(c.quaternion), 0.75 - 0.45 * e));
+      this.clickMat.opacity = Math.min(1, k * 8) * (1 - k);
     }
     this.fx.p.setShade(0.25 + 0.75 * ATMOS.day);
     this.fx.update(this.self?.pos);

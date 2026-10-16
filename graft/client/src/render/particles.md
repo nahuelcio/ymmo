@@ -1,0 +1,21 @@
+# client/src/render/particles.ts
+
+- Cell · type · L10-L10 — type Cell = (typeof CELLS)[number];
+- Emit · interface · L16-L63 — interface Emit
+- rnd · function · L65-L65 — rnd = (r: number | [number, number] | undefined, d: number)
+- particleAtlas · function · L120-L120 — particleAtlas = ()
+- makeAtlas · function · L121-L137 — function makeAtlas(): THREE.Texture
+- Pool · class · L140-L320 — class Pool
+- constructor · method · L161-L192 — constructor(scene: THREE.Scene, atlas: THREE.Texture, solid: boolean)
+- attr · function · L167-L171 — attr = (name: string, size: number, arr: Float32Array<ArrayBuffer> = new Float32Array(MAX * size))
+- add · method · L194-L252 — add(o: Emit, n: number)
+- move · method · L255-L263 — private move(i: number, j: number)
+- update · method · L265-L313 — update(dt: number)
+- dispose · method · L315-L319 — dispose()
+- Particles · class · L322-L356 — class Particles
+- constructor · method · L327-L330 — constructor(scene: THREE.Scene)
+- emit · method · L333-L336 — emit(o: Emit)
+- update · method · L338-L341 — update(dt: number)
+- count · method · L343-L345 — get count()
+- setShade · method · L348-L350 — setShade(k: number)
+- dispose · method · L352-L355 — dispose()

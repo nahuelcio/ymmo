@@ -19,6 +19,9 @@ impl World {
             P { x: r.entry.x + a.cos() * 3.0, z: r.entry.z + a.sin() * 3.0 }
         }));
         let (x, z) = at.map_or((row.x, row.z), |p| (p.x, p.z));
+        // saved where there is no land any more (the world was redrawn: open sea, or past the edge): wake in the nearest town
+        let half = d().c.playable_half;
+        let (x, z) = if at.is_none() && (d().is_deep(x, z) || x.abs() > half || z.abs() > half) { let p = crate::world::town_near(Some((x, z))); (p.x, p.z) } else { (x, z) };
         let mut p = Player {
             sid: m.sid, out: m.out, lang: m.lang, stats: Stats::default(), buffs: vec![], target: None, intent: None, next_attack: 0.0, casting: None,
             cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, auto_loot: false, dodge_until: 0.0, rtt: 80.0,

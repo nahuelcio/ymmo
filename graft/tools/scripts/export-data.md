@@ -1,3 +1,3 @@
 # tools/scripts/export-data.ts
 
-_No extracted symbols in this file._
+- waterRuns · function · L21-L32 — function waterRuns(): [number, number, number][]

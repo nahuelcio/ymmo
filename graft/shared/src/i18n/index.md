@@ -25,9 +25,9 @@ Bilingual (Spanish/English) facade that resolves every kind of game-data label �
 - teleportName · function · L49-L49 — Localized name of a teleport destination as shown on the travel menu.
 - npcText · function · L51-L54 — Localized NPC dialogue title or greeting shown when interacting with an NPC.
 - npcLines · function · L55-L58 — Localized list of an NPC's dialogue lines, falling back to the greeting when the NPC has no dedicated line list.
-- zoneName · function · L61-L69 — Translates zone names, which arrive as raw Spanish text from the data layer, into the reader's language by matching against the town, dusk, raid, and world-zone definitions with a Spanish passthrough fallback.
-- questField · function · L71-L73 — Localized quest text field (name, story, offer, busy, ready, or done) used wherever quest dialogue is rendered.
-- questName · function · L74-L74 — Localized quest title looked up by quest id for quest logs and trackers.
-- tr · function · L77-L77 — Lets callers inline ad-hoc Spanish/English string pairs without registering them in the dictionaries.
-- questSummaryL · function · L80-L84 — Renders a quest objective as a compact progress line like "Kill 8 × Keltir" or "Bring 5 × Wolf Pelt" in the reader's language.
-- questLineL · function · L86-L89 — Produces the NPC's quest dialogue line appropriate to the quest's current state: a level-gate message when locked, otherwise the offer/busy/ready/done text.
+- zoneName · function · L61-L72 — Translates zone names, which arrive as raw Spanish text from the data layer, into the reader's language by matching against the town, dusk, raid, and world-zone definitions with a Spanish passthrough fallback.
+- questField · function · L74-L76 — Localized quest text field (name, story, offer, busy, ready, or done) used wherever quest dialogue is rendered.
+- questName · function · L77-L77 — Localized quest title looked up by quest id for quest logs and trackers.
+- tr · function · L80-L80 — Lets callers inline ad-hoc Spanish/English string pairs without registering them in the dictionaries.
+- questSummaryL · function · L83-L87 — Renders a quest objective as a compact progress line like "Kill 8 × Keltir" or "Bring 5 × Wolf Pelt" in the reader's language.
+- questLineL · function · L89-L92 — Produces the NPC's quest dialogue line appropriate to the quest's current state: a level-gate message when locked, otherwise the offer/busy/ready/done text.

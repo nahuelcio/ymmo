@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { animate, playerModel, type AnimState, type Rig } from './models';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
@@ -99,7 +100,7 @@ function headOnly(geo: THREE.BufferGeometry) {
 
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
-    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+    const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
     const [[anims, ...gltfs], heads, rigid] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
       loader.loadAsync('q/heads.glb'),
@@ -142,7 +143,9 @@ export function loadQ(): Promise<void> {
           else sources.set(mat.map.name, mat.map.source);
         }
         if (head && kind === 'skin') headOnly(m.geometry);
-        if (mat.map && !mat.map.userData.avg) mat.map.userData.avg = avgColor(mat.map);
+        // KTX2 maps carry it precomputed (tools/scripts/ktx2.mjs, as [r, g, b]): their pixels cannot be drawn on a canvas
+        const avg = mat.map?.userData.avg as THREE.Color | number[] | undefined;
+        if (mat.map && !(avg instanceof THREE.Color)) mat.map.userData.avg = avg ? new THREE.Color().setRGB(avg[0], avg[1], avg[2], THREE.SRGBColorSpace) : avgColor(mat.map);
         return { geo: m.geometry, tex: mat.map, kind, fam, bind, morphs: m.morphTargetDictionary };
       }));
     FILES.forEach((file, i) => {

@@ -3,29 +3,61 @@
 SQLite persistence layer that keeps accounts, characters, sessions, inventory, and quests in the same game.db — with the same schema and scrypt password hashes as the Node server — so the existing database keeps working when switching server implementations.
 
 - Db · struct · L8-L8 — Handle struct owning the SQLite connection that all account, session, and character persistence goes through.
-- CharRow · struct · L10-L13 — Full character record (identity, position, vitals, adena, karma/PvP counters, appearance, specialization) restored from the characters table when a player loads into the game.
-- CharSummary · struct · L15-L15 — Compact per-character listing (name, race, class, level, appearance, specialization) used to populate an account's character-selection screen.
-- TOKEN_TTL · constant · L17-L17 — Session lifetime rule: login tokens stay valid for 30 days before expiring.
-- db_path · function · L19-L21 — Resolves where the SQLite file lives, defaulting to the same game.db the Node server uses so both share one database.
-- look_of · function · L23-L26 — Converts raw gender/hair columns from a row into a validated Look via the shared sanitize rule, keeping DB-appearance data consistent with game rules.
-- now_ms · function · L28-L28 — Single clock source for all DB timestamps, delegated to the world clock.
-- sha · function · L29-L29 — SHA-256 of a session token, enforcing that only token hashes (never raw tokens) are stored in the sessions table.
-- scrypt_hash · function · L32-L37 — Derives a password hash with Node's crypto.scrypt default parameters (N=16384, r=8, p=1), guaranteeing hash compatibility between the Rust and Node servers.
-- hash_pass · function · L39-L42 — Creates a credential string for a new account by scrypt-hashing the password with a random salt, stored as 'salt:hash'.
-- check_pass · function · L44-L50 — Verifies a login password against the stored salted scrypt hash using a constant-time comparison to prevent timing attacks.
-- open · function · L53-L79 — Opens or creates game.db, brings the schema up to date (tables, indexes, and additive column migrations for older databases), and purges expired login sessions at startup.
-- account · function · L81-L83 — Looks up an account's id and password hash by username, the first step of login verification.
-- insert_account · function · L85-L88 — Registers a new account with its password hash, translating the UNIQUE-name violation into a user-facing 'account name in use' error.
-- create_session · function · L90-L96 — Issues a login token: a random URL-safe value given to the client while only its SHA-256 hash is stored with a 30-day expiry.
-- resume_session · function · L98-L109 — Validates a remembered-login token and implements sliding expiry: expired sessions are deleted and rejected, valid ones get their 30-day TTL renewed.
-- delete_session · function · L111-L111 — Logs the client out by removing the stored hash of its session token.
-- list_chars · function · L113-L117 — Enumerates every character belonging to one account as lightweight summaries (ordered by id) for the character-selection screen.
-- create_char · function · L119-L137 — Enforces character-creation rules — unique name and a maximum of 7 characters per account — before inserting a level-1 character spawned in a ring around town with starting adena and class starting items.
-- delete_char · function · L139-L146 — Permanently removes a character only if it belongs to the requesting account, cascading the delete to its items and quests.
-- load_char · function · L149-L167 — Loads one account-owned character together with its inventory and quest state, silently dropping any item or quest ids that no longer exist in the current game data.
-- cast_overrides · function · L171-L174 — pub fn cast_overrides(&self) -> Vec<(String, f64)>
-- set_cast · function · L177-L182 — pub fn set_cast(&self, skill: &str, ms: Option<f64>)
-- balance_overrides · function · L185-L188 — pub fn balance_overrides(&self) -> Vec<(String, f64)>
-- set_balance · function · L191-L196 — pub fn set_balance(&self, key: &str, value: Option<f64>)
-- set_spec · function · L198-L198 — Permanently records a character's once-only class specialization, written immediately so it never waits on (or gets overwritten by) the periodic save.
-- save_char · function · L201-L211 — Atomically persists a character's full runtime state (level, xp, position, vitals, adena, karma/PvP, inventory, quests) in one transaction by rewriting the item and quest tables.
+- CharRow · struct · L10-L14 — Full character record (identity, position, vitals, adena, karma/PvP counters, appearance, specialization) restored from the characters table when a player loads into the game.
+- CharSummary · struct · L16-L16 — Compact per-character listing (name, race, class, level, appearance, specialization) used to populate an account's character-selection screen.
+- TOKEN_TTL · constant · L18-L18 — Session lifetime rule: login tokens stay valid for 30 days before expiring.
+- db_path · function · L20-L22 — Resolves where the SQLite file lives, defaulting to the same game.db the Node server uses so both share one database.
+- look_of · function · L24-L27 — Converts raw gender/hair columns from a row into a validated Look via the shared sanitize rule, keeping DB-appearance data consistent with game rules.
+- now_ms · function · L29-L29 — Single clock source for all DB timestamps, delegated to the world clock.
+- sha · function · L30-L30 — SHA-256 of a session token, enforcing that only token hashes (never raw tokens) are stored in the sessions table.
+- scrypt_hash · function · L33-L38 — Derives a password hash with Node's crypto.scrypt default parameters (N=16384, r=8, p=1), guaranteeing hash compatibility between the Rust and Node servers.
+- hash_pass · function · L40-L43 — Creates a credential string for a new account by scrypt-hashing the password with a random salt, stored as 'salt:hash'.
+- check_pass · function · L45-L51 — Verifies a login password against the stored salted scrypt hash using a constant-time comparison to prevent timing attacks.
+- open · function · L54-L107 — Opens or creates game.db, brings the schema up to date (tables, indexes, and additive column migrations for older databases), and purges expired login sessions at startup.
+- account · function · L109-L111 — Looks up an account's id and password hash by username, the first step of login verification.
+- insert_account · function · L113-L116 — Registers a new account with its password hash, translating the UNIQUE-name violation into a user-facing 'account name in use' error.
+- create_session · function · L118-L124 — Issues a login token: a random URL-safe value given to the client while only its SHA-256 hash is stored with a 30-day expiry.
+- resume_session · function · L126-L137 — Validates a remembered-login token and implements sliding expiry: expired sessions are deleted and rejected, valid ones get their 30-day TTL renewed.
+- delete_session · function · L139-L139 — Logs the client out by removing the stored hash of its session token.
+- list_chars · function · L141-L145 — Enumerates every character belonging to one account as lightweight summaries (ordered by id) for the character-selection screen.
+- create_char · function · L147-L165 — Enforces character-creation rules — unique name and a maximum of 7 characters per account — before inserting a level-1 character spawned in a ring around town with starting adena and class starting items.
+- char_hotbar · function · L168-L170 — pub fn char_hotbar(&self, id: i64, json: &str)
+- owns_char · function · L172-L174 — pub fn owns_char(&self, account_id: i64, id: i64) -> bool
+- delete_char · function · L176-L183 — Permanently removes a character only if it belongs to the requesting account, cascading the delete to its items and quests.
+- load_char · function · L186-L204 — Loads one account-owned character together with its inventory and quest state, silently dropping any item or quest ids that no longer exist in the current game data.
+- cast_overrides · function · L208-L211 — pub fn cast_overrides(&self) -> Vec<(String, f64)>
+- set_cast · function · L214-L219 — pub fn set_cast(&self, skill: &str, ms: Option<f64>)
+- balance_overrides · function · L222-L225 — pub fn balance_overrides(&self) -> Vec<(String, f64)>
+- set_balance · function · L228-L233 — pub fn set_balance(&self, key: &str, value: Option<f64>)
+- set_spec · function · L235-L235 — Permanently records a character's once-only class specialization, written immediately so it never waits on (or gets overwritten by) the periodic save.
+- save_char · function · L238-L248 — Atomically persists a character's full runtime state (level, xp, position, vitals, adena, karma/PvP, inventory, quests) in one transaction by rewriting the item and quest tables.
+- load_clans · function · L253-L277 — pub fn load_clans(&self) -> (Vec<ClanRow>, Vec<(i64, i64, i64)>, Vec<ClanMemberRow>, Vec<(i64, f64, f64)>)
+- clan_insert · function · L280-L284 — pub fn clan_insert(&self, name: &str, leader: i64) -> Result<i64, String>
+- clan_save · function · L286-L288 — pub fn clan_save(&self, id: i64, leader: i64, level: i64, rep: i64, ally: Option<i64>, invite_until: f64)
+- clan_crest · function · L290-L292 — pub fn clan_crest(&self, id: i64, png: &[u8], ver: i64)
+- clan_privs · function · L294-L296 — pub fn clan_privs(&self, id: i64, grade: i64, privs: i64)
+- clan_ally_pen · function · L299-L301 — pub fn clan_ally_pen(&self, id: i64, join_until: f64, found_until: f64)
+- load_wars · function · L304-L314 — pub fn load_wars(&self) -> (Vec<(i64, i64)>, Vec<(i64, i64, f64)>)
+- war_add · function · L316-L318 — pub fn war_add(&self, clan: i64, target: i64)
+- war_del · function · L321-L324 — pub fn war_del(&self, clan: i64, target: i64, cd: f64)
+- load_allies · function · L326-L334 — pub fn load_allies(&self) -> Vec<AllyRow>
+- ally_insert · function · L337-L340 — pub fn ally_insert(&self, name: &str, leader_clan: i64) -> Result<i64, String>
+- ally_save · function · L342-L344 — pub fn ally_save(&self, id: i64, invite_until: f64)
+- ally_crest · function · L346-L348 — pub fn ally_crest(&self, id: i64, png: &[u8], ver: i64)
+- ally_delete · function · L351-L354 — pub fn ally_delete(&self, id: i64)
+- load_clan_items · function · L357-L363 — pub fn load_clan_items(&self) -> Vec<(i64, i64, String, i64, i64, bool)>
+- clan_item_add · function · L366-L369 — pub fn clan_item_add(&self, clan: i64, item: &str, count: i64, enchant: i64, legacy: bool) -> i64
+- clan_item_set · function · L372-L375 — pub fn clan_item_set(&self, id: i64, count: i64)
+- clan_adena · function · L377-L379 — pub fn clan_adena(&self, clan: i64, adena: i64)
+- load_clan_adena · function · L382-L388 — pub fn load_clan_adena(&self) -> Vec<(i64, i64)>
+- clan_log · function · L391-L394 — pub fn clan_log(&self, clan: i64, who: &str, dep: bool, item: &str, count: i64, enchant: i64)
+- load_clan_log · function · L397-L406 — pub fn load_clan_log(&self, per_clan: usize) -> Vec<(i64, f64, String, bool, String, i64, i64)>
+- load_clan_skills · function · L408-L414 — pub fn load_clan_skills(&self) -> Vec<(i64, String, i64)>
+- clan_skill · function · L416-L418 — pub fn clan_skill(&self, clan: i64, skill: &str, level: i64)
+- clan_delete · function · L421-L430 — pub fn clan_delete(&self, id: i64)
+- char_clan · function · L433-L435 — pub fn char_clan(&self, char_id: i64, clan: Option<i64>, grade: i64, title: &str)
+- char_clan_penalty · function · L437-L439 — pub fn char_clan_penalty(&self, char_id: i64, join_until: f64, found_until: f64)
+- ClanRow · struct · L443-L446 — pub struct ClanRow
+- AllyRow · struct · L447-L447 — pub struct AllyRow { pub id: i64, pub name: String, pub leader: i64, pub crest: Option<Vec<u8>>, pub crest_ver: i64, pub invite_until: f64 }
+- ClanMemberRow · struct · L448-L448 — pub struct ClanMemberRow { pub char_id: i64, pub name: String, pub level: i64, pub cls: String, pub clan_id: i64, pub grade: i64, pub title: String }
+- mark_legacy_s · function · L455-L466 — fn mark_legacy_s(c: &Connection)
