@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { DUSK, EMBER, FROST, REED, TOWN } from './terrain';
+import { DUSK, EMBER, FROST, REED, roadLegs, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -149,7 +149,7 @@ function tintOf(piece: VPiece, t: NonNullable<Stamp['tint']>): number | undefine
 }
 
 export function houseInstances(): KitInst[] {
-  return [...ALBA_STAMPS, ...FORTS.flatMap((f) => f.stamps)].flatMap(expandStamp);
+  return [...albaWorld(), ...FORTS.flatMap((f) => f.stamps)].flatMap(expandStamp);
 }
 
 /**
@@ -190,9 +190,12 @@ function paving(town: { x: number; z: number; r: number }, stamps: Stamp[], tint
   return out;
 }
 
-/** Paving for every town (Alba sits at the origin, so its stamps' coordinates are world ones too). */
+/** Alba's stamps are authored round its centre: these are them where the village stands. */
+const albaWorld = () => ALBA_STAMPS.map((s) => ({ ...s, x: TOWN.x + s.x, z: TOWN.z + s.z }));
+
+/** Paving for every town. */
 export function groundInstances(): KitInst[] {
-  return [...paving(TOWN, ALBA_STAMPS), ...FORTS.flatMap((f) => paving(f.town, f.stamps, f.stone))];
+  return [...paving(TOWN, albaWorld()), ...FORTS.flatMap((f) => paving(f.town, f.stamps, f.stone))];
 }
 
 /**
@@ -238,7 +241,7 @@ export interface CurtainWall {
 
 /** One gate on every road out of Alba, a watchtower at the middle of each span, and wall runs between them. */
 export function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] } {
-  return curtain(TOWN, TOWN.r + 2, ROAD_TO.map(([x, z]) => Math.atan2(z - TOWN.z, x - TOWN.x)), { scale: CURTAIN_SCALE, towers: 1 });
+  return curtain(TOWN, TOWN.r + 2, ROAD_TO.map(([x, z]) => Math.atan2(z, x)), { scale: CURTAIN_SCALE, towers: 1 });
 }
 
 /** A fort's wall: its own stone, lower than Alba's, a gate on each of its roads, two towers a span. */
@@ -320,11 +323,8 @@ export const DUSK_STONE = 0x8e8c96;
 /** Dyes for a greyed copy of the kit textures (client/src/render/village.ts kitDye): dark stone, wine or slate roofs, dark wood. */
 const DUSK_TINT = { wall: 0x9a96a0, roof: 0x6e2c32, wood: 0x7a6258 };
 const DUSK_TINT_SLATE = { wall: 0x9a96a0, roof: 0x5a6478, wood: 0x7a6258 };
-/** Its two roads: back toward Alba, and on toward the ruins. Angles from its centre (x = cos, z = sin). */
-export const DUSK_GATES = (() => {
-  const back = Math.atan2(TOWN.z - DUSK.z, TOWN.x - DUSK.x);
-  return [back, back + Math.PI];
-})();
+/** Its two roads (terrain.ts ROAD_LINES leaves it south-west and north-east, the way this plan was drawn). Angles from its centre (x = cos, z = sin). */
+export const DUSK_GATES = roadLegs(DUSK).map(([x, z]) => Math.atan2(z - DUSK.z, x - DUSK.x));
 
 /** A Bastión building at (lx, lz) from its centre, door toward the plaza. */
 const dusk = (id: string, lx: number, lz: number, w: number, d: number, o: Partial<Stamp> = {}): Stamp => ({
@@ -350,12 +350,12 @@ export const DUSK_STAMPS: Stamp[] = [
 
 /** The Bastión's merchants (shared/src/data/world.ts), whose spots and stalls the buildings must leave clear. */
 const DUSK_FOLK: { id: string; x: number; z: number }[] = [
-  { id: 'dusk_weapons', x: 178, z: -162 },
-  { id: 'dusk_armor', x: 162, z: -178 },
-  { id: 'dusk_grocer', x: 181, z: -172 },
-  { id: 'dusk_gate', x: 159, z: -168 },
-  { id: 'dusk_clan', x: 183, z: -163.5 },
-];
+  { id: 'dusk_weapons', x: 8, z: 8 },
+  { id: 'dusk_armor', x: -8, z: -8 },
+  { id: 'dusk_grocer', x: 11, z: -2 },
+  { id: 'dusk_gate', x: -11, z: 2 },
+  { id: 'dusk_clan', x: 13, z: 6.5 },
+].map((n) => ({ ...n, x: DUSK.x + n.x, z: DUSK.z + n.z }));
 
 /** Empty when a fort's plan stays off its plaza, its roads, its wall and its folk, without overlaps. */
 export function fortIssues(f: Fort): string[] {
@@ -498,8 +498,8 @@ export function spot(id: string, lx = 0, out = 2): { x: number; z: number; ry: n
   return { x: st.x + lx * c + lz * s, z: st.z - lx * s + lz * c, ry: st.rot };
 }
 
-/** Same road targets as ROADS in layout.ts (meadows, hills, barracks, wastes, dusk). */
-const ROAD_TO: [number, number][] = [[190, 30], [20, -220], [-230, -40], [-20, 260], [170, -170]];
+/** Where Alba's roads head first (terrain.ts ROAD_LINES), from its centre. */
+const ROAD_TO: [number, number][] = roadLegs(TOWN).map(([x, z]) => [x - TOWN.x, z - TOWN.z]);
 
 function distToRoad(px: number, pz: number): number {
   let best = Infinity;
@@ -528,11 +528,11 @@ export function albaIssues(): string[] {
   });
   for (const b of boxes) {
     for (const [x, z] of b.pts) {
-      const r = Math.hypot(x - TOWN.x, z - TOWN.z);
+      const r = Math.hypot(x, z); // the plan is authored round the centre
       if (r < 16) issues.push(`${b.st.id} enters the plaza (${r.toFixed(1)})`);
       if (r > 36) issues.push(`${b.st.id} crosses the 36 m ring (${r.toFixed(1)})`);
     }
-    const road = distToRoad(b.st.x - TOWN.x, b.st.z - TOWN.z);
+    const road = distToRoad(b.st.x, b.st.z);
     const need = Math.hypot(b.st.w, b.st.d) / 2 + 2.5;
     if (road < need) issues.push(`${b.st.id} is ${road.toFixed(1)} m from a road (need ${need.toFixed(1)})`);
     const c = Math.cos(b.st.rot), s = Math.sin(b.st.rot);
@@ -658,7 +658,7 @@ function ringFort(s: FortSpec): Fort {
 
 /** Fuerte de Escarcha (levels 50-60): pale stone and slate under the snow, a gate toward the pass and one toward its lands. */
 const FROST_FORT = ringFort({
-  id: 'frost', town: FROST, roads: [[20, -220], [FROST.x - 200, FROST.z]],
+  id: 'frost', town: FROST, roads: roadLegs(FROST),
   stone: 0xc4ccd6, wall: 0xb8bcc4, roof: 0x4a5a78,
   tint: { wall: 0xf0f2f6, roof: 0x7a90b4, wood: 0xa89888 }, tintAlt: { wall: 0xe4e8ee, roof: 0x8a98ac, wood: 0x9a8a7a },
   // whitewashed plaster, a few stone ones
@@ -673,7 +673,7 @@ const FROST_FORT = ringFort({
 
 /** Juncoverde (levels 60-70): mossy stone, plaster and green thatch by the swamp, a gate toward the pass and one toward its lands. */
 const REED_FORT = ringFort({
-  id: 'reed', town: REED, roads: [[190, 30], [REED.x, REED.z - 200]],
+  id: 'reed', town: REED, roads: roadLegs(REED),
   stone: 0x9aa88a, wall: 0xc8c0a0, roof: 0x4a7a4a,
   tint: { wall: 0xe0d8b8, roof: 0x5a8a4a, wood: 0x7a6a48 }, tintAlt: { wall: 0xd4ccaa, roof: 0x7a9a4a, wood: 0x6a5a3a },
   buildings: [
@@ -687,7 +687,7 @@ const REED_FORT = ringFort({
 
 /** Brasaoscura (levels 70-78): dark basalt and red tile, a gate toward the pass and one toward the volcano and the Abyss. */
 const EMBER_FORT = ringFort({
-  id: 'ember', town: EMBER, roads: [[-20, 260], [EMBER.x + 200, EMBER.z]],
+  id: 'ember', town: EMBER, roads: roadLegs(EMBER),
   stone: 0x5e5250, wall: 0x6a5e5a, roof: 0x8a2a1a,
   tint: { wall: 0x7e726e, roof: 0x9a2c1c, wood: 0x4a3a30 }, tintAlt: { wall: 0x6e6460, roof: 0x7a2418, wood: 0x3e3028 },
   buildings: [

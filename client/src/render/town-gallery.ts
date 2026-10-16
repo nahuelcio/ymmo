@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { TOWN, TOWN_HEIGHT } from '../../../shared/src/terrain';
+import { heightAt, TOWN } from '../../../shared/src/terrain';
 import { FORTS } from '../../../shared/src/village';
 import { settings } from '../settings';
-import { ATMOS, LocalLights } from './atmos';
+import { ATMOS, LocalLights, Motes } from './atmos';
 import { FxManager } from './fx';
 import { loadNature } from './nature';
 import { PostFX } from './post';
@@ -12,7 +12,7 @@ import { loadV } from './village';
 /**
  * Dev view (?town=alba, or a fort: dusk, frost...): the real world scene around a town, with an orbiting camera.
  * No server needed. ?hour=0..24 fixes the time of day (21 = night), ?ry=<radians> stops the orbit there,
- * ?dist and ?pitch (radians) frame it, ?at=x,z looks at another point, ?ty=<height> raises it (the sky).
+ * ?dist and ?pitch (radians) frame it, ?at=x,z looks at another point (any spot of the world), ?ty=<height> raises it (the sky).
  */
 export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   host.innerHTML = '';
@@ -31,7 +31,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   await Promise.all([loadV().catch(() => {}), loadNature().catch(() => {})]);
 
   const cam = new THREE.PerspectiveCamera(55, 1, 0.3, 700);
-  const world = createWorldScene({ maxAnisotropy: renderer.capabilities.getMaxAnisotropy() });
+  const world = createWorldScene({ maxAnisotropy: renderer.capabilities.getMaxAnisotropy(), renderer });
   const post = new PostFX(renderer, world.scene, cam);
   post.sun = world.sun;
   post.rebuild(settings.s);
@@ -40,7 +40,9 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   fx.onLight = (at, color, power, range, ms) => lights.flash(at, color, power, range, ms);
   for (const b of BRAZIER_FIRES) fx.hearth(new THREE.Vector3(b.x, b.y, b.z), 1.1);
   const [ax, az] = (p.get('at') ?? `${town.x},${town.z}`).split(',').map(Number);
-  const target = new THREE.Vector3(ax, Number(p.get('ty')) || TOWN_HEIGHT + 2, az);
+  const target = new THREE.Vector3(ax, Number(p.get('ty')) || heightAt(ax, az) + 2, az);
+  const motes = new Motes();
+  world.scene.add(motes.points);
   const dist = Number(p.get('dist')) || town.r * 2.1, pitch = Number(p.get('pitch')) || 0.55;
   const fixed = p.get('ry');
   const resize = () => {
@@ -63,6 +65,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
     world.updateSky(cam, cam.far, dt);
     world.follow(target);
     lights.update(target, now / 1000);
+    motes.update(target, dt, now / 1000);
     fx.p.setShade(0.25 + 0.75 * ATMOS.day);
     fx.update(target);
     post.render();
@@ -70,6 +73,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   return () => {
     removeEventListener('resize', resize);
     renderer.setAnimationLoop(null);
+    world.dispose();
     renderer.dispose();
     host.innerHTML = '';
   };

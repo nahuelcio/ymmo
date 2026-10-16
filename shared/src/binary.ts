@@ -4,12 +4,13 @@
 // Layout (little endian):
 //   u8  type (= SNAP_UPD)
 //   u16 update count, u16 gone count, u32 server time (ms, wraps every ~49 days)
-//   update × n: u32 id, i16 x·50, i16 z·50, i16 ry·10000, u8 hp%, u16 flags   (13 bytes)
+//   update × n: u32 id, i32 x·50, i32 z·50, i16 ry·10000, u8 hp%, u16 flags   (17 bytes)
+//   x/z are i32 so a world past ±655 still round-trips (i16·50 overflowed at 655.34).
 //   gone   × m: u32 id
 import type { C2S, EntUpd, S2C } from './protocol';
 
-export const SNAP_UPD = 1;
-const UPD_BYTES = 13;
+export const SNAP_UPD = 2;
+const UPD_BYTES = 17;
 const HEADER = 9;
 
 /** Quantize a position the way the wire does (1/50 unit), so diffs match what clients see. */
@@ -30,11 +31,11 @@ export function encodeSnap(upd: EntUpd[], gone: number[], time: number): Uint8Ar
   let o = HEADER;
   for (const [id, x, z, ry, hp, f] of upd) {
     v.setUint32(o, id, true);
-    v.setInt16(o + 4, Math.round(x * 50), true);
-    v.setInt16(o + 6, Math.round(z * 50), true);
-    v.setInt16(o + 8, Math.round(ry * 10000), true);
-    v.setUint8(o + 10, Math.max(0, Math.min(255, hp)));
-    v.setUint16(o + 11, f & 0xffff, true);
+    v.setInt32(o + 4, Math.round(x * 50), true);
+    v.setInt32(o + 8, Math.round(z * 50), true);
+    v.setInt16(o + 12, Math.round(ry * 10000), true);
+    v.setUint8(o + 14, Math.max(0, Math.min(255, hp)));
+    v.setUint16(o + 15, f & 0xffff, true);
     o += UPD_BYTES;
   }
   for (const id of gone) {
@@ -53,7 +54,7 @@ export function decodeSnap(buf: ArrayBuffer): { upd: EntUpd[]; gone: number[]; s
   const gone: number[] = [];
   let o = HEADER;
   for (let i = 0; i < n; i++, o += UPD_BYTES)
-    upd.push([v.getUint32(o, true), v.getInt16(o + 4, true) / 50, v.getInt16(o + 6, true) / 50, v.getInt16(o + 8, true) / 10000, v.getUint8(o + 10), v.getUint16(o + 11, true)]);
+    upd.push([v.getUint32(o, true), v.getInt32(o + 4, true) / 50, v.getInt32(o + 8, true) / 50, v.getInt16(o + 12, true) / 10000, v.getUint8(o + 14), v.getUint16(o + 15, true)]);
   for (let i = 0; i < m; i++, o += 4) gone.push(v.getUint32(o, true));
   return { upd, gone, st };
 }

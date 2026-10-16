@@ -1,23 +1,25 @@
 # client/src/render/nature.ts
 
-- Mode · type · L33-L33 — type Mode = 'bark' | 'leaves' | 'bush' | 'grass' | 'flower' | 'rock';
-- Prim · interface · L43-L43 — interface Prim
-- natureReady · function · L50-L50 — natureReady = ()
-- pick · function · L62-L64 — function pick<T>(list: readonly T[], u: number): T
-- fileOf · function · L66-L69 — function fileOf(map: THREE.Texture): string
-- modeOf · function · L71-L78 — function modeOf(piece: string, matName: string): Mode
-- bake · function · L80-L95 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
-- ground · function · L98-L109 — function ground(list: Prim[])
-- fitRock · function · L112-L122 — function fitRock(geo: THREE.BufferGeometry)
-- material · function · L124-L145 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
-- loadNature · function · L147-L169 — function loadNature(): Promise<void>
-- Item · interface · L171-L171 — interface Item
-- chunked · function · L174-L207 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
-- spawn · function · L214-L220 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number): Item[]
-- buildNatureTrees · function · L222-L236 — function buildNatureTrees(): THREE.Group
-- buildNatureRocks · function · L238-L248 — function buildNatureRocks(): THREE.Group
-- buildNatureBushes · function · L252-L262 — function buildNatureBushes(): THREE.Group
-- natureDetailCell · function · L267-L290 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
-- buildNatureTown · function · L293-L335 — function buildNatureTown(): THREE.Group
-- place · function · L296-L299 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
-- world · function · L300-L303 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)
+- Mode · type · L46-L46 — type Mode = 'bark' | 'leaves' | 'bush' | 'grass' | 'flower' | 'rock';
+- Prim · interface · L56-L56 — interface Prim
+- natureReady · function · L63-L63 — natureReady = ()
+- dropNodeInstances · function · L70-L76 — function dropNodeInstances(meshes: THREE.Object3D[])
+- pick · function · L85-L87 — function pick<T>(list: readonly T[], u: number): T
+- fileOf · function · L89-L92 — function fileOf(map: THREE.Texture): string
+- modeOf · function · L94-L101 — function modeOf(piece: string, matName: string): Mode
+- bake · function · L103-L118 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
+- ground · function · L121-L132 — function ground(list: Prim[])
+- fitRock · function · L135-L145 — function fitRock(geo: THREE.BufferGeometry)
+- material · function · L147-L168 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
+- loadNature · function · L170-L192 — function loadNature(): Promise<void>
+- Item · interface · L194-L194 — interface Item
+- chunked · function · L197-L232 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
+- spawn · function · L240-L246 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number, leafOnly = false): Item[]
+- natureTile · function · L249-L254 — function natureTile(idx: { trees: number[]; rocks: number[]; bushes: number[] }): THREE.Object3D[]
+- buildNatureTrees · function · L256-L278 — function buildNatureTrees(idx: number[]): THREE.Group
+- buildNatureRocks · function · L280-L292 — function buildNatureRocks(idx: number[]): THREE.Group
+- buildNatureBushes · function · L296-L311 — function buildNatureBushes(idx: number[]): THREE.Group
+- natureDetailCell · function · L316-L339 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
+- buildNatureTown · function · L342-L384 — function buildNatureTown(): THREE.Group
+- place · function · L345-L348 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
+- world · function · L349-L352 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)

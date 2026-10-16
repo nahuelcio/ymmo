@@ -1,36 +1,42 @@
 # client/src/ui/minimap.ts
 
-- questAreas · function · L22-L29 — Resolves which hunting zones contain spawns for the mobs demanded by the player's active quests, so those zones can be highlighted with quest labels on both maps.
-- worldImage · function · L31-L55 — Pre-renders the whole game world once into a 512x512 pixel canvas — water vs. terrain coloring plus north-west-light relief shading — that both maps later crop from.
-- at · function · L36-L36 — Maps a raster pixel index to a world coordinate spanning the full map extent, used while sampling terrain during pre-rendering.
-- hAt · function · L39-L39 — Clamped lookup into the precomputed height grid so the relief shading can sample neighboring pixels without falling off the map edges.
-- css · function · L57-L57 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
-- toMap · function · L59-L59 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
-- Minimap · class · L61-L642 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
-- constructor · method · L86-L169 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
-- mapSpan · method · L172-L174 — private mapSpan()
-- clampMap · method · L176-L180 — private clampMap(v: number)
-- worldAt · method · L183-L188 — private worldAt(px: number, py: number): [number, number]
-- toBig · method · L191-L195 — private toBig(x: number, z: number): [number, number]
-- syncBig · method · L198-L210 — private syncBig(): number
-- blitMap · method · L213-L217 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
-- renderWindow · method · L220-L248 — private renderWindow(): HTMLCanvasElement
-- at · function · L230-L230 — at = (i: number)
-- hAt · function · L233-L233 — hAt = (i: number, j: number)
-- toggleMap · method · L250-L253 — Opens or closes the big world-map window and repaints it when shown.
-- drawBig · method · L255-L339 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
-- drawStructures · method · L342-L402 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
-- seen · function · L343-L343 — seen = (x: number, y: number, m = 8)
-- strokeWall · function · L358-L365 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L371-L381 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
-- campIcon · method · L405-L420 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
-- drawRoute · method · L423-L456 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
-- label · method · L458-L463 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
-- arrow · method · L465-L482 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
-- update · method · L484-L641 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
-- toC · function · L509-L509 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
-- seen · function · L511-L511 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
-- strokeWall · function · L524-L531 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L537-L547 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
-- disc · function · L558-L566 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
-- questMob · function · L605-L605 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.
+- Region · type · L21-L21 — type Region = { id: string; name: string; levels: string; x: number; z: number; poly: [number, number][] };
+- INK_A · function · L32-L32 — INK_A = (a: number)
+- questAreas · function · L38-L45 — Resolves which hunting zones contain spawns for the mobs demanded by the player's active quests, so those zones can be highlighted with quest labels on both maps.
+- paintTerrain · function · L51-L108 — function* paintTerrain(x0: number, z0: number, span: number, res: number): Generator<void, HTMLCanvasElement>
+- drain · function · L111-L116 — function drain(gen: Generator<void, HTMLCanvasElement>): HTMLCanvasElement
+- worldImage · function · L118-L118 — Pre-renders the whole game world once into a 512x512 pixel canvas — water vs. terrain coloring plus north-west-light relief shading — that both maps later crop from.
+- css · function · L120-L120 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
+- toMap · function · L122-L122 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
+- Minimap · class · L124-L827 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
+- constructor · method · L151-L234 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
+- mapSpan · method · L237-L239 — private mapSpan()
+- clampMap · method · L241-L245 — private clampMap(v: number)
+- worldAt · method · L248-L253 — private worldAt(px: number, py: number): [number, number]
+- toBig · method · L256-L260 — private toBig(x: number, z: number): [number, number]
+- syncBig · method · L263-L275 — private syncBig(): number
+- blitMap · method · L278-L282 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
+- renderWindow · method · L288-L306 — private renderWindow(key: string)
+- tick · function · L291-L304 — tick = ()
+- toggleMap · method · L308-L311 — Opens or closes the big world-map window and repaints it when shown.
+- drawBig · method · L313-L454 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
+- tag · function · L365-L374 — tag = (t: string, x: number, y: number, px = 12, font = 'bold', spacing = '0px')
+- inView · function · L375-L375 — inView = (x: number, y: number, m = 80)
+- drawStructures · method · L457-L517 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
+- seen · function · L458-L458 — seen = (x: number, y: number, m = 8)
+- strokeWall · function · L473-L480 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L486-L496 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
+- townIcon · method · L520-L532 — private townIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
+- raidIcon · method · L535-L552 — private raidIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
+- compass · method · L555-L584 — private compass(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
+- campIcon · method · L587-L602 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
+- drawRoute · method · L605-L638 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
+- label · method · L640-L648 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
+- arrow · method · L650-L667 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
+- update · method · L669-L826 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
+- toC · function · L694-L694 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
+- seen · function · L696-L696 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
+- strokeWall · function · L709-L716 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L722-L732 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
+- disc · function · L743-L751 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
+- questMob · function · L790-L790 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.

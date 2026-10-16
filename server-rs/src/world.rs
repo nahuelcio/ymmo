@@ -197,11 +197,7 @@ impl World {
 
     /// A free spot in the town closest to this entity (the starting village when there is none, or inside a raid).
     pub fn town_point(&self, near: Option<u32>) -> P {
-        let c = near.filter(|_| self.raid.is_none()).and_then(|id| self.ents.get(&id)).map(|e| (e.c.x, e.c.z));
-        let dist = |t: &&crate::data::Town| c.map_or(0.0, |(x, z)| (x - t.x).hypot(z - t.z));
-        let t = d().towns.iter().min_by(|a, b| dist(a).total_cmp(&dist(b))).unwrap_or(&d().town);
-        let (a, r) = (rnd() * std::f64::consts::TAU, 11.0 + rnd() * 4.0);
-        push_out(t.x + a.cos() * r, t.z + a.sin() * r, d().c.walk_radius)
+        town_near(near.filter(|_| self.raid.is_none()).and_then(|id| self.ents.get(&id)).map(|e| (e.c.x, e.c.z)))
     }
 
     pub fn teleport(&mut self, pid: u32, x: f64, z: f64) {
@@ -234,12 +230,25 @@ impl World {
             return true;
         }
         let (mut wx, mut wz, mut wstop) = (tx, tz, stop);
+        // swimming is slower (deep water, shared/src/terrain.ts isDeep)
+        let swim = if d().is_deep(e.c.x, e.c.z) { d().c.swim_speed } else { 1.0 };
+        let mut budget = speed * swim * e.c.speed_mul(now) * dt;
         if !line_clear(e.c.x, e.c.z, tx, tz) {
             let stale = match &e.c.nav { None => true, Some(n) => n.path.is_empty() || (n.gx - tx).hypot(n.gz - tz) > 1.5 || now - n.at > 1500.0 };
             if stale { e.c.nav = Some(Nav { gx: tx, gz: tz, at: now, path: find_path(e.c.x, e.c.z, tx, tz) }); }
-            let (ex, ez) = (e.c.x, e.c.z);
+            let (mut ex, mut ez) = (e.c.x, e.c.z);
             let path = &mut e.c.nav.as_mut().unwrap().path;
             while path.len() > 1 && (path[0].x - ex).hypot(path[0].z - ez) < 0.15 { path.remove(0); }
+            // Spend the whole tick's step across waypoints: stopping at each one dropped the remainder, so on
+            // 1 m grid paths the server walked ~15% slower than the client's per-frame prediction (rubber-band).
+            while path.len() > 1 {
+                let h = (path[0].x - ex).hypot(path[0].z - ez);
+                if h > budget { break; }
+                budget -= h;
+                (ex, ez) = (path[0].x, path[0].z);
+                path.remove(0);
+            }
+            (e.c.x, e.c.z) = (ex, ez);
             // The path ends short of the target (it sits where the grid is blocked) and we are standing on
             // its last node: this is as close as it gets. Stop instead of walking in place forever.
             if path.len() == 1 && (path[0].x - ex).hypot(path[0].z - ez) < 0.15 && (path[0].x - tx).hypot(path[0].z - tz) > 0.01 {
@@ -256,9 +265,7 @@ impl World {
         }
         let (dx, dz) = (wx - e.c.x, wz - e.c.z);
         let wd = { let h = dx.hypot(dz); if h == 0.0 { 1e-4 } else { h } };
-        // swimming is slower (deep water, shared/src/terrain.ts isDeep)
-        let swim = if d().is_deep(e.c.x, e.c.z) { d().c.swim_speed } else { 1.0 };
-        let step = (speed * swim * e.c.speed_mul(now) * dt).min((wd - wstop).max(0.0));
+        let step = budget.min((wd - wstop).max(0.0));
         e.c.ry = dx.atan2(dz);
         let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, e.c.radius);
         e.c.moving = true;
@@ -626,3 +633,11 @@ impl World {
 }
 
 pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }
+
+/// A free spot in the town closest to (x, z) (the starting village without one).
+pub fn town_near(c: Option<(f64, f64)>) -> P {
+    let dist = |t: &&crate::data::Town| c.map_or(0.0, |(x, z)| (x - t.x).hypot(z - t.z));
+    let t = d().towns.iter().min_by(|a, b| dist(a).total_cmp(&dist(b))).unwrap_or(&d().town);
+    let (a, r) = (rnd() * std::f64::consts::TAU, 11.0 + rnd() * 4.0);
+    push_out(t.x + a.cos() * r, t.z + a.sin() * r, d().c.walk_radius)
+}

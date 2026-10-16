@@ -13,16 +13,17 @@
 - houseInstances · function · L151-L153 — function houseInstances(): KitInst[]
 - paving · function · L171-L191 — function paving(town: { x: number; z: number; r: number }, stamps: Stamp[], tint?: number): KitInst[]
 - covered · function · L175-L183 — covered = (x: number, z: number)
-- groundInstances · function · L194-L196 — function groundInstances(): KitInst[]
-- CurtainDraw · interface · L218-L228 — interface CurtainDraw
-- CurtainWall · interface · L230-L237 — interface CurtainWall
-- albaCurtain · function · L240-L242 — function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] }
-- fortCurtain · function · L245-L247 — function fortCurtain(f: Fort): { draw: CurtainDraw[]; walls: CurtainWall[] }
-- curtain · function · L254-L314 — function curtain(town: { x: number; z: number }, R: number, gateAngles: number[], o: { scale: number; towers: number; tint?: number }): { draw: CurtainDraw[]; walls: CurtainWall[] }
-- at · function · L260-L260 — at = (a: number)
-- wallRot · function · L262-L262 — wallRot = (a: number)
-- halfAng · function · L263-L263 — halfAng = (halfLen: number)
-- fill · function · L265-L279 — fill = (from: number, to: number)
+- albaWorld · function · L194-L194 — albaWorld = ()
+- groundInstances · function · L197-L199 — function groundInstances(): KitInst[]
+- CurtainDraw · interface · L221-L231 — interface CurtainDraw
+- CurtainWall · interface · L233-L240 — interface CurtainWall
+- albaCurtain · function · L243-L245 — function albaCurtain(): { draw: CurtainDraw[]; walls: CurtainWall[] }
+- fortCurtain · function · L248-L250 — function fortCurtain(f: Fort): { draw: CurtainDraw[]; walls: CurtainWall[] }
+- curtain · function · L257-L317 — function curtain(town: { x: number; z: number }, R: number, gateAngles: number[], o: { scale: number; towers: number; tint?: number }): { draw: CurtainDraw[]; walls: CurtainWall[] }
+- at · function · L263-L263 — at = (a: number)
+- wallRot · function · L265-L265 — wallRot = (a: number)
+- halfAng · function · L266-L266 — halfAng = (halfLen: number)
+- fill · function · L268-L282 — fill = (from: number, to: number)
 - dusk · function · L330-L333 — dusk = (id: string, lx: number, lz: number, w: number, d: number, o: Partial<Stamp> = {}): Stamp
 - fortIssues · function · L361-L403 — function fortIssues(f: Fort): string[]
 - PropName · type · L406-L406 — type PropName = 'Banner_1_Cloth' | 'Banner_2_Cloth' | 'Lantern_Wall' | 'WeaponStand' | 'Anvil' | 'Cauldron' | 'Barrel' | 'Crate_Wooden';

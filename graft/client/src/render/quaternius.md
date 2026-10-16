@@ -1,30 +1,30 @@
 # client/src/render/quaternius.ts
 
-- Prim · interface · L27-L27 — interface Prim
-- Helm · type · L42-L42 — type Helm = keyof typeof HELMS;
-- qReady · function · L62-L62 — qReady = ()
-- qWeapon · function · L64-L64 — qWeapon = (item: string | null): THREE.Object3D | null
-- avgColor · function · L70-L82 — function avgColor(tex: THREE.Texture): THREE.Color
-- lum · function · L76-L76 — lum = (i: number)
-- headOnly · function · L85-L98 — function headOnly(geo: THREE.BufferGeometry)
-- keep · function · L87-L91 — keep = (v: number)
-- loadQ · function · L100-L169 — function loadQ(): Promise<void>
-- collect · function · L130-L147 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
-- get · function · L162-L162 — get = (n: string)
-- setCharAniso · function · L177-L190 — function setCharAniso(n: number): number
-- material · function · L199-L222 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
-- QZone · interface · L225-L225 — interface QZone
-- QOpts · interface · L226-L246 — interface QOpts
-- QAnim · interface · L248-L253 — interface QAnim
-- attach · function · L256-L264 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
-- qPlayer · function · L266-L341 — function qPlayer(o: QOpts): Rig
-- add · function · L275-L286 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
-- zone · function · L288-L289 — zone = (z: QZone, hands?: number)
-- kit · function · L290-L290 — kit = (z: QZone)
-- hair · function · L297-L297 — hair = (p: Prim): [number, number, boolean]
-- animateQ · function · L344-L393 — function animateQ(q: QAnim, s: AnimState)
-- at · function · L350-L355 — at = (name: string, ms: number)
-- mountQuaterniusPreview · function · L396-L488 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L414-L422 — resize = ()
-- build · function · L445-L457 — build = ()
-- btn · function · L458-L464 — btn = (label: string, fn: () => void)
+- Prim · interface · L28-L28 — interface Prim
+- Helm · type · L43-L43 — type Helm = keyof typeof HELMS;
+- qReady · function · L63-L63 — qReady = ()
+- qWeapon · function · L65-L65 — qWeapon = (item: string | null): THREE.Object3D | null
+- avgColor · function · L71-L83 — function avgColor(tex: THREE.Texture): THREE.Color
+- lum · function · L77-L77 — lum = (i: number)
+- headOnly · function · L86-L99 — function headOnly(geo: THREE.BufferGeometry)
+- keep · function · L88-L92 — keep = (v: number)
+- loadQ · function · L101-L172 — function loadQ(): Promise<void>
+- collect · function · L131-L150 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
+- get · function · L165-L165 — get = (n: string)
+- setCharAniso · function · L180-L193 — function setCharAniso(n: number): number
+- material · function · L202-L225 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
+- QZone · interface · L228-L228 — interface QZone
+- QOpts · interface · L229-L249 — interface QOpts
+- QAnim · interface · L251-L256 — interface QAnim
+- attach · function · L259-L267 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
+- qPlayer · function · L269-L344 — function qPlayer(o: QOpts): Rig
+- add · function · L278-L289 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
+- zone · function · L291-L292 — zone = (z: QZone, hands?: number)
+- kit · function · L293-L293 — kit = (z: QZone)
+- hair · function · L300-L300 — hair = (p: Prim): [number, number, boolean]
+- animateQ · function · L347-L396 — function animateQ(q: QAnim, s: AnimState)
+- at · function · L353-L358 — at = (name: string, ms: number)
+- mountQuaterniusPreview · function · L399-L491 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L417-L425 — resize = ()
+- build · function · L448-L460 — build = ()
+- btn · function · L461-L467 — btn = (label: string, fn: () => void)

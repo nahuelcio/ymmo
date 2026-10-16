@@ -19,9 +19,9 @@ export interface RaidDef {
 }
 
 export const RAIDS: Record<string, RaidDef> = {
-  kaim: { id: 'kaim', name: 'Guarida de Kaim', nameEn: "Kaim's Lair", boss: 'kaim_ascended', x: -20, z: 260, entry: { x: -20, z: 232 }, maxPlayers: 9, minLevel: 1, closeAfterKill: 90000 },
+  kaim: { id: 'kaim', name: 'Guarida de Kaim', nameEn: "Kaim's Lair", boss: 'kaim_ascended', x: -330, z: 720, entry: { x: -330, z: 748 }, maxPlayers: 9, minLevel: 1, closeAfterKill: 90000 },
   // entered with `/raid nest`
-  nest: { id: 'nest', name: 'Corazón del Nido', nameEn: 'Heart of the Nest', boss: 'vharion', x: -340, z: 130, entry: { x: -340, z: 100 }, maxPlayers: 9, minLevel: 45, quest: 'ancient_drakes', closeAfterKill: 90000 },
+  nest: { id: 'nest', name: 'Corazón del Nido', nameEn: 'Heart of the Nest', boss: 'vharion', x: -420, z: -460, entry: { x: -420, z: -430 }, maxPlayers: 9, minLevel: 45, quest: 'ancient_drakes', closeAfterKill: 90000 },
   // the ring's raids sit on their own flat floors (terrain.ts RAID_FLOORS): `/raid frost`
   frost: { id: 'frost', name: 'Trono de Escarcha', nameEn: 'Frost Throne', boss: 'hrimgar', x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z, entry: { x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z + 20 }, maxPlayers: 9, minLevel: 58, quest: 'giant_slayer', closeAfterKill: 90000 },
   abyss: { id: 'abyss', name: 'Corazón del Abismo', nameEn: 'Heart of the Abyss', boss: 'azgaroth', x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z, entry: { x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z - 20 }, maxPlayers: 9, minLevel: 76, quest: 'abyss_guard', closeAfterKill: 90000 },

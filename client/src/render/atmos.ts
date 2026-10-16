@@ -3,7 +3,7 @@
 // screen-space light shafts / tilt-shift shaders. Every piece has its own switch in Options.
 import * as THREE from 'three';
 import { settings } from '../settings';
-import { heightAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, heightAt, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { waterRipple } from './propTex';
 
 /** Length of a full day. It runs off the wall clock, so every player sees the same hour without the server. */
@@ -166,11 +166,12 @@ export function waterMaterial(): THREE.ShaderMaterial {
 
 // ---------------------------------------------------------------- motes
 /** Dust in the daylight, fireflies after dark: a small cloud of points that stays around the player. */
+const tint = new THREE.Color();
 export class Motes {
   readonly points: THREE.Points;
   private pos: Float32Array;
   private mat: THREE.PointsMaterial;
-  private readonly N = 70;
+  private readonly N = 260;
   private readonly BOX = 34;
 
   constructor() {
@@ -196,12 +197,16 @@ export class Motes {
     this.points.visible = settings.s.particles;
     if (!this.points.visible) return;
     const p = this.pos, B = this.BOX, night = 1 - ATMOS.day;
-    for (let i = 0; i < this.N; i++) {
+    // snow over the frost lands, ash over the volcanic ones: the cloud thickens and falls; elsewhere only 70 drift
+    const snow = biomeWeight('frost', center.x, center.z), ash = biomeWeight('ash', center.x, center.z), fall = Math.max(snow, ash);
+    const n = Math.round(70 + (this.N - 70) * fall);
+    this.points.geometry.setDrawRange(0, n);
+    for (let i = 0; i < n; i++) {
       const o = i * 3;
       // Each one meanders on its own, in world space. Only those left behind (or too high / low) are
       // recycled to the far side, so the cloud never appears to travel with the player.
       p[o] += (Math.sin(t * 0.4 + i) * 0.5 + 0.35) * dt;
-      p[o + 1] += Math.sin(t * 0.7 + i * 1.7) * 0.25 * dt;
+      p[o + 1] += (Math.sin(t * 0.7 + i * 1.7) * 0.25 - fall * (1.2 + (i % 5) * 0.2)) * dt;
       p[o + 2] += Math.cos(t * 0.33 + i * 0.6) * 0.45 * dt;
       const dx = p[o] - center.x, dy = p[o + 1] - (center.y + 7.5), dz = p[o + 2] - center.z;
       if (Math.abs(dx) > B) p[o] -= Math.sign(dx) * 2 * B;
@@ -209,9 +214,11 @@ export class Motes {
       if (Math.abs(dy) > 7) p[o + 1] -= Math.sign(dy) * 14;
     }
     this.points.geometry.attributes.position.needsUpdate = true;
-    this.mat.color.setRGB(1 - night * 0.2, 0.96, 0.82 - night * 0.45);
-    this.mat.size = 0.14 + night * 0.08;
-    this.mat.opacity = 0.25 + night * (0.35 + 0.15 * Math.sin(t * 3));
+    this.mat.color.setRGB(1 - night * 0.2, 0.96, 0.82 - night * 0.45).lerp(tint.setRGB(0.95, 0.97, 1), snow).lerp(tint.setRGB(0.45, 0.4, 0.38), ash);
+    // ash and snow are not additive light: switch to normal blending under them
+    this.mat.blending = fall > 0.3 ? THREE.NormalBlending : THREE.AdditiveBlending;
+    this.mat.size = 0.14 + night * 0.08 + fall * 0.1;
+    this.mat.opacity = 0.25 + night * (0.35 + 0.15 * Math.sin(t * 3)) + fall * 0.45;
   }
 }
 

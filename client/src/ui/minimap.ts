@@ -3,10 +3,10 @@ import { makeMovable } from './movable';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
-import { heightAt, TOWN, TOWNS, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import * as terrain from '../../../shared/src/terrain';
+import { heightAt, TOWN, TOWNS, valueNoise, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees } from '../../../shared/src/layout';
 import { F_RED, type Game } from '../game';
-import { groundColor } from '../render/scene';
 import { el, Win } from './dom';
 import { lang, t as tx } from '../lang';
 import { settings } from '../settings';
@@ -14,7 +14,23 @@ import { gameClock } from '../render/atmos';
 import { campName, zoneName } from '../../../shared/src/i18n';
 import { BELL_TOWER } from '../../../shared/src/village';
 
-const RES = Math.round((512 * WORLD_HALF) / 500); // ~2 m a pixel
+// ponytail: capped so the 4 km continent overview stays ~2.5 M samples at startup (~2.5 m a pixel); the big map
+// re-samples the visible window at full resolution anyway. Raise the cap if the corner minimap looks soft.
+const RES = Math.min(1600, Math.round((512 * WORLD_HALF) / 500));
+
+type Region = { id: string; name: string; levels: string; x: number; z: number; poly: [number, number][] };
+// World v2 contract (terrain.ts): read optionally so the client builds before / without the new terrain.
+const ext = terrain as unknown as { landAt?: (x: number, z: number) => number; REGIONS?: Region[]; RING_ROADS?: [number, number, number, number][] };
+const landAt = ext.landAt ?? ((x: number, z: number) => (heightAt(x, z) < WATER_LEVEL ? 0 : 1));
+const REGIONS = ext.REGIONS ?? [];
+const ROADS = ext.RING_ROADS ?? [];
+
+/** Parchment palette, shared by the world map and the corner minimap. */
+const PAPER: [number, number, number] = [226, 206, 162];
+const SEA: [number, number, number] = [238, 228, 202];
+const INK = '#3a2614';
+const INK_A = (a: number) => `rgba(58, 38, 20, ${a})`;
+const REGION_TINT = ['#7a8a4a', '#a0703a', '#6a7a8a', '#8a5a6a', '#5a7a6a', '#9a8a3a', '#7a4a3a'];
 /** minimap size in CSS px; its canvas is backed at device resolution so it stays sharp */
 const MM = 170;
 
@@ -40,22 +56,49 @@ function* paintTerrain(x0: number, z0: number, span: number, res: number): Gener
   const step = span / res;
   // heights one sample past each edge so the slope at the border is real, not clamped
   const W = res + 2;
-  const hs = new Float32Array(W * W);
+  const hs = new Float32Array(W * W), ls = new Float32Array(W * W);
   for (let j = 0; j < W; j++) {
-    for (let i = 0; i < W; i++) hs[j * W + i] = heightAt(x0 + (i - 1) * step, z0 + (j - 1) * step);
+    for (let i = 0; i < W; i++) {
+      const x = x0 + (i - 1) * step, z = z0 + (j - 1) * step;
+      hs[j * W + i] = heightAt(x, z);
+      ls[j * W + i] = landAt(x, z);
+    }
     yield;
   }
+  // hatching period in pixels: a few metres at the overview, never finer than 3 px
+  const hatch = Math.max(3, Math.round(6 / Math.max(0.5, step)));
   for (let j = 0; j < res; j++) {
     for (let i = 0; i < res; i++) {
       const k = (j + 1) * W + i + 1, h = hs[k];
-      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(x0 + i * step, z0 + j * step, h);
-      // relief per metre, so every zoom level shades alike (the 2 m overview used raw height differences)
-      const slope = ((hs[k + 1] - hs[k - 1] + hs[k + W] - hs[k - W]) * 2) / step;
-      const shade = h < WATER_LEVEL ? 1 : (0.9 + Math.min(0.25, h / 140)) * Math.min(1.3, Math.max(0.62, 1 - slope * 0.11));
+      const x = x0 + i * step, z = z0 + j * step;
+      const land = ls[k];
+      // paper stains: two octaves of noise in world space, so they don't swim while panning
+      const stain = 0.93 + 0.07 * valueNoise(x * 0.004, z * 0.004) + 0.03 * valueNoise(x * 0.03, z * 0.03);
+      let r: number, g: number, b: number;
+      if (land < 0.5) {
+        // sea: pale paper with a darker wash hugging the coast (the shadow under the inked shore)
+        const wash = Math.max(0, (land - 0.15) / 0.35);
+        [r, g, b] = SEA.map((c, n) => c - wash * (n === 2 ? 30 : 45));
+      } else if (h < WATER_LEVEL) {
+        [r, g, b] = [150, 150, 128]; // lakes and rivers: ink-tinted water
+      } else {
+        // relief per metre, so every zoom level shades alike; light from the north-west
+        const sx = (hs[k + 1] - hs[k - 1]) / (2 * step), sz = (hs[k + W] - hs[k - W]) / (2 * step);
+        const light = Math.min(1.12, Math.max(0.6, 1 + (sx + sz) * 0.35));
+        const steep = Math.min(1, Math.hypot(sx, sz) * 0.9);
+        // ink hatching on slopes, diagonal strokes that thicken with steepness
+        const ink = (i + j) % hatch < 1 + steep * 1.5 ? steep * 0.35 : 0;
+        const hi = Math.min(1, Math.max(0, h / 90)) * 0.18; // uplands a shade browner
+        const f = light * (1 - ink) * (1 - hi);
+        [r, g, b] = [PAPER[0] * f, PAPER[1] * f * (1 - hi * 0.2), PAPER[2] * f * (1 - hi * 0.5)];
+      }
+      // the coastline itself: one inked pixel wherever a neighbour lies on the other side of the shore
+      const side = land >= 0.5;
+      const coast = (ls[k + 1] >= 0.5) !== side || (ls[k - 1] >= 0.5) !== side || (ls[k + W] >= 0.5) !== side || (ls[k - W] >= 0.5) !== side ? 0.85 : 0;
       const o = (j * res + i) * 4;
-      img.data[o] = Math.min(255, r * 255 * shade);
-      img.data[o + 1] = Math.min(255, g * 255 * shade);
-      img.data[o + 2] = Math.min(255, b * 255 * shade);
+      img.data[o] = (r * (1 - coast) + 58 * coast) * stain;
+      img.data[o + 1] = (g * (1 - coast) + 38 * coast) * stain;
+      img.data[o + 2] = (b * (1 - coast) + 20 * coast) * stain;
       img.data[o + 3] = 255;
     }
     yield;
@@ -287,55 +330,97 @@ export class Minimap {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, S, S);
     }
-    const pxPer = S / this.mapSpan();
+    const pxPer = S / this.mapSpan(), zoom = this.mapZoom;
+    // regions: a faint wash and a dashed ink border
+    ctx.save();
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([7, 4]);
+    REGIONS.forEach((r, n) => {
+      ctx.beginPath();
+      for (const [x, z] of r.poly) ctx.lineTo(...this.toBig(x, z));
+      ctx.closePath();
+      ctx.globalAlpha = 0.13;
+      ctx.fillStyle = REGION_TINT[n % REGION_TINT.length];
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = INK_A(0.55);
+      ctx.stroke();
+    });
+    // roads as dotted ink
+    ctx.setLineDash([2, 4]);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = INK_A(0.7);
+    ctx.beginPath();
+    for (const [ax, az, bx, bz] of ROADS) {
+      ctx.moveTo(...this.toBig(ax, az));
+      ctx.lineTo(...this.toBig(bx, bz));
+    }
+    ctx.stroke();
+    ctx.restore();
     this.drawStructures(ctx, pxPer, S);
-    ctx.font = 'bold 12px Tahoma, sans-serif';
     ctx.textAlign = 'center';
-    // ponytail: greedy declutter, labels that would overlap one already drawn are skipped (towns win, then zones,
-    // then camps); zooming in frees room so the rest appear. O(n²) over ~40 labels.
+    // ponytail: greedy declutter, labels that would overlap one already drawn are skipped (regions win, then
+    // towns, zones, camps); zooming in frees room so the rest appear. O(n^2) over ~50 labels.
     const taken: number[][] = [];
-    const tag = (t: string, x: number, y: number) => {
+    const tag = (t: string, x: number, y: number, px = 12, font = 'bold', spacing = '0px') => {
+      ctx.font = `${font} ${px}px Georgia, serif`;
+      ctx.letterSpacing = spacing;
       const w = ctx.measureText(t).width / 2 + 3;
-      if (taken.some(([a, b, c, d]) => x - w < c && x + w > a && y - 13 < d && y + 3 > b)) return;
-      taken.push([x - w, y - 13, x + w, y + 3]);
-      this.label(ctx, t, x, y);
+      if (!taken.some(([a, b, c, d]) => x - w < c && x + w > a && y - px < d && y + 3 > b)) {
+        taken.push([x - w, y - px, x + w, y + 3]);
+        this.label(ctx, t, x, y);
+      }
+      ctx.letterSpacing = '0px';
     };
+    const inView = (x: number, y: number, m = 80) => x > -m && y > -20 && x < S + m && y < S + 20;
+    // labels by zoom: regions far out, towns and zones mid, camps, raids and quests close
+    if (zoom < 3) for (const r of REGIONS) {
+      const [x, y] = this.toBig(r.x, r.z);
+      tag(r.name.toUpperCase(), x, y, Math.round(Math.min(26, 14 + 6 * zoom)), 'italic 600', '5px');
+      tag(r.levels, x, y + 16, 11, 'italic');
+    }
+    const mid = zoom >= 1.4 || !REGIONS.length;
     const towns = TOWNS.map((t) => [...this.toBig(t.x, t.z), t] as const);
-    for (const [x, y, t] of towns) tag(zoneName(t.name, lang), x, y - 12);
+    if (mid) for (const [x, y, t] of towns) tag(zoneName(t.name, lang), x, y - 13, 13);
+    ctx.save();
+    ctx.strokeStyle = INK_A(0.45);
+    ctx.setLineDash([3, 4]);
     for (const z of ZONES) {
       const [x, y] = this.toBig(z.x, z.z);
-      ctx.strokeStyle = 'rgba(255,220,140,0.6)';
-      ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.arc(x, y, z.r * pxPer, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
-      if (x > -80 && y > -20 && x < S + 80 && y < S + 20) tag(`${zoneName(z.name, lang)} (${z.levels})`, x, y);
     }
-    ctx.fillStyle = '#ffd966';
-    for (const [x, y] of towns) {
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fill();
+    ctx.restore();
+    if (mid) for (const z of ZONES) {
+      const [x, y] = this.toBig(z.x, z.z);
+      if (inView(x, y)) tag(`${zoneName(z.name, lang)} (${z.levels})`, x, y, 12, 'italic bold');
     }
-    // hostile camps: the icon always, the name only where it fits
+    for (const [x, y] of towns) this.townIcon(ctx, x, y);
+    // hostile camps and raid lairs: the icon always, the name only close in and where it fits
+    const close = zoom >= 3;
+    for (const r of Object.values(RAIDS)) {
+      const [x, y] = this.toBig(r.x, r.z);
+      this.raidIcon(ctx, x, y);
+      if (close) tag(lang === 'en' ? r.nameEn : r.name, x, y - 12, 11, 'italic bold');
+    }
     for (const c of CAMPS) {
       const [x, y] = this.toBig(c.x, c.z);
-      this.campIcon(ctx, x, y, 9);
-      tag(`${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12);
+      this.campIcon(ctx, x, y, close ? 8 : 6);
+      if (close) tag(`${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12, 11);
     }
-    // quest hunting areas
+    // quest hunting areas: always outlined, named once zoomed in
     for (const { zone, quests } of questAreas(this.g.questTargets())) {
       const [x, y] = this.toBig(zone.x, zone.z), r = zone.r * 0.85 * pxPer;
-      ctx.fillStyle = 'rgba(255, 210, 0, 0.18)';
-      ctx.strokeStyle = 'rgba(255, 210, 0, 0.9)';
+      ctx.fillStyle = 'rgba(200, 120, 0, 0.16)';
+      ctx.strokeStyle = 'rgba(150, 60, 10, 0.9)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.lineWidth = 1;
-      quests.forEach((q, i) => this.label(ctx, q, x, y + 18 + i * 14));
+      if (zoom >= 2) quests.forEach((q, i) => tag(q, x, y + 18 + i * 14));
     }
     this.drawRoute(ctx, (x, z) => this.toBig(x, z));
     // other players, as far as the server tells us about them (those in view): the party in green, with names
@@ -345,13 +430,22 @@ export class Minimap {
     for (const c of this.g.ents.values()) {
       if (c.rec.k !== 'p' || c.id === this.g.me.id) continue;
       const [x, y] = this.toBig(c.pos.x, c.pos.z), mate = partyIds.has(c.id);
-      ctx.fillStyle = mate ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
+      ctx.strokeStyle = '#000';
+      ctx.fillStyle = mate ? '#2a9a48' : c.flags & F_RED ? '#ff2222' : '#66aaff';
       ctx.beginPath();
       ctx.arc(x, y, mate ? 4.5 : 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       if (mate) this.label(ctx, c.rec.n, x, y - 8);
     }
+    // aged edges: a brown vignette and two compass roses
+    const v = ctx.createRadialGradient(S / 2, S / 2, S * 0.38, S / 2, S / 2, S * 0.75);
+    v.addColorStop(0, 'rgba(90, 55, 20, 0)');
+    v.addColorStop(1, 'rgba(90, 55, 20, 0.5)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, S, S);
+    this.compass(ctx, S - 52, 52, 36);
+    this.compass(ctx, 34, S - 34, 22);
     const self = this.g.self;
     if (self) {
       const [x, y] = this.toBig(self.pos.x, self.pos.z);
@@ -422,6 +516,73 @@ export class Minimap {
     }
   }
 
+  /** A little inked keep: a walled block with three merlons and a gate. */
+  private townIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    ctx.fillStyle = '#e8d2a0';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.rect(x - 7, y - 5, 14, 11);
+    for (let i = 0; i < 3; i++) ctx.rect(x - 7 + i * 5.5, y - 8, 3, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.fillRect(x - 1.5, y + 1, 3, 5);
+    ctx.lineWidth = 1;
+  }
+
+  /** A raid lair: a dark cave mouth in a crag. */
+  private raidIcon(ctx: CanvasRenderingContext2D, x: number, y: number) {
+    ctx.fillStyle = '#6a3a22';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y + 6);
+    ctx.lineTo(x - 3, y - 7);
+    ctx.lineTo(x + 3, y - 7);
+    ctx.lineTo(x + 8, y + 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#120806';
+    ctx.beginPath();
+    ctx.arc(x, y + 6, 3.5, Math.PI, 0);
+    ctx.fill();
+    ctx.lineWidth = 1;
+  }
+
+  /** An eight-point compass rose in ink, N on top. */
+  private compass(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const len = i % 2 ? r * 0.55 : r, w = r * (i % 2 ? 0.1 : 0.16);
+      ctx.save();
+      ctx.rotate((i * Math.PI) / 4);
+      for (const sd of [-1, 1]) {
+        ctx.fillStyle = sd < 0 ? INK : '#e8d6aa';
+        ctx.beginPath();
+        ctx.moveTo(0, -len);
+        ctx.lineTo(sd * w, -w);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.font = `bold ${Math.round(r * 0.4)}px Georgia, serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK;
+    ctx.fillText('N', 0, -r - 3);
+    ctx.restore();
+  }
+
   /** Crossed swords on a red disc. */
   private campIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
     ctx.fillStyle = '#8a1a14';
@@ -477,10 +638,13 @@ export class Minimap {
   }
 
   private label(ctx: CanvasRenderingContext2D, t: string, x: number, y: number) {
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillText(t, x + 1, y + 1);
-    ctx.fillStyle = '#fff4d0';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(240, 226, 190, 0.85)';
+    ctx.strokeText(t, x, y);
+    ctx.fillStyle = INK;
     ctx.fillText(t, x, y);
+    ctx.lineWidth = 1;
   }
 
   private arrow(ctx: CanvasRenderingContext2D, x: number, y: number, ry: number, s: number) {
@@ -521,7 +685,7 @@ export class Minimap {
     const R = this.viewR;
     const px = self.pos.x, pz = self.pos.z;
     const scale = W / (2 * R);
-    ctx.fillStyle = '#10131a';
+    ctx.fillStyle = `rgb(${SEA})`;
     ctx.fillRect(0, 0, W, W);
     const srcR = (R / (2 * WORLD_HALF)) * RES;
     ctx.imageSmoothingEnabled = true;

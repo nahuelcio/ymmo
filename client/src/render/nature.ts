@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { biomeWeight, heightAt, mulberry32, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, heightAt, mulberry32, regionAt, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { fertile, layoutBushes, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
 import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
@@ -24,7 +24,20 @@ const PINES = ['PineTree_1', 'PineTree_2', 'PineTree_3'] as const;
 const GREENS = ['NormalTree_1', 'NormalTree_2'] as const;
 const AUTUMN = ['BirchTree_1', 'MapleTree_1'] as const;
 const DEAD = ['DeadTree_1', 'DeadTree_2'] as const;
-const FROSTED = new THREE.Color(0x9ab8b4);
+// Leaf tints per biome (instance colour multiplies the texture; over 1 brightens it).
+// ponytail: tints are hand-picked constants, one per biome; a per-region palette table is the upgrade if more pile up
+const FROSTED = new THREE.Color(0.6, 0.78, 0.95);
+const DARK_PINE = new THREE.Color(0.72, 0.8, 0.78);
+const LUSH = new THREE.Color(0.62, 0.92, 0.55);
+const GIANT = new THREE.Color(0.68, 0.88, 0.62);
+/** the dusk lands' autumn: deep red maples, copper, and pale gold birches */
+const FALL = [new THREE.Color(1.05, 0.62, 0.5), new THREE.Color(1.1, 0.85, 0.6), new THREE.Color(1.15, 1, 0.8)];
+const CHARRED = new THREE.Color(0.32, 0.3, 0.3);
+const BLEACHED = new THREE.Color(0.8, 0.78, 0.82);
+/** the steppes' golden grass and the ash lands' rocks */
+const GOLDEN = new THREE.Color(1.25, 1.0, 0.45);
+const BASALT = new THREE.Color(0.35, 0.32, 0.32);
+const MIRE = new THREE.Color(0.55, 0.62, 0.42);
 /** the swamp's grass, dark and wet */
 const BOGGY = new THREE.Color(0.6, 0.7, 0.46);
 const BUSHES = ['Bush_Small', 'Bush', 'Bush_Large'] as const;
@@ -51,6 +64,16 @@ export const natureReady = () => ready;
 
 /** The instances that draw each world node (shared/src/nodes.ts), so render/nodes.ts can fell, empty or restore it. */
 export const nodeInstances = new Map<number, { mesh: THREE.InstancedMesh; i: number }[]>();
+/** Called with the node ids a freshly streamed tile just drew (render/nodes.ts re-applies felled/mined state). */
+export const nodeHooks = { built: (_ids: number[]) => {} };
+/** A streamed tile is going away: forget its instances in nodeInstances. */
+export function dropNodeInstances(meshes: THREE.Object3D[]) {
+  for (const m of meshes) for (const id of (m.userData.nodes as number[] | undefined) ?? []) {
+    const l = nodeInstances.get(id)?.filter((e) => e.mesh !== m);
+    if (l?.length) nodeInstances.set(id, l);
+    else nodeInstances.delete(id);
+  }
+}
 
 const CHUNK = 200;
 const DETAIL_CHUNK = 40;
@@ -189,6 +212,7 @@ function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }
       mesh.setMatrixAt(i, it.m);
       if (tinted) mesh.setColorAt(i, it.c ?? WHITE);
       if (it.node !== undefined) {
+        (mesh.userData.nodes ??= []).push(it.node);
         let l = nodeInstances.get(it.node);
         if (!l) nodeInstances.set(it.node, (l = []));
         l.push({ mesh, i });
@@ -212,52 +236,76 @@ const DRY = new THREE.Color(1, 0.92, 0.5);
 const PARCHED = new THREE.Color(1, 0.98, 0.75);
 const up = new THREE.Vector3(0, 1, 0);
 
-function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number): Item[] {
+/** leafOnly: the tint skips the opaque parts (trunks keep their bark). */
+function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number, leafOnly = false): Item[] {
   const mm = m.clone();
-  const n = prims.get(piece)?.length ?? 0;
+  const list = prims.get(piece) ?? [];
   const out: Item[] = [];
-  for (let prim = 0; prim < n; prim++) out.push({ m: mm, x, z, piece, prim, c, node });
+  list.forEach((p, prim) => out.push({ m: mm, x, z, piece, prim, c: leafOnly && !p.mat.alphaTest ? undefined : c, node }));
   return out;
 }
 
-export function buildNatureTrees(): THREE.Group {
+/** One streamed tile's trees, rocks and bushes (indices into layoutTrees/Rocks/Bushes). */
+export function natureTile(idx: { trees: number[]; rocks: number[]; bushes: number[] }): THREE.Object3D[] {
+  const g = [buildNatureTrees(idx.trees), buildNatureRocks(idx.rocks), buildNatureBushes(idx.bushes)];
+  const out = g.flatMap((x) => [...x.children]);
+  nodeHooks.built(out.flatMap((m) => (m.userData.nodes as number[] | undefined) ?? []));
+  return out;
+}
+
+function buildNatureTrees(idx: number[]): THREE.Group {
   const items: Item[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
-  layoutTrees().forEach((t, treeIdx) => {
+  const all = layoutTrees();
+  idx.forEach((treeIdx) => {
+    const t = all[treeIdx];
     const u = hash(t.x, t.z);
-    // the jungle keeps its green all year
-    const jungle = biomeWeight('swamp', t.x, t.z) > 0.5;
-    const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : jungle ? pick(GREENS, u) : u < 0.3 ? pick(AUTUMN, u / 0.3) : pick(GREENS, (u - 0.3) / 0.7);
-    const m = new THREE.Matrix4().compose(p.set(t.x, t.h - 0.1, t.z), q.setFromAxisAngle(up, t.rot), s.set(t.sc, t.sc, t.sc));
-    // the frost region's pines, dulled under the cold
-    const tint = biomeWeight('frost', t.x, t.z) > 0.5 ? FROSTED : undefined;
-    items.push(...spawn(piece, m, t.x, t.z, tint, NODE_BASE.tree + treeIdx));
+    const reg = regionAt(t.x, t.z), zone = zoneOf(t.x, t.z)?.id;
+    // the jungle keeps its green all year; the dusk lands burn with autumn
+    const jungle = biomeWeight('swamp', t.x, t.z) > 0.5, fall = reg === 'dusk' && zone !== 'wastes';
+    const piece = t.dead ? pick(DEAD, u) : t.pine ? pick(PINES, u) : jungle || t.sc > 3 ? pick(GREENS, u)
+      : u < (fall ? 0.75 : 0.3) ? pick(AUTUMN, u / (fall ? 0.75 : 0.3)) : pick(GREENS, (u - 0.3) / 0.7);
+    // giants sink a little more so their wide root flare does not float on slopes
+    const m = new THREE.Matrix4().compose(p.set(t.x, t.h - 0.1 * t.sc, t.z), q.setFromAxisAngle(up, t.rot), s.set(t.sc, t.sc, t.sc));
+    const tint = t.dead ? (biomeWeight('ash', t.x, t.z) > 0.5 ? CHARRED : zone === 'wastes' ? BLEACHED : undefined)
+      : biomeWeight('frost', t.x, t.z) > 0.5 ? FROSTED // snow-dusted pines
+      : jungle ? LUSH : t.sc > 3 ? GIANT
+      : fall && piece !== GREENS[0] && piece !== GREENS[1] ? FALL[Math.floor(t.hue * 3)]
+      : t.pine && (reg === 'dragon' || zone === 'barracks') ? DARK_PINE : undefined;
+    items.push(...spawn(piece, m, t.x, t.z, tint, NODE_BASE.tree + treeIdx, !t.dead));
   });
   return chunked(items, CHUNK);
 }
 
-export function buildNatureRocks(): THREE.Group {
+function buildNatureRocks(idx: number[]): THREE.Group {
   const items: Item[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
-  layoutRocks().forEach((r, rockIdx) => {
+  const all = layoutRocks();
+  idx.forEach((rockIdx) => {
+    const r = all[rockIdx];
     const piece = pick(ROCKS, hash(r.x, r.z));
     const m = new THREE.Matrix4().compose(p.set(r.x, r.y, r.z), q.setFromEuler(e.set(r.e[0], r.e[1], r.e[2])), s.set(r.s[0], r.s[1], r.s[2]));
     const id = NODE_BASE.rock + rockIdx;
-    items.push(...spawn(piece, m, r.x, r.z, undefined, nodeById(id) ? id : undefined));
+    items.push(...spawn(piece, m, r.x, r.z, biomeWeight('ash', r.x, r.z) > 0.5 ? BASALT : undefined, nodeById(id) ? id : undefined));
   });
   return chunked(items, CHUNK);
 }
 
 const ROCKS = ['Rock_1', 'Rock_2', 'Rock_3'] as const;
 
-export function buildNatureBushes(): THREE.Group {
+function buildNatureBushes(idx: number[]): THREE.Group {
   const items: Item[] = [];
   const q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3();
-  layoutBushes().forEach((b, bushIdx) => {
+  const all = layoutBushes();
+  idx.forEach((bushIdx) => {
+    const b = all[bushIdx];
     const piece = b.u < 0.18 ? pick(BUSH_FLOWERS, b.u / 0.18) : pick(BUSHES, (b.u - 0.18) / 0.82);
     const sc = b.sc * BUSH_FIT;
     const m = new THREE.Matrix4().compose(p.set(b.x, b.h - 0.1, b.z), q.setFromAxisAngle(up, b.rot), sv.set(sc, sc, sc));
-    items.push(...spawn(piece, m, b.x, b.z, undefined, b.fruit ? NODE_BASE.bush + bushIdx : undefined));
+    // the swamp's mangrove thickets: big, dark and wet
+    const bog = biomeWeight('swamp', b.x, b.z) > 0.5;
+    if (bog) m.scale(sv.set(1.6, 1.25, 1.6));
+    items.push(...spawn(piece, m, b.x, b.z, bog ? MIRE : zoneOf(b.x, b.z)?.id === 'steppes' ? GOLDEN : undefined, b.fruit ? NODE_BASE.bush + bushIdx : undefined));
   });
   return chunked(items, CHUNK);
 }
@@ -282,7 +330,7 @@ export function natureDetailCell(x0: number, z0: number, seed: number): THREE.Ob
           items.push(...spawn(r1 < 0.5 ? 'Flower_1_Clump' : 'Flower_3_Clump', m, x, z));
         } else {
           const dry = zone === 'wastes' ? 1 : zone === 'barracks' ? 0.5 : 0;
-          const tint = dry === 1 ? DRY : dry === 0.5 ? PARCHED : biomeWeight('swamp', x, z) > 0.5 ? BOGGY : WHITE;
+          const tint = zone === 'steppes' ? GOLDEN : dry === 1 ? DRY : dry === 0.5 ? PARCHED : biomeWeight('swamp', x, z) > 0.5 ? BOGGY : regionAt(x, z) === 'dusk' ? PARCHED : WHITE;
           items.push(...spawn(r1 > 0.72 ? 'Grass_Large' : 'Grass_Small', m, x, z, c.copy(tint).clone()));
         }
       }

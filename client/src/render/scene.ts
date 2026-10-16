@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { Clouds, cloudShadow } from './clouds';
 import { fortLanterns, FORTS } from '../../../shared/src/village';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { biomeWeight, fbm, heightAt, inTown, mulberry32, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, VOLCANO, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { biomeWeight, fbm, heightAt, inTown, mulberry32, valueNoise, smoothstep, TOWN, TOWN_HEIGHT, TOWNS, VOLCANO, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { ZONES } from '../../../shared/src/data/world';
 import { layoutCamps, layoutRocks, layoutTown, layoutTrees, layoutZoneProps, nearCamp, plazaBenches, roadDist, ROADS, zoneOf, detailCells, layoutBushes } from '../../../shared/src/layout';
 import { buildVillage, vReady } from './village';
-import { buildNatureBushes, buildNatureRocks, buildNatureTown, buildNatureTrees, natureDetailCell, NATURE_DETAIL_DRAWS, natureReady } from './nature';
+import { buildNatureTown, dropNodeInstances, natureDetailCell, NATURE_DETAIL_DRAWS, natureReady, natureTile } from './nature';
 import { setCharAniso } from './quaternius';
 import { settings } from '../settings';
 import { ATMOS, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
@@ -31,7 +31,8 @@ FC.fog_fragment = FC.fog_fragment.replace('gl_FragColor.rgb = mix( gl_FragColor.
 const SNAP_UP = new THREE.Vector3(0, 1, 0), snapR = new THREE.Vector3(), snapU = new THREE.Vector3(), snapped = new THREE.Vector3();
 
 /** Sky palette per region: zenith, horizon (also fog), ground bounce, sun colour & strength, cloud tint. */
-interface SkyPal { top: number; horizon: number; ground: number; sun: number; sunI: number; hemi: number; cloud: number }
+/** near: where the fog starts, as a share of the view distance (thick swamp air, clear frost); 0.22 when left out. */
+interface SkyPal { top: number; horizon: number; ground: number; sun: number; sunI: number; hemi: number; cloud: number; near?: number }
 const SKIES: Record<string, SkyPal> = {
   town: { top: 0x4a86d0, horizon: 0xb8d4ec, ground: 0x5a4a35, sun: 0xfff0d0, sunI: 2.4, hemi: 1.6, cloud: 0xffffff },
   meadows: { top: 0x3a8ae0, horizon: 0xcfe6f6, ground: 0x5a5a35, sun: 0xfff6dc, sunI: 2.6, hemi: 1.7, cloud: 0xffffff },
@@ -44,10 +45,13 @@ const SKIES: Record<string, SkyPal> = {
   citadel: { top: 0x4a3a30, horizon: 0x9a8670, ground: 0x302820, sun: 0xe8c8a0, sunI: 1.8, hemi: 1.1, cloud: 0x80705e },
   valley: { top: 0x4a6e70, horizon: 0xa8c0a8, ground: 0x34402c, sun: 0xf0f0d0, sunI: 2.0, hemi: 1.4, cloud: 0xc8d4c8 },
   nest: { top: 0x3a2438, horizon: 0x9a6a6a, ground: 0x2a1c22, sun: 0xff9a70, sunI: 1.7, hemi: 1.0, cloud: 0x7a5058 },
-  // whole ring regions (biomeWeight), so their towns and the land between zones get the sky too
-  frost: { top: 0x6a90b8, horizon: 0xe4ecf2, ground: 0xb8c4cc, sun: 0xf0f6ff, sunI: 2.2, hemi: 1.8, cloud: 0xf4f8fc },
-  swamp: { top: 0x4a5a3a, horizon: 0x9aa47a, ground: 0x2a3020, sun: 0xd8e0a0, sunI: 1.6, hemi: 1.2, cloud: 0x8a9470 },
-  ash: { top: 0x2a1a18, horizon: 0x8a5a40, ground: 0x2a1810, sun: 0xff8a50, sunI: 1.6, hemi: 0.9, cloud: 0x5a4038 },
+  // whole regions (biomeWeight), so their towns and the land between zones get the sky too
+  dusk: { top: 0x5a78b0, horizon: 0xf0c8a0, ground: 0x5a3a28, sun: 0xffd8a0, sunI: 2.4, hemi: 1.5, cloud: 0xf8dcc0 },
+  heart: { top: 0x3a84d0, horizon: 0xc4e0d0, ground: 0x3a5a30, sun: 0xfff4d0, sunI: 2.6, hemi: 1.7, cloud: 0xffffff, near: 0.3 },
+  dragon: { top: 0x52506e, horizon: 0xb09a90, ground: 0x3a2a24, sun: 0xffc8a0, sunI: 2.1, hemi: 1.3, cloud: 0xc0a8a0, near: 0.18 },
+  frost: { top: 0x6a90b8, horizon: 0xe4ecf2, ground: 0xb8c4cc, sun: 0xf0f6ff, sunI: 2.2, hemi: 1.8, cloud: 0xf4f8fc, near: 0.12 },
+  swamp: { top: 0x3e4c34, horizon: 0x8a9670, ground: 0x2a3020, sun: 0xd8e0a0, sunI: 1.5, hemi: 1.2, cloud: 0x7a8466, near: 0.03 },
+  ash: { top: 0x1e1210, horizon: 0x7a4a34, ground: 0x2a1810, sun: 0xff7a40, sunI: 1.5, hemi: 0.9, cloud: 0x4a3430, near: 0.06 },
 };
 
 const SkyShader = {
@@ -92,7 +96,8 @@ function groundFactors(x: number, z: number, h: number) {
   const town = Math.max(...TOWNS.map((t) => 1 - smoothstep(t.r - 2, t.r + 6, Math.hypot(x - t.x, z - t.z))));
   const dirt = Math.max(road * 0.85, town);
   const frost = biomeWeight('frost', x, z), swamp = biomeWeight('swamp', x, z), ash = biomeWeight('ash', x, z);
-  const peak = smoothstep(45, 60, h) * (1 - ash);
+  // the snow line: every range's tops are white (the volcano's are not)
+  const peak = smoothstep(36, 50, h + (valueNoise(x / 25, z / 25) - 0.5) * 10) * (1 - ash);
   const shore = (1 - smoothstep(WATER_LEVEL + 0.4, WATER_LEVEL + 2.2, h)) * (1 - dirt);
   return {
     n: fbm(x / 40 + 50, z / 40 - 20, 3),
@@ -118,6 +123,11 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   // the volcanic region's basalt and ash
   const as = f.ash * 0.9;
   r += (0.14 + n * 0.05 - r) * as; g += (0.12 + n * 0.03 - g) * as; b += (0.115 + n * 0.03 - b) * as;
+  // the midlands: dusk's dry olive autumn, the Heart's lush green, the dragon's scorched brown
+  const du = biomeWeight('dusk', x, z) * 0.55, he = biomeWeight('heart', x, z) * 0.45, dr = biomeWeight('dragon', x, z) * 0.5;
+  r += (0.46 + n * 0.1 - r) * du; g += (0.46 + n * 0.08 - g) * du; b += (0.2 + n * 0.04 - b) * du;
+  r += (0.24 + n * 0.08 - r) * he; g += (0.46 + n * 0.12 - g) * he; b += (0.15 + n * 0.05 - b) * he;
+  r += (0.34 + n * 0.08 - r) * dr; g += (0.36 + n * 0.06 - g) * dr; b += (0.22 + n * 0.04 - b) * dr;
   for (const zn of ZONES) {
     const w = (1 - smoothstep(zn.r * 0.5, zn.r * 1.15, Math.hypot(x - zn.x, z - zn.z))) * 0.75;
     r += (zn.tint[0] * (0.85 + n * 0.3) - r) * w;
@@ -130,6 +140,9 @@ export function groundColor(x: number, z: number, h: number): [number, number, n
   r += (0.74 - r) * f.sand; g += (0.68 - g) * f.sand; b += (0.5 - b) * f.sand;
   r += (0.27 - r) * f.mud; g += (0.25 - g) * f.mud; b += (0.16 - b) * f.mud;
   r += (0.22 - r) * f.deep; g += (0.32 - g) * f.deep; b += (0.34 - b) * f.deep;
+  // the ash lands' lava: thin glowing cracks along a ridged noise, off the roads and towns
+  const lava = f.ash * smoothstep(0.965, 0.99, 1 - Math.abs(valueNoise(x / 22 - 7, z / 22 + 3) * 2 - 1)) * (1 - f.dirt) * (1 - f.deep);
+  r += (1.0 - r) * lava; g += (0.32 - g) * lava; b += (0.06 - b) * lava;
   return [r, g, b];
 }
 
@@ -211,9 +224,12 @@ export interface WorldScene {
   setAniso(n: number): void;
   /** Cinematic preset: render the world mirrored in the water for this frame (before the main render). */
   renderReflection(on: boolean, renderer: THREE.WebGLRenderer, camera: THREE.Camera): void;
+  /** free the PMREM targets (the gallery disposes its world when unmounted) */
+  dispose(): void;
 }
 
-export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile } = {}): WorldScene {
+export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Precompile; renderer?: THREE.WebGLRenderer } = {}): WorldScene {
+  const t0 = performance.now();
   const scene = new THREE.Scene();
   // The scene itself never moves. Left on, it re-marks its own matrix every frame and three.js then recomputes the
   // world matrix of every node under it, frozen or not (4.7 ms a frame on the grown map).
@@ -222,7 +238,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   scene.fog = new THREE.Fog(SKY, 90, 420);
   /** where follow() last culled the chunks, and with which view distance / foliage setting */
   const lastCull = new THREE.Vector3(Infinity, 0, 0);
-  let lastReach = 0, lastDetail = false, grassLeft = false;
+  let lastReach = 0, lastDetail = false, grassLeft = false, tilesLeft = false;
 
   const hemi = new THREE.HemisphereLight(0xcfe3ff, 0x5a4a35, 1.6);
   scene.add(hemi);
@@ -232,36 +248,67 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   sky.renderOrder = -1;
   sky.frustumCulled = false;
   scene.add(sky);
+  // IBL: the sky itself lights the world. A twin of the dome (same material, so same uniforms) is baked into a PMREM
+  // and set as the scene's environment: every Lambert then picks up the sky's bounce (horizon glow, zone tints, dusk
+  // orange) for the cost of one texture lookup. The hemisphere light hands over part of its energy so the total
+  // ambient stays where it was tuned. Re-baked lazily: only when the sky has drifted past ENV_EPS since the last bake
+  // (a zone crossing, the sun crossing the sky) and at most every ENV_MIN_MS — a bake is a handful of tiny cube
+  // renders of the dome alone.
+  const ENV_I = 0.45, HEMI_KEEP = 0.7, ENV_MIN_MS = 1500, ENV_EPS = 0.05;
+  const pmrem = opts.renderer ? new THREE.PMREMGenerator(opts.renderer) : null;
+  const envScene = pmrem ? new THREE.Scene() : null;
+  if (envScene) envScene.add(sky.clone());
+  let envRT: THREE.WebGLRenderTarget | null = null, lastBake = -1e9;
+  const baked = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), night: 0, dir: new THREE.Vector3(9, 9, 9) };
+  /** total channel distance between two colours, the drift unit below */
+  const cd = (a: THREE.Color, b: THREE.Color) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b);
+  const skyDrift = () => {
+    const u = skyMat.uniforms;
+    return cd(baked.top, u.top.value) + cd(baked.horizon, u.horizon.value)
+      + cd(baked.ground, u.ground.value) + cd(baked.sun, u.sunColor.value)
+      + Math.abs(baked.night - u.night.value) * 0.5 + baked.dir.distanceTo(u.sunDir.value);
+  };
+  const bakeEnv = () => {
+    if (!pmrem || !envScene) return;
+    const next = pmrem.fromScene(envScene);
+    const old = envRT;
+    envRT = next;
+    scene.environment = envRT.texture;
+    scene.environmentIntensity = ENV_I;
+    if (old) old.dispose();
+    const u = skyMat.uniforms;
+    baked.top.copy(u.top.value); baked.horizon.copy(u.horizon.value); baked.ground.copy(u.ground.value);
+    baked.sun.copy(u.sunColor.value); baked.night = u.night.value; baked.dir.copy(u.sunDir.value);
+    lastBake = performance.now();
+  };
   const clouds = new Clouds();
   scene.add(clouds.mesh);
   const cloudLit = new THREE.Color(), cloudShade = new THREE.Color(), cloudRim = new THREE.Color();
   const pal = { ...SKIES.town };
-  const cur = { top: new THREE.Color(pal.top), horizon: new THREE.Color(pal.horizon), ground: new THREE.Color(pal.ground), sun: new THREE.Color(pal.sun), cloud: new THREE.Color(pal.cloud), sunI: pal.sunI, hemi: pal.hemi };
-  const tgt = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), cloud: new THREE.Color(), sunI: 0, hemi: 0 };
+  const cur = { top: new THREE.Color(pal.top), horizon: new THREE.Color(pal.horizon), ground: new THREE.Color(pal.ground), sun: new THREE.Color(pal.sun), cloud: new THREE.Color(pal.cloud), sunI: pal.sunI, hemi: pal.hemi, near: 0.22 };
+  const tgt = { top: new THREE.Color(), horizon: new THREE.Color(), ground: new THREE.Color(), sun: new THREE.Color(), cloud: new THREE.Color(), sunI: 0, hemi: 0, near: 0.22 };
   const tmp = new THREE.Color();
   /** Blend the palettes of nearby zones (town as the base) at world position (x,z). */
   const paletteAt = (x: number, z: number) => {
     const base = SKIES.town;
     tgt.top.set(base.top); tgt.horizon.set(base.horizon); tgt.ground.set(base.ground); tgt.sun.set(base.sun); tgt.cloud.set(base.cloud);
     tgt.sunI = base.sunI; tgt.hemi = base.hemi;
+    tgt.near = 0.22;
+    const blend = (p: SkyPal, w: number) => {
+      tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
+      tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
+      tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w; tgt.near += ((p.near ?? 0.22) - tgt.near) * w;
+    };
+    // the midland regions under the zones, the far regions over them
+    for (const id of ['dusk', 'heart', 'dragon'] as const) blend(SKIES[id], biomeWeight(id, x, z));
     for (const zn of ZONES) {
       const w = 1 - smoothstep(zn.r * 0.6, zn.r * 1.5, Math.hypot(x - zn.x, z - zn.z));
       if (w <= 0) continue;
       // zones without a palette of their own (volcanic, abyss, tundra...) take their ring region's sky below
       const p = SKIES[zn.id] as SkyPal | undefined;
-      if (!p) continue;
-      tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
-      tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
-      tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;
+      if (p) blend(p, w);
     }
-    for (const id of ['frost', 'swamp', 'ash'] as const) {
-      const w = biomeWeight(id, x, z);
-      if (w <= 0) continue;
-      const p = SKIES[id];
-      tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
-      tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
-      tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;
-    }
+    for (const id of ['frost', 'swamp', 'ash'] as const) blend(SKIES[id], biomeWeight(id, x, z));
   };
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
   sun.castShadow = true;
@@ -272,12 +319,14 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
 
-  const terrain = buildTerrain();
-  const terrainTex = new TerrainTextures(terrain, (terrain.children[0] as THREE.Mesh).material as THREE.Material, opts.maxAnisotropy ?? 1, opts.precompile);
-  scene.add(terrain);
-  const forest = [natureReady() ? buildNatureTrees() : buildTrees(), natureReady() ? buildNatureRocks() : buildRocks(), natureReady() ? buildNatureBushes() : buildBushes()];
-  scene.add(...forest);
+  // terrain tiles and their trees/rocks/bushes stream in around the player (streamTiles); the start town's are built now
+  const tiles = streamTiles();
+  const terrain = tiles.terrain;
+  tiles.update(new THREE.Vector3(TOWN.x, 0, TOWN.z), (scene.fog as THREE.Fog).far);
+  const terrainTex = new TerrainTextures(terrain, tiles.plain, opts.maxAnisotropy ?? 1, opts.precompile);
+  scene.add(terrain, tiles.forest);
   const water = buildWater();
+  scene.add(buildSeabed());
   const waterPlain = water.material as THREE.MeshLambertMaterial, waterFancy = waterMaterial();
   const reflection = new WaterReflection(waterFancy.uniforms as ConstructorParameters<typeof WaterReflection>[0], WATER_LEVEL);
   scene.add(water);
@@ -299,6 +348,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   // capped by the GPU's max. three.js clamps per-texture at upload too; this keeps it explicit.
   const setAniso = (n: number): number => sharpenMaps(scene, n) + setCharAniso(n);
   const aniso = setAniso(Math.min(settings.s.textureAniso, opts.maxAnisotropy ?? settings.s.textureAniso));
+  console.info(`[world] built in ${(performance.now() - t0).toFixed(0)} ms`);
   if (aniso > 0) console.debug(`[tex] aniso ${settings.s.textureAniso}x: ${aniso} maps sharpened`);
 
   return {
@@ -308,6 +358,11 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     renderReflection(on, renderer, camera) {
       // only the fancy water shader can show it
       reflection.update(on && water.material === waterFancy, renderer, scene, camera, water);
+    },
+    dispose() {
+      pmrem?.dispose();
+      envRT?.dispose();
+      scene.environment = null;
     },
     setTextureQuality: (q) => {
       terrainTex.set(q);
@@ -331,7 +386,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       const k = Math.min(1, dt * 0.8);
       cur.top.lerp(tgt.top, k); cur.horizon.lerp(tgt.horizon, k); cur.ground.lerp(tgt.ground, k);
       cur.sun.lerp(tgt.sun, k); cur.cloud.lerp(tgt.cloud, k);
-      cur.sunI += (tgt.sunI - cur.sunI) * k; cur.hemi += (tgt.hemi - cur.hemi) * k;
+      cur.sunI += (tgt.sunI - cur.sunI) * k; cur.hemi += (tgt.hemi - cur.hemi) * k; cur.near += (tgt.near - cur.near) * k;
+      // the region's air: the fog starts closer in the swamp and the ash, the far edge stays the view distance
+      (scene.fog as THREE.Fog).near = (scene.fog as THREE.Fog).far * cur.near;
       // Hour of the day on top of the region's palette. `el` is the sun's elevation (-0.9 midnight .. 0.9 noon);
       // with the cycle off it stays where the fixed sun always was.
       const A = ATMOS;
@@ -361,7 +418,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // nights stay playable: moonlight and a floor of sky light keep the ground readable
       const nb = settings.s.nightBrightness;
       sun.intensity = up ? cur.sunI * smoothstep(-0.06, 0.24, el) : 1.9 * nb * smoothstep(0.08, 0.3, -el);
-      hemi.intensity = cur.hemi * (nb + (1 - nb) * day);
+      hemi.intensity = cur.hemi * (nb + (1 - nb) * day) * (pmrem ? HEMI_KEEP : 1);
       hemi.color.copy(A.horizon).lerp(tmp.set(0xffffff), 0.4 * day);
       // water follows the setting and the light
       const fancy = settings.s.fancyWater;
@@ -381,6 +438,8 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       cloudShade.copy(cloudLit).multiplyScalar(0.5).lerp(A.top, 0.25);
       cloudRim.copy(up ? u.sunColor.value : tmp.set(0x8fa6e8)).multiplyScalar(up ? 1 : 0.35);
       clouds.update(camera.position, A.lightDir, cloudLit, cloudShade, cloudRim, A.horizon, day);
+      // the IBL trails the visible sky: first frame bakes (lastBake starts at -inf), then only on real drift
+      if (pmrem && performance.now() - lastBake > ENV_MIN_MS && skyDrift() > ENV_EPS) bakeEnv();
     },
     follow(p) {
       // snap to whole shadow texels in light space: the map then moves in steps, so edges don't shimmer while walking
@@ -398,15 +457,14 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // chunk visibility only changes after a few steps (or a new view distance): don't re-check every frame
       const reachNow = (scene.fog as THREE.Fog).far;
       const moved = lastCull.distanceToSquared(p);
-      if (moved < 4 && lastReach === reachNow && lastDetail === detail.visible && !grassLeft) return;
+      if (moved < 4 && lastReach === reachNow && lastDetail === detail.visible && !grassLeft && !tilesLeft) return;
       lastCull.copy(p);
       lastReach = reachNow;
       lastDetail = detail.visible;
       // grass and flowers only around the player (still building some: come back next frame)
       if (detail.visible) grassLeft = !grass.update(p, moved > 60 * 60);
-      // fog hides everything past its far end: skip whole forest chunks beyond it (150 covers a chunk's half-diagonal plus the camera's offset)
-      const reach = (scene.fog as THREE.Fog).far + 150;
-      for (const g of forest) for (const ch of g.children) if (ch.userData.cx !== undefined) ch.visible = Math.hypot(ch.userData.cx - p.x, ch.userData.cz - p.z) < reach;
+      // terrain/forest tiles: build what came into range (a few ms a frame), drop what fell far behind
+      tilesLeft = !tiles.update(p, reachNow);
     },
   };
 }
@@ -456,58 +514,189 @@ function sharpenMaps(o: THREE.Object3D, n: number): number {
 // i.e. the view distance) can skip everything that isn't on screen. One big mesh or
 // InstancedMesh would always be drawn whole.
 const CHUNK = 200;
+/** streamed terrain/forest tile size: the same grid as the merged chunks */
+const TILE = CHUNK;
+/** the sea floor outside the land tiles: one big plane under the water */
+const SEABED = WATER_LEVEL - 8;
 const chunkKey = (x: number, z: number) => `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
 
-function buildTerrain(): THREE.Group {
-  const g = new THREE.Group();
-  g.name = 'terrain';
-  const n = Math.round((WORLD_HALF * 2) / CHUNK), seg = CHUNK / 4; // a vertex every 4 m
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  mat.onBeforeCompile = cloudShadow;
-  const c = new THREE.Color();
-  for (let cx = 0; cx < n; cx++)
-    for (let cz = 0; cz < n; cz++) {
-      const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, seg, seg);
-      geo.rotateX(-Math.PI / 2);
-      geo.translate(-WORLD_HALF + (cx + 0.5) * CHUNK, 0, -WORLD_HALF + (cz + 0.5) * CHUNK);
-      const pos = geo.attributes.position as THREE.BufferAttribute;
-      const colors = new Float32Array(pos.count * 3);
-      // texture-layer weights (render/terrainTex.ts): splatA = grass, dirt, rock, sand; splatB = snow, cobble
-      const layers = new Float32Array(6);
-      const splatA = new Float32Array(pos.count * 4), splatB = new Float32Array(pos.count * 2);
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i), z = pos.getZ(i);
-        const h = heightAt(x, z);
-        pos.setY(i, h);
-        const [r, gg, b] = groundColor(x, z, h);
-        c.setRGB(r, gg, b, THREE.SRGBColorSpace);
-        colors.set([c.r, c.g, c.b], i * 3);
-        groundLayers(x, z, h, layers, 0);
-        splatA.set(layers.subarray(0, 4), i * 4);
-        splatB.set(layers.subarray(4, 6), i * 2);
-      }
-      geo.setAttribute('splatA', new THREE.BufferAttribute(splatA, 4));
-      geo.setAttribute('splatB', new THREE.BufferAttribute(splatB, 2));
-      geo.computeVertexNormals();
-      // steep slopes turn to bare rock and darken a little: hills read as hills
-      const nrm = geo.attributes.normal as THREE.BufferAttribute;
-      for (let i = 0; i < pos.count; i++) {
-        const steep = 1 - smoothstep(0.72, 0.93, nrm.getY(i));
-        if (steep <= 0) continue;
-        const o = i * 3;
-        // the volcanic region's slopes are dark basalt, not grey stone
-        const k = 1 - 0.6 * biomeWeight('ash', pos.getX(i), pos.getZ(i));
-        colors[o] += (0.36 * k - colors[o]) * steep * 0.8;
-        colors[o + 1] += (0.33 * k - colors[o + 1]) * steep * 0.8;
-        colors[o + 2] += (0.3 * k - colors[o + 2]) * steep * 0.8;
-      }
-      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-      geo.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.receiveShadow = true;
-      g.add(mesh);
+/** Terrain vertex spacing index for a tile whose centre is `d` m away: 4 m near, coarser far (skirts hide the seams). */
+export function tileLod(d: number): number {
+  return d < 350 ? 0 : d < 700 ? 1 : 2;
+}
+const LOD_STEP = [4, 8, 20]; // m between vertices; each divides TILE
+
+/** Tiles (cx, cz, centre distance) whose centre lies within `r` of (x, z), nearest first. */
+export function tilesWithin(x: number, z: number, r: number): { cx: number; cz: number; d: number }[] {
+  const out: { cx: number; cz: number; d: number }[] = [];
+  const n = Math.ceil(r / TILE) + 1, ix = Math.floor(x / TILE), iz = Math.floor(z / TILE);
+  for (let cx = ix - n; cx <= ix + n; cx++)
+    for (let cz = iz - n; cz <= iz + n; cz++) {
+      const d = Math.hypot((cx + 0.5) * TILE - x, (cz + 0.5) * TILE - z);
+      if (d < r) out.push({ cx, cz, d });
     }
-  return g;
+  return out.sort((a, b) => a.d - b.d);
+}
+
+/**
+ * Terrain tiles with distance LOD plus each tile's trees/rocks/bushes, built around the player and let go when far.
+ * update() builds the tiles under the player at once (spawn, teleport) and the rest within a few ms a frame,
+ * nearest first. False while some are left to build.
+ */
+function streamTiles() {
+  const terrain = new THREE.Group(), forest = new THREE.Group();
+  terrain.name = 'terrain';
+  const plain = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  plain.onBeforeCompile = cloudShadow;
+  const live = new Map<string, { lod: number; ground: THREE.Mesh | null; trees: THREE.Object3D[] | null }>();
+  let buckets: Map<string, TileIdx> | null = null;
+  const BUDGET_MS = 4;
+  const update = (p: THREE.Vector3, fog: number): boolean => {
+    const reach = fog + 150; // fog end + about a tile's half-diagonal: nothing visible pops
+    buckets ??= bucketLayout();
+    const t0 = performance.now();
+    let done = true;
+    const want = new Set<string>();
+    for (const { cx, cz, d } of tilesWithin(p.x, p.z, reach + TILE)) {
+      const k = `${cx},${cz}`, lod = tileLod(d);
+      want.add(k);
+      let t = live.get(k);
+      if (!t) live.set(k, (t = { lod: -1, ground: null, trees: null }));
+      const needTrees = !t.trees && d < reach;
+      if (t.lod !== lod || needTrees) {
+        const urgent = d < TILE * 1.2 && (t.lod < 0 || needTrees);
+        if (!urgent && performance.now() - t0 > BUDGET_MS) {
+          done = false;
+          continue;
+        }
+        if (t.lod !== lod) {
+          const g = buildTile(cx, cz, LOD_STEP[lod]);
+          if (t.ground) terrain.remove(t.ground), t.ground.geometry.dispose();
+          // new tiles take whatever material the texture setting put on the others (render/terrainTex.ts)
+          if (g) (g.material = (terrain.children[0] as THREE.Mesh | undefined)?.material ?? plain), terrain.add(g);
+          t.ground = g;
+          t.lod = lod;
+        }
+        if (needTrees) {
+          const idx = buckets.get(k) ?? { trees: [], rocks: [], bushes: [] };
+          t.trees = natureReady() ? natureTile(idx) : fallbackTile(idx);
+          // the group is frozen (no per-frame matrix pass): the meshes sit at the origin, so their matrices already are right
+          for (const m of t.trees) (m.matrixAutoUpdate = false), forest.add(m);
+        }
+      }
+      // fog hides everything past its far end
+      if (t.trees) for (const m of t.trees) m.visible = d < reach;
+    }
+    // ponytail: drops a tile as soon as it leaves the wanted ring (one tile of hysteresis past reach); upgrade path: a small LRU if pacing back and forth rebuilds too often
+    for (const [k, t] of live) {
+      if (want.has(k)) continue;
+      if (t.ground) terrain.remove(t.ground), t.ground.geometry.dispose();
+      if (t.trees) {
+        dropNodeInstances(t.trees);
+        for (const m of t.trees) forest.remove(m), (m as THREE.InstancedMesh).dispose(); // instance buffers; geometry/material are shared
+      }
+      live.delete(k);
+    }
+    return done;
+  };
+  return { terrain, forest, plain, update };
+}
+
+interface TileIdx { trees: number[]; rocks: number[]; bushes: number[] }
+/** Which layout trees/rocks/bushes sit in each tile (indices, so node ids keep layout order). */
+function bucketLayout(): Map<string, TileIdx> {
+  const m = new Map<string, TileIdx>();
+  const add = (list: { x: number; z: number }[], key: keyof TileIdx) => list.forEach((o, i) => {
+    const k = chunkKey(o.x, o.z);
+    let b = m.get(k);
+    if (!b) m.set(k, (b = { trees: [], rocks: [], bushes: [] }));
+    b[key].push(i);
+  });
+  add(layoutTrees(), 'trees');
+  add(layoutRocks(), 'rocks');
+  add(layoutBushes(), 'bushes');
+  return m;
+}
+
+/** One terrain tile at vertex spacing `step`, with a skirt hanging from its rim; null over open sea (the seabed plane covers it). */
+function buildTile(cx: number, cz: number, step: number): THREE.Mesh | null {
+  const x0 = cx * TILE, z0 = cz * TILE;
+  if (Math.max(Math.abs(x0 + TILE / 2), Math.abs(z0 + TILE / 2)) > WORLD_HALF + TILE) return null;
+  let top = -Infinity;
+  for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) top = Math.max(top, heightAt(x0 + (i * TILE) / 4, z0 + (j * TILE) / 4));
+  // ponytail: a 5x5 probe can miss an islet narrower than 50 m; upgrade path: probe landAt() on a finer grid
+  if (top < SEABED - 1) return null;
+  const seg = TILE / step;
+  const c = new THREE.Color();
+  const geo = new THREE.PlaneGeometry(TILE, TILE, seg, seg);
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(x0 + TILE / 2, 0, z0 + TILE / 2);
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const colors = new Float32Array(pos.count * 3);
+  // texture-layer weights (render/terrainTex.ts): splatA = grass, dirt, rock, sand; splatB = snow, cobble
+  const layers = new Float32Array(6);
+  const splatA = new Float32Array(pos.count * 4), splatB = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = heightAt(x, z);
+    pos.setY(i, h);
+    const [r, gg, b] = groundColor(x, z, h);
+    c.setRGB(r, gg, b, THREE.SRGBColorSpace);
+    colors.set([c.r, c.g, c.b], i * 3);
+    groundLayers(x, z, h, layers, 0);
+    splatA.set(layers.subarray(0, 4), i * 4);
+    splatB.set(layers.subarray(4, 6), i * 2);
+  }
+  geo.setAttribute('splatA', new THREE.BufferAttribute(splatA, 4));
+  geo.setAttribute('splatB', new THREE.BufferAttribute(splatB, 2));
+  geo.computeVertexNormals();
+  // steep slopes turn to bare rock and darken a little: hills read as hills
+  const nrm = geo.attributes.normal as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const steep = 1 - smoothstep(0.72, 0.93, nrm.getY(i));
+    if (steep <= 0) continue;
+    const o = i * 3;
+    // the volcanic region's slopes are dark basalt, not grey stone
+    const k = 1 - 0.6 * biomeWeight('ash', pos.getX(i), pos.getZ(i));
+    colors[o] += (0.36 * k - colors[o]) * steep * 0.8;
+    colors[o + 1] += (0.33 * k - colors[o + 1]) * steep * 0.8;
+    colors[o + 2] += (0.3 * k - colors[o + 2]) * steep * 0.8;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  addSkirt(geo, seg, step * 1.5 + 3);
+  geo.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geo);
+  mesh.receiveShadow = true;
+  mesh.matrixAutoUpdate = false;
+  return mesh;
+}
+
+/** Copy the rim of a (seg+1)² grid `depth` m down and wall it in: hides the gaps where LODs meet. */
+function addSkirt(geo: THREE.BufferGeometry, seg: number, depth: number) {
+  const w = seg + 1, rim: number[] = [];
+  for (let i = 0; i < seg; i++) rim.push(i); // top row
+  for (let j = 0; j < seg; j++) rim.push(j * w + seg); // right column
+  for (let i = seg; i > 0; i--) rim.push(seg * w + i); // bottom row
+  for (let j = seg; j > 0; j--) rim.push(j * w); // left column
+  rim.push(0);
+  const n = geo.attributes.position.count;
+  for (const name of Object.keys(geo.attributes)) {
+    const a = geo.attributes[name] as THREE.BufferAttribute, k = a.itemSize;
+    const arr = new Float32Array((n + rim.length) * k);
+    arr.set(a.array as Float32Array);
+    rim.forEach((v, r) => {
+      for (let c = 0; c < k; c++) arr[(n + r) * k + c] = a.array[v * k + c];
+      if (name === 'position') arr[(n + r) * 3 + 1] -= depth;
+    });
+    geo.setAttribute(name, new THREE.BufferAttribute(arr, k));
+  }
+  const idx = Array.from(geo.index!.array as ArrayLike<number>);
+  // ponytail: both windings, so the wall shows from either side without working out which way the rim runs
+  for (let r = 0; r + 1 < rim.length; r++) {
+    const a = rim[r], b = rim[r + 1], a2 = n + r, b2 = n + r + 1;
+    idx.push(a, b, b2, a, b2, a2, a, b2, b, a, a2, b2);
+  }
+  geo.setIndex(idx);
 }
 
 interface Inst { m: THREE.Matrix4; c: THREE.Color; x: number; z: number }
@@ -583,7 +772,13 @@ function mergeStatic(src: THREE.Group): THREE.Group {
   return out;
 }
 
-function buildTrees(): THREE.Group {
+/** Procedural trees/rocks/bushes for one streamed tile, when the nature models did not load. */
+function fallbackTile(idx: TileIdx): THREE.Object3D[] {
+  return [buildTrees(idx.trees), buildRocks(idx.rocks), buildBushes(idx.bushes)].flatMap((g) => [...g.children.flatMap((c) => (c instanceof THREE.Group ? [...c.children] : [c]))]);
+}
+/** shared geometry/materials of the procedural fallback, made once */
+const once = <T,>(f: () => T) => { let v: T | undefined; return () => (v ??= f()); };
+const treeRes = once(() => {
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 2.2, 5);
   trunkGeo.translate(0, 1.1, 0);
   // pines: three stacked tiers; broadleaf: a cluster of blobs
@@ -605,9 +800,16 @@ function buildTrees(): THREE.Group {
     new THREE.CylinderGeometry(0.05, 0.08, 1.0, 4).rotateZ(-1.0).translate(-0.4, 2.5, 0.1),
     new THREE.CylinderGeometry(0.04, 0.07, 0.9, 4).rotateX(0.9).translate(0, 2.0, 0.35),
   ].map((g) => g.toNonIndexed()))!;
+  const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
+  const canopy = (amp: number) => instancedSurface(sway(mat(), amp), 'leaves');
+  return { trunkGeo, pineGeo, leafGeo, deadGeo, bark: instancedSurface(mat(), 'bark'), pine: canopy(0.007), leaf: canopy(0.009) };
+});
+function buildTrees(idx: number[]): THREE.Group {
+  const { trunkGeo, pineGeo, leafGeo, deadGeo, bark, pine, leaf } = treeRes();
   const trunks: Inst[] = [], pines: Inst[] = [], leaves: Inst[] = [], deads: Inst[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  for (const t of layoutTrees()) {
+  const all = layoutTrees();
+  for (const t of idx.map((i) => all[i])) {
     p.set(t.x, t.h - 0.1, t.z);
     q.setFromAxisAngle(up, t.rot);
     s.set(t.sc, t.sc, t.sc);
@@ -620,24 +822,24 @@ function buildTrees(): THREE.Group {
     if (t.pine) pines.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.3 + t.hue * 0.05, 0.45, 0.22 + t.light * 0.08) });
     else leaves.push({ m, x: t.x, z: t.z, c: new THREE.Color().setHSL(0.22 + t.hue * 0.08, 0.5, 0.3 + t.light * 0.1) });
   }
-  const mat = () => new THREE.MeshLambertMaterial({ flatShading: true });
-  const bark = () => instancedSurface(mat(), 'bark'), canopy = (amp: number) => instancedSurface(sway(mat(), amp), 'leaves');
   const g = new THREE.Group();
-  g.add(chunkedInstances(trunkGeo, bark(), trunks), chunkedInstances(pineGeo, canopy(0.007), pines), chunkedInstances(leafGeo, canopy(0.009), leaves));
-  if (deads.length) g.add(chunkedInstances(deadGeo, bark(), deads));
+  g.add(chunkedInstances(trunkGeo, bark, trunks), chunkedInstances(pineGeo, pine, pines), chunkedInstances(leafGeo, leaf, leaves));
+  if (deads.length) g.add(chunkedInstances(deadGeo, bark, deads));
   return g;
 }
 
-function buildRocks(): THREE.Group {
+const rockRes = once(() => ({ geo: new THREE.DodecahedronGeometry(1, 0), mat: instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'rock') }));
+function buildRocks(idx: number[]): THREE.Group {
   const items: Inst[] = [];
   const q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
-  for (const r of layoutRocks()) {
+  const all = layoutRocks();
+  for (const r of idx.map((i) => all[i])) {
     p.set(r.x, r.y, r.z);
     q.setFromEuler(e.set(...r.e));
     s.set(...r.s);
     items.push({ m: new THREE.Matrix4().compose(p, q, s), x: r.x, z: r.z, c: new THREE.Color().setHSL(0.08, 0.06, 0.38 + r.light * 0.15) });
   }
-  return chunkedInstances(new THREE.DodecahedronGeometry(1, 0), instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'rock'), items);
+  return chunkedInstances(rockRes().geo, rockRes().mat, items);
 }
 
 /** The volcano's crater: a disc of slow-churning lava on its flat floor (its glow is a fire in lightSources). */
@@ -678,11 +880,20 @@ function buildLava(time: { value: number }): THREE.Mesh {
 }
 
 function buildWater(): THREE.Mesh {
-  const geo = new THREE.PlaneGeometry(WORLD_HALF * 2, WORLD_HALF * 2, 1, 1).rotateX(-Math.PI / 2);
+  // one plane for the whole sea, reaching well past the coast so the horizon is water
+  const geo = new THREE.PlaneGeometry(WORLD_HALF * 4, WORLD_HALF * 4, 1, 1).rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x3a7ab0, transparent: true, opacity: 0.72, depthWrite: false }));
   water.position.y = WATER_LEVEL;
   water.renderOrder = 2;
   return water;
+}
+
+function buildSeabed(): THREE.Mesh {
+  const [r, g, b] = groundColor(0, 0, SEABED);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_HALF * 4, WORLD_HALF * 4, 1, 1).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace) }));
+  m.position.y = SEABED;
+  m.receiveShadow = true;
+  return m;
 }
 
 /** Can decorative foliage grow here? (not on roads, town, water, rock or snow) */
@@ -690,20 +901,25 @@ function fertile(x: number, z: number, h: number): boolean {
   return h > WATER_LEVEL + 1.2 && h < 22 && !inTown(x, z) && roadDist(x, z) > 3.2 && !nearCamp(x, z, 16);
 }
 
-function buildBushes(): THREE.Group {
-  const rng = mulberry32(21);
-  const geo = mergeGeometries([
+const bushRes = once(() => ({
+  geo: mergeGeometries([
     new THREE.IcosahedronGeometry(0.6, 0).translate(0, 0.45, 0),
     new THREE.IcosahedronGeometry(0.45, 0).translate(0.45, 0.35, 0.1),
     new THREE.IcosahedronGeometry(0.42, 0).translate(-0.4, 0.32, -0.15),
-  ])!;
+  ])!,
+  mat: instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'leaves'),
+}));
+function buildBushes(idx: number[]): THREE.Group {
+  const rng = mulberry32(21 + (idx[0] ?? 0)); // ponytail: per-tile colour seed, so a tile looks the same each time it streams in
+  const { geo, mat } = bushRes();
   const items: Inst[] = [];
   const q = new THREE.Quaternion(), sv = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  for (const b of layoutBushes()) {
+  const all = layoutBushes();
+  for (const b of idx.map((i) => all[i])) {
     items.push({ m: new THREE.Matrix4().compose(p.set(b.x, b.h - 0.1, b.z), q.setFromAxisAngle(up, b.rot), sv.set(b.sc, b.sc * (0.8 + b.u * 0.4), b.sc)),
       x: b.x, z: b.z, c: new THREE.Color().setHSL(0.24 + rng() * 0.08, 0.45, 0.24 + rng() * 0.1) });
   }
-  return chunkedInstances(geo, instancedSurface(new THREE.MeshLambertMaterial({ flatShading: true }), 'leaves'), items);
+  return chunkedInstances(geo, mat, items);
 }
 
 const DETAIL_CHUNK = 40;
