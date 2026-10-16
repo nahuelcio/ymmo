@@ -380,6 +380,16 @@ input { font: inherit; user-select: text; }
 
 .dialog { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); background: rgba(12, 14, 22, 0.96); border: 1px solid var(--border-hi); border-radius: 4px; padding: 16px 22px; text-align: center; z-index: 90; min-width: 260px; box-shadow: 0 8px 30px #000; }
 .dialog-btns { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+/* the trade window (ui/trade.ts): the other's offer, yours, then your bag and adena */
+.trade-head { display: flex; align-items: center; gap: 8px; margin: 8px 0 3px; color: var(--gold); font-family: Georgia, serif; }
+.trade-ok { color: #6aff8a; font-family: Tahoma, sans-serif; font-size: 12px; }
+.trade-list { max-height: 150px; overflow-y: auto; background: rgba(0, 0, 0, 0.25); border: 1px solid #2a2618; border-radius: 2px; padding: 0 4px; }
+.trade-list .tt-dim { padding: 6px 2px; }
+.trade-bag { max-height: 190px; }
+.trade-bag .shop-row { cursor: pointer; }
+.trade-bag .shop-row:hover { background: rgba(232, 207, 138, 0.06); }
+.trade-adena { justify-content: flex-end; }
+.trade-note { margin-top: 8px; }
 
 .help h4 { margin: 10px 0 2px; color: var(--gold); font: 400 13px Georgia, serif; }
 .help h4:first-child { margin-top: 0; }

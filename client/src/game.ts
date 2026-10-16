@@ -609,6 +609,9 @@ export class Game {
       this.ui.npc.syncQuest(m.list);
     });
     n.on('partyInvite', (m) => this.ui.dialogs.invite(m.from));
+    n.on('tradeRequest', (m) => this.ui.dialogs.trade(m.from));
+    n.on('trade', (m) => this.ui.trade.set(m));
+    n.on('tradeEnd', () => this.ui.trade.end());
     n.on('clan', (m) => {
       this.ui.clan.set(m.clan);
       // wars and alliances change how other players' names look

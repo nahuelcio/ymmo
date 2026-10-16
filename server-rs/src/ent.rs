@@ -148,6 +148,9 @@ pub struct Player {
     pub escape_at: f64,
     pub party: Option<u32>,
     pub pending_invite: Option<(u32, f64)>,
+    /** the trade this player is in (trade.rs), and a trade request waiting for their answer: (from, until ms) */
+    pub trade: Option<u32>,
+    pub pending_trade: Option<(u32, f64)>,
     /** a clan invitation waiting for an answer: (clan id, until ms) */
     pub pending_clan: Option<(u32, f64)>,
     /** an alliance invitation waiting for this clan leader's answer: (alliance id, until ms) */
