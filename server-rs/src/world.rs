@@ -370,7 +370,7 @@ impl World {
                     let id = self.new_id();
                     let mut c = Common::new(id, pos.x, pos.z);
                     c.ry = rnd() * std::f64::consts::TAU;
-                    self.add(Ent { c, k: Kind::Item(GroundItem { item: "camp_chest".into(), count: 1, enchant: 0, owners: Some([*pid].into_iter().collect()), owner_until: now + 180000.0, expire_at: now + 180000.0, camp_id: Some(def.id.clone()) }) });
+                    self.add(Ent { c, k: Kind::Item(GroundItem { item: "camp_chest".into(), count: 1, enchant: 0, legacy: false, mw: false, owners: Some([*pid].into_iter().collect()), owner_until: now + 180000.0, expire_at: now + 180000.0, camp_id: Some(def.id.clone()) }) });
                     self.sys(*pid, &format!("¡Despejaste {}! Te espera un cofre junto a la fogata.", def.name), &format!("You cleared {}! A chest awaits you by the campfire.", def.name_en));
                 }
                 self.clan_rep(&winners, d().clans.rep.camp_clear, &def.name, &def.name_en);
@@ -480,7 +480,11 @@ impl World {
             }
             Kind::Mob(m) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "m", "n": m.tpl.name, "l": m.tpl.level, "tpl": m.tpl.id }),
             Kind::Npc(n) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "n", "n": n.def.name, "title": n.def.title, "npc": n.def.id }),
-            Kind::Item(g) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "i", "item": g.item, "c": g.count }),
+            Kind::Item(g) => {
+                let mut r = json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "i", "item": g.item, "c": g.count });
+                if g.mw { r["m"] = json!(true); }
+                r
+            }
         }
     }
 
@@ -543,7 +547,7 @@ impl World {
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
             "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit,
-            "atkSpd": jround(60000.0 / s.atk_interval), "speed": jround(s.speed * 20.0), "cdr": (s.cdr * 100.0).round(),
+            "atkSpd": jround(60000.0 / s.atk_interval), "castSpd": jround(100.0 / s.cast_mul), "speed": jround(s.speed * 20.0), "cdr": (s.cdr * 100.0).round(),
             "adena": p.adena, "karma": p.karma, "pk": p.pk, "pvp": p.pvp, "flagged": p.pvp_until > self.now, "pvpOn": p.pvp_on,
             "skills": skills, "buffs": buffs,
             "zone": match self.raid { Some(r) => r.name.clone(), None => zone_at(e.c.x, e.c.z) },

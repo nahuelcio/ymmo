@@ -22,7 +22,7 @@ import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig }
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
-import { glyph, setTipLevel } from './ui/common';
+import { glyph, setTipLevel, setTipSelf } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
 import { ATMOS, LocalLights, Motes, tickWind } from './render/atmos';
 import { PostFX } from './render/post';
@@ -290,6 +290,7 @@ export class Game {
     this.barData = enter.bar ?? '';
     this.me = enter.self;
     setTipLevel(() => this.me.lvl);
+    setTipSelf(() => this.me);
     ambience(enter.self.zone);
     this.inv = enter.inv;
     this.adena = enter.self.adena;
@@ -577,6 +578,12 @@ export class Game {
       if (e) this.vfx('levelup', e);
       if (m.id === this.me.id) this.ui.hud.banner(m.spec ? tx(`¡Despertaste! ${specName(m.spec, lang)}`, `Awakened! ${specName(m.spec, lang)}`) : tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
+    n.on('masterwork', (m) => {
+      const e = this.ents.get(this.me.id);
+      play('levelUp');
+      if (e) this.vfx('chest', e);
+      this.ui.hud.banner(tx(`¡Obra Maestra! ${itemName(m.item, lang)}`, `Masterwork! ${itemName(m.item, lang)}`), true, 'mw');
+    });
     n.on('chat', (m) => {
       const who = this.whoPending && m.ch === 'sys' ? WHO.exec(m.text) : null;
       if (who) return this.fillWho(who[2].split(', '));
@@ -755,6 +762,8 @@ export class Game {
     } else {
       el.textContent = r.item === 'adena' ? `${r.c} Adena` : `${itemName(r.item, lang)}${r.c > 1 ? ` (${r.c})` : ''}`;
       el.classList.add('np-item');
+      // a Masterwork dropped by a player
+      if (r.m) el.classList.add('mw');
     }
   }
 

@@ -348,6 +348,13 @@ input { font: inherit; user-select: text; }
 .tt-cmp { margin-top: 5px; padding-top: 4px; border-top: 1px solid #3a3424; }
 .tt-up { color: #6aff8a; }
 .tt-down { color: #ff6a5a; }
+/* Masterwork (data/items.ts MASTERWORK): a gold name, a gold-edged cell with a star, a gold banner */
+.tt-mw { color: #ffc94a; text-shadow: 0 0 6px rgba(255, 190, 60, 0.45); }
+.inv-cell.mw, .doll-slot.mw { border-color: #e0a830; box-shadow: inset 0 0 7px rgba(255, 190, 60, 0.45), 0 0 5px rgba(255, 190, 60, 0.35); }
+.doll-slot.mw { position: relative; }
+.inv-cell.mw::after, .doll-slot.mw::after { content: '★'; position: absolute; left: 2px; bottom: 0; font-size: 9px; color: #ffc94a; text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: none; }
+.banner.mw { color: #ffc94a; text-shadow: 0 0 14px rgba(255, 170, 40, 0.8), 0 0 3px #000; }
+.np-item.mw { color: #ffc94a; }
 .inv-footer { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid #2a2618; }
 .adena { color: #ffd966; }
 .ctx-menu { position: fixed; z-index: 300; background: var(--panel-solid); border: 1px solid var(--border); border-radius: 3px; display: flex; flex-direction: column; min-width: 100px; }

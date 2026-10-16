@@ -43,15 +43,32 @@ pub fn enchant_chance(e: i64) -> f64 {
     if e < c.safe { 1.0 } else { c.chance }
 }
 
-/** equipped: each worn piece with its enchant level (+N) */
-pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64)], buffs: &[&BuffMods], gender: &str) -> Stats {
+/**
+ * What one Masterwork piece gives a wearer of this race and class: (attack speed, cast speed, cooldown cut), fractions.
+ * A speed the class does not use turns into the one it does; a human gets half in the class's speed and half in
+ * cooldown cut. Mirrors masterworkBonus in shared/src/data/items.ts.
+ */
+pub fn masterwork_bonus(race: &str, cls: &str, is_weapon: bool) -> (f64, f64, f64) {
+    let m = &d().masterwork;
+    let v = if is_weapon { m.weapon } else { m.piece };
+    let speed = |f: f64| if cls == "mystic" { (0.0, f, 0.0) } else { (f, 0.0, 0.0) };
+    match d().races[race].mw.as_str() {
+        "cdr" => (0.0, 0.0, v),
+        "mix" => { let (a, c, _) = speed(v / 2.0); (a, c, v / 2.0) }
+        _ => speed(v),
+    }
+}
+
+/** equipped: each worn piece with its enchant level (+N) and whether it is a Masterwork */
+pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64, bool)], buffs: &[&BuffMods], gender: &str) -> Stats {
     let r = stat_mods(race, gender);
     let c = &d().classes[cls];
     let cb = |f: &str, v: f64| bal(&format!("class.{cls}.{f}"), v);
     let ench = &d().enchant;
     let lm = level_mod(level);
     let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    for &(it, e) in equipped {
+    let (mut mw_atk, mut mw_cast) = (0.0, 0.0);
+    for &(it, e, mw) in equipped {
         let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
         if it.kind == "weapon" {
             let k = 1.0 + ench.weapon * e as f64;
@@ -65,6 +82,12 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         hp_bonus += ib("hp", it.hp);
         mp_bonus += ib("mp", it.mp);
         cdr_sum += ib("cdr", it.cdr);
+        if mw {
+            let (a, c, cd) = masterwork_bonus(race, cls, it.kind == "weapon");
+            mw_atk += a;
+            mw_cast += c;
+            cdr_sum += cd;
+        }
     }
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     for b in buffs {
@@ -89,8 +112,8 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         accuracy: 80.0 + level as f64 + r.accuracy,
         evasion: 30.0 + level as f64 + r.evasion,
         crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit,
-        atk_interval: jround(c.atk_interval / (r.atk_spd * ba)),
-        cast_mul: 1.0 / r.cast_spd,
+        atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk))),
+        cast_mul: 1.0 / (r.cast_spd * (1.0 + mw_cast)),
         speed: BASE_SPEED * r.speed * bs,
         hp_regen: max_hp * 0.008 + 0.5,
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
@@ -229,7 +252,7 @@ mod tests {
         assert_eq!(enchant_chance(2), 1.0);
         for e in 3..16 { assert!((enchant_chance(e) - 0.66).abs() < 1e-9, "+{e}"); }
         let sword = &d().items["broadsword"];
-        let at = |e| compute_stats("human", "fighter", 10, &[(sword, e)], &[], "m").p_atk;
+        let at = |e| compute_stats("human", "fighter", 10, &[(sword, e, false)], &[], "m").p_atk;
         assert!(at(0) < at(3) && at(3) < at(10));
     }
 
@@ -237,8 +260,35 @@ mod tests {
     fn cdr_sums_and_caps() {
         let ring = &d().items["ring_of_swiftness"];
         let amulet = &d().items["amulet_of_haste"];
-        let cdr = |eq: &[(&ItemDef, i64)]| compute_stats("human", "mystic", 10, eq, &[], "m").cdr;
-        assert!((cdr(&[(ring, 0), (amulet, 0)]) - 0.15).abs() < 1e-9);
-        assert!((cdr(&[(ring, 0); 11]) - 0.5).abs() < 1e-9, "55% of raw cdr must cap at 50%");
+        let cdr = |eq: &[(&ItemDef, i64, bool)]| compute_stats("human", "mystic", 10, eq, &[], "m").cdr;
+        assert!((cdr(&[(ring, 0, false), (amulet, 0, false)]) - 0.15).abs() < 1e-9);
+        assert!((cdr(&[(ring, 0, false); 11]) - 0.5).abs() < 1e-9, "55% of raw cdr must cap at 50%");
+    }
+
+    #[test]
+    fn masterwork_by_race() {
+        let is = |got: (f64, f64, f64), want: (f64, f64, f64)| {
+            assert!((got.0 - want.0).abs() < 1e-9 && (got.1 - want.1).abs() < 1e-9 && (got.2 - want.2).abs() < 1e-9, "{got:?} != {want:?}");
+        };
+        is(masterwork_bonus("dwarf", "fighter", true), (0.06, 0.0, 0.0));
+        is(masterwork_bonus("orc", "fighter", false), (0.01, 0.0, 0.0));
+        is(masterwork_bonus("darkelf", "fighter", true), (0.0, 0.0, 0.06));
+        // a speed the class does not use turns into the one it does
+        is(masterwork_bonus("elf", "mystic", true), (0.0, 0.06, 0.0));
+        is(masterwork_bonus("elf", "fighter", true), (0.06, 0.0, 0.0));
+        is(masterwork_bonus("orc", "mystic", true), (0.0, 0.06, 0.0));
+        // a human: half in the class's speed, half in cooldown cut
+        is(masterwork_bonus("human", "fighter", true), (0.03, 0.0, 0.03));
+        is(masterwork_bonus("human", "mystic", false), (0.0, 0.005, 0.005));
+        // worn: a dwarf's Masterwork axe swings 6% faster, an elf's Masterwork staff casts 6% faster
+        let axe = &d().items["hand_axe"];
+        let swing = |mw| compute_stats("dwarf", "fighter", 10, &[(axe, 0, mw)], &[], "m").atk_interval;
+        assert!((swing(false) / swing(true) - 1.06).abs() < 0.01, "{} / {}", swing(false), swing(true));
+        let staff = &d().items["willow_staff"];
+        let cast = |mw| compute_stats("elf", "mystic", 10, &[(staff, 0, mw)], &[], "m").cast_mul;
+        assert!((cast(false) / cast(true) - 1.06).abs() < 1e-9);
+        // the cooldown cut still caps at 50%
+        let ring = &d().items["ring_of_swiftness"];
+        assert!((compute_stats("darkelf", "mystic", 10, &[(ring, 0, true); 11], &[], "m").cdr - 0.5).abs() < 1e-9);
     }
 }

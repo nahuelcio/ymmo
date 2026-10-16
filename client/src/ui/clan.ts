@@ -401,7 +401,7 @@ export class ClanWarehouse {
       if (!m.can) el('div', 'tt-dim', list, tx('Podés depositar, pero tu rango no tiene permiso para retirar.', 'You may deposit, but your grade may not withdraw.'));
       if (!m.items.length) el('div', 'tt-dim', list, tx('El depósito está vacío.', 'The warehouse is empty.'));
       for (const it of m.items) {
-        const row = this.itemRow(list, it.i, it.c, it.e, it.l);
+        const row = this.itemRow(list, it.i, it.c, it.e, it.l, it.m);
         if (!m.can) continue;
         const qty = this.qty(row, it.c);
         const btn = el('button', 'btn small', row, tx('Retirar', 'Withdraw'));
@@ -412,7 +412,7 @@ export class ClanWarehouse {
       const bag = this.g.inv.filter((i) => !i.s);
       if (!bag.length) el('div', 'tt-dim', list, tx('No tenés nada para depositar.', 'You have nothing to deposit.'));
       for (const it of bag) {
-        const row = this.itemRow(list, it.i, it.c, it.e ?? 0, it.l);
+        const row = this.itemRow(list, it.i, it.c, it.e ?? 0, it.l, it.m);
         const qty = this.qty(row, it.c);
         const btn = el('button', 'btn small', row, tx('Depositar', 'Deposit'));
         btn.onclick = () => this.g.net.send({ t: 'clanWhDeposit', npc: this.npc, uid: it.u, qty: clampQty(qty, it.c) });
@@ -427,11 +427,11 @@ export class ClanWarehouse {
     }
   }
 
-  private itemRow(list: HTMLElement, id: string, c: number, e: number, legacy = false) {
+  private itemRow(list: HTMLElement, id: string, c: number, e: number, legacy = false, mw = false) {
     const row = el('div', 'shop-row', list);
     itemIcon(id, row, c, e);
-    el('div', 'grow', row).textContent = `${e ? `+${e} ` : ''}${itemLabel(id)}${c > 1 ? ` ×${c}` : ''}`;
-    setTip(row, () => itemTip(id, c, e, legacy));
+    el('div', mw ? 'grow tt-mw' : 'grow', row).textContent = `${e ? `+${e} ` : ''}${itemLabel(id)}${c > 1 ? ` ×${c}` : ''}`;
+    setTip(row, () => itemTip(id, c, e, legacy, mw));
     return row;
   }
 

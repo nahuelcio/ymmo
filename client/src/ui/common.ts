@@ -1,8 +1,9 @@
-import { enchanted, GRADE_COLOR, ITEMS, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
-import { itemDesc, itemName, skillDesc, skillName } from '../../../shared/src/i18n';
+import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
 export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), chest: tx('Torso', 'Chest'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet'), amulet: tx('Collar', 'Necklace'), earring: tx('Pendiente', 'Earring'), ring: tx('Anillo', 'Ring') };
 export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt'), axe: tx('Hacha', 'Axe'), spear: tx('Lanza', 'Spear'), dagger: tx('Daga', 'Dagger') };
 
@@ -65,16 +66,43 @@ export function skillIcon(skillId: string, parent?: HTMLElement): HTMLDivElement
 /** The player's level, for the "requires level" line of item tooltips (game.ts sets it). */
 let myLevel = () => 0;
 export const setTipLevel = (f: () => number) => (myLevel = f);
+/** The player's race and class, for what a Masterwork piece gives them (game.ts sets it). */
+let mySelf = (): { race: Race; cls: ClassType } | null => null;
+export const setTipSelf = (f: () => { race: Race; cls: ClassType } | null) => (mySelf = f);
 
-export function itemTip(itemId: string, count = 1, ench = 0, legacy = false): string {
+const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
+/** "Vel.Atq +6%, Recarga -3%" */
+export const mwText = (b: MasterworkBonus) => [
+  b.atkSpd && `${tx('Vel.Atq', 'Atk.Spd')} +${pct(b.atkSpd)}`,
+  b.castSpd && `${tx('Vel.Casteo', 'Cast.Spd')} +${pct(b.castSpd)}`,
+  b.cdr && `${tx('Recarga', 'Cooldown')} -${pct(b.cdr)}`,
+].filter(Boolean).join(', ');
+
+/** What a Masterwork piece gives: you, then every other race ("speed" being the class's own, attack or cast). */
+function masterworkLines(isWeapon: boolean): string[] {
+  const me = mySelf();
+  const out = [`<span class="tt-mw">★ ${tx('Obra Maestra', 'Masterwork')}</span>`];
+  if (me) out.push(`${tx('Para vos', 'For you')}: <span class="tt-up">${mwText(masterworkBonus(me.race, me.cls, isWeapon))}</span>`);
+  const others = (Object.keys(RACES) as Race[]).filter((r) => r !== me?.race).map((r) => {
+    const b = masterworkBonus(r, 'fighter', isWeapon);
+    const v = [b.atkSpd && `${tx('velocidad', 'speed')} +${pct(b.atkSpd)}`, b.cdr && `${tx('recarga', 'cooldown')} -${pct(b.cdr)}`].filter(Boolean).join(', ');
+    return `${raceName(r, lang).replace(/ /g, '&nbsp;')}: ${v}`;
+  });
+  out.push(`<span class="tt-dim">${others.join(' · ')}<br>${tx('La velocidad es de ataque para guerreros y de casteo para místicos.', 'Speed is attack speed for fighters and cast speed for mystics.')}</span>`);
+  return out;
+}
+
+export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw = false): string {
   const d = ITEMS[itemId];
   if (!d) return '';
   const lines: string[] = [];
   const gradeTxt = d.grade ? ` <span style="color:${GRADE_COLOR[d.grade]}">[${d.grade === 'NG' ? tx('Sin grado', 'No grade') : tx('Grado ', 'Grade ') + d.grade}]</span>` : '';
-  lines.push(`<div class="tt-title">${ench ? `+${ench} ` : ''}${esc(itemName(itemId, lang))}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
+  const name = `${ench ? `+${ench} ` : ''}${esc(itemName(itemId, lang))}`;
+  lines.push(`<div class="tt-title">${mw ? `<span class="tt-mw">${name}</span>` : name}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
   const st = (k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef') => enchanted(d, k, ench);
   if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}</span>`);
   if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  if (d.slot && mw) lines.push(...masterworkLines(d.type === 'weapon'));
   const need = wearLevel(d);
   if (d.slot && legacy) lines.push(`<span class="tt-up">${tx('Equipo heredado: sin requisito de nivel', 'Legacy gear: no level requirement')}</span>`);
   else if (d.slot && need > 0) lines.push(`<span class="${myLevel() >= need ? 'tt-dim' : 'tt-down'}">${tx(`Requiere nivel ${need}`, `Requires level ${need}`)}</span>`);
