@@ -1,5 +1,6 @@
 import { CLASSES, EVOLVE_LEVEL, evolutionOf, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
 import { makeMovable } from './movable';
+import { foldable } from './hud';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
@@ -465,8 +466,11 @@ export class PartyPanel {
 
   constructor(private g: Game, parent: HTMLElement) {
     this.root = el('div', 'panel party', parent);
-    makeMovable(this.root, 'party');
-    const head = el('div', 'party-head', this.root, 'Party');
+    makeMovable(this.root, 'party', { handle: (t) => !t.closest('button') });
+    const head = el('div', 'party-head', this.root);
+    el('span', 'party-title', head, 'Party');
+    // a tap on the title folds the member list
+    foldable(this.root, head, 'party');
     const leave = el('button', 'btn small', head, tx('Salir', 'Leave'));
     leave.onclick = () => g.net.send({ t: 'partyLeave' });
     this.list = el('div', '', this.root);
@@ -913,8 +917,8 @@ export function createHelp(root: HTMLElement): Win {
     const touch = document.createElement('div');
     touch.className = 'help';
     touch.innerHTML = tx(
-      '<h4>En el celular</h4><p><b>Joystick</b> (abajo a la izquierda) para caminar. <b>Tocá</b> el piso para ir caminando hasta ahí, un monstruo o jugador para seleccionarlo, un NPC para hablar o un objeto para juntarlo. <b>Arrastrá con un dedo</b> para girar la cámara y <b>pellizcá</b> para el zoom.</p><p><b>Atacar</b> pega al objetivo (o elige el más cercano) y sigue pegándole, <b>Rodar</b> esquiva, <b>Objetivo</b> pasa al siguiente monstruo y <b>Juntar</b> levanta lo que esté cerca. Las habilidades y pociones están en la barra de abajo.</p>',
-      '<h4>On your phone</h4><p>The <b>joystick</b> (bottom left) walks. <b>Tap</b> the ground to walk there, a monster or player to select them, an NPC to talk or an item to pick it up. <b>Drag one finger</b> to turn the camera and <b>pinch</b> to zoom.</p><p><b>Attack</b> hits your target (or picks the nearest) and keeps swinging, <b>Roll</b> dodges, <b>Target</b> cycles monsters and <b>Loot</b> picks up what is nearby. Skills and potions are on the bottom bar.</p>',
+      '<h4>En el celular</h4><p><b>Joystick</b> (abajo a la izquierda) para caminar. <b>Tocá</b> el piso para ir caminando hasta ahí, un monstruo o jugador para seleccionarlo, un NPC para hablar o un objeto para juntarlo. <b>Arrastrá con un dedo</b> para girar la cámara y <b>pellizcá</b> para el zoom.</p><p><b>Atacar</b> pega al objetivo (o elige el más cercano) y sigue pegándole, <b>Rodar</b> esquiva y <b>Objetivo</b> pasa al siguiente monstruo. Lo que sueltan los monstruos se junta solo. Las habilidades y pociones están en la barra de abajo: el botón <b>1/2</b> de su esquina (o deslizar el dedo sobre la barra) pasa a las barras 2 y 3, que se activan en <b>☰ → Barras</b>.</p><p><b>Mantené apretado</b> un bloque para moverlo: la vida, el objetivo, el minimapa, las misiones, la party, el chat por sus pestañas o la barra por su botón 1/2. Queda guardado, una disposición con el celular parado y otra acostado. <b>Tocá</b> la vida para dejar solo HP y MP, el título de Misiones o Party para plegarlos y el <b>−</b> del minimapa para achicarlo. El <b>☰</b> abre el menú, con el <b>Modo combate</b> (esconde chat, misiones y party) y <b>Restablecer interfaz</b>.</p>',
+      '<h4>On your phone</h4><p>The <b>joystick</b> (bottom left) walks. <b>Tap</b> the ground to walk there, a monster or player to select them, an NPC to talk or an item to pick it up. <b>Drag one finger</b> to turn the camera and <b>pinch</b> to zoom.</p><p><b>Attack</b> hits your target (or picks the nearest) and keeps swinging, <b>Roll</b> dodges and <b>Target</b> cycles monsters. Loot is picked up by itself. Skills and potions are on the bottom bar: the <b>1/2</b> button at its corner (or a swipe along the bar) turns to bars 2 and 3, which you switch on in <b>☰ → Bars</b>.</p><p><b>Press and hold</b> a block to move it: your vitals, the target, the minimap, quests, the party, the chat by its tabs or the bar by its 1/2 button. It is kept, one layout with the phone upright and one sideways. <b>Tap</b> your vitals to keep only HP and MP, the Quests or Party title to fold them and the <b>−</b> on the minimap to shrink it. <b>☰</b> opens the menu, with <b>Combat mode</b> (hides chat, quests and party) and <b>Reset layout</b>.</p>',
     );
     w.body.prepend(touch);
   }

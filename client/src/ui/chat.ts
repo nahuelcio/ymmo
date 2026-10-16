@@ -30,7 +30,8 @@ export class Chat {
 
   constructor(private g: Game, root: HTMLElement) {
     const box = (this.box = el('div', 'panel chat', root));
-    makeMovable(box, 'chat');
+    // touch: a long press on the tabs moves it (the log scrolls)
+    makeMovable(box, 'chat', { handle: (t) => !!t.closest('.chat-tabs') });
     const tabs = el('div', 'chat-tabs', box);
     for (const t of TABS) {
       const b = el('button', 'chat-tab', tabs, t.label);

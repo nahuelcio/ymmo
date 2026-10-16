@@ -8,8 +8,8 @@ import { NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, hideTip, setTip } from './dom';
-import { makeMovable, onLayoutReset, uiScale } from './movable';
-import { isTouchDevice } from './touch';
+import { makeMovable, onLayoutReset, resetLayout, uiScale } from './movable';
+import { hudFocus, isTouchDevice, setHudFocus } from './touch';
 import { lang, t as tx, fmt } from '../lang';
 import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
@@ -30,6 +30,32 @@ const emptyBar = (b: number) => Array<Slot>(SIZE[b]).fill(null);
 const STATUS_KEY = 'hud:status';
 const STATUS_W = { min: 180, max: 640 };
 const slotAction = (b: number, i: number) => (b === 0 ? `slot${i + 1}` : `bar${b + 1}slot${i + 1}`) as Action;
+
+/**
+ * A panel whose title folds it down to that title line (class 'folded'), kept per browser (localStorage fold:<id>);
+ * `start` when nothing is kept yet. A tap on a button in the title (party: Leave) does not fold.
+ */
+export function foldable(box: HTMLElement, head: HTMLElement, id: string, start = false) {
+  let on = start;
+  try {
+    const v = localStorage.getItem(`fold:${id}`);
+    if (v !== null) on = v === '1';
+  } catch {
+    /* storage unavailable */
+  }
+  box.classList.toggle('folded', on);
+  head.classList.add('fold-head');
+  head.addEventListener('click', (e) => {
+    if ((e.target as Element).closest('button')) return;
+    on = !box.classList.contains('folded');
+    box.classList.toggle('folded', on);
+    try {
+      localStorage.setItem(`fold:${id}`, on ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  });
+}
 
 export class Hud {
   private statusEl!: HTMLDivElement;
@@ -63,6 +89,11 @@ export class Hud {
   private questList: HTMLDivElement;
   private lastTargetKey = '';
   private slotsKey = '';
+  /** phones and tablets: a ☰ menu, the bars one page at a time, blocks moved by a long press */
+  private touch = isTouchDevice();
+  /** touch: the bar on show (0: the main one, 1-2: bars 2 and 3), turned by the pager or a swipe */
+  private page = 0;
+  private pager: HTMLButtonElement | null = null;
 
   constructor(private g: Game, root: HTMLElement) {
     // Status window (top-left)
@@ -78,6 +109,23 @@ export class Hud {
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
     this.makeStatusMovable(st);
+    if (this.touch) {
+      // touch: a tap folds it down to HP and MP (and back); a long press moves it
+      const compact = (on: boolean) => {
+        st.classList.toggle('compact', on);
+        try {
+          localStorage.setItem('statusCompact', on ? '1' : '0');
+        } catch {
+          /* ignore */
+        }
+      };
+      try {
+        compact(localStorage.getItem('statusCompact') === '1');
+      } catch {
+        /* storage unavailable */
+      }
+      st.addEventListener('click', () => compact(!st.classList.contains('compact')));
+    }
 
     // Target window (top-center)
     this.target = el('div', 'panel target', root);
@@ -87,7 +135,7 @@ export class Hud {
     tClose.onclick = () => g.setTarget(null);
     this.tHp = bar(this.target, 'bar-hp thin');
     this.tActions = el('div', 'target-actions', this.target);
-    makeMovable(this.target, 'target');
+    makeMovable(this.target, 'target', { handle: (t) => !t.closest('button') });
 
     // Shortcut bar (bottom-center)
     const sc = el('div', 'panel shortcuts', root);
@@ -96,6 +144,7 @@ export class Hud {
     this.slotEls.push(this.buildSlots(0, sc));
     for (let b = 1; b < BARS; b++) {
       const row = el('div', 'bar-row', extra);
+      row.dataset.bar = String(b);
       const fold = el('button', 'bar-toggle', row);
       fold.title = tx(`Barra ${b + 1}: plegar / desplegar`, `Bar ${b + 1}: fold / unfold`);
       fold.onclick = () => {
@@ -136,8 +185,29 @@ export class Hud {
     this.dashCd = el('div', 'cd', this.dashEl);
     this.dashEl.title = tx('Rodar (Shift): esquivás hacia el cursor y sos invulnerable un instante. Ideal para salir de los círculos rojos.', 'Roll (Shift): dodge toward the cursor, briefly invulnerable. Great for getting out of red circles.');
     this.dashEl.onclick = () => g.dash();
-    makeMovable(sc, 'shortcuts');
     this.shortcuts = sc;
+    if (this.touch) {
+      // touch: one bar at a time. The pager turns the page (a long press on it moves the bars), so does a swipe along them
+      sc.dataset.page = '0';
+      try {
+        this.page = Math.max(0, Math.min(BARS - 1, Number(localStorage.getItem('barPage')) || 0));
+      } catch {
+        /* storage unavailable */
+      }
+      this.pager = el('button', 'bar-pager', sc);
+      this.pager.onclick = () => (this.pages().length > 1 ? this.flip(1) : this.toggleBarsMenu());
+      sc.addEventListener('pointerdown', (e) => {
+        const sx = e.clientX, sy = e.clientY, id = e.pointerId;
+        const up = (u: PointerEvent) => {
+          if (u.pointerId !== id) return;
+          removeEventListener('pointerup', up);
+          const dx = u.clientX - sx, dy = u.clientY - sy;
+          if (Math.abs(dx) > 40 && Math.abs(dy) < 30) this.flip(dx < 0 ? 1 : -1);
+        };
+        addEventListener('pointerup', up);
+      });
+      makeMovable(sc, 'shortcuts', { handle: (t) => !!t.closest('.bar-pager') });
+    } else makeMovable(sc, 'shortcuts');
 
     this.cast = el('div', 'castbar', root);
     this.castFill = el('div', 'castbar-fill', this.cast);
@@ -171,19 +241,85 @@ export class Hud {
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
     this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
     this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
-    makeMovable(menu, 'menu');
+    if (this.touch) this.menuDrawer(root, menu);
+    else makeMovable(menu, 'menu');
 
-    // which extra bars are on screen: it opens over the menu, wherever the menu is
-    this.barsPop = el('div', 'panel bars-pop', menu);
+    // which extra bars are on screen: it opens over the menu, wherever the menu is (touch: a sheet from the bottom)
+    this.barsPop = el('div', 'panel bars-pop', this.touch ? root : menu);
     this.barsPop.style.display = 'none';
 
     this.bannerEl = el('div', 'banner', root);
 
     this.questRoot = el('div', 'panel quest-tracker', root);
-    el('div', 'quest-head', this.questRoot, tx('Misiones', 'Quests'));
+    const qHead = el('div', 'quest-head', this.questRoot, tx('Misiones', 'Quests'));
     this.questList = el('div', '', this.questRoot);
+    // a tap on the title folds the list (phones start with it folded)
+    foldable(this.questRoot, qHead, 'quests', this.touch && Math.min(innerWidth, innerHeight) <= 500);
     makeMovable(this.questRoot, 'quests');
     this.questRoot.style.display = 'none';
+  }
+
+  /**
+   * Touch: the menu folds into one ☰ button that opens it as a grid of big labelled buttons, with combat mode and the
+   * layout reset added; a choice closes it, and so does a tap anywhere else. The button moves by a long press.
+   */
+  private menuDrawer(root: HTMLElement, menu: HTMLDivElement) {
+    const open = el('button', 'menu-toggle', root, '☰');
+    open.setAttribute('aria-label', tx('Menú', 'Menu'));
+    menu.classList.add('drawer');
+    const extra = (icon: string, label: string, fn: () => void) => {
+      const b = el('button', 'menu-btn', menu);
+      el('span', 'mb-icon', b, icon);
+      el('span', 'mb-label', b, label);
+      b.onclick = fn;
+      return b;
+    };
+    const focus = extra('◱', tx('Modo combate', 'Combat mode'), () => setHudFocus(!hudFocus()));
+    extra('↺', tx('Restablecer interfaz', 'Reset layout'), () => resetLayout());
+    const show = (on: boolean) => {
+      menu.classList.toggle('open', on);
+      if (!on) return;
+      focus.classList.toggle('on', hudFocus());
+      // next to the button, wherever the player put it
+      const k = uiScale(), r = open.getBoundingClientRect(), s = menu.style;
+      s.left = `${Math.max(6, Math.min(innerWidth - menu.offsetWidth * k - 6, r.left)) / k}px`;
+      if (r.top < innerHeight / 2) (s.top = `${(r.bottom + 6) / k}px`), (s.bottom = 'auto');
+      else (s.bottom = `${(innerHeight - r.top + 6) / k}px`), (s.top = 'auto');
+    };
+    open.onclick = () => show(!menu.classList.contains('open'));
+    menu.addEventListener('click', (e) => {
+      if ((e.target as Element).closest('.menu-btn')) show(false);
+    });
+    addEventListener('pointerdown', (e) => {
+      const t = e.target as Node;
+      if (menu.classList.contains('open') && !menu.contains(t) && !open.contains(t)) show(false);
+      if (this.barsPop.style.display !== 'none' && !this.barsPop.contains(t) && !menu.contains(t) && !this.pager?.contains(t)) this.barsPop.style.display = 'none';
+    }, true);
+    makeMovable(open, 'menu');
+  }
+
+  /** Touch: the bars the pager goes through (the main one, then those ticked in the Bars menu). */
+  private pages(): number[] {
+    return [0, ...[1, 2].filter((b) => this.st?.shown[b - 1])];
+  }
+  /** Touch: the next (d 1) or previous (d -1) bar. */
+  private flip(d: number) {
+    const p = this.pages(), i = p.indexOf(this.page);
+    this.page = p[(Math.max(0, i) + d + p.length) % p.length];
+    try {
+      localStorage.setItem('barPage', String(this.page));
+    } catch {
+      /* ignore */
+    }
+    this.showPage();
+  }
+  private showPage() {
+    if (!this.pager) return;
+    const p = this.pages();
+    if (!p.includes(this.page)) this.page = 0;
+    this.shortcuts.dataset.page = String(this.page);
+    this.pager.textContent = `${p.indexOf(this.page) + 1}/${p.length}`;
+    this.pager.title = p.length > 1 ? tx('Cambiar de barra (o deslizá sobre la barra)', 'Switch bars (or swipe along the bar)') : tx('Activar más barras', 'Turn on more bars');
   }
 
   /**
@@ -191,7 +327,20 @@ export class Hud {
    * Buffs and status effects stay next to it. Desktop only: on touch screens the layout is fixed.
    */
   private makeStatusMovable(st: HTMLDivElement) {
-    if (isTouchDevice()) return;
+    if (this.touch) {
+      // touch: a long press moves it, buffs and status effects follow under it (no widening)
+      return makeMovable(st, 'status', {
+        placed: (moved) => {
+          const b = this.buffs.style, e = this.statusEl.style;
+          if (!moved) return void (b.left = b.top = b.bottom = e.left = e.top = e.bottom = '');
+          const k = uiScale(), r = st.getBoundingClientRect();
+          b.left = e.left = `${r.left / k}px`;
+          b.bottom = e.bottom = 'auto';
+          b.top = `${r.bottom / k + 4}px`;
+          e.top = `${r.bottom / k + 32}px`;
+        },
+      });
+    }
     st.classList.add('movable');
     st.title = tx('Arrastrá para moverla, estirá el borde derecho para ensancharla, doble clic en el nombre para volver al lugar original.',
       'Drag to move it, pull the right edge to widen it, double click the name to put it back.');
@@ -450,6 +599,7 @@ export class Hud {
         this.st.shown[b - 1] = box.checked;
         this.st.collapsed[b - 1] = false;
         this.saveBar();
+        this.showPage();
       };
       el('span', '', r, tx(`Barra ${b + 1}`, `Bar ${b + 1}`));
     }
@@ -481,11 +631,13 @@ export class Hud {
     let up = 0;
     this.barRows.forEach((row, k) => {
       row.style.display = st.shown[k] ? '' : 'none';
-      row.classList.toggle('collapsed', st.collapsed[k]);
+      // touch shows them one at a time instead (showPage), never folded
+      row.classList.toggle('collapsed', !this.touch && st.collapsed[k]);
       row.querySelector('.bar-toggle')!.textContent = st.collapsed[k] ? '▸' : '▾';
-      if (st.shown[k]) up += st.collapsed[k] ? 19 : 47;
+      if (st.shown[k] && !this.touch) up += st.collapsed[k] ? 19 : 47;
     });
     document.documentElement.style.setProperty('--xbars', `${up}px`);
+    this.showPage();
     this.slotEls.forEach((els, b) => els.forEach((s, i) => {
       s.querySelector('.icon')?.remove();
       s.querySelector('.cd')?.remove();
@@ -505,7 +657,8 @@ export class Hud {
   activateSlot(b: number, i: number) {
     const sl = this.st?.bars[b]?.[i];
     if (!sl) return;
-    if (b > 0 && (!this.st!.shown[b - 1] || this.st!.collapsed[b - 1])) return; // a bar out of sight does nothing
+    // a bar out of sight does nothing (touch: only the page on show is)
+    if (b > 0 && (this.touch ? b !== this.page : !this.st!.shown[b - 1] || this.st!.collapsed[b - 1])) return;
     // still cooling down for real (not a client guess): shake the slot instead of asking the server
     const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
     const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
