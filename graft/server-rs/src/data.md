@@ -49,21 +49,21 @@ This module is the server's typed view of the shared game database (items, mobs,
 - ClanSkillDef · struct · L299-L299 — pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
 - ClanRepDef · struct · L302-L302 — pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
 - ClansDef · struct · L305-L305 — pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
-- Raw · struct · L308-L336 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
-- Data · struct · L338-L374 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
-- item · function · L377-L377 — O(1) item-catalog lookup by id.
-- wear_level · function · L379-L379 — pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
-- skill · function · L380-L380 — Skill lookup by id via the id→index map, preserving data order.
-- quest · function · L381-L381 — Finds a quest by its id.
-- quest_by_npc · function · L382-L382 — Finds the quest offered by a given NPC.
-- camp · function · L383-L383 — Finds a camp by its id.
-- npc · function · L384-L384 — Finds an NPC by its id.
-- status_flag · function · L385-L385 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
-- spec · function · L387-L387 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
-- evolution_of · function · L389-L389 — pub fn evolution_of(&self, spec: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.parent.as_deref() == Some(spec)) }
-- is_deep · function · L392-L396 — pub fn is_deep(&self, x: f64, z: f64) -> bool
-- gather_def · function · L398-L400 — pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef>
-- skill_available · function · L402-L407 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
-- skills_for · function · L410-L414 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
-- DATA · constant · L417-L417 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
-- d · function · L419-L462 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.
+- Raw · struct · L308-L338 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
+- Data · struct · L340-L378 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
+- item · function · L381-L381 — O(1) item-catalog lookup by id.
+- wear_level · function · L383-L383 — pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
+- skill · function · L384-L384 — Skill lookup by id via the id→index map, preserving data order.
+- quest · function · L385-L385 — Finds a quest by its id.
+- quest_by_npc · function · L386-L386 — Finds the quest offered by a given NPC.
+- camp · function · L387-L387 — Finds a camp by its id.
+- npc · function · L388-L388 — Finds an NPC by its id.
+- status_flag · function · L389-L389 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
+- spec · function · L391-L391 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
+- evolution_of · function · L393-L393 — pub fn evolution_of(&self, spec: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.parent.as_deref() == Some(spec)) }
+- is_deep · function · L396-L400 — pub fn is_deep(&self, x: f64, z: f64) -> bool
+- gather_def · function · L402-L404 — pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef>
+- skill_available · function · L406-L411 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
+- skills_for · function · L414-L418 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
+- DATA · constant · L421-L421 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
+- d · function · L423-L467 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.

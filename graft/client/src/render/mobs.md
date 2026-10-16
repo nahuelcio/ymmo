@@ -5,20 +5,20 @@
 - goblin · function · L42-L42 — goblin = (o: Partial<MobLook>): MobLook
 - realMob · function · L97-L100 — function realMob(tplId: string): Rig | null
 - qMob · function · L102-L116 — function qMob(tplId: string): Rig | null
-- Model · type · L122-L122 — type Model = 'wolf' | 'fox' | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
-- Role · type · L123-L123 — type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
-- ClipSet · type · L124-L124 — type ClipSet = Partial<Record<Role, string>>;
-- GlbLook · interface · L130-L153 — interface GlbLook
-- Loaded · interface · L237-L237 — interface Loaded
-- loadMobs · function · L243-L261 — function loadMobs(): Promise<void>
-- get · function · L246-L246 — get = (f: string)
-- add · function · L250-L254 — add = (m: Model, g: { scene: THREE.Object3D }, clips: THREE.AnimationClip[])
-- rockMap · function · L269-L281 — function rockMap(n: number): THREE.Texture | null
-- lambert · function · L282-L321 — function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material
-- ClipAnim · interface · L324-L330 — interface ClipAnim
-- glbMob · function · L332-L385 — function glbMob(tplId: string): Rig | null
-- animateClips · function · L387-L422 — function animateClips(a: ClipAnim, s: AnimState)
-- at · function · L391-L391 — at = (act: THREE.AnimationAction, ms: number)
-- mountMobPreview · function · L428-L516 — async function mountMobPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L466-L474 — resize = ()
-- frame · function · L489-L502 — frame = (now: number, draw = true)
+- Model · type · L125-L125 — type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
+- Role · type · L126-L126 — type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
+- ClipSet · type · L127-L127 — type ClipSet = Partial<Record<Role, string>>;
+- GlbLook · interface · L133-L156 — interface GlbLook
+- Loaded · interface · L246-L246 — interface Loaded
+- loadMobs · function · L252-L272 — function loadMobs(): Promise<void>
+- get · function · L255-L255 — get = (f: string)
+- add · function · L259-L263 — add = (m: Model, g: { scene: THREE.Object3D }, clips: THREE.AnimationClip[])
+- rockMap · function · L280-L292 — function rockMap(n: number): THREE.Texture | null
+- lambert · function · L293-L332 — function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material
+- ClipAnim · interface · L335-L341 — interface ClipAnim
+- glbMob · function · L343-L396 — function glbMob(tplId: string): Rig | null
+- animateClips · function · L398-L433 — function animateClips(a: ClipAnim, s: AnimState)
+- at · function · L402-L402 — at = (act: THREE.AnimationAction, ms: number)
+- mountMobPreview · function · L439-L527 — async function mountMobPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L477-L485 — resize = ()
+- frame · function · L500-L513 — frame = (now: number, draw = true)

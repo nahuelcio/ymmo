@@ -72,6 +72,8 @@ export interface CEnt {
   rollAt?: number;
   /** /dance emote running until this time */
   danceUntil?: number;
+  /** got at least one animated pose (a rig never animated stays in its bind T-pose) */
+  posed?: boolean;
   roll?: { fx: number; fz: number; tx: number; tz: number; ry: number; at: number };
   hpFill: HTMLDivElement | null;
   bubble?: HTMLDivElement | null;
@@ -1964,7 +1966,8 @@ export class Game {
       if (c.danceUntil && (moving || now - c.atkAt < 700 || now > c.danceUntil)) c.danceUntil = undefined;
       // farther rigs animate on fewer frames (every 2nd past 20 m, every 3rd past 40 m): small on screen, same motion
       const stride = c === self || dSelf < 20 ? 1 : dSelf < 40 ? 2 : 3;
-      const animNow = c.rig !== null && onScreen && dSelf < 60 && (this.frameNo + c.id) % stride === 0;
+      // past 60 m nothing animates, but every rig gets one pose first: one that spawned far away would stand in its bind T-pose
+      const animNow = c.rig !== null && onScreen && (!c.posed || (dSelf < 60 && (this.frameNo + c.id) % stride === 0));
       if (onScreen && c.rig && c !== self) {
         // A rig neither animated nor moved this frame keeps last frame's matrices: recomputing every bone
         // of every idle mob in view was a fifth of the frame once mobs had skeletons.
@@ -1976,6 +1979,7 @@ export class Game {
         c.root.matrixWorldAutoUpdate = animNow || !still;
       }
       if (animNow && c.rig) {
+        c.posed = true;
         if (now >= (c.hitStop ?? 0)) animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
