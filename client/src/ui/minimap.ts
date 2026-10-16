@@ -28,31 +28,51 @@ function questAreas(targets: { quest: string; mobs: Set<string> }[]): { zone: Zo
   return out;
 }
 
-function worldImage(): HTMLCanvasElement {
+/**
+ * Shaded terrain for the square window [x0, x0+span]², res px a side: water, ground colour and north-west-light relief.
+ * A generator so a big sample can be spread over frames (yields after every row); drain it to paint synchronously.
+ */
+function* paintTerrain(x0: number, z0: number, span: number, res: number): Generator<void, HTMLCanvasElement> {
   const c = document.createElement('canvas');
-  c.width = c.height = RES;
+  c.width = c.height = res;
   const ctx = c.getContext('2d')!;
-  const img = ctx.createImageData(RES, RES);
-  const at = (i: number) => (i / RES) * 2 * WORLD_HALF - WORLD_HALF;
-  const hs = new Float32Array(RES * RES);
-  for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) hs[j * RES + i] = heightAt(at(i), at(j));
-  const hAt = (i: number, j: number) => hs[Math.min(RES - 1, Math.max(0, j)) * RES + Math.min(RES - 1, Math.max(0, i))];
-  for (let j = 0; j < RES; j++)
-    for (let i = 0; i < RES; i++) {
-      const h = hs[j * RES + i];
-      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(at(i), at(j), h);
-      // relief: slopes facing the north-west light are brighter, the far sides fall into shade
-      const slope = hAt(i + 1, j) - hAt(i - 1, j) + hAt(i, j + 1) - hAt(i, j - 1);
+  const img = ctx.createImageData(res, res);
+  const step = span / res;
+  // heights one sample past each edge so the slope at the border is real, not clamped
+  const W = res + 2;
+  const hs = new Float32Array(W * W);
+  for (let j = 0; j < W; j++) {
+    for (let i = 0; i < W; i++) hs[j * W + i] = heightAt(x0 + (i - 1) * step, z0 + (j - 1) * step);
+    yield;
+  }
+  for (let j = 0; j < res; j++) {
+    for (let i = 0; i < res; i++) {
+      const k = (j + 1) * W + i + 1, h = hs[k];
+      const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(x0 + i * step, z0 + j * step, h);
+      // relief per metre, so every zoom level shades alike (the 2 m overview used raw height differences)
+      const slope = ((hs[k + 1] - hs[k - 1] + hs[k + W] - hs[k - W]) * 2) / step;
       const shade = h < WATER_LEVEL ? 1 : (0.9 + Math.min(0.25, h / 140)) * Math.min(1.3, Math.max(0.62, 1 - slope * 0.11));
-      const o = (j * RES + i) * 4;
+      const o = (j * res + i) * 4;
       img.data[o] = Math.min(255, r * 255 * shade);
       img.data[o + 1] = Math.min(255, g * 255 * shade);
       img.data[o + 2] = Math.min(255, b * 255 * shade);
       img.data[o + 3] = 255;
     }
+    yield;
+  }
   ctx.putImageData(img, 0, 0);
   return c;
 }
+
+/** Run a paintTerrain generator to the end right now. */
+function drain(gen: Generator<void, HTMLCanvasElement>): HTMLCanvasElement {
+  for (;;) {
+    const r = gen.next();
+    if (r.done) return r.value;
+  }
+}
+
+const worldImage = () => drain(paintTerrain(-WORLD_HALF, -WORLD_HALF, 2 * WORLD_HALF, RES));
 
 const css = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
@@ -74,6 +94,8 @@ export class Minimap {
   private mapDrag: { x: number; y: number; cx: number; cz: number; moved: boolean } | null = null;
   private detail: HTMLCanvasElement | null = null;
   private detailKey = '';
+  /** Key of the window `detail` was painted for. */
+  private detailSpan = '';
   /** CSS pixels of the world map. Overlays are drawn in this space; the bitmap is device pixels. */
   private mapS = RES;
   private lastDraw = 0;
@@ -216,35 +238,28 @@ export class Minimap {
     ctx.drawImage(src, 0, 0, S, S);
   }
 
-  /** Re-sample the height field for the visible window so zoom shows real terrain, not a stretched bitmap. */
-  private renderWindow(): HTMLCanvasElement {
-    // ponytail: 480 px caps the synchronous re-sample at ~1/4 of RES² (922² took ~900 ms and froze the game);
-    // a worker would allow full resolution
-    const RES = Math.min(480, this.bigCanvas.width);
-    const c = document.createElement('canvas');
-    c.width = c.height = RES;
-    const ctx = c.getContext('2d')!;
-    const img = ctx.createImageData(RES, RES);
+  /**
+   * Re-sample the visible window at one pixel per device pixel, a few ms per frame so the game never stalls;
+   * the window keeps showing the previous picture until the sharp one is done. A newer request cancels the old.
+   */
+  private renderWindow(key: string) {
     const span = this.mapSpan();
-    const x0 = this.mapCx - span / 2, z0 = this.mapCz - span / 2;
-    const at = (i: number) => x0 + (i / RES) * span;
-    const hs = new Float32Array(RES * RES);
-    for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) hs[j * RES + i] = heightAt(at(i), at(j));
-    const hAt = (i: number, j: number) => hs[Math.min(RES - 1, Math.max(0, j)) * RES + Math.min(RES - 1, Math.max(0, i))];
-    for (let j = 0; j < RES; j++)
-      for (let i = 0; i < RES; i++) {
-        const h = hs[j * RES + i];
-        const [r, g, b] = h < WATER_LEVEL ? [0.25, 0.48, 0.7] : groundColor(at(i), at(j), h);
-        const slope = hAt(i + 1, j) - hAt(i - 1, j) + hAt(i, j + 1) - hAt(i, j - 1);
-        const shade = h < WATER_LEVEL ? 1 : (0.9 + Math.min(0.25, h / 140)) * Math.min(1.3, Math.max(0.62, 1 - slope * 0.11));
-        const o = (j * RES + i) * 4;
-        img.data[o] = Math.min(255, r * 255 * shade);
-        img.data[o + 1] = Math.min(255, g * 255 * shade);
-        img.data[o + 2] = Math.min(255, b * 255 * shade);
-        img.data[o + 3] = 255;
+    const gen = paintTerrain(this.mapCx - span / 2, this.mapCz - span / 2, span, this.bigCanvas.width);
+    const tick = () => {
+      if (this.detailKey !== key) return;
+      const end = performance.now() + 8;
+      while (performance.now() < end) {
+        const r = gen.next();
+        if (r.done) {
+          this.detail = r.value;
+          this.detailSpan = key;
+          this.drawBig();
+          return;
+        }
       }
-    ctx.putImageData(img, 0, 0);
-    return c;
+      setTimeout(tick, 0);
+    };
+    tick();
   }
 
   toggleMap() {
@@ -257,28 +272,36 @@ export class Minimap {
     const S = this.syncBig();
     if (!S) return;
     const ctx = this.bigCanvas.getContext('2d')!;
-    const zoomed = this.mapZoom > 1.08;
     const dragging = !!this.mapDrag?.moved || performance.now() - this.wheelAt < 250;
-    if (zoomed && !dragging) {
-      const key = `${this.bigCanvas.width}:${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
-      if (this.detailKey !== key) {
-        this.detailKey = key;
-        this.detail = this.renderWindow();
-      }
-      this.blitMap(ctx, this.detail!, S);
-    } else if (zoomed) {
-      // while panning, crop the overview so the drag stays smooth; the sharp sample lands on release
+    const key = `${this.bigCanvas.width}:${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
+    if (!dragging && this.detailKey !== key) {
+      this.detailKey = key;
+      this.renderWindow(key);
+    }
+    if (this.detail && this.detailSpan === key) {
+      this.blitMap(ctx, this.detail, S);
+    } else {
+      // until the sharp sample lands (and while panning), crop the overview
       const src = (this.mapSpan() / (2 * WORLD_HALF)) * RES;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, S, S);
-    } else {
-      this.blitMap(ctx, this.img, S);
     }
     const pxPer = S / this.mapSpan();
-    if (zoomed) this.drawStructures(ctx, pxPer, S);
+    this.drawStructures(ctx, pxPer, S);
     ctx.font = 'bold 12px Tahoma, sans-serif';
     ctx.textAlign = 'center';
+    // ponytail: greedy declutter, labels that would overlap one already drawn are skipped (towns win, then zones,
+    // then camps); zooming in frees room so the rest appear. O(n²) over ~40 labels.
+    const taken: number[][] = [];
+    const tag = (t: string, x: number, y: number) => {
+      const w = ctx.measureText(t).width / 2 + 3;
+      if (taken.some(([a, b, c, d]) => x - w < c && x + w > a && y - 13 < d && y + 3 > b)) return;
+      taken.push([x - w, y - 13, x + w, y + 3]);
+      this.label(ctx, t, x, y);
+    };
+    const towns = TOWNS.map((t) => [...this.toBig(t.x, t.z), t] as const);
+    for (const [x, y, t] of towns) tag(zoneName(t.name, lang), x, y - 12);
     for (const z of ZONES) {
       const [x, y] = this.toBig(z.x, z.z);
       ctx.strokeStyle = 'rgba(255,220,140,0.6)';
@@ -287,21 +310,19 @@ export class Minimap {
       ctx.arc(x, y, z.r * pxPer, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
-      if (x > -80 && y > -20 && x < S + 80 && y < S + 20) this.label(ctx, `${zoneName(z.name, lang)} (${z.levels})`, x, y);
+      if (x > -80 && y > -20 && x < S + 80 && y < S + 20) tag(`${zoneName(z.name, lang)} (${z.levels})`, x, y);
     }
     ctx.fillStyle = '#ffd966';
-    for (const t of TOWNS) {
-      const [x, y] = this.toBig(t.x, t.z);
+    for (const [x, y] of towns) {
       ctx.beginPath();
       ctx.arc(x, y, 6, 0, Math.PI * 2);
       ctx.fill();
-      this.label(ctx, zoneName(t.name, lang), x, y - 12);
     }
-    // hostile camps
+    // hostile camps: the icon always, the name only where it fits
     for (const c of CAMPS) {
       const [x, y] = this.toBig(c.x, c.z);
       this.campIcon(ctx, x, y, 9);
-      this.label(ctx, `${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12);
+      tag(`${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12);
     }
     // quest hunting areas
     for (const { zone, quests } of questAreas(this.g.questTargets())) {

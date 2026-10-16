@@ -234,7 +234,8 @@ export class Game {
   ctrl = false;
   private raycaster = new THREE.Raycaster();
   private targetRing: THREE.Mesh;
-  private clickMarker: THREE.Mesh;
+  private clickMarker: THREE.Group;
+  private clickMat!: THREE.MeshBasicMaterial;
   private clickAt = 0;
   private hoverRing: THREE.Mesh;
   private post: PostFX;
@@ -333,8 +334,16 @@ export class Game {
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 40), glow(0xff4444));
     this.targetRing.rotation.x = -Math.PI / 2;
     this.targetRing.visible = false;
-    this.clickMarker = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 24), glow(0x66ff88));
-    this.clickMarker.rotation.x = -Math.PI / 2;
+    // the walk-to marker: a thin gold ring closing in with four chevrons pointing at the spot (flat on the ground)
+    this.clickMat = Object.assign(glow(0xffd36a), { blending: THREE.AdditiveBlending });
+    this.clickMarker = new THREE.Group();
+    this.clickMarker.add(new THREE.Mesh(new THREE.RingGeometry(0.5, 0.56, 40).rotateX(-Math.PI / 2), this.clickMat));
+    const chev = new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(-0.12, 0.16), new THREE.Vector2(0, 0), new THREE.Vector2(0.12, 0.16), new THREE.Vector2(0, 0.08)])).rotateX(-Math.PI / 2);
+    for (let i = 0; i < 4; i++) {
+      const c = new THREE.Mesh(chev, this.clickMat);
+      c.rotation.y = (i * Math.PI) / 2;
+      this.clickMarker.add(c);
+    }
     this.clickMarker.visible = false;
     this.hoverRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 40), glow(0xffffff));
     this.hoverRing.rotation.x = -Math.PI / 2;
@@ -2048,10 +2057,13 @@ export class Game {
       (this.hoverRing.material as THREE.MeshBasicMaterial).color.set(0xffd966);
     } else this.hoverRing.visible = false;
     if (this.clickMarker.visible) {
-      const k = (now - this.clickAt) / 400;
+      const k = (now - this.clickAt) / 550;
       this.clickMarker.visible = k < 1;
-      this.clickMarker.scale.setScalar(1 + k);
-      (this.clickMarker.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      const e = 1 - (1 - Math.min(1, k * 1.6)) ** 3; // ease out: snaps in, then holds while it fades
+      const [ring, ...chevs] = this.clickMarker.children;
+      ring.scale.setScalar(1.5 - 0.8 * e);
+      chevs.forEach((c) => c.position.set(0, 0, 0).addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(c.quaternion), 0.75 - 0.45 * e));
+      this.clickMat.opacity = Math.min(1, k * 8) * (1 - k);
     }
     this.fx.p.setShade(0.25 + 0.75 * ATMOS.day);
     this.fx.update(this.self?.pos);

@@ -38,6 +38,16 @@ const SKIES: Record<string, SkyPal> = {
   hills: { top: 0x5a8cc0, horizon: 0xc8d6d8, ground: 0x4a4a30, sun: 0xfff0d8, sunI: 2.3, hemi: 1.5, cloud: 0xeef2f4 },
   barracks: { top: 0x5a4a78, horizon: 0xe8a070, ground: 0x4a3020, sun: 0xffb070, sunI: 2.1, hemi: 1.3, cloud: 0xf0b890 },
   wastes: { top: 0x24203a, horizon: 0x7a7088, ground: 0x2a2228, sun: 0xc8b8e8, sunI: 1.4, hemi: 1.0, cloud: 0x5a5468 },
+  coast: { top: 0x3f7fb8, horizon: 0xd8e4e0, ground: 0x6a6048, sun: 0xfff2d8, sunI: 2.5, hemi: 1.6, cloud: 0xf4f6f6 },
+  ruins: { top: 0x41617a, horizon: 0x9fb2b4, ground: 0x34403c, sun: 0xdde6e0, sunI: 1.8, hemi: 1.3, cloud: 0xb4c0c2 },
+  steppes: { top: 0x8a5a3a, horizon: 0xe8b078, ground: 0x5a3420, sun: 0xffc080, sunI: 2.5, hemi: 1.3, cloud: 0xe8a878 },
+  citadel: { top: 0x4a3a30, horizon: 0x9a8670, ground: 0x302820, sun: 0xe8c8a0, sunI: 1.8, hemi: 1.1, cloud: 0x80705e },
+  valley: { top: 0x4a6e70, horizon: 0xa8c0a8, ground: 0x34402c, sun: 0xf0f0d0, sunI: 2.0, hemi: 1.4, cloud: 0xc8d4c8 },
+  nest: { top: 0x3a2438, horizon: 0x9a6a6a, ground: 0x2a1c22, sun: 0xff9a70, sunI: 1.7, hemi: 1.0, cloud: 0x7a5058 },
+  // whole ring regions (biomeWeight), so their towns and the land between zones get the sky too
+  frost: { top: 0x6a90b8, horizon: 0xe4ecf2, ground: 0xb8c4cc, sun: 0xf0f6ff, sunI: 2.2, hemi: 1.8, cloud: 0xf4f8fc },
+  swamp: { top: 0x4a5a3a, horizon: 0x9aa47a, ground: 0x2a3020, sun: 0xd8e0a0, sunI: 1.6, hemi: 1.2, cloud: 0x8a9470 },
+  ash: { top: 0x2a1a18, horizon: 0x8a5a40, ground: 0x2a1810, sun: 0xff8a50, sunI: 1.6, hemi: 0.9, cloud: 0x5a4038 },
 };
 
 const SkyShader = {
@@ -237,9 +247,17 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
     for (const zn of ZONES) {
       const w = 1 - smoothstep(zn.r * 0.6, zn.r * 1.5, Math.hypot(x - zn.x, z - zn.z));
       if (w <= 0) continue;
-      // zones without a palette of their own (the 20-50 ones) keep the town's sky
+      // zones without a palette of their own (volcanic, abyss, tundra...) take their ring region's sky below
       const p = SKIES[zn.id] as SkyPal | undefined;
       if (!p) continue;
+      tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
+      tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
+      tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;
+    }
+    for (const id of ['frost', 'swamp', 'ash'] as const) {
+      const w = biomeWeight(id, x, z);
+      if (w <= 0) continue;
+      const p = SKIES[id];
       tgt.top.lerp(tmp.set(p.top), w); tgt.horizon.lerp(tmp.set(p.horizon), w); tgt.ground.lerp(tmp.set(p.ground), w);
       tgt.sun.lerp(tmp.set(p.sun), w); tgt.cloud.lerp(tmp.set(p.cloud), w);
       tgt.sunI += (p.sunI - tgt.sunI) * w; tgt.hemi += (p.hemi - tgt.hemi) * w;

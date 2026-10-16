@@ -405,7 +405,7 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
       scene.add(model);
     }
     const w = host.clientWidth, h = host.clientHeight;
-    if (renderer.domElement.width !== Math.floor(w * renderer.getPixelRatio())) {
+    if (renderer.domElement.width !== Math.floor(w * renderer.getPixelRatio()) || renderer.domElement.height !== Math.floor(h * renderer.getPixelRatio())) {
       renderer.setSize(w, h, false);
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
