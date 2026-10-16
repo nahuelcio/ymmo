@@ -320,6 +320,8 @@ struct Raw {
     quests: Vec<QuestDef>,
     npcs: Vec<NpcDef>,
     zones: Vec<ZoneDef>,
+    #[serde(default)]
+    herds: Vec<ZoneDef>,
     teleports: Vec<Teleport>,
     camps: Vec<CampDef>,
     races: Vec<RaceDef>,
@@ -351,6 +353,8 @@ pub struct Data {
     pub quests: Vec<QuestDef>,
     pub npcs: Vec<NpcDef>,
     pub zones: Vec<ZoneDef>,
+    /** open-country wild game: spawned like zones, never named as one */
+    pub herds: Vec<ZoneDef>,
     pub teleports: Vec<Teleport>,
     pub camps: Vec<CampDef>,
     pub races: HashMap<String, RaceDef>,
@@ -438,6 +442,7 @@ pub fn d() -> &'static Data {
             quests: raw.quests,
             npcs: raw.npcs,
             zones: raw.zones,
+            herds: raw.herds,
             teleports: raw.teleports,
             camps: raw.camps,
             races: raw.races.into_iter().map(|r| (r.id.clone(), r)).collect(),

@@ -227,7 +227,7 @@ mod tests {
             for dr in &m.drops { item(&dr.item, &m.id); }
             for ph in m.phases.iter().flatten() { if let Some(a) = &ph.adds { mob(&a.mob, &m.id); } }
         }
-        for z in &data.zones { for s in &z.spawns { mob(&s.mob, &z.name); } }
+        for z in data.zones.iter().chain(&data.herds) { for s in &z.spawns { mob(&s.mob, &z.name); } }
         for n in &data.npcs {
             for s in n.shop.iter().flatten() { item(s, &n.id); }
             for c in n.craft.iter().flatten() { assert!(data.item(c).map_or(false, |i| i.craft.is_some()), "{} crafts {c}, which has no recipe", n.id); }

@@ -118,8 +118,11 @@ function qMob(tplId: string): Rig | null {
 // --- models with their own skeleton and clips (client/public/m)
 
 /** creatures: one file each, clips named by role in tools/scripts/m-assets.mjs (CREATURES) */
+/** Quaternius farm and wild animals: Idle/Walk/Gallop/Eating/Death and a headbutt */
+const GAME = ['stag', 'horse', 'donkey', 'alpaca', 'bull', 'cow'] as const;
+const GRAZER: ClipSet = { idle: 'Eating', run: 'Gallop', attack: 'Attack_Headbutt', death: 'Death' };
 const CREATURES = ['spider', 'wyvern', 'cobra', 'drake', 'crab', 'limule', 'golem', 'raptor', 'werewolf', 'forest'] as const;
-type Model = 'wolf' | 'fox' | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
+type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
 type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
 type ClipSet = Partial<Record<Role, string>>;
 const ANIMAL: ClipSet = { idle: 'Idle', run: 'Gallop', attack: 'Attack', death: 'Death' };
@@ -153,6 +156,12 @@ interface GlbLook {
 }
 
 export const MOB_GLB: Record<string, GlbLook> = {
+  cow: { model: 'cow', height: 1.6, clips: GRAZER },
+  donkey: { model: 'donkey', height: 1.4, clips: GRAZER },
+  stag: { model: 'stag', height: 1.9, clips: GRAZER },
+  wild_horse: { model: 'horse', height: 1.8, clips: GRAZER },
+  bull: { model: 'bull', height: 1.7, clips: GRAZER },
+  alpaca: { model: 'alpaca', height: 1.7, clips: GRAZER },
   keltir: { model: 'fox', height: 1.15 },
   elder_keltir: { model: 'fox', height: 1.15, tint: { Main: 0x9a6a3a } },
   young_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0x9a9a9a } },
@@ -257,6 +266,8 @@ export function loadMobs(): Promise<void> {
     SKELETONS.forEach((m, i) => add(m, skels[i], anims.animations));
     for (const s of kit.scenes) weapons[s.name] = s;
     CREATURES.forEach((c, i) => creatures[i] && add(c, creatures[i]!, creatures[i]!.animations));
+    const game = await Promise.all(GAME.map((c) => get(c).catch((err) => (console.warn('mob model', c, err), null))));
+    GAME.forEach((c, i) => game[i] && add(c, game[i]!, game[i]!.animations));
   })());
 }
 

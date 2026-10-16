@@ -1,5 +1,4 @@
 /// <reference types="vite/client" />
-import { loadWildlife } from './render/wildlife';
 import './assets'; // first: versions every public file request
 import './style.css';
 import * as THREE from 'three';
@@ -452,8 +451,6 @@ async function boot() {
     loadV().catch((err) => console.warn('village', err)),
     loadNature().catch((err) => console.warn('nature', err)),
   ]);
-  // the wildlife is scenery: it fills in whenever it arrives, nobody waits for it
-  loadWildlife().catch((err) => console.warn('wildlife', err));
   for (let attempt = 1; ; attempt++) {
     try {
       await net.connect();

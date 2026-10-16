@@ -285,7 +285,7 @@ impl World {
     fn spawn_mobs(&mut self) {
         let data = d();
         let mut rng = Mulberry32::new(42);
-        for zone in &data.zones {
+        for zone in data.zones.iter().chain(&data.herds) {
             for sp in &zone.spawns {
                 let tpl = &data.mobs[&sp.mob];
                 for _ in 0..sp.count {

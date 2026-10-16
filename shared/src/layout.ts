@@ -2,7 +2,7 @@
 // Shared so the client renders exactly what the server collides against.
 import { NPCS, ZONES } from './data/world';
 import { CAMPS, type CampDef } from './data/camps';
-import { biomeWeight, forestAt, FORESTS, heightAt, inTown, inCrater, landAt, onRaidFloor, mulberry32, PLAYABLE_HALF, ROAD_SEGS, TOWN, TOWNS, WATER_LEVEL } from './terrain';
+import { biomeWeight, forestAt, FORESTS, heightAt, inTown, inCrater, landAt, onRaidFloor, mulberry32, PLAYABLE_HALF, regionAt, ROAD_SEGS, TOWN, TOWNS, WATER_LEVEL } from './terrain';
 import { ALBA_STAMPS, albaCurtain, fortCurtain, FORTS } from './village';
 
 /** Every road segment (terrain.ts ROAD_LINES): town to town through the passes, and out to the hunting grounds. */
@@ -340,4 +340,35 @@ export function layoutCamps(): CampL[] {
     return { camp, tents, walls, fire: { x: camp.x, z: camp.z }, banner: { x: camp.x + 2.5, z: camp.z + 2.5 } };
   });
   return camps;
+}
+
+/** Wild game per region (the farm animals graze around Alba and the Dusk bastion instead): herds placed in the open, off zones, towns and camps. */
+const HERD_KINDS: { region: string | null; mob: string; herds: number; size: [number, number] }[] = [
+  { region: 'dawn', mob: 'stag', herds: 22, size: [2, 4] },
+  { region: 'dusk', mob: 'wild_horse', herds: 16, size: [3, 5] },
+  { region: 'heart', mob: 'wild_horse', herds: 16, size: [3, 5] },
+  { region: 'dragon', mob: 'bull', herds: 14, size: [2, 3] },
+  { region: 'frost', mob: 'alpaca', herds: 14, size: [2, 4] },
+];
+const FARMS: { x: number; z: number; mob: string }[] = [
+  { x: TOWN.x + 90, z: TOWN.z - 40, mob: 'cow' }, { x: TOWN.x - 85, z: TOWN.z - 60, mob: 'cow' }, { x: TOWN.x + 30, z: TOWN.z - 110, mob: 'donkey' },
+];
+export interface HerdL { mob: string; x: number; z: number; count: number }
+let herds: HerdL[] | null = null;
+export function layoutHerds(): HerdL[] {
+  if (herds) return herds;
+  herds = FARMS.map((f) => ({ ...f, count: 4 }));
+  const rng = mulberry32(17);
+  for (const k of HERD_KINDS) {
+    for (let n = 0, tries = 0; n < k.herds && tries < 4000; tries++) {
+      const p = landSpot(rng);
+      if (!p) continue;
+      const [x, z] = p, h = heightAt(x, z);
+      if (regionAt(x, z) !== k.region || zoneOf(x, z) || TOWNS.some((t) => Math.hypot(x - t.x, z - t.z) < t.r + 40) || nearCamp(x, z, 40)) continue;
+      if (h < WATER_LEVEL + 1 || h > 30 || roadDist(x, z) < 8) continue;
+      herds.push({ mob: k.mob, x, z, count: k.size[0] + Math.floor(rng() * (k.size[1] - k.size[0] + 1)) });
+      n++;
+    }
+  }
+  return herds;
 }

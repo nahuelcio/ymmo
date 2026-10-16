@@ -197,6 +197,12 @@ export const EN = {
   }
  },
  "mobs": {
+  "cow": "Cow",
+  "donkey": "Donkey",
+  "stag": "Stag",
+  "wild_horse": "Wild Horse",
+  "bull": "Fighting Bull",
+  "alpaca": "Snow Alpaca",
   "keltir": "Keltir",
   "gremlin": "Gremlin",
   "elder_keltir": "Elder Keltir",

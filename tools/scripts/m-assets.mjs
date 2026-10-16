@@ -31,7 +31,7 @@ const CREATURES = {
   werewolf: { file: 'werewolf.glb', clips: { 'idle-loop': 'Idle', 'run-loop': 'Run', attack: 'Attack', death: 'Death' } },
   forest: { file: 'forest.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Dying: 'Death' } },
 };
-const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Eating', 'Attack', 'Death'];
+const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Eating', 'Attack', 'Attack_Headbutt', 'Death'];
 const SKELETONS = ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Mage'];
 const WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Shield_Large_A', 'Skeleton_Shield_Small_A'];
 /** Rig_Medium animation file -> clips kept from it */

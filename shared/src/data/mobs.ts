@@ -43,6 +43,19 @@ export interface MobPhase {
 }
 
 const list: MobDef[] = [
+  // Wild game of the open country (layoutHerds): passive, they fight back once hit
+  { id: 'cow', name: 'Vaca', level: 2, shape: 'beast', color: 0xeeeeee, scale: 1, aggressive: false, speed: 3, atkInterval: 1800, range: 2.2, adena: [3, 8],
+    drops: [{ item: 'animal_skin', chance: 0.5 }, { item: 'animal_bone', chance: 0.3 }] },
+  { id: 'donkey', name: 'Burro', level: 3, shape: 'beast', color: 0x8a7a6a, scale: 1, aggressive: false, speed: 3.5, atkInterval: 1700, range: 2.0, adena: [4, 10],
+    drops: [{ item: 'animal_skin', chance: 0.5 }, { item: 'animal_bone', chance: 0.3 }] },
+  { id: 'stag', name: 'Ciervo', level: 7, shape: 'beast', color: 0x9a6a3a, scale: 1, aggressive: false, speed: 6, atkInterval: 1500, range: 2.2, adena: [20, 40],
+    drops: [{ item: 'animal_skin', chance: 0.6, max: 2 }, { item: 'animal_bone', chance: 0.4 }] },
+  { id: 'wild_horse', name: 'Caballo Salvaje', level: 20, shape: 'beast', color: 0xe8e4dc, scale: 1, aggressive: false, speed: 6.5, atkInterval: 1500, range: 2.4, adena: [90, 160],
+    drops: [{ item: 'animal_skin', chance: 0.6, max: 2 }, { item: 'animal_bone', chance: 0.4, max: 2 }] },
+  { id: 'bull', name: 'Toro Bravo', level: 44, shape: 'beast', color: 0x3a2a22, scale: 1.1, aggressive: false, speed: 5.5, atkInterval: 1600, range: 2.6, hpMult: 1.4, adena: [400, 700],
+    drops: [{ item: 'animal_skin', chance: 0.7, max: 3 }, { item: 'animal_bone', chance: 0.5, max: 2 }] },
+  { id: 'alpaca', name: 'Alpaca de las Nieves', level: 54, shape: 'beast', color: 0xf4f0e8, scale: 1, aggressive: false, speed: 5, atkInterval: 1600, range: 2.2, adena: [600, 1000],
+    drops: [{ item: 'animal_skin', chance: 0.7, max: 3 }, { item: 'animal_bone', chance: 0.4, max: 2 }] },
   // Windy Meadows 1-5
   { id: 'keltir', name: 'Keltir', level: 1, shape: 'beast', color: 0xb08850, scale: 0.6, aggressive: false, speed: 4, atkInterval: 1600, range: 1.6, adena: [4, 12],
     drops: [{ item: 'animal_skin', chance: 0.35 }, { item: 'lesser_healing_potion', chance: 0.05 }] },

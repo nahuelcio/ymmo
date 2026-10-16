@@ -1,6 +1,7 @@
 // Exports the shared game data (shared/src) to JSON for the Rust server, so both servers and the
 // client keep one source of truth. English names are resolved here, so Rust needs no overlay logic.
 //   npm run export-data   (also run by the Docker builds)
+import { layoutHerds } from '../../shared/src/layout';
 import { writeFileSync } from 'node:fs';
 import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
@@ -48,6 +49,8 @@ const out = {
     title: n.title, titleEn: npcText(n.id, 'title', 'en'), greeting: n.greeting, greetingEn: npcText(n.id, 'greeting', 'en'),
     lines: npcLines(n.id, 'es'), linesEn: npcLines(n.id, 'en'), road: n.road ?? null,
   })),
+  // open-country herds spawn like a small zone each (server-rs world.rs spawn_mobs)
+  herds: layoutHerds().map((h) => ({ name: '', nameEn: '', x: h.x, z: h.z, r: 10, spawns: [{ mob: h.mob, count: h.count }] })),
   zones: ZONES.map((z) => ({ id: z.id, name: z.name, nameEn: zoneName(z.name, 'en'), x: z.x, z: z.z, r: z.r, spawns: z.spawns })),
   teleports: TELEPORTS.map((t) => ({ ...t, nameEn: teleportName(t.id, 'en') })),
   camps: CAMPS.map((c) => ({ ...c, nameEn: campName(c.id, 'en') })),
