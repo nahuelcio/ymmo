@@ -178,8 +178,8 @@ export class Win {
   }
 
   show() {
-    // phones: one window at a time, full width (see the portrait layout in style.css)
-    if (document.body.classList.contains('touch') && innerWidth <= 760) for (const w of [...Win.stack]) if (w !== this) w.hide();
+    // phones, upright or sideways: one window at a time, as wide as fits (see the phone windows in style.css)
+    if (document.body.classList.contains('touch') && Math.min(innerWidth, innerHeight) <= 500) for (const w of [...Win.stack]) if (w !== this) w.hide();
     this.root.style.display = '';
     this.front();
     this.onShow?.();

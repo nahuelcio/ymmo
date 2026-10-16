@@ -151,6 +151,26 @@ export class Minimap {
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
     makeMovable(box, 'minimap');
+    // touch: folds down to a small round map (a tap on it still opens the world map)
+    const fold = el('button', 'btn small mm-fold', box);
+    const setFold = (on: boolean) => {
+      box.classList.toggle('folded', on);
+      fold.textContent = on ? '+' : '−';
+      fold.title = on ? tx('Agrandar el minimapa', 'Enlarge the minimap') : tx('Achicar el minimapa', 'Shrink the minimap');
+    };
+    try {
+      setFold(localStorage.getItem('fold:minimap') === '1');
+    } catch {
+      setFold(false);
+    }
+    fold.onclick = () => {
+      setFold(!box.classList.contains('folded'));
+      try {
+        localStorage.setItem('fold:minimap', box.classList.contains('folded') ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    };
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));

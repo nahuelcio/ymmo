@@ -9,6 +9,27 @@ export function isTouchDevice(): boolean {
   return matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches);
 }
 
+/**
+ * Combat focus (touch, from the ☰ menu): hides the chat, quests, party and buffs, and folds the status window down
+ * to HP and MP (style.css .hud-focus). saved: the state the player left it in, else the current one.
+ */
+export function hudFocus(saved = false): boolean {
+  if (!saved) return document.body.classList.contains('hud-focus');
+  try {
+    return localStorage.getItem('hudFocus') === '1';
+  } catch {
+    return false;
+  }
+}
+export function setHudFocus(on: boolean) {
+  document.body.classList.toggle('hud-focus', on);
+  try {
+    localStorage.setItem('hudFocus', on ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Mobile controls: a virtual joystick on the left and big action buttons on the right. */
 export class TouchControls {
   constructor(private g: Game, root: HTMLElement) {
@@ -40,34 +61,7 @@ export class TouchControls {
     } catch {
       settings.set({ autoLoot: true });
     }
-    this.focusToggle(root);
-  }
-
-  /** Combat focus: hide everything but movement, combat and the minimap (menu, chat, quests...). */
-  private focusToggle(root: HTMLElement) {
-    const b = el('button', 'focus-btn', root);
-    const set = (on: boolean) => {
-      document.body.classList.toggle('hud-focus', on);
-      b.textContent = on ? '◱' : '◰';
-      b.setAttribute('aria-label', on ? tx('Mostrar interfaz', 'Show interface') : tx('Modo combate: ocultar interfaz', 'Combat mode: hide interface'));
-      try {
-        localStorage.setItem('hudFocus', on ? '1' : '0');
-      } catch {
-        /* ignore */
-      }
-    };
-    let on = false;
-    try {
-      on = localStorage.getItem('hudFocus') === '1';
-    } catch {
-      /* ignore */
-    }
-    set(on);
-    b.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      set(!document.body.classList.contains('hud-focus'));
-    });
+    setHudFocus(hudFocus(true));
   }
 
   private joystick(root: HTMLElement) {

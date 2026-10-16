@@ -9,6 +9,7 @@
 // --minutes  how long to play (default 5)   --every  seconds between samples (default 15)
 // --chrome   browser executable (default: Chrome, then Edge, in their usual Windows places)
 // --profile  N: record a CPU profile over N seconds of play instead, and list the hottest functions
+// --mobile   WxH: a phone or tablet of that CSS size (touch screen, mobile viewport), for the touch HUD
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,6 +33,8 @@ const SHOT = arg('shot', '');
 const SNAPS = arg('snaps', '');
 /** --nologin: a page that needs no account (the ?fx=1 / ?mobs=1 galleries): open --url and go straight to --eval / --shot */
 const NOLOGIN = process.argv.includes('--nologin');
+/** --mobile WxH: emulate a touch device of that size (390x844 a phone held upright, 844x390 the same phone sideways) */
+const MOBILE = arg('mobile', '');
 const EVAL =((e) => (e.startsWith('@') ? readFileSync(e.slice(1), 'utf8') : e))(arg('eval', '')); // @file reads it from a file
 const PORT = 9333;
 const CHROME = arg('chrome', [
@@ -125,6 +128,14 @@ try {
   await send('Runtime.enable');
   // the window counts as focused even when it isn't (the game drops to 30 fps without focus)
   await send('Emulation.setFocusEmulationEnabled', { enabled: true });
+  if (MOBILE) {
+    const [w, h] = MOBILE.split('x').map(Number);
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: w, height: h, deviceScaleFactor: 2, mobile: true,
+      screenOrientation: w > h ? { type: 'landscapePrimary', angle: 90 } : { type: 'portraitPrimary', angle: 0 },
+    });
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  }
   await send('Page.navigate', { url: URL });
   await sleep(4000);
   // a fresh account and character each run (local dev server only)
