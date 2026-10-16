@@ -439,6 +439,15 @@ export class Hud {
         ? `<b class="qt-ready"><i data-gi="ui/check"></i> ${tx('Volvé con', 'Return to')} ${esc(NPCS.find((n) => n.id === q.npc)?.name ?? '')}</b>`
         : `${esc(questSummaryL(q, lang))} <b>${row.progress}/${q.objective.count}</b>`;
       hydrate(prog);
+      // done: a button that walks you to whoever takes it back (they may be a region away)
+      const giver = NPCS.find((n) => n.id === q.npc);
+      if (ready && giver) {
+        const go = el('button', 'btn small qt-go', line, tx(`Ir con ${giver.name} ➜`, `Go to ${giver.name} ➜`));
+        go.onclick = () => {
+          this.g.travel(giver.x + Math.sin(giver.ry) * 2, giver.z + Math.cos(giver.ry) * 2, false);
+          this.g.sys(tx(`Caminando hacia ${giver.name}.`, `Walking to ${giver.name}.`));
+        };
+      }
       el('div', '', el('div', 'qt-bar', line)).style.width = `${Math.min(100, (row.progress / q.objective.count) * 100)}%`;
     }
     this.questRoot.style.display = shown ? '' : 'none';

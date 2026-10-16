@@ -131,6 +131,7 @@ input { font: inherit; user-select: text; }
 .qt-row.ready .qt-bar > div { background: #8fdc8f; }
 .quest-head { color: var(--gold); margin-bottom: 4px; font-family: Georgia, serif; }
 .qt-row { padding: 3px 0; border-top: 1px solid #2a2a2a; }
+.qt-go { display: block; margin: 3px 0 2px; color: #ffd200; }
 .qt-name { color: var(--gold); display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .qt-track { background: none; border: none; padding: 0; cursor: pointer; font-size: 14px; line-height: 1; color: #ffd200; }
 .qt-track:hover { filter: brightness(1.3); }

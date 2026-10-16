@@ -1,12 +1,18 @@
 //! Compact snapshot frame (same layout as shared/src/binary.ts):
-//!   u8 type=2, u16 n, u16 gone, u32 server time, n × (u32 id, i32 x·50, i32 z·50, i16 ry·10000, u8 hp, u16 flags), gone × u32
+//!   u8 type=SNAP, u16 n, u16 gone, u32 server time, n × (u32 id, i32 x·50, i32 z·50, i16 ry·10000, u8 hp, u16 flags), gone × u32
+//! A frame's first byte says what it is, so the codes never repeat: the snapshot SNAP, the combat events EV_ATK, EV_DMG,
+//! EV_FX (encode_event). The snapshot once took 2, the attack's code, and the client read every attack as a broken snapshot.
+pub const SNAP: u8 = 6;
+pub const EV_ATK: u8 = 2;
+pub const EV_DMG: u8 = 3;
+pub const EV_FX: u8 = 4;
 pub fn q_pos(v: f64) -> f64 { crate::formulas::jround(v * 50.0) / 50.0 }
 pub fn q_rot(v: f64) -> f64 { crate::formulas::jround(v.sin().atan2(v.cos()) * 10000.0) / 10000.0 }
 pub fn wire_time(ms: f64) -> u32 { (ms as u64 % 0x1_0000_0000) as u32 }
 
 pub fn encode_snap(upd: &[[f64; 6]], gone: &[u32], time: f64) -> Vec<u8> {
     let mut b = Vec::with_capacity(9 + upd.len() * 17 + gone.len() * 4);
-    b.push(2u8);
+    b.push(SNAP);
     b.extend_from_slice(&(upd.len() as u16).to_le_bytes());
     b.extend_from_slice(&(gone.len() as u16).to_le_bytes());
     b.extend_from_slice(&wire_time(time).to_le_bytes());
@@ -48,9 +54,9 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
     let flag = |k: &str| v.get(k).and_then(|x| x.as_bool()).unwrap_or(false);
     let obj = v.as_object()?;
     let kind = match t {
-        "atk" if obj.len() == 3 => 2u8,
-        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot")) => 3,
-        "fx" if obj.len() == 4 => 4,
+        "atk" if obj.len() == 3 => EV_ATK,
+        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot")) => EV_DMG,
+        "fx" if obj.len() == 4 => EV_FX,
         _ => return None,
     };
     let (s, tg) = (id("s")?, id("tg")?);
@@ -68,4 +74,20 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
         b.extend_from_slice(sk);
     }
     Some(b)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn frame_kinds_never_collide() {
+        // the client tells a frame by its first byte (client/src/net.ts): a snapshot must never look like an event
+        let snap = encode_snap(&[[1.0, 2.0, 3.0, 0.5, 100.0, 0.0]], &[7], 1000.0);
+        let events = [json!({ "t": "atk", "s": 1, "tg": 2 }), json!({ "t": "dmg", "s": 1, "tg": 2, "v": 10.0 }), json!({ "t": "fx", "s": 1, "tg": 2, "skill": "slash" })];
+        let kinds: Vec<u8> = events.iter().map(|e| encode_event(e).unwrap()[0]).collect();
+        assert_eq!(kinds, vec![EV_ATK, EV_DMG, EV_FX]);
+        assert!(!kinds.contains(&snap[0]), "the snapshot's type byte {} is an event's", snap[0]);
+    }
 }

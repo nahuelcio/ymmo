@@ -1,5 +1,7 @@
 import { NPCS, ZONES, type ZoneDef } from '../../../shared/src/data/world';
 import { makeMovable } from './movable';
+import { isTouchDevice } from './touch';
+import type { QuestMarker } from '../../../shared/src/data/quests';
 import { CAMPS } from '../../../shared/src/data/camps';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
@@ -121,6 +123,18 @@ const css = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
 const toMap = (v: number) => ((v + WORLD_HALF) / (2 * WORLD_HALF)) * RES;
 
+/** A quest giver's mark on a map, as over their head: ! to take a quest, ? to hand one in (grey: not yet). */
+function drawQuestMark(ctx: CanvasRenderingContext2D, x: number, y: number, qm: NonNullable<QuestMarker>, size: number) {
+  ctx.font = `bold ${size}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.lineWidth = Math.max(3, size / 4);
+  ctx.strokeStyle = '#000';
+  const ch = qm === 'ready' || qm === 'active' ? '?' : '!';
+  ctx.strokeText(ch, x, y + size * 0.38);
+  ctx.fillStyle = qm === 'ready' || qm === 'available' ? '#ffd200' : '#9a9a9a';
+  ctx.fillText(ch, x, y + size * 0.38);
+}
+
 export class Minimap {
   private img = worldImage();
   private canvas: HTMLCanvasElement;
@@ -135,6 +149,9 @@ export class Minimap {
   private mapCx = 0;
   private mapCz = 0;
   private mapDrag: { x: number; y: number; cx: number; cz: number; moved: boolean } | null = null;
+  /** fingers on the world map; two of them pinch-zoom round their middle, keeping the world point first under it there */
+  private mapPts = new Map<number, { x: number; y: number }>();
+  private pinch: { d: number; zoom: number; wx: number; wz: number } | null = null;
   private detail: HTMLCanvasElement | null = null;
   private detailKey = '';
   /** Key of the window `detail` was painted for. */
@@ -203,13 +220,43 @@ export class Minimap {
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = side;
     this.bigCanvas.style.width = this.bigCanvas.style.height = `${side}px`;
-    // click walks there; a drag pans once zoomed in; Ctrl+click adds a stop; right click clears the route
+    // click walks there; a drag pans once zoomed in; Ctrl+click adds a stop; right click clears the route; two fingers pinch
+    const mid = () => {
+      const [a, b] = [...this.mapPts.values()];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+    };
     this.bigCanvas.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      this.bigCanvas.setPointerCapture(e.pointerId);
+      try {
+        this.bigCanvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* a pointer the browser no longer tracks: the gesture still works without capture */
+      }
+      this.mapPts.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (this.mapPts.size === 2) {
+        // a second finger: no walk and no one-finger pan from here, a pinch instead
+        const m = mid(), [wx, wz] = this.worldAt(m.x, m.y);
+        this.pinch = { d: m.d, zoom: this.mapZoom, wx, wz };
+        this.mapDrag = null;
+        return;
+      }
+      if (this.mapPts.size > 2 || this.pinch) return;
       this.mapDrag = { x: e.offsetX, y: e.offsetY, cx: this.mapCx, cz: this.mapCz, moved: false };
     });
+    const lift = (e: PointerEvent) => {
+      this.mapPts.delete(e.pointerId);
+      if (this.pinch && this.mapPts.size < 2) {
+        this.pinch = null;
+        this.drawBig();
+      }
+    };
+    this.bigCanvas.addEventListener('pointercancel', lift);
     this.bigCanvas.addEventListener('pointermove', (e) => {
+      if (this.mapPts.has(e.pointerId)) this.mapPts.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      if (this.pinch && this.mapPts.size >= 2) {
+        const m = mid(), p = this.pinch;
+        return this.zoomAt(m.x, m.y, Math.min(8, Math.max(1, (p.zoom * m.d) / p.d)), p.wx, p.wz);
+      }
       const d = this.mapDrag;
       if (!d) return;
       const dx = e.offsetX - d.x, dy = e.offsetY - d.y;
@@ -222,6 +269,7 @@ export class Minimap {
       this.drawBig();
     });
     this.bigCanvas.addEventListener('pointerup', (e) => {
+      lift(e);
       const d = this.mapDrag;
       this.mapDrag = null;
       if (d?.moved) this.drawBig();
@@ -233,24 +281,29 @@ export class Minimap {
     this.bigCanvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const [wx, wz] = this.worldAt(e.offsetX, e.offsetY);
-      const next = Math.min(8, Math.max(1, this.mapZoom * (e.deltaY < 0 ? 1.28 : 1 / 1.28)));
-      this.mapZoom = next;
-      this.wheelAt = performance.now();
-      const span = this.mapSpan();
-      const w = this.bigCanvas.clientWidth || 512;
-      const h = this.bigCanvas.clientHeight || 512;
-      this.mapCx = next <= 1 ? 0 : this.clampMap(wx - (e.offsetX / w - 0.5) * span);
-      this.mapCz = next <= 1 ? 0 : this.clampMap(wz - (e.offsetY / h - 0.5) * span);
-      this.drawBig();
+      this.zoomAt(e.offsetX, e.offsetY, Math.min(8, Math.max(1, this.mapZoom * (e.deltaY < 0 ? 1.28 : 1 / 1.28))), wx, wz);
     }, { passive: false });
     this.bigCanvas.oncontextmenu = (e) => {
       e.preventDefault();
       g.stop();
       this.routeAt = 0;
     };
-    el('div', 'hint', this.mapWin.body, tx(
-      'Rueda: acercar · Arrastrar: mover · Click: caminar · Ctrl+click: parada · Click derecho: cancelar',
-      'Wheel: zoom · Drag: pan · Click: walk · Ctrl+click: add a stop · Right click: cancel'));
+    el('div', 'hint', this.mapWin.body, isTouchDevice()
+      ? tx('Pellizcar: acercar · Arrastrar: mover · Tocar: caminar', 'Pinch: zoom · Drag: pan · Tap: walk')
+      : tx('Rueda: acercar · Arrastrar: mover · Click: caminar · Ctrl+click: parada · Click derecho: cancelar',
+        'Wheel: zoom · Drag: pan · Click: walk · Ctrl+click: add a stop · Right click: cancel'));
+  }
+
+  /** World-map zoom to `next`, with the world point (wx, wz) landing under (px, py) on the canvas (the wheel's cursor, a pinch's middle). */
+  private zoomAt(px: number, py: number, next: number, wx: number, wz: number) {
+    this.mapZoom = next;
+    this.wheelAt = performance.now();
+    const span = this.mapSpan();
+    const w = this.bigCanvas.clientWidth || 512;
+    const h = this.bigCanvas.clientHeight || 512;
+    this.mapCx = next <= 1 ? 0 : this.clampMap(wx - (px / w - 0.5) * span);
+    this.mapCz = next <= 1 ? 0 : this.clampMap(wz - (py / h - 0.5) * span);
+    this.drawBig();
   }
 
   /** World units across the world-map window. */
@@ -441,6 +494,15 @@ export class Minimap {
       ctx.stroke();
       ctx.lineWidth = 1;
       if (zoom >= 2) quests.forEach((q, i) => tag(q, x, y + 18 + i * 14));
+    }
+    // quest givers, as over their heads (! to take, ? to hand in); one waiting for a finished quest is larger and named
+    for (const n of NPCS) {
+      const qm = this.g.questMarkerFor(n.id);
+      if (!qm) continue;
+      const [x, y] = this.toBig(n.x, n.z), ready = qm === 'ready';
+      if (!inView(x, y, 20)) continue;
+      drawQuestMark(ctx, x, y, qm, ready ? 22 : 15);
+      if (ready || zoom >= 2) tag(n.name, x, y - (ready ? 20 : 14), 11);
     }
     this.drawRoute(ctx, (x, z) => this.toBig(x, z));
     // other players, as far as the server tells us about them (those in view): the party in green, with names
@@ -782,15 +844,11 @@ export class Minimap {
       const [x, y] = toC(n.x, n.z);
       const qm = this.g.questMarkerFor(n.id);
       if (qm) {
-        // quest givers: ! / ? like over their heads
-        ctx.font = 'bold 13px Georgia, serif';
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = '#000';
-        const ch = qm === 'ready' || qm === 'active' ? '?' : '!';
-        ctx.strokeText(ch, x, y + 5);
-        ctx.fillStyle = qm === 'ready' || qm === 'available' ? '#ffd200' : '#9a9a9a';
-        ctx.fillText(ch, x, y + 5);
+        // quest givers: ! / ? like over their heads; one waiting for a finished quest stays on the rim when out of
+        // range, on the side it lies
+        const dx = x - W / 2, dy = y - W / 2, dist = Math.hypot(dx, dy), rim = W / 2 - 9;
+        if (dist <= rim) drawQuestMark(ctx, x, y, qm, 13);
+        else if (qm === 'ready') drawQuestMark(ctx, W / 2 + (dx / dist) * rim, W / 2 + (dy / dist) * rim, qm, 12);
         continue;
       }
       ctx.fillStyle = '#ffd966';
