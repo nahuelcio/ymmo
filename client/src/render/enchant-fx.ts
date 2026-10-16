@@ -1,4 +1,4 @@
-// The glow of an enchanted weapon (+1 to +16): a beam of light along the blade and sparks circling it, blue that grows
+// The glow of an enchanted weapon (+1 to +16): a ribbon of light along the blade and sparks circling it, blue that grows
 // denser and more saturated with the level, red at +16. Hung under the weapon, so it follows every swing for free.
 // Everything moves in the shaders off one shared clock (tickEnchantFx): no per-frame CPU work per weapon, and the
 // materials and geometries are shared by every weapon of the same level.
@@ -33,27 +33,11 @@ export function tickEnchantFx(seconds: number, viewHeight: number) {
   shared.uViewH.value = viewHeight;
 }
 
-const beamGeo = (() => {
-  // two crossed planes along +Y, 0..1 (scaled to the blade's length)
-  const a = new THREE.PlaneGeometry(1, 1, 1, 8).translate(0, 0.5, 0);
-  const b = a.clone().rotateY(Math.PI / 2);
-  const g = new THREE.BufferGeometry();
-  const merge = (geos: THREE.BufferGeometry[]) => {
-    const pos: number[] = [], uv: number[] = [], idx: number[] = [];
-    let off = 0;
-    for (const x of geos) {
-      pos.push(...(x.attributes.position.array as Float32Array));
-      uv.push(...(x.attributes.uv.array as Float32Array));
-      for (const i of x.index!.array as Uint16Array) idx.push(i + off);
-      off += x.attributes.position.count;
-    }
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx);
-  };
-  merge([a, b]);
-  return g;
-})();
+/**
+ * One plane along +Y, 0..1 (scaled to the blade's length), 1 wide. The vertex shader turns it to face the camera round
+ * the blade's axis: a fixed plane (there were two, crossed) seen face-on mid-swing read as a flat card beside the blade.
+ */
+const beamGeo = new THREE.PlaneGeometry(1, 1, 1, 8).translate(0, 0.5, 0);
 
 const cache = new Map<number, { beam: THREE.ShaderMaterial; sparks: THREE.ShaderMaterial; geo: THREE.BufferGeometry }>();
 
@@ -69,9 +53,15 @@ function materials(level: number) {
       varying vec2 vUv;
       void main() {
         vUv = uv;
-        vec3 p = position;
-        p.xz *= uWidth * 2.0; // the planes are 1 wide: as wide as the beam's halo
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        // a point on the blade's axis, then sideways across the view: the ribbon always shows its face
+        vec4 c = modelViewMatrix * vec4(0.0, position.y, 0.0, 1.0);
+        vec3 axis = normalize((modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+        vec3 side = cross(axis, normalize(c.xyz));
+        float sl = length(side);
+        side = sl > 1e-4 ? side / sl : vec3(1.0, 0.0, 0.0); // looking straight down the blade
+        // the group is scaled to the blade's length: the halo's width is a fraction of it (the plane is 1 wide)
+        c.xyz += side * position.x * uWidth * 2.0 * length(modelViewMatrix[0].xyz);
+        gl_Position = projectionMatrix * c;
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
@@ -79,7 +69,8 @@ function materials(level: number) {
       varying vec2 vUv;
       void main() {
         float x = abs(vUv.x - 0.5) * 2.0;               // 0 at the blade, 1 at the halo's edge
-        float halo = exp(-x * x * 5.0), core = exp(-x * x * 60.0);
+        // the halo has gone to nothing by the plane's edge: cut off there, the bright blues of +10 and up drew a box round the blade
+        float halo = exp(-x * x * 5.0) * (1.0 - smoothstep(0.65, 1.0, x)), core = exp(-x * x * 60.0);
         float ends = smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.82, vUv.y);
         // light running up the blade
         float flow = 0.75 + 0.25 * sin(vUv.y * 14.0 - uTime * 6.0);

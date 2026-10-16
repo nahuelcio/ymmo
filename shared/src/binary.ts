@@ -9,7 +9,12 @@
 //   gone   × m: u32 id
 import type { C2S, EntUpd, S2C } from './protocol';
 
-export const SNAP_UPD = 2;
+/**
+ * Every binary frame's first byte says what it is, so the codes never repeat: the snapshot is 6 (it was 1 before x/z
+ * grew to i32), the combat events 2, 3 and 4 (EV_ATK, EV_DMG, EV_FX below). A snapshot once took 2, the attack's code,
+ * and every attack was read as a broken snapshot: no swing showed but the first (server-rs/src/binary.rs keeps the same).
+ */
+export const SNAP_UPD = 6;
 const UPD_BYTES = 17;
 const HEADER = 9;
 
