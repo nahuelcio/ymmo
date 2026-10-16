@@ -6,6 +6,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { animate, heldWeapon, mobModel, type AnimState, type Rig, type WeaponKind } from './models';
 import { loadQ, qPlayer, qReady, qWeapon, type Helm } from './quaternius';
 import { kitTexture, loadV } from './village';
+import { contactPhases, crossed } from './footfalls';
 
 /**
  * Mob models instead of the procedural box rigs (models.ts mobModel), all CC0:
@@ -334,6 +335,8 @@ function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): TH
 const ATK_MS = 700;
 interface ClipAnim {
   mixer: THREE.AnimationMixer; acts: Partial<Record<Role, THREE.AnimationAction>>; w: Partial<Record<Role, number>>; t: number;
+  /** the moments (0..1) the feet land in the run clip (render/footfalls.ts) */
+  steps: number[];
   /** the model's holder, for the moves a model has no clip for (lunge, keel over, hover) */
   body: THREE.Object3D;
   float: boolean;
@@ -375,7 +378,7 @@ function glbMob(tplId: string): Rig | null {
   const creature = (CREATURES as readonly string[]).includes(l.model);
   const set = { ...(creature ? CREATURE : animal ? ANIMAL : BONES), ...l.clips };
   const mixer = new THREE.AnimationMixer(obj);
-  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity, body, float: !!l.ghost, wave: !!l.wave };
+  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity, steps: [], body, float: !!l.ghost, wave: !!l.wave };
   for (const role of Object.keys(set) as Role[]) {
     const clip = src.clips.find((c) => c.name === set[role]);
     if (!clip) continue;
@@ -384,6 +387,8 @@ function glbMob(tplId: string): Rig | null {
     if (role === 'attack' || role === 'death') act.timeScale = 0; // driven by the entity's clock
     act.play();
   }
+  // wyverns fly: no footsteps
+  if (a.acts.run && l.model !== 'wyvern') a.steps = runSteps(l.model, src, a.acts.run.getClip());
   return {
     root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * t.scale,
     anim: (s) => animateClips(a, s),
@@ -395,8 +400,30 @@ function glbMob(tplId: string): Rig | null {
   };
 }
 
-function animateClips(a: ClipAnim, s: AnimState) {
-  const dt = Math.min(0.1, Math.max(0, s.t - a.t));
+const stepCache = new Map<string, number[]>();
+/**
+ * When the feet land in a model's run clip, measured once per model on a spare copy: its foot, toe, paw or heel bones,
+ * or failing those its two lowest bones.
+ */
+function runSteps(model: Model, src: Loaded, clip: THREE.AnimationClip): number[] {
+  const key = `${model}:${clip.name}`, hit = stepCache.get(key);
+  if (hit) return hit;
+  const spare = cloneSkinned(src.scene), bones: THREE.Object3D[] = [];
+  spare.traverse((o) => (o as THREE.Bone).isBone && bones.push(o));
+  let feet = bones.filter((b) => /foot|toe|paw|heel/i.test(b.name) && !/ik|pole|target/i.test(b.name));
+  if (!feet.length) {
+    spare.updateMatrixWorld(true);
+    const y = (b: THREE.Object3D) => b.getWorldPosition(new THREE.Vector3()).y;
+    feet = [...bones].sort((p, q) => y(p) - y(q)).slice(0, 2);
+  }
+  const steps = feet.length ? contactPhases(spare, clip, feet) : [0, 0.5];
+  stepCache.set(key, steps);
+  return steps;
+}
+
+/** Pose a clip-driven mob for this frame. Returns how many feet landed in it (footsteps). */
+function animateClips(a: ClipAnim, s: AnimState): number {
+  const dt = Math.min(0.1, Math.max(0, s.t - a.t)), t0 = Number.isFinite(a.t) ? a.t : s.t;
   a.t = s.t;
   /** a one-shot clip at ms into it, held on its last frame */
   const at = (act: THREE.AnimationAction, ms: number) => (act.time = Math.min(ms / 1000, act.getClip().duration - 0.02));
@@ -429,7 +456,13 @@ function animateClips(a: ClipAnim, s: AnimState) {
     else if (w > 0.997) w = 1;
     a.acts[r]!.setEffectiveWeight((a.w[r] = w));
   }
+  const run = a.acts.run, run0 = run?.time ?? 0;
   a.mixer.update(dt);
+  if (!s.moving || s.deadAge >= 0) return 0;
+  // the run clip's clock runs at any weight; a model with no run clip bobs on sin(t·9), a foot down at each dip
+  if (run) return cur === 'run' && (a.w.run ?? 0) > 0.5 ? crossed(run0 / run.getClip().duration, run.time / run.getClip().duration, a.steps) : 0;
+  const bob = (t: number) => ((t * 9) / (2 * Math.PI)) % 1;
+  return cur === 'idle' ? crossed(bob(t0), bob(s.t), [0, 0.5]) : 0;
 }
 
 /**

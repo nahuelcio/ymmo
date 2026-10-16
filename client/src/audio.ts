@@ -71,8 +71,40 @@ function want(f: string) {
   fetch(versioned(`/audio/${f}`))
     .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
     .then((b) => c.decodeAudioData(b))
-    .then((buf) => decoded.set(f, buf))
+    .then((buf) => {
+      decoded.set(f, buf);
+      if (f.startsWith('steps')) grains.set(f, grainsOf(buf));
+    })
     .catch(() => failed.add(f)); // no sample: the synth recipe still plays
+}
+
+/** each footstep file's footfalls: where each one strikes and how long it rings (grainsOf) */
+const grains = new Map<string, { at: number; dur: number }[]>();
+/**
+ * The footfalls in a recording, from its loudness in 5 ms steps: a footfall strikes where the sound jumps to 3x the
+ * quietest it was over the last 150 ms (and to a fifth of the loudest in the file), at least 0.25 s after the last
+ * one. A single step comes out with the silence before it cut off, so it sounds the moment the foot lands; a
+ * recording of someone walking comes out as many single steps.
+ */
+function grainsOf(buf: AudioBuffer): { at: number; dur: number }[] {
+  const d = buf.getChannelData(0), hop = Math.max(1, Math.round(buf.sampleRate * 0.005)), env: number[] = [];
+  for (let i = 0; i < d.length; i += hop) {
+    let m = 0;
+    for (let j = i, e = Math.min(d.length, i + hop); j < e; j++) m = Math.max(m, Math.abs(d[j]));
+    env.push(m);
+  }
+  const peak = env.reduce((a, b) => Math.max(a, b), 0), at: number[] = [];
+  let last = -Infinity;
+  for (let k = 0; k < env.length; k++) {
+    if (env[k] < peak * 0.2 || k - last < 50) continue;
+    let low = env[k];
+    for (let j = Math.max(0, k - 30); j < k; j++) low = Math.min(low, env[j]);
+    if (k === 0 || env[k] >= low * 3) {
+      at.push(Math.max(0, (k * hop) / buf.sampleRate - 0.005));
+      last = k;
+    }
+  }
+  return at.map((a, i) => ({ at: a, dur: Math.min(0.35, (at[i + 1] ?? buf.duration) - a) }));
 }
 
 function preloadSamples(_c: AudioContext) {
@@ -280,6 +312,19 @@ const STEPS: Record<Footing, { files: string[]; gain: number; rate?: number }> =
   water: { files: steps('water', 4), gain: 0.22, rate: 1.25 },
 };
 
+/** The footfall gallery (?steps=1): swap the recordings a ground uses, to try them by ear. */
+export function setStepFiles(on: Footing, files: string[]) {
+  STEPS[on].files = files;
+  for (const f of files) want(f);
+}
+/** Load these footstep files now (the gallery's candidates), once the sound is allowed to start. */
+export function preloadSteps(files: string[]) {
+  if (!audio()) return;
+  for (const f of files) want(f);
+}
+/** How many footfalls were found in each file (grainsOf), or null while it loads; -1 if it would not load. */
+export const stepGrains = (files: string[]) => files.map((f) => (failed.has(f) ? -1 : grains.get(f)?.length ?? null));
+
 /** One footfall on `on` (render/scene.ts footingAt). gain: by distance and body size; rate: pitch (big bodies lower). */
 export function step(on: Footing, gain = 1, rate = 1) {
   const s = STEPS[on], vol = settings.s.volume * gain * s.gain;
@@ -289,16 +334,20 @@ export function step(on: Footing, gain = 1, rate = 1) {
   const out = c.createGain();
   out.gain.value = vol;
   out.connect(master);
-  const t = c.currentTime + 0.005, r = rate * (s.rate ?? 1) * (0.92 + Math.random() * 0.16);
+  const t = c.currentTime + 0.005, r = rate * (s.rate ?? 1) * (0.95 + Math.random() * 0.1);
   const ready = s.files.filter((f) => decoded.has(f));
   if (ready.length) {
-    const src = c.createBufferSource(), g = c.createGain(), max = on === 'water' ? 0.45 : 0.35;
-    src.buffer = decoded.get(ready[Math.floor(Math.random() * ready.length)])!;
+    // one footfall out of one of the files, from its strike (grainsOf)
+    const f = ready[Math.floor(Math.random() * ready.length)], buf = decoded.get(f)!, gs = grains.get(f);
+    const gr = gs?.length ? gs[Math.floor(Math.random() * gs.length)] : { at: 0, dur: 0.35 };
+    const dur = Math.min(gr.dur, on === 'water' ? 0.45 : 0.35) / r;
+    const src = c.createBufferSource(), g = c.createGain();
+    src.buffer = buf;
     src.playbackRate.value = r;
-    g.gain.setValueAtTime(1, t + max - 0.06);
-    g.gain.linearRampToValueAtTime(0, t + max);
+    g.gain.setValueAtTime(1, t + Math.max(0, dur - 0.05));
+    g.gain.linearRampToValueAtTime(0, t + dur);
     src.connect(g).connect(out);
-    src.start(t, 0, max);
+    src.start(t, gr.at, dur * r);
     src.onended = () => out.disconnect();
     return;
   }

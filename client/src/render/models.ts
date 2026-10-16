@@ -10,6 +10,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
+import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
 /** Creatures and gear stay untextured even when they share a colour with the building palette. */
@@ -31,8 +32,10 @@ export interface Rig {
   radius: number;
   /** skinned Quaternius character: clip-driven instead of per-limb */
   q?: QAnim;
-  /** any other clip-driven model (render/mobs.ts) */
-  anim?: (s: AnimState) => void;
+  /** any other clip-driven model (render/mobs.ts): poses it and returns how many feet landed */
+  anim?: (s: AnimState) => number;
+  /** box rigs: the clock of the last pose, to tell when a foot landed since */
+  stepT?: number;
   /** frees what is per-entity (shared geometries and materials stay) */
   dispose?: () => void;
 }
@@ -1106,15 +1109,19 @@ export function bake(rig: Rig): Rig {
   return rig;
 }
 
-export function animate(rig: Rig, s: AnimState) {
-  if (rig.q) {
-    animateQ(rig.q, s);
-    return;
-  }
-  if (rig.anim) {
-    rig.anim(s);
-    return;
-  }
+/** Pose a rig for this frame. Returns how many feet landed in it, for the footsteps (render/footfalls.ts). */
+export function animate(rig: Rig, s: AnimState): number {
+  if (rig.q) return animateQ(rig.q, s);
+  if (rig.anim) return rig.anim(s);
+  // the box rigs swing their legs on sin(t·11): a foot is down at either end of the swing
+  const swing = (t: number) => ((t * 11) / (2 * Math.PI)) % 1, prev = rig.stepT ?? s.t;
+  rig.stepT = s.t;
+  animateBoxes(rig, s);
+  return s.moving && s.deadAge < 0 && !s.dancing ? crossed(swing(prev), swing(s.t), BOX_STEPS) : 0;
+}
+const BOX_STEPS = [0.25, 0.75];
+
+function animateBoxes(rig: Rig, s: AnimState) {
   const dance = !!s.dancing && s.deadAge < 0;
   const { body, legs, armL, armR, torso } = rig;
   if (s.deadAge >= 0) {

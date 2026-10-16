@@ -432,6 +432,11 @@ async function boot() {
     cleanup = await (await import('./render/fx-gallery')).mountFxGallery(document.body);
     return;
   }
+  // ?steps=1: footstep gallery, to choose the recordings by ear (no server needed)
+  if (new URLSearchParams(location.search).has('steps')) {
+    cleanup = await (await import('./render/steps-gallery')).mountStepsGallery(document.body);
+    return;
+  }
   // ?mobs=1: mob gallery only (no server needed)
   if (new URLSearchParams(location.search).has('mobs')) {
     cleanup = await mountMobPreview(document.body);

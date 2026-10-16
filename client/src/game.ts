@@ -90,9 +90,6 @@ export interface CEnt {
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
   splashAt?: number;
-  /** footsteps: where the body was last frame and the ground covered since the last footfall */
-  stepFrom?: { x: number; z: number };
-  stepDist?: number;
 }
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
@@ -1092,21 +1089,12 @@ export class Game {
   /** others' footsteps heard in the last 150 ms: a few at a time, or a crowd in town drowns everything */
   private stepsHeard = { at: 0, n: 0 };
   /**
-   * A footfall for every stride of ground c covers, so the steps keep pace with any speed and stop with the body; the
-   * ground under it picks the sound (render/scene.ts footingAt). Ours always; others' within 15 m, quieter.
+   * The footsteps of `landed` feet that just met the ground in c's walk or run (render/footfalls.ts, through animate),
+   * on the ground under it (render/scene.ts footingAt). Ours always; others' within 15 m, quieter.
    */
-  private footfall(c: CEnt, isSelf: boolean, now: number) {
-    const from = (c.stepFrom ??= { x: c.pos.x, z: c.pos.z });
-    const d = Math.hypot(c.pos.x - from.x, c.pos.z - from.z);
-    from.x = c.pos.x;
-    from.z = c.pos.z;
-    // a snap or a teleport is no walk, nor is a roll, a swim (it splashes) or a body sliding into place
-    if (d > 3 || c.flags & F_DEAD || c.roll || (c.rollAt && now - c.rollAt < ROLL_MS) || isDeep(c.pos.x, c.pos.z)) return void (c.stepDist = 0);
-    const size = c.height / 1.8, stride = Math.min(2.5, Math.max(0.6, 1.1 * size));
-    c.stepDist = (c.stepDist ?? 0) + d;
-    if (c.stepDist < stride) return;
-    c.stepDist %= stride;
-    const rate = Math.min(1.3, Math.max(0.6, 1 / Math.sqrt(size))); // big bodies land lower
+  private footfall(c: CEnt, isSelf: boolean, now: number, landed: number) {
+    if (!landed || (c.rollAt && now - c.rollAt < ROLL_MS) || isDeep(c.pos.x, c.pos.z)) return;
+    const size = c.height / 1.8, rate = Math.min(1.3, Math.max(0.6, 1 / Math.sqrt(size))); // big bodies land lower
     if (isSelf) return step(footingAt(c.pos.x, c.pos.z), 1, rate);
     const self = this.self, heard = this.stepsHeard;
     if (!self || c.pos.distanceTo(self.pos) > 15) return;
@@ -1985,7 +1973,6 @@ export class Game {
         d = Math.atan2(Math.sin(d), Math.cos(d));
         c.ry += d * Math.min(1, dt * 14);
       }
-      if (c.rig) this.footfall(c, c === self, now);
       c.root.position.copy(c.pos);
       // in deep water the body floats at the swimming line; sitting on the ground sinks the hips to it
       const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
@@ -2057,7 +2044,8 @@ export class Game {
       }
       if (animNow && c.rig) {
         c.posed = true;
-        if (now >= (c.hitStop ?? 0)) animate(c.rig, {
+        // the pose says when a foot lands: the footstep sounds then
+        if (now >= (c.hitStop ?? 0)) this.footfall(c, c === self, now, animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
           atkAge: now - c.atkAt,
@@ -2069,7 +2057,7 @@ export class Game {
           sitAge: sitting ? now - (c.sitAt ?? now - 5000) : -1,
           standAge: c.standAt ? now - c.standAt : Infinity,
           gather: c.gather && c.flags & F_GATHER ? { anim: c.gather.anim, age: now - c.gather.at, swingMs: c.gather.swingMs } : null,
-        });
+        }));
       } else if (!c.rig) {
         c.model.rotation.y = tSec * 1.5;
         c.model.position.y = 0.1 + Math.sin(tSec * 3 + c.id) * 0.05;
