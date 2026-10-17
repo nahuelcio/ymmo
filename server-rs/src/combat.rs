@@ -101,12 +101,65 @@ impl World {
         e.c.statuses.insert(sa.id.clone(), ActiveStatus { until: now + sa.ms, src, dps, next_tick: now + 1000.0 });
         if sa.id == "stun" {
             e.c.moving = false;
-            match &mut e.k {
-                Kind::Player(p) => { p.casting = None; p.intent = None; }
-                Kind::Mob(m) => m.winding = None, // stunning a mob interrupts its special attack
-                _ => {}
+            let (x, z) = (e.c.x, e.c.z);
+            let (player, winding) = match &mut e.k {
+                Kind::Player(p) => {
+                    p.intent = None;
+                    (true, false)
+                }
+                Kind::Mob(m) => (false, m.winding.take().is_some()),
+                _ => (false, false),
+            };
+            // a stun cuts a cast (no damage, no cost) and a mob's special attack, its warning circle and slam too
+            if player { self.stop_cast(tid, false, now); }
+            if winding { self.send_near(x, z, json!({ "t": "castx", "s": tid })); }
+        }
+    }
+
+    /**
+     * Stop a player's cast without it going off, and drop the skill queued after it. `charge`: a cancel they chose
+     * (Esc, walking or rolling away, sitting down) costs its MP and cooldown like a finished cast; one forced on them (a
+     * stun, death, a teleport) costs nothing. Everyone near sees the cast bar and the casting pose stop.
+     */
+    pub fn stop_cast(&mut self, pid: u32, charge: bool, now: f64) {
+        let Some(p) = self.pl_mut(pid) else { return };
+        p.queued = None;
+        let Some((skill, _, _)) = p.casting.take() else { return };
+        if let Some(def) = d().skill(&skill).filter(|_| charge) {
+            let def = crate::admin::tuned_skill(def);
+            p.mp = (p.mp - def.mp).max(0.0);
+            let cd = (def.cooldown * (1.0 - p.stats.cdr)).round();
+            p.cooldowns.insert(def.id.clone(), now + cd);
+            p.send(json!({ "t": "cd", "key": def.id, "ms": cd }));
+        }
+        let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        self.send_near(x, z, json!({ "t": "castx", "s": pid }));
+    }
+
+    /** After a cast: the skill pressed during it goes now, if it is ready (request_skill checks it all and says why not). */
+    pub fn fire_queued(&mut self, pid: u32, now: f64) {
+        let Some((skill, force)) = self.pl_mut(pid).and_then(|p| p.queued.take()) else { return };
+        self.request_skill(pid, &skill, force, now);
+    }
+
+    /** A skill's status on its target: a stun or a slow has to land (land_chance), a bleed or poison always does. */
+    fn skill_status(&mut self, pid: u32, tg: u32, sa: &StatusApply, hit: f64, now: f64) {
+        if matches!(sa.id.as_str(), "stun" | "slow") {
+            let base = sa.chance.unwrap_or(if sa.id == "stun" { 0.6 } else { 0.8 });
+            let att = self.pl(pid).map_or(1, |p| p.level);
+            let (lvl, boss) = match self.ents.get(&tg).map(|e| &e.k) {
+                Some(Kind::Player(p)) => (p.level, false),
+                Some(Kind::Mob(m)) => (m.tpl.level, m.tpl.boss.unwrap_or(false)),
+                _ => return,
+            };
+            if rnd() >= land_chance(base, att, lvl, boss) {
+                let msg = json!({ "t": "dmg", "s": pid, "tg": tg, "v": 0, "res": true });
+                self.send(pid, msg.clone());
+                self.send(tg, msg);
+                return;
             }
         }
+        self.apply_status(pid, tg, sa, hit, now);
     }
 
     /** Expire statuses and tick bleed / poison once per second. */
@@ -330,12 +383,12 @@ impl World {
             let t = e.player_mut().unwrap();
             t.hp = 0.0;
             t.intent = None;
-            t.casting = None;
             t.escape_at = 0.0;
             t.buffs.clear();
             t.recalc();
             (e.c.x, e.c.z)
         };
+        self.stop_cast(tid, false, now);
         // a trade in progress ends with nothing changing hands, before anything drops
         self.trade_cancel(tid, Some(("El comercio se canceló.".into(), "The trade has been cancelled.".into())));
         let by_player = self.pl(killer).is_some() && killer != tid;
@@ -390,7 +443,11 @@ impl World {
         let c = &self.ents[&pid].c;
         if c.dead { return; }
         if c.has("stun", now) { return self.sys(pid, "Estás aturdido.", "You are stunned."); }
-        if p.casting.is_some() { return self.sys(pid, "Ya estás lanzando una habilidad.", "You are already casting."); }
+        if p.casting.is_some() {
+            // casting already: this one goes next (fire_queued), in place of any other waiting
+            self.pl_mut(pid).unwrap().queued = Some((def.id.clone(), force));
+            return self.send(pid, json!({ "t": "queued", "skill": def.id }));
+        }
         if p.cooldowns.get(&def.id).copied().unwrap_or(0.0) > now { return self.sys(pid, &format!("{} todavía no está lista.", def.name), &format!("{} is not ready yet.", def.name_en)); }
         if p.mp < def.mp { return self.sys(pid, "No te alcanza el MP.", "Not enough MP."); }
         let mut target = pid;
@@ -483,12 +540,12 @@ impl World {
                         let crit = rnd() * 100.0 < st.crit;
                         let dmg = phys_damage(st.p_atk, p_def, def.power, crit);
                         self.apply_damage(pid, tg, dmg, now, crit, false);
-                        if let Some(sa) = &def.status { self.apply_status(pid, tg, sa, dmg, now); }
+                        if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                     } else {
                         let crit = rnd() < 0.05;
                         let dmg = magic_damage(st.m_atk, m_def, def.power, crit);
                         self.apply_damage(pid, tg, dmg, now, crit, false);
-                        if let Some(sa) = &def.status { self.apply_status(pid, tg, sa, dmg, now); }
+                        if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                         if def.kind == "drain" && !self.ents[&pid].c.dead {
                             let heal = jround(dmg * 0.5);
                             let p = self.pl_mut(pid).unwrap();

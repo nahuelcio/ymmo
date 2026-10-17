@@ -35,8 +35,8 @@ impl World {
             "move" => {
                 let (x, z) = (num(m, "x"), num(m, "z"));
                 if dead || !x.is_finite() || !z.is_finite() { return; }
+                // a cast goes on (update_player waits for it): the walk starts when it ends. Esc is what cancels a cast
                 let p = self.pl_mut(pid).unwrap();
-                p.casting = None;
                 p.talking_to = None;
                 p.intent = Some(Intent::Move { x, z });
             }
@@ -44,6 +44,8 @@ impl World {
                 let rtt = now - num(m, "s");
                 if (0.0..5000.0).contains(&rtt) { let p = self.pl_mut(pid).unwrap(); p.rtt = p.rtt * 0.7 + rtt * 0.3; }
             }
+            // Esc: the cast stops, its MP and cooldown spent all the same
+            "cancel" => self.stop_cast(pid, true, now),
             "stop" => {
                 self.pl_mut(pid).unwrap().intent = None;
                 self.ents.get_mut(&pid).unwrap().c.moving = false;

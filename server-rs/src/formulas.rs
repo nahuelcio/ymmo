@@ -37,6 +37,15 @@ pub fn stat_mods(race: &str, g: &str) -> StatMods {
     }
 }
 
+/**
+ * Chance that a stun or slow from a skill lands: its base, 3% more or less per level the attacker is above or below
+ * the target, kept within 10-90%. Bosses resist twice as well (never below 5%).
+ */
+pub fn land_chance(base: f64, att_level: i64, def_level: i64, boss: bool) -> f64 {
+    let c = (base + 0.03 * (att_level - def_level) as f64).clamp(0.1, 0.9);
+    if boss { (c * 0.5).max(0.05) } else { c }
+}
+
 /** Chance that enchanting a piece currently at +e succeeds. */
 pub fn enchant_chance(e: i64) -> f64 {
     let c = &d().enchant;
@@ -171,6 +180,18 @@ pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stuns_and_slows_land_by_level() {
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert!(near(land_chance(0.6, 40, 40, false), 0.6));
+        assert!(near(land_chance(0.6, 45, 40, false), 0.75)); // 3% a level above
+        assert!(near(land_chance(0.6, 35, 40, false), 0.45)); // and below
+        assert!(near(land_chance(0.6, 80, 40, false), 0.9)); // never sure
+        assert!(near(land_chance(0.6, 1, 40, false), 0.1)); // never hopeless
+        assert!(near(land_chance(0.6, 40, 40, true), 0.3)); // bosses resist twice as well
+        assert!(near(land_chance(0.6, 1, 40, true), 0.05));
+    }
 
     #[test]
     fn levels_go_to_78_slower_past_50() {

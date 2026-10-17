@@ -234,7 +234,13 @@ export class Game {
   rtt = 0;
   /** time of a swing we started locally before the server confirmed it */
   private predictedSwing = 0;
-  castBar: { end: number; dur: number; name: string } | null = null;
+  /** skill: set for a skill's cast (Esc cancels it), not for gathering */
+  castBar: { end: number; dur: number; name: string; skill?: string } | null = null;
+  /** the skill pressed during our cast (server 'queued'): it goes when the cast ends, if it is ready by then */
+  queuedSkill: string | null = null;
+  /** each caster's cast sparkles, and each mob's special-attack warning with its slam timer, to stop if cut short */
+  private castFx = new Map<number, ReturnType<FxManager['sparkles']>>();
+  private teles = new Map<number, { fx: ReturnType<FxManager['telegraph']>; timer: number }>();
   ctrl = false;
   private raycaster = new THREE.Raycaster();
   private targetRing: THREE.Mesh;
@@ -538,14 +544,17 @@ export class Game {
     });
     n.on('tele', (m) => {
       const c = this.ents.get(m.id);
-      this.fx.telegraph(m.x, m.z, m.r, m.ms);
+      const fx = this.fx.telegraph(m.x, m.z, m.r, m.ms);
       play('warn', c ? this.near(c) : 0.6);
-      setTimeout(() => {
+      // a stun before it lands calls it off (castx): no slam
+      const timer = window.setTimeout(() => {
+        this.teles.delete(m.id);
         play('slam', c ? this.near(c) : 0.6);
         this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), 0xff6a3a, m.r, 450);
         const self = this.self;
         if (self && settings.s.screenShake && Math.hypot(self.pos.x - m.x, self.pos.z - m.z) < m.r + 8) this.cam.shake(0.25);
       }, m.ms);
+      this.teles.set(m.id, { fx, timer });
     });
     n.on('say', (m) => {
       this.ui.chat.add('npc', m.name, m.text);
@@ -567,10 +576,14 @@ export class Game {
     onSync('cast', (m) => m.s, (m) => {
       const s = this.ents.get(m.s);
       const def = SKILLS[m.skill];
-      if (s && def) this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur));
+      if (s && def) this.castFx.set(m.s, this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur)));
       if (s && def && m.dur > 250) play('cast', this.near(s));
-      if (m.s === this.me.id && def && m.dur > 0) this.castBar = { end: performance.now() + m.dur, dur: m.dur, name: def.name };
+      if (m.s === this.me.id && def && m.dur > 0) this.castBar = { end: performance.now() + m.dur, dur: m.dur, name: def.name, skill: m.skill };
+      if (m.s === this.me.id && this.queuedSkill === m.skill) this.queuedSkill = null;
     });
+    // a cast (or a mob's special attack) stopped before it went off: cancelled, stunned, dead
+    n.on('castx', (m) => this.castStopped(m.s));
+    n.on('queued', (m) => (this.queuedSkill = m.skill));
     onSync('fx', (m) => m.s, (m) => this.onFx(m.s, m.tg, m.skill));
     n.on('cd', (m) => this.cooldowns.set(m.key, { end: performance.now() + m.ms, dur: m.ms }));
     onSync('died', (m) => m.id, (m) => {
@@ -1086,6 +1099,36 @@ export class Game {
     return Math.max(0, 1 - c.pos.distanceTo(self.pos) / 45);
   }
 
+  /** What a player, mob or NPC is called (as its nameplate says). */
+  private nameOf(c: CEnt): string {
+    return c.rec.k === 'm' ? mobName(c.rec.tpl, lang) : c.rec.k === 'p' || c.rec.k === 'n' ? c.rec.n : '';
+  }
+
+  /** Esc (or a tap on the cast bar): our cast stops here at once and on the server, its MP and cooldown spent all the same. */
+  cancelCast() {
+    if (!this.castBar?.skill) return;
+    this.net.send({ t: 'cancel' });
+    this.castStopped(this.me.id);
+  }
+
+  /** A cast (or a mob's special attack) stopped before it went off: its bar, sparkles, casting pose, warning and slam go. */
+  private castStopped(id: number) {
+    this.fx.end(this.castFx.get(id));
+    this.castFx.delete(id);
+    const tele = this.teles.get(id);
+    if (tele) {
+      this.fx.end(tele.fx);
+      clearTimeout(tele.timer);
+      this.teles.delete(id);
+    }
+    const c = this.ents.get(id);
+    if (c) c.flags &= ~F_CASTING; // the next snapshot agrees: the server dropped the cast
+    if (id === this.me.id) {
+      if (this.castBar?.skill) this.castBar = null;
+      this.queuedSkill = null;
+    }
+  }
+
   /** others' footsteps heard in the last 150 ms: a few at a time, or a crowd in town drowns everything */
   private stepsHeard = { at: 0, n: 0 };
   /**
@@ -1149,6 +1192,10 @@ export class Game {
       play('miss', vol);
       return this.floatText(t, tx('Falló', 'Miss'), 'f-miss');
     }
+    if (m.res) {
+      play('miss', vol);
+      return this.floatText(t, tx('Resistió', 'Resisted'), 'f-miss');
+    }
     if (m.heal) {
       play('heal', vol * 0.8);
       return this.floatText(t, `+${m.v}`, 'f-heal');
@@ -1157,6 +1204,11 @@ export class Game {
     if (m.dot) {
       play('dot', vol * 0.6);
       return this.floatText(t, String(m.v), 'f-dot');
+    }
+    // what hits us, in the System tab (Options: off). Bleed and poison ticks returned above: they would flood it
+    if (mine && settings.s.dmgLog) {
+      const by = this.ents.get(m.s), who = by ? this.nameOf(by) : tx('Algo', 'Something'), crit = m.crit ? tx(' (crítico)', ' (critical)') : '';
+      this.ui.chat.add('log', '', tx(`${who} te pegó por ${m.v}${crit}`, `${who} hit you for ${m.v}${crit}`));
     }
     let sfx: Sfx = mine ? 'hurt' : m.crit ? 'crit' : 'hit';
     if (!mine && this.ents.get(m.s)?.rec.k === 'p' && (this.ents.get(m.s)!.rec as { cls?: string }).cls === 'mystic') sfx = 'magic';
@@ -1372,6 +1424,8 @@ export class Game {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
     if (!route) this.route.length = 0; // any other move replaces the map route
+    // a cast goes on (the server walks there once it ends): no walking ahead of it here, nor dropping its bar
+    if (this.castBar?.skill) return void this.net.send({ t: 'move', x: p.x, z: p.z });
     this.dropPredictedCooldowns();
     this.net.send({ t: 'move', x: p.x, z: p.z });
     const path = findPath(self.pos.x, self.pos.z, p.x, p.z);
@@ -1543,6 +1597,8 @@ export class Game {
   }
 
   useSkill(id: string) {
+    // casting already: the server queues it for when the cast ends (no walking up to the target, no cooldown guess)
+    if (this.castBar?.skill) return void this.net.send({ t: 'skill', skill: id, force: this.ctrl });
     // Do not hunt for a mob here. A skill uses the target already selected; otherwise the server asks for one.
     // prediction: start the cooldown sweep right away when the skill is obviously usable
     const def = SKILLS[id], now = performance.now();
@@ -1696,6 +1752,7 @@ export class Game {
       }
       if (e.key === 'Escape') {
         if (typing()) (document.activeElement as HTMLElement).blur();
+        else if (this.castBar?.skill) this.cancelCast();
         else if (!this.ui.closeTop()) this.setTarget(null);
         return;
       }

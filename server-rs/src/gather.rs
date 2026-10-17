@@ -27,8 +27,9 @@ impl World {
             return self.sys(pid, es, en);
         }
         self.idle_interrupt(pid);
+        // walking off to work, or to a seat, cancels a cast: it costs what Esc does
+        self.stop_cast(pid, true, now);
         let p = self.pl_mut(pid).unwrap();
-        p.casting = None;
         p.talking_to = None;
         p.intent = Some(Intent::Interact { node });
     }
@@ -162,11 +163,13 @@ impl World {
             self.ents.get_mut(&pid).unwrap().c.ry = n.ry;
             self.seats.insert(s, pid);
         }
+        // sitting down cancels a cast: it costs what Esc does
+        let now = self.now;
+        self.stop_cast(pid, true, now);
         let e = self.ents.get_mut(&pid).unwrap();
         e.c.moving = false;
         let p = e.player_mut().unwrap();
         p.intent = None;
-        p.casting = None;
         p.sitting = Some(seat.unwrap_or(0));
     }
 

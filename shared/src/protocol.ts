@@ -158,6 +158,8 @@ export type C2S =
   /** dodge roll toward a point */
   | { t: 'dash'; x: number; z: number; dx: number; dz: number }
   | { t: 'stop' }
+  /** Esc: stop the cast in progress (its MP and cooldown are spent all the same) */
+  | { t: 'cancel' }
   /** use a world node (shared/src/nodes.ts): fell, mine, pick or sit; the server walks there first */
   | { t: 'interact'; node: number }
   /** sit down on the spot, or stand up (also /sit) */
@@ -182,9 +184,14 @@ export type S2C =
   | { t: 'me'; s: SelfState }
   | { t: 'inv'; items: InvItem[]; adena: number }
   | { t: 'target'; id: number | null }
-  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean }
+  /** res: a stun or slow that did not land (it was resisted) */
+  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean; res?: boolean }
   | { t: 'atk'; s: number; tg: number }
   | { t: 'cast'; s: number; tg: number; skill: string; dur: number }
+  /** s's cast (or a mob's special attack) stopped before it went off: cancelled, stunned, dead... */
+  | { t: 'castx'; s: number }
+  /** the skill pressed during our cast: it goes when the cast ends, if it is ready by then */
+  | { t: 'queued'; skill: string }
   | { t: 'fx'; s: number; tg: number; skill: string }
   | { t: 'cd'; key: string; ms: number }
   | { t: 'died'; id: number; byPlayer: boolean }
