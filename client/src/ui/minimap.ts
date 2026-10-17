@@ -124,6 +124,21 @@ const css = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 const toMap = (v: number) => ((v + WORLD_HALF) / (2 * WORLD_HALF)) * RES;
 
 /** A quest giver's mark on a map, as over their head: ! to take a quest, ? to hand one in (grey: not yet). */
+/** How much the world map's labels and icons shrink on a map S px wide: none from 640 px up, the square root below. */
+const markScale = (S: number) => Math.min(1, Math.sqrt(S / 640));
+
+/** The player's arrow on a map: a white dart with a black rim pointing up, turned and moved with a CSS transform. */
+function faceArrow(parent: HTMLElement): SVGSVGElement {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('class', 'map-face');
+  s.setAttribute('viewBox', '-9 -9 18 18');
+  s.setAttribute('width', '18');
+  s.setAttribute('height', '18');
+  s.innerHTML = '<path d="M0,-7 L4.9,7 L0,3.5 L-4.9,7 Z" fill="#fff" stroke="#000" stroke-width="1.5" stroke-linejoin="round"/>';
+  parent.appendChild(s);
+  return s;
+}
+
 function drawQuestMark(ctx: CanvasRenderingContext2D, x: number, y: number, qm: NonNullable<QuestMarker>, size: number) {
   ctx.font = `bold ${size}px Georgia, serif`;
   ctx.textAlign = 'center';
@@ -164,6 +179,15 @@ export class Minimap {
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
   private raidBtn: HTMLButtonElement;
+  /** the player's arrows, pointing where the camera looks (face, every frame) and the last transform each was given */
+  private mmFace!: SVGSVGElement;
+  private bigFace!: SVGSVGElement;
+  private mmFaceAt = '';
+  private bigFaceAt = '';
+  /** the world map's full side (the size it always had) and whether it is showing at that size or at half */
+  private mapSide = RES;
+  private mapBig = false;
+  private sizeBtn!: HTMLButtonElement;
 
   constructor(private g: Game, root: HTMLElement) {
     const box = el('div', 'panel minimap', root);
@@ -190,6 +214,7 @@ export class Minimap {
     };
     this.zoneEl = el('div', 'mm-zone', box);
     this.canvas = el('canvas', 'mm-canvas', box);
+    this.mmFace = faceArrow(box);
     this.canvas.width = this.canvas.height = Math.round(MM * Math.min(devicePixelRatio || 1, 3));
     el('span', 'mm-north', box, 'N');
     this.coordsEl = el('div', 'mm-coords', box);
@@ -215,9 +240,18 @@ export class Minimap {
     // The overview is already RES px (~2 m). Squashing it into 512 and smoothing made the whole map soft.
     // fits .win-body (max-height 100vh - 120, 8px padding) with the hint line: a scrollbar would toggle
     // the canvas width every frame, and every new width re-samples the whole terrain (the map ran at 1 FPS)
-    const side = Math.min(RES, Math.max(320, innerHeight - 160));
+    const side = (this.mapSide = Math.min(RES, Math.max(320, innerHeight - 160)));
     this.mapWin = new Win('worldmap', tx('Mapa del Mundo — Frontera de Aden', 'World Map — Aden Frontier'), 160, 28, side + 18, root);
+    // ⤢ / ⤡ by the ×: the full size it always had, or half
+    const bar = this.mapWin.root.querySelector('.win-title')!;
+    this.sizeBtn = el('button', 'win-size');
+    bar.insertBefore(this.sizeBtn, bar.querySelector('.win-close'));
+    this.sizeBtn.onclick = () => this.setMapSize(!this.mapBig);
+    // it opens at half size; phones keep the size they had, half of it would be too small to read (Win.show's phones)
+    this.mapWin.onShow = () => this.setMapSize(document.body.classList.contains('touch') && Math.min(innerWidth, innerHeight) <= 500);
+    this.mapWin.body.style.position = 'relative'; // the arrow (bigFace) is placed over the canvas
     this.bigCanvas = el('canvas', 'big-map', this.mapWin.body);
+    this.bigFace = faceArrow(this.mapWin.body);
     this.bigCanvas.width = this.bigCanvas.height = side;
     this.bigCanvas.style.width = this.bigCanvas.style.height = `${side}px`;
     // click walks there; a drag pans once zoomed in; Ctrl+click adds a stop; right click clears the route; two fingers pinch
@@ -383,10 +417,48 @@ export class Minimap {
     this.drawBig();
   }
 
+  /** The world map at its full size or at half (the button by the ×), kept on the screen. */
+  private setMapSize(big: boolean) {
+    this.mapBig = big;
+    const r = this.mapWin.root, side = big ? this.mapSide : Math.max(240, Math.round(this.mapSide / 2));
+    r.style.width = `${side + 18}px`;
+    r.classList.toggle('map-half', !big);
+    this.sizeBtn.textContent = big ? '⤡' : '⤢';
+    this.sizeBtn.title = big ? tx('Achicar el mapa', 'Shrink the map') : tx('Agrandar el mapa', 'Enlarge the map');
+    // grown past the edge of the screen: back inside
+    const right = r.offsetLeft + r.offsetWidth - innerWidth, bottom = r.offsetTop + r.offsetHeight - innerHeight;
+    if (right > 0) r.style.left = `${Math.max(0, r.offsetLeft - right)}px`;
+    if (bottom > 0) r.style.top = `${Math.max(0, r.offsetTop - bottom)}px`;
+    this.drawBig();
+  }
+
+  /**
+   * The player's arrows on both maps, every frame: north stays up and the arrow points where the camera looks (it
+   * looks along -sin yaw, -cos yaw), whichever way the body walks. A CSS transform, so the maps aren't redrawn for it.
+   */
+  private face() {
+    const self = this.g.self;
+    this.mmFace.style.display = self ? '' : 'none';
+    if (!self) return void (this.bigFace.style.display = 'none');
+    const turn = `rotate(${(-this.g.cam.yaw).toFixed(3)}rad)`;
+    // the minimap is centred on the player
+    const c = this.canvas, mm = `translate(${c.offsetLeft + c.clientLeft + c.clientWidth / 2 - 9}px, ${c.offsetTop + c.clientTop + c.clientHeight / 2 - 9}px) ${turn}`;
+    if (mm !== this.mmFaceAt) this.mmFace.style.transform = this.mmFaceAt = mm;
+    const S = this.bigCanvas.clientWidth;
+    const [x, y] = this.mapWin.visible && S ? this.toBig(self.pos.x, self.pos.z) : [-1, -1];
+    const inView = x >= 0 && y >= 0 && x <= S && y <= S; // zoomed in, the player may be off the window
+    this.bigFace.style.display = inView ? '' : 'none';
+    if (!inView) return;
+    // at half size it shrinks with the map's other marks (drawBig)
+    const b = this.bigCanvas, k = markScale(S);
+    const big = `translate(${(b.offsetLeft + b.clientLeft + x - 9).toFixed(1)}px, ${(b.offsetTop + b.clientTop + y - 9).toFixed(1)}px) ${turn} scale(${k.toFixed(2)})`;
+    if (big !== this.bigFaceAt) this.bigFace.style.transform = this.bigFaceAt = big;
+  }
+
   private drawBig() {
     if (!this.mapWin.visible) return;
-    const S = this.syncBig();
-    if (!S) return;
+    const S0 = this.syncBig();
+    if (!S0) return;
     const ctx = this.bigCanvas.getContext('2d')!;
     const dragging = !!this.mapDrag?.moved || performance.now() - this.wheelAt < 250;
     const key = `${this.bigCanvas.width}:${this.mapZoom.toFixed(3)}:${this.mapCx.toFixed(1)}:${this.mapCz.toFixed(1)}`;
@@ -395,14 +467,30 @@ export class Minimap {
       this.renderWindow(key);
     }
     if (this.detail && this.detailSpan === key) {
-      this.blitMap(ctx, this.detail, S);
+      this.blitMap(ctx, this.detail, S0);
     } else {
       // until the sharp sample lands (and while panning), crop the overview
       const src = (this.mapSpan() / (2 * WORLD_HALF)) * RES;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, S, S);
+      ctx.drawImage(this.img, toMap(this.mapCx) - src / 2, toMap(this.mapCz) - src / 2, src, src, 0, 0, S0, S0);
     }
+    // On a smaller map (half size, a phone) the labels, icons and compass roses shrink by less than it (the square
+    // root): still readable, and inside it. They are drawn in a larger virtual space that the context scales down.
+    const k = markScale(S0);
+    ctx.save();
+    ctx.scale(k, k);
+    this.mapS = S0 / k;
+    try {
+      this.drawMarks(ctx, S0 / k);
+    } finally {
+      ctx.restore();
+      this.mapS = S0;
+    }
+  }
+
+  /** Everything over the terrain: regions, roads, places, quests, players and the compass roses, on an S-wide map. */
+  private drawMarks(ctx: CanvasRenderingContext2D, S: number) {
     const pxPer = S / this.mapSpan(), zoom = this.mapZoom;
     // regions: a faint wash and a dashed ink border
     ctx.save();
@@ -528,11 +616,6 @@ export class Minimap {
     ctx.fillRect(0, 0, S, S);
     this.compass(ctx, S - 52, 52, 36);
     this.compass(ctx, 34, S - 34, 22);
-    const self = this.g.self;
-    if (self) {
-      const [x, y] = this.toBig(self.pos.x, self.pos.z);
-      this.arrow(ctx, x, y, self.ry, 7);
-    }
   }
 
   /** Houses, walls and trees, drawn as shapes so they stay sharp once the map is zoomed in. */
@@ -730,26 +813,8 @@ export class Minimap {
     ctx.lineWidth = 1;
   }
 
-  private arrow(ctx: CanvasRenderingContext2D, x: number, y: number, ry: number, s: number) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-ry + Math.PI);
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -s);
-    ctx.lineTo(s * 0.7, s);
-    ctx.lineTo(0, s * 0.5);
-    ctx.lineTo(-s * 0.7, s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
   update(now: number) {
+    this.face();
     if (now - this.lastDraw < 150) return;
     this.lastDraw = now;
     const self = this.g.self;
@@ -898,7 +963,6 @@ export class Minimap {
     rim.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = rim;
     ctx.fillRect(0, 0, W, W);
-    this.arrow(ctx, W / 2, W / 2, self.ry, 7);
     const coords = `${Math.round(px)}, ${Math.round(pz)}`;
     if (this.coordsEl.textContent !== coords) this.coordsEl.textContent = coords;
     this.drawBig();
