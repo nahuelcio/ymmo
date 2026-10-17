@@ -138,6 +138,8 @@ pub struct Player {
     pub intent: Option<Intent>,
     pub next_attack: f64,
     pub casting: Option<(String, u32, f64)>,
+    /** the skill pressed while casting (and whether its attack was forced): it goes when the cast ends, if ready */
+    pub queued: Option<(String, bool)>,
     pub cooldowns: HashMap<String, f64>,
     pub pvp_until: f64,
     pub pvp_on: bool,

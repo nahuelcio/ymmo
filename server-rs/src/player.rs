@@ -43,7 +43,10 @@ impl World {
 
         let p = self.pl(pid).unwrap();
         if let Some((_, _, end)) = p.casting {
-            if now >= end { self.finish_cast(pid, now); }
+            if now >= end {
+                self.finish_cast(pid, now);
+                self.fire_queued(pid, now);
+            }
             return;
         }
         if self.tick_gather(pid, now) { return; }

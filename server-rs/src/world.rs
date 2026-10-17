@@ -205,11 +205,12 @@ impl World {
 
     pub fn teleport(&mut self, pid: u32, x: f64, z: f64) {
         self.idle_interrupt(pid);
+        let now = self.now;
+        self.stop_cast(pid, false, now); // carried off: the cast stops, costing nothing
         if let Some(e) = self.ents.get_mut(&pid) {
             e.c.moving = false;
             if let Some(p) = e.player_mut() {
                 p.intent = None;
-                p.casting = None;
                 p.talking_to = None;
             }
         }
@@ -457,6 +458,8 @@ impl World {
         }
         dx /= dl;
         dz /= dl;
+        // rolling out of a cast cancels it, costing what Esc does
+        self.stop_cast(pid, true, now);
         let (sx, sz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         let end = dash_end(sx, sz, dx, dz, radius);
         self.set_pos(pid, end.x, end.z);
@@ -465,7 +468,6 @@ impl World {
         e.c.ry = dx.atan2(dz);
         if !keep_move { e.c.moving = false; }
         let p = e.player_mut().unwrap();
-        p.casting = None;
         p.dodge_until = now + DODGE_MS;
         p.cooldowns.insert("dash".into(), now + DASH_CD);
         p.send(json!({ "t": "cd", "key": "dash", "ms": DASH_CD }));

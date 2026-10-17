@@ -20,7 +20,7 @@ export const SLOW_MUL = 0.6;
 export interface StatusApply {
   id: StatusId;
   ms: number;
-  /** chance on hit (mob hits); skills always apply */
+  /** chance on hit (mob hits); for a skill's stun or slow, its base chance to land (server formulas.rs land_chance) */
   chance?: number;
   /** damage per second as a fraction of the triggering hit (bleed/poison) */
   dot?: number;

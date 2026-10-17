@@ -212,6 +212,9 @@ export class Hud {
     this.cast = el('div', 'castbar', root);
     this.castFill = el('div', 'castbar-fill', this.cast);
     this.castName = el('span', 'castbar-text', this.cast);
+    // a tap on the bar cancels the cast, as Esc does (phones have no Esc)
+    this.cast.onclick = () => this.g.cancelCast();
+    this.cast.title = tx('Clic o Esc: cancelar (gasta el MP y el tiempo de espera igual)', 'Click or Esc: cancel (the MP and cooldown are spent all the same)');
 
     // Menu (bottom-right)
     const menu = el('div', 'panel menu', root);
@@ -714,6 +717,8 @@ export class Hud {
       if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
+      // the skill pressed during the cast, waiting to go when it ends
+      s.classList.toggle('queued', sl.type === 'skill' && sl.id === this.g.queuedSkill && !!this.g.castBar?.skill);
     }));
     const self = this.g.self, swing = 60000 / Math.max(1, this.g.me.atkSpd);
     const arem = self && self.atkAt > 0 ? swing - (now - self.atkAt) : 0;

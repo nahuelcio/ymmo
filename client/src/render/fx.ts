@@ -63,10 +63,16 @@ export class FxManager {
     return this.basic(color, opacity, side, THREE.AdditiveBlending);
   }
 
-  /** Runs update(k, dt) every frame for dur ms; obj (if any) is in the scene meanwhile. */
+  /** Runs update(k, dt) every frame for dur ms; obj (if any) is in the scene meanwhile. Returns it, for end(). */
   private add(obj: THREE.Object3D | null, dur: number, update: (k: number, dt: number) => void) {
     if (obj) this.scene.add(obj);
-    this.list.push({ obj, t0: performance.now(), dur, update });
+    const f = { obj, t0: performance.now(), dur, update };
+    this.list.push(f);
+    return f;
+  }
+  /** Stop an effect now (a cast cut short): it goes on the next frame. */
+  end(f: { dur: number } | undefined) {
+    if (f) f.dur = 0;
   }
   /** emits `perSec` particles a second over an effect's frames, whatever the frame rate */
   private rate(perSec: number) {
@@ -192,7 +198,7 @@ export class FxManager {
     const { n = 14, r = 0.9, spin = 4, rise = 2.2, fall = 0, size = 1, cell = 'star' } = o;
     const seeds = Array.from({ length: n }, (_, i) => ({ a: (i / n) * Math.PI * 2, r: r * (0.5 + Math.random() * 0.5), s: 0.5 + Math.random(), i }));
     const p = V(), trail = this.rate(n * 18), col = hot(color, 0.35);
-    this.add(null, dur, (k, dt) => {
+    return this.add(null, dur, (k, dt) => {
       const life = Math.max(45, dt * 2600), fade = 1 - k * k;
       let t = trail(dt);
       for (const m of seeds) {
@@ -206,7 +212,7 @@ export class FxManager {
 
   /** Twinkling motes spiralling up around a character. */
   sparkles(pos: THREE.Vector3, color: number, dur = 900) {
-    this.motes(pos, color, dur);
+    return this.motes(pos, color, dur);
   }
 
   /** Chunks blasted outwards and thrown up, bouncing on the ground, with glowing sparks among them. */
@@ -360,7 +366,7 @@ export class FxManager {
     const fill = new THREE.Mesh(GEO.disc, fillMat);
     fill.rotation.x = -Math.PI / 2;
     g.add(edge, fill);
-    this.add(g, ms, (k) => {
+    return this.add(g, ms, (k) => {
       fill.scale.setScalar(r * Math.max(0.02, k));
       edgeMat.opacity = 0.6 + 0.35 * Math.sin(k * Math.PI * 8);
     });
