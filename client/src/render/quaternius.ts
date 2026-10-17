@@ -55,8 +55,10 @@ export type Helm = keyof typeof HELMS | GearSet;
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
   karmian_hat: { model: 'karmian_hat' }, demons_circlet: { model: 'demons_circlet', hair: true },
-  leather_cap: { model: 'apprentice' }, abyssal_helm: { model: 'abyssal' }, ashforged_helm: { model: 'ashforged', closed: true },
-  dragon_helm: { model: 'dragon' }, glacial_helm: { model: 'glacial' }, emerald_helm: { model: 'emerald' }, infernal_helm: { model: 'infernal', closed: true },
+  // closed: covers the ears (an elf's or an orc's would poke through), the face too for some
+  leather_cap: { model: 'apprentice', closed: true }, abyssal_helm: { model: 'abyssal' }, ashforged_helm: { model: 'ashforged', closed: true },
+  dragon_helm: { model: 'dragon', closed: true }, glacial_helm: { model: 'glacial', closed: true }, emerald_helm: { model: 'emerald', closed: true },
+  infernal_helm: { model: 'infernal', closed: true },
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
@@ -125,9 +127,15 @@ export function loadQ(): Promise<void> {
       if (!scene) return;
       scene.traverse((m) => {
         if (!(m instanceof THREE.Mesh)) return;
-        // flat colours, and the glow of embers, runes and ice kept (Lambert, like the rest of the characters)
-        const { color, emissive, emissiveIntensity } = m.material as THREE.MeshStandardMaterial;
-        m.material = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity });
+        // the baked look (colour and relief maps per piece); metal takes a highlight tinted by itself, tighter the more
+        // polished, while paint, leather and the insides barely shine (what each is made of comes in the glTF extras)
+        const src = m.material as THREE.MeshStandardMaterial;
+        const { kind = '', rgb = 0xffffff, rough = 0.6 } = src.userData as { kind?: string; rgb?: number; rough?: number };
+        const metal = ['steel', 'blued', 'black', 'iron', 'brass', 'gold', 'bronze', 'mail'].includes(kind);
+        const specular = metal ? new THREE.Color(rgb).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6)
+          : new THREE.Color(kind === 'enamel' ? 0x383838 : 0x121212);
+        const { color, map, normalMap, normalScale } = src;
+        m.material = new THREE.MeshPhongMaterial({ color, map, normalMap, normalScale, specular, shininess: 6 + (1 - rough) ** 2 * 90 });
         m.castShadow = true;
       });
       gear[s] = scene;
