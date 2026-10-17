@@ -676,13 +676,12 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, buzz = race === 'orc' && !female && look.hs === 0, bald = buzz || HAIR_STYLES[look.hs] === 'Pelado';
   if (qReady()) {
     const skin = race === 'orc' ? 0x5a7340 : r.skin; // the flat-shaded green reads as neon on a textured face
-    const cap = head?.id === 'leather_cap'; // worn as a hood
-    const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
+    const gear = head ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && lookGrade(d) !== 'NG', dye: d?.color, glow: topTier(lookGrade(d)) });
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
-      chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
+      chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color,
       pauldron: !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),

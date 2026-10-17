@@ -43,11 +43,20 @@ let jogSteps: number[] = [0, 0.5];
  * for nudging): the head spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
  */
 const HELMS = { HelmC: [0, 0, 1], HelmD: [0, 0, 1], karmian_hat: [0, 0, 1], demons_circlet: [0, 0, 1] } as const;
-export type Helm = keyof typeof HELMS;
+/**
+ * Armour sets modelled from code (tools/art/blender/gear.py), one file each with a node per piece (`helm` so far),
+ * every piece around its bone's pivot like the helmets above.
+ */
+const GEAR_SETS = ['apprentice', 'abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const;
+export type GearSet = (typeof GEAR_SETS)[number];
+const gear: Partial<Record<GearSet, THREE.Object3D>> = {};
+export type Helm = keyof typeof HELMS | GearSet;
 /** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
   karmian_hat: { model: 'karmian_hat' }, demons_circlet: { model: 'demons_circlet', hair: true },
+  leather_cap: { model: 'apprentice' }, abyssal_helm: { model: 'abyssal' }, ashforged_helm: { model: 'ashforged', closed: true },
+  dragon_helm: { model: 'dragon' }, glacial_helm: { model: 'glacial' }, emerald_helm: { model: 'emerald' }, infernal_helm: { model: 'infernal', closed: true },
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
@@ -104,11 +113,25 @@ function headOnly(geo: THREE.BufferGeometry) {
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
-    const [[anims, ...gltfs], heads, rigid] = await Promise.all([
+    const [[anims, ...gltfs], heads, rigid, sets] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
       loader.loadAsync('q/heads.glb'),
       Promise.all(PROPS.map((f) => loader.loadAsync(`q/${f}.glb`))),
+      // a set that fails to load leaves its pieces off, not the rest
+      Promise.all(GEAR_SETS.map((s) => loader.loadAsync(`q/gear/${s}.glb`).catch((err) => (console.warn('gear', s, err), null)))),
     ]);
+    GEAR_SETS.forEach((s, i) => {
+      const scene = sets[i]?.scene;
+      if (!scene) return;
+      scene.traverse((m) => {
+        if (!(m instanceof THREE.Mesh)) return;
+        // flat colours, and the glow of embers, runes and ice kept (Lambert, like the rest of the characters)
+        const { color, emissive, emissiveIntensity } = m.material as THREE.MeshStandardMaterial;
+        m.material = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity });
+        m.castShadow = true;
+      });
+      gear[s] = scene;
+    });
     PROPS.forEach((name, i) => {
       const o = (props[name] = rigid[i].scene);
       o.children.forEach((c) => c.position.set(0, 0, 0));
@@ -325,8 +348,10 @@ export function qPlayer(o: QOpts): Rig {
     attach(byName.Head, crest, 0, 0, 0, 1);
   }
   if (o.helm) {
-    const [y, z, s] = HELMS[o.helm];
-    attach(byName.Head, props[o.helm].clone(), 0, y, z, s); // geometry and materials are shared
+    const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
+    const model = fixed ? props[o.helm] : gear[o.helm as GearSet]?.getObjectByName('helm');
+    const [y, z, s] = fixed ?? [0, 0, 1];
+    if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
   if (o.inHand) attach(byName.hand_r, o.inHand, -0.09, -0.02, 0.03, 0.85);
 
@@ -451,7 +476,15 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Daga: ['assassin_dagger', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
     Martillo: ['war_hammer', 'brigandine_tunic', null, 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     'Místico C': ['sages_staff', 'demons_tunic', 'demons_circlet', null, 'karmian_stockings', 'reinforced_boots'],
+    // the region sets (tools/art/blender/gear.py)
+    ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
+      { abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s],
+      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`],
+    ])),
+    // every helmet side by side, on one race (?race=, default human; ?g=f for women)
+    Cascos: [null, 'brigandine_tunic', null, null, null, null],
   };
+  const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
@@ -462,6 +495,16 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       r.dispose?.();
     }
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
+    if (tier === 'Cascos') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      rigs = HELMETS.map((h, i) => {
+        const rig = playerModel(race, 'fighter', w, chest, { g, hs: 1, hc: 0 }, [h, ...eq.slice(1)]);
+        rig.root.position.set((i - (HELMETS.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
     rigs = (Object.keys(RACES) as Race[]).flatMap((race, i) => (['m', 'f'] as const).map((g, j) => {
       const rig = playerModel(race, tier.startsWith('Místico') ? 'mystic' : 'fighter', w, chest, { g, hs: (i + j) % HAIR_STYLES.length, hc: 0 }, eq);
       rig.root.position.set((i * 2 + j - 4.5) * 1.25, 0, 0);
