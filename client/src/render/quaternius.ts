@@ -55,7 +55,7 @@ const gear: Partial<Record<GearSet, THREE.Object3D>> = {};
  * bones carry them over onto her (and every race's scaling onto it). */
 let restInv: THREE.Matrix4[] = [];
 /** The cloth under a set's armour: the peasant kit dyed in it (the bulkier ranger kit would poke through). */
-const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19 };
+const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19, glacial: 0x161d26 };
 /** The items whose set has a model of their own for them (not every set has its body pieces yet). */
 const SET_PIECE: Record<string, [GearSet, string]> = {
   apprentice_tunic: ['apprentice', 'chest'], apprentice_stockings: ['apprentice', 'legs'], short_gloves: ['apprentice', 'gloves'],
@@ -67,6 +67,34 @@ export function armorPiece(id: string): { node: THREE.Object3D; under: number } 
   const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', greaves: 'legs', boots: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
   const node = set && wantGear(set)?.getObjectByName(name);
   return node ? { node, under: UNDER[set] ?? 0x3a3530 } : undefined;
+}
+/**
+ * A chest piece as a woman wears it. The sets' plates are fitted to the man's chest, and her bust, taken into his rest
+ * pose, stands up to 3.5 cm further out, some 7 cm either side of the middle at the height of his chest: it would come
+ * through. Her copy swells forward there (bridging the middle, as a cuirass would), the hollows of the plates and
+ * everything on them moved alike, its normals turned to match. One copy per piece.
+ */
+const bustCopies = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+function bustGeo(src: THREE.BufferGeometry): THREE.BufferGeometry {
+  let g = bustCopies.get(src);
+  if (g) return g;
+  g = src.clone();
+  const swell = (x: number, y: number, z: number) => {
+    const ax = Math.abs(x), across = ax < 0.068 ? 0.88 + 0.12 * (ax / 0.068) ** 2 : Math.exp(-(((ax - 0.068) / 0.035) ** 2));
+    return 0.04 * across * Math.exp(-(((y - 1.34) / (y < 1.34 ? 0.085 : 0.04)) ** 2)) * THREE.MathUtils.smoothstep(z, -0.02, 0.04);
+  };
+  const pos = g.getAttribute('position'), nor = g.getAttribute('normal'), n = new THREE.Vector3(), e = 0.002;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), h = swell(x, y, z);
+    if (h < 1e-5) continue;
+    pos.setZ(i, z + h);
+    if (!nor) continue;
+    const hx = (swell(x + e, y, z) - swell(x - e, y, z)) / (2 * e), hy = (swell(x, y + e, z) - swell(x, y - e, z)) / (2 * e);
+    n.set(nor.getX(i) - hx * nor.getZ(i), nor.getY(i) - hy * nor.getZ(i), nor.getZ(i)).normalize();
+    nor.setXYZ(i, n.x, n.y, n.z);
+  }
+  bustCopies.set(src, g);
+  return g;
 }
 /** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
  * a skin in our joint order. */
@@ -435,9 +463,10 @@ export function qPlayer(o: QOpts): Rig {
     const sk = new THREE.Skeleton(bones, restInv);
     skeletons.set(-1, sk);
     for (const node of o.armor) {
+      const bust = o.g === 'f' && node.name === 'chest';
       node.traverse((x) => {
         if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
-        const m = new THREE.SkinnedMesh(x.geometry, x.material); // geometry and materials are shared
+        const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
         m.bind(sk, new THREE.Matrix4());
         m.castShadow = true;
         m.frustumCulled = false;
