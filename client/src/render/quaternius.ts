@@ -55,7 +55,7 @@ const gear: Partial<Record<GearSet, THREE.Object3D>> = {};
  * bones carry them over onto her (and every race's scaling onto it). */
 let restInv: THREE.Matrix4[] = [];
 /** The cloth under a set's armour: the peasant kit dyed in it (the bulkier ranger kit would poke through). */
-const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19, glacial: 0x161d26 };
+const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19, glacial: 0x161d26, emerald: 0x121a16 };
 /** The items whose set has a model of their own for them (not every set has its body pieces yet). */
 const SET_PIECE: Record<string, [GearSet, string]> = {
   apprentice_tunic: ['apprentice', 'chest'], apprentice_stockings: ['apprentice', 'legs'], short_gloves: ['apprentice', 'gloves'],
