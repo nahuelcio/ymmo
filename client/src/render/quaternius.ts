@@ -44,19 +44,57 @@ let jogSteps: number[] = [0, 0.5];
  */
 const HELMS = { HelmC: [0, 0, 1], HelmD: [0, 0, 1], karmian_hat: [0, 0, 1], demons_circlet: [0, 0, 1] } as const;
 /**
- * Armour sets modelled from code (tools/art/blender/gear.py), one file each with a node per piece (`helm` so far),
- * every piece around its bone's pivot like the helmets above.
+ * Armour sets modelled from code (tools/art/blender/gear.py), one file each with a node per piece: `helm`, modelled
+ * round the head bone's pivot like the helmets above, and the body pieces (`chest`, `gloves`, `legs`, `feet`), modelled
+ * on the male body in its bind pose with the joints and weights of the body under them, worn as skins.
  */
 const GEAR_SETS = ['apprentice', 'abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const;
 export type GearSet = (typeof GEAR_SETS)[number];
 const gear: Partial<Record<GearSet, THREE.Object3D>> = {};
+/** The male bind pose's inverse bone matrices, in `joints` order: the body pieces were modelled in it, so a woman's
+ * bones carry them over onto her (and every race's scaling onto it). */
+let restInv: THREE.Matrix4[] = [];
+/** The cloth under a set's armour: the peasant kit dyed in it (the bulkier ranger kit would poke through). */
+const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19 };
+/** The items whose set has a model of their own for them (not every set has its body pieces yet). */
+const SET_PIECE: Record<string, [GearSet, string]> = {
+  apprentice_tunic: ['apprentice', 'chest'], apprentice_stockings: ['apprentice', 'legs'], short_gloves: ['apprentice', 'gloves'],
+  leather_sandals: ['apprentice', 'feet'],
+};
+/** A set's model for an armour item, when there is one: the node to wear and the colour to dye the cloth under it. */
+export function armorPiece(id: string): { node: THREE.Object3D; under: number } | undefined {
+  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|greaves|boots)$/.exec(id);
+  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', greaves: 'legs', boots: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
+  const node = set && wantGear(set)?.getObjectByName(name);
+  return node ? { node, under: UNDER[set] ?? 0x3a3530 } : undefined;
+}
+/** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
+ * a skin in our joint order. */
+function toSkin(m: THREE.Mesh) {
+  const g = m.geometry, j = g.getAttribute('_joints'), w = g.getAttribute('_weights');
+  const names = (m.userData.joints ?? m.parent?.userData.joints) as string[] | undefined;
+  if (!j || !w || !names) return;
+  const map = names.map((n) => Math.max(0, joints.indexOf(n)));
+  const idx = new Uint16Array(j.count * 4), wt = new Float32Array(j.count * 4);
+  for (let i = 0; i < j.count; i++) {
+    for (let k = 0; k < 4; k++) {
+      idx[i * 4 + k] = map[Math.round(j.getComponent(i, k))] ?? 0;
+      wt[i * 4 + k] = w.getComponent(i, k);
+    }
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+  g.deleteAttribute('_joints');
+  g.deleteAttribute('_weights');
+  m.userData.skinned = true;
+}
 export type Helm = keyof typeof HELMS | GearSet;
 /** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
   karmian_hat: { model: 'karmian_hat' }, demons_circlet: { model: 'demons_circlet', hair: true },
   // closed: covers the ears (an elf's or an orc's would poke through), the face too for some
-  leather_cap: { model: 'apprentice', closed: true }, abyssal_helm: { model: 'abyssal' }, ashforged_helm: { model: 'ashforged', closed: true },
+  leather_cap: { model: 'apprentice', closed: true }, abyssal_helm: { model: 'abyssal', closed: true }, ashforged_helm: { model: 'ashforged', closed: true },
   dragon_helm: { model: 'dragon', closed: true }, glacial_helm: { model: 'glacial', closed: true }, emerald_helm: { model: 'emerald', closed: true },
   infernal_helm: { model: 'infernal', closed: true },
 };
@@ -97,49 +135,81 @@ function avgColor(tex: THREE.Texture): THREE.Color {
 }
 
 /** The outfits cover the body: keep only the triangles of the base mesh that follow the head and neck. */
-function headOnly(geo: THREE.BufferGeometry) {
+/** Keep only the triangles touching a vertex whose strongest joint `keep` accepts (or, with `all`, only those whose
+ * every vertex it accepts). */
+function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean, all = false) {
   const si = geo.getAttribute('skinIndex'), sw = geo.getAttribute('skinWeight'), idx = geo.index!;
-  const keep = (v: number) => {
+  const ok = (v: number) => {
     let best = 0, bw = -1;
     for (let k = 0; k < 4; k++) if (sw.getComponent(v, k) > bw) { bw = sw.getComponent(v, k); best = si.getComponent(v, k); }
-    return joints[best] === 'Head' || joints[best] === 'neck_01';
+    return keep(joints[best]);
   };
   const out: number[] = [];
   for (let i = 0; i < idx.count; i += 3) {
     const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
-    if (keep(a) || keep(b) || keep(c)) out.push(a, b, c);
+    if (all ? ok(a) && ok(b) && ok(c) : ok(a) || ok(b) || ok(c)) out.push(a, b, c);
   }
   geo.setIndex(out);
+}
+const isHead = (j: string) => j === 'Head' || j === 'neck_01';
+const headOnly = (geo: THREE.BufferGeometry) => trim(geo, isHead);
+/** The bare body under a set's armour, in three parts (whichever the armour covers stands in for the cloth there):
+ * the trunk and arms, the hips and legs, the feet; the head and neck are the head's. */
+const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
+  top: (j) => !isHead(j) && j !== 'pelvis' && !/^(thigh|calf|foot|ball)/.test(j),
+  legs: (j) => /^(pelvis|thigh|calf)/.test(j),
+  feet: (j) => /^(foot|ball)/.test(j),
+};
+
+let gearLoader: GLTFLoader | null = null;
+const gearLoading = new Set<GearSet>();
+/**
+ * An armour set's file, fetched the first time a character wears something of it (a whole set's maps are tens of
+ * megabytes on the GPU: only the sets on screen get loaded). Until it is in, the piece is left off; then a
+ * 'gear-loaded' event (detail: the set) tells whoever drew a character without it to build it again.
+ */
+function wantGear(s: GearSet): THREE.Object3D | undefined {
+  if (gear[s] || !gearLoader || gearLoading.has(s)) return gear[s];
+  gearLoading.add(s);
+  gearLoader.loadAsync(`q/gear/${s}.glb`).then((g) => {
+    g.scene.traverse((m) => {
+      if (!(m instanceof THREE.Mesh)) return;
+      // the baked look (colour and relief maps per piece); metal takes a highlight tinted by itself, tighter the more
+      // polished, while paint, leather and the insides barely shine (what each is made of comes in the glTF extras)
+      const src = m.material as THREE.MeshStandardMaterial;
+      const { kind = '', rgb = 0xffffff, rough = 0.6 } = src.userData as { kind?: string; rgb?: number; rough?: number };
+      const metal = ['steel', 'blued', 'black', 'iron', 'brass', 'gold', 'bronze', 'mail'].includes(kind);
+      const specular = metal ? new THREE.Color(rgb).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6)
+        : new THREE.Color(kind === 'enamel' ? 0x383838 : 0x121212);
+      const { color, map, normalMap, normalScale } = src;
+      const mat = new THREE.MeshPhongMaterial({ color, map, normalMap, normalScale, specular, shininess: 6 + (1 - rough) ** 2 * 90 });
+      if (src.userData.shine && map) {
+        // one material for the whole piece: how much each part of it shines is in the colour map's alpha
+        mat.specularMap = map;
+        mat.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <specularmap_fragment>', 'float specularStrength = texture2D(specularMap, vSpecularMapUv).a;');
+        };
+        mat.customProgramCacheKey = () => 'gear-shine';
+      }
+      m.material = mat;
+      m.castShadow = true;
+      toSkin(m);
+    });
+    gear[s] = g.scene;
+    dispatchEvent(new CustomEvent('gear-loaded', { detail: s }));
+  }).catch((err) => console.warn('gear', s, err)); // a set that fails to load leaves its pieces off
+  return undefined;
 }
 
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
-    const [[anims, ...gltfs], heads, rigid, sets] = await Promise.all([
+    gearLoader = loader;
+    const [[anims, ...gltfs], heads, rigid] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
       loader.loadAsync('q/heads.glb'),
       Promise.all(PROPS.map((f) => loader.loadAsync(`q/${f}.glb`))),
-      // a set that fails to load leaves its pieces off, not the rest
-      Promise.all(GEAR_SETS.map((s) => loader.loadAsync(`q/gear/${s}.glb`).catch((err) => (console.warn('gear', s, err), null)))),
     ]);
-    GEAR_SETS.forEach((s, i) => {
-      const scene = sets[i]?.scene;
-      if (!scene) return;
-      scene.traverse((m) => {
-        if (!(m instanceof THREE.Mesh)) return;
-        // the baked look (colour and relief maps per piece); metal takes a highlight tinted by itself, tighter the more
-        // polished, while paint, leather and the insides barely shine (what each is made of comes in the glTF extras)
-        const src = m.material as THREE.MeshStandardMaterial;
-        const { kind = '', rgb = 0xffffff, rough = 0.6 } = src.userData as { kind?: string; rgb?: number; rough?: number };
-        const metal = ['steel', 'blued', 'black', 'iron', 'brass', 'gold', 'bronze', 'mail'].includes(kind);
-        const specular = metal ? new THREE.Color(rgb).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6)
-          : new THREE.Color(kind === 'enamel' ? 0x383838 : 0x121212);
-        const { color, map, normalMap, normalScale } = src;
-        m.material = new THREE.MeshPhongMaterial({ color, map, normalMap, normalScale, specular, shininess: 6 + (1 - rough) ** 2 * 90 });
-        m.castShadow = true;
-      });
-      gear[s] = scene;
-    });
     PROPS.forEach((name, i) => {
       const o = (props[name] = rigid[i].scene);
       o.children.forEach((c) => c.position.set(0, 0, 0));
@@ -194,9 +264,17 @@ export function loadQ(): Promise<void> {
         armature[file.startsWith('Female') ? 'f' : 'm'] = gltfs[i].scene; // what is left is the bone hierarchy
       }
     });
+    armature.m!.updateMatrixWorld(true);
+    restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
+      for (const part of ['top', 'legs', 'feet'] as const) {
+        const b = get('body'), m = new THREE.SkinnedMesh(b.geometry.clone(), b.material);
+        m.bind(b.skeleton, b.bindMatrix);
+        trim(m.geometry, SUIT[part], true);
+        collect(`Suit_${part}_${g}`, [m]);
+      }
       collect(`Head_${g}`, [get('body'), get('eyes'), get('brows')], true);
       const t = (tusks[g] = get('tusks'));
       t.material = new THREE.MeshLambertMaterial({ color: 0xf0ecd8 });
@@ -281,6 +359,12 @@ export interface QOpts {
   /** head scale, ear shape key and tusks of the race */
   head?: number; ears?: 'elf_ears' | 'orc_ears'; tusks?: boolean;
   helm?: Helm;
+  /** body pieces of the armour sets (armorPiece), worn over the cloth */
+  armor?: THREE.Object3D[];
+  /** no boots: a set's own feet piece (greaves and sabatons) takes their place */
+  bareFeet?: boolean;
+  /** no cloth on the trunk and arms, or on the legs: a set's armour covers them, over the bare body dyed `suit` */
+  noTop?: boolean; noLegs?: boolean; suit?: number;
   /** weapon built along +Z with the grip at the origin */
   inHand?: THREE.Object3D | null;
 }
@@ -317,6 +401,7 @@ export function qPlayer(o: QOpts): Rig {
       let sk = skeletons.get(p.fam);
       if (!sk) skeletons.set(p.fam, (sk = new THREE.Skeleton(bones, families[p.fam])));
       const m = new THREE.SkinnedMesh(p.geo, material(p, ...tint(p)));
+      m.userData.file = file;
       m.bind(sk, p.bind);
       if (o.ears && p.morphs?.[o.ears] !== undefined) m.morphTargetInfluences![p.morphs[o.ears]] = 1;
       m.castShadow = true;
@@ -329,15 +414,37 @@ export function qPlayer(o: QOpts): Rig {
     p.kind === 'skin' ? (hands !== undefined ? [new THREE.Color(hands).multiplyScalar(0.55).getHex(), 0, false] : [o.skin, 0, false]) : [z.dye, 0.85, !!z.glow];
   const kit = (z: QZone) => (z.ranger ? 'Ranger' : 'Peasant');
   add(`Head_${o.g}`, (p) => (p.kind === 'skin' ? [o.skin, 0, false] : p.kind === 'hair' ? [o.hair, 0.9, false] : [undefined, 0, false]));
-  add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
-  add(`${S}_${kit(o.chest)}_Arms`, zone(o.chest, o.gloves));
-  add(`${S}_${kit(o.legs)}_Legs`, zone(o.legs));
-  add(o.feet.ranger ? (o.g === 'm' ? 'Male_Ranger_Feet_Boots' : 'Female_Ranger_Feet') : `${S}_Peasant_Feet`, zone(o.feet));
+  if (o.suit !== undefined) {
+    const suit = (): [number, number, boolean] => [o.suit!, 0.9, false];
+    if (o.noTop) add(`Suit_top_${o.g}`, suit);
+    if (o.noLegs) add(`Suit_legs_${o.g}`, suit);
+    if (o.bareFeet) add(`Suit_feet_${o.g}`, suit);
+  }
+  if (!o.noTop) {
+    add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
+    add(`${S}_${kit(o.chest)}_Arms`, zone(o.chest, o.gloves));
+  }
+  if (!o.noLegs) add(`${S}_${kit(o.legs)}_Legs`, zone(o.legs));
+  if (!o.bareFeet) add(o.feet.ranger ? (o.g === 'm' ? 'Male_Ranger_Feet_Boots' : 'Female_Ranger_Feet') : `${S}_Peasant_Feet`, zone(o.feet));
   if (o.pauldron) add(o.g === 'm' ? 'Male_Ranger_Acc_Pauldron' : 'Female_Ranger_Acc_Pauldrons', zone(o.chest));
   const hair = (p: Prim): [number, number, boolean] => [o.hair, 0.9, false];
   if (o.hood !== undefined) add(`${S}_Ranger_Head_Hood`, zone({ ranger: true, dye: o.hood }));
   else if (!o.hideHair && (o.bald || HAIR[o.hairStyle])) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle]!, hair);
   if (o.beard) add('Hair_Beard', hair);
+  if (o.armor?.length) {
+    const sk = new THREE.Skeleton(bones, restInv);
+    skeletons.set(-1, sk);
+    for (const node of o.armor) {
+      node.traverse((x) => {
+        if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
+        const m = new THREE.SkinnedMesh(x.geometry, x.material); // geometry and materials are shared
+        m.bind(sk, new THREE.Matrix4());
+        m.castShadow = true;
+        m.frustumCulled = false;
+        body.add(m);
+      });
+    }
+  }
 
   if (o.tusks) {
     const t = tusks[o.g]!.clone(); // keeps its offset from the head bone
@@ -357,7 +464,7 @@ export function qPlayer(o: QOpts): Rig {
   }
   if (o.helm) {
     const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
-    const model = fixed ? props[o.helm] : gear[o.helm as GearSet]?.getObjectByName('helm');
+    const model = fixed ? props[o.helm] : wantGear(o.helm as GearSet)?.getObjectByName('helm');
     const [y, z, s] = fixed ?? [0, 0, 1];
     if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
@@ -528,6 +635,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     bar.appendChild(b);
   };
   for (const name in TIERS) btn(name, () => { tier = name; build(); });
+  addEventListener('gear-loaded', build);
   for (const name in STATES) btn(name, () => { state = name; since = performance.now(); });
   build();
 
@@ -545,6 +653,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
 
   return () => {
     removeEventListener('resize', resize);
+    removeEventListener('gear-loaded', build);
     renderer.setAnimationLoop(null);
     renderer.dispose();
     renderer.domElement.remove();

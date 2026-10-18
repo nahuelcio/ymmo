@@ -9,7 +9,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
-import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
+import { animateQ, armorPiece, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -679,10 +679,15 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const gear = head ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && lookGrade(d) !== 'NG', dye: d?.color, glow: topTier(lookGrade(d)) });
+    // a set's own model for the piece, where it has one, goes over the peasant kit dyed in the set's cloth
+    const [wChest, wGloves, wLegs, wFeet] = [chestDef, gloves, legs, feet].map((d) => (d ? armorPiece(d.id) : undefined));
+    const under = (d: ItemDef | null, w?: { under: number }): QZone => (w ? { ranger: false, dye: w.under } : zone(d));
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
-      chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color,
-      pauldron: !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
+      chest: under(chestDef, wChest), legs: under(legs, wLegs), feet: under(feet, wFeet), gloves: wGloves ? undefined : gloves?.color,
+      pauldron: !wChest && !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
+      armor: [wChest, wGloves, wLegs, wFeet].filter((w) => !!w).map((w) => w!.node), bareFeet: !!wFeet,
+      noTop: !!wChest, noLegs: !!wLegs, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant),

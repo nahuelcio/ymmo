@@ -53,7 +53,8 @@ FAST = os.environ.get('GEAR_FAST', '') == '1'  # previews of the dense model, wi
 HEAD = os.environ.get('GEAR_HEAD', '')
 ONLY = os.environ.get('GEAR_ONLY', '')
 LIGHT = float(os.environ.get('GEAR_LIGHT', '2.2'))  # how much coarser the game's copy is than the dense model
-BUDGET = int(os.environ.get('GEAR_TRIS', '10000'))  # the triangles a piece may have in the game
+BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000}  # the triangles each piece may have in the game
+PART = os.environ.get('GEAR_PART', '')  # only these pieces of each set (helm, chest, gloves, legs, feet)
 
 RES = 1.0  # the resolution being built: 1 for the dense model, LIGHT for the game's copy
 UP = Vector((0, 1, 0))
@@ -180,10 +181,11 @@ def bumps(*fns):
 _mats = {}
 
 
-def mat(name, color, kind, engrave=None, engrave_color=None, rough=0.55, metal=0.0, emboss=False, ring=0.0042):
+def mat(name, color, kind, engrave=None, engrave_color=None, rough=0.55, metal=0.0, emboss=False, ring=0.0042, bump=-1.0):
     """A colour (sRGB hex) and what it is made of (kind: steel, blued, black, iron, enamel, brass, gold, bronze, leather,
     mail, hair); `engrave` puts a pattern (waves, scales, vines, lattice, stitch) wherever the part's deco mask allows:
-    etched in dark lines, gilt (engrave_color) or, with emboss, raised in relief; ring: a mail ring's size."""
+    etched in dark lines, gilt (engrave_color) or, with emboss, raised in relief; ring: a mail ring's size; bump: how
+    strong its relief is (else its kind's)."""
     if name in _mats:
         return _mats[name]
     m = bpy.data.materials.new(name)
@@ -191,7 +193,7 @@ def mat(name, color, kind, engrave=None, engrave_color=None, rough=0.55, metal=0
     m['kind'], m['rgb'], m['rough'], m['metal'] = kind, color, rough, metal
     m['engrave'] = engrave or ''
     m['engrave_rgb'] = engrave_color if engrave_color is not None else -1
-    m['emboss'], m['ring'] = int(emboss), ring
+    m['emboss'], m['ring'], m['bump'] = int(emboss), ring, bump
     _mats[name] = m
     return m
 
@@ -355,18 +357,23 @@ class Piece:
     def __init__(self, name):
         self.name = name
         self.parts = []
+        self.rules = [None]  # skin rules, by index: none (a rigid piece, the helmet), bones, or a function
 
     def add(self, material, verts, faces, solid=0.0, roll=0.0, roll_min=0.0, roll_mat=None, rope=False, bump=None,
-            fine=None, forge=None, bead=None, deco=None, sharp=40):
+            fine=None, forge=None, bead=None, deco=None, sharp=40, skin=None):
         """solid: thickness (inwards); roll: how far a rolled edge stands out of the plate, along every edge loop longer
         than roll_min metres, in roll_mat (rope: twisted like a cable); bump(p) -> metres to push each point out, fine
         the same for detail only the dense model gets; forge: the surface work (default: hammered, for metal plates);
         bead=(inset, height, width): a raised bead running that far inside every edge; deco: where the material's
         engraving shows - a function p -> 0..1 or (p, distance to the nearest edge) -> 0..1, a width (a border that wide
-        along the outer edges) or (width, function); sharp: edges sharper than this many degrees stay sharp."""
+        along the outer edges) or (width, function); sharp: edges sharper than this many degrees stay sharp; skin: the
+        bones a body piece follows - a tuple of names (weights taken from the body under it, kept to those bones) or a
+        function p -> {bone: weight}."""
+        if skin not in self.rules:
+            self.rules.append(skin)
         self.parts.append(dict(material=material, verts=verts, faces=faces, solid=solid, roll=roll, roll_min=roll_min,
                                roll_mat=roll_mat, rope=rope, bump=bump, fine=fine, forge=forge, bead=bead, deco=deco,
-                               sharp=sharp))
+                               sharp=sharp, rule=self.rules.index(skin)))
         return self
 
     def build(self):
@@ -386,9 +393,14 @@ class Piece:
             bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
             bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
             is_open = any(e.is_boundary for e in bm.edges)
-            if is_open and bm.faces:  # an open sheet faces away from the head
-                ref = B(HEAD_C)
-                if sum((f.calc_center_median() - ref).dot(f.normal) * f.calc_area() for f in bm.faces) < 0:
+            if is_open and bm.faces:  # an open sheet faces away from the head, or a body piece from the body under it
+                if P['rule']:
+                    kd = body()['kd']
+                    out = sum((f.calc_center_median() - B(kd.find(G(f.calc_center_median()))[0])).dot(f.normal) * f.calc_area() for f in bm.faces)
+                else:
+                    ref = B(HEAD_C)
+                    out = sum((f.calc_center_median() - ref).dot(f.normal) * f.calc_area() for f in bm.faces)
+                if out < 0:
                     for f in bm.faces:
                         f.normal_flip()
             bm.normal_update()
@@ -427,17 +439,17 @@ class Piece:
                 bm.normal_update()
             # rolled edges
             rolls = []
-            if P['roll'] and is_open:
+            if P['roll'] and is_open and RES <= 1:  # the game's copy gets its rolled edges from the bake
                 for lp, L in zip(loops, lens):
                     if L < P['roll_min']:
                         continue
                     pts = [v.co - v.normal * (P['solid'] / 2) for v in lp]
                     rope = P['rope'] and RES <= 1
-                    pts, _ = resample(pts, 0.0016 if rope else 0.0035 * RES, closed=True)
+                    pts, _ = resample(pts, 0.0021 if rope else (0.0035 if RES <= 1 else 0.009), closed=True)
                     for _ in range(2 if rope else 2):
                         pts = [(pts[k - 1] + pts[k] * 2 + pts[(k + 1) % len(pts)]) / 4 for k in range(len(pts))]
                     r = P['solid'] / 2 + P['roll']
-                    seg = 16 if rope else (8 if RES <= 1 else 6)
+                    seg = 12 if rope else (8 if RES <= 1 else 5)
                     rolls.append(tube(pts, r, seg, closed=True, fixed=True, twist=(3, 0.011, 0.22) if rope else None))
             # where the engraving shows
             deco = P['deco']
@@ -462,10 +474,11 @@ class Piece:
                 lo_ = Vector((min(lo_.x, v[0]), min(lo_.y, v[1]), min(lo_.z, v[2])))
                 hi_ = Vector((max(hi_.x, v[0]), max(hi_.y, v[1]), max(hi_.z, v[2])))
             small = (hi_ - lo_).length < 0.035
-            ob = self._object(me, plain(material) if small else material, inside(material), dvals)
+            ob = self._object(me, plain(material) if small else material, inside(material), dvals, P['rule'])
             if P['solid']:
                 mod = ob.modifiers.new('sol', 'SOLIDIFY')
-                mod.thickness, mod.offset, mod.use_rim, mod.use_even_offset = P['solid'], -1.0, True, True
+                mod.thickness, mod.offset, mod.use_rim, mod.use_even_offset = P['solid'], -1.0, True, False
+                mod.use_quality_normals = True
                 mod.material_offset, mod.material_offset_rim = 1, (1 if rolls else 0)  # a rolled edge hides the rim
                 bpy.ops.object.modifier_apply(modifier='sol')
             bpy.ops.object.shade_smooth_by_angle(angle=math.radians(P['sharp']))
@@ -477,12 +490,18 @@ class Piece:
                 for poly in rme.polygons:
                     poly.use_smooth = True
                 rm = P['roll_mat'] or material
-                objs.append(self._object(rme, rm if P['rope'] else plain(rm), inside(material), [0.0] * len(rv)))
+                objs.append(self._object(rme, rm if P['rope'] else plain(rm), inside(material), [0.0] * len(rv), P['rule']))
         if RES > 1:  # the game's copy: thin the plates down to the budget (rolled edges and small parts stay whole)
             count = lambda o: sum(len(p_.vertices) - 2 for p_ in o.data.polygons)
             thin = [o for o in objs if o.get('thin')]
             fixed = sum(count(o) for o in objs if not o.get('thin'))
-            ratio = clamp((BUDGET - fixed) / max(1, sum(count(o) for o in thin)), 0.2, 1.0)
+            ratio = clamp((BUDGET.get(self.name, 8000) - fixed) / max(1, sum(count(o) for o in thin)), 0.05, 1.0)
+            if os.environ.get('GEAR_COUNT'):  # where the triangles go
+                kinds = {}
+                for o in objs:
+                    k = 'thin' if o.get('thin') else ('roll' if o.name.endswith('_roll') else 'detail')
+                    kinds[k] = kinds.get(k, 0) + count(o)
+                print(f'[gear] {self.name}: {kinds}, ratio {ratio:.2f}')
             for o in thin:
                 if ratio < 1.0:
                     select(o)
@@ -498,13 +517,14 @@ class Piece:
         ob.name = ob.data.name = self.name
         return ob
 
-    def _object(self, me, material, inner, dvals):
+    def _object(self, me, material, inner, dvals, rule=0):
         me.materials.append(material)
         me.materials.append(inner)
         attr = me.color_attributes.new('deco', 'FLOAT_COLOR', 'POINT')
         for k in range(len(me.vertices)):
             d = dvals[k] if dvals is not None else 1.0
             attr.data[k].color = (d, d, d, 1.0)
+        me.attributes.new('rule', 'INT', 'POINT').data.foreach_set('value', [rule] * len(me.vertices))
         ob = bpy.data.objects.new(me.name, me)
         bpy.context.scene.collection.objects.link(ob)
         bpy.ops.object.select_all(action='DESELECT')
@@ -586,6 +606,11 @@ class Skull:
 
     def point(self, a, y, off=0.0):
         return self.at(a, y) + self.normal(a, y) * off
+
+    def around(self, a, y):
+        """How far from the axis the surface is (to turn a width into an angle)."""
+        q = self.at(a, y)
+        return math.hypot(q.x, q.z - self.zc)
 
     def column(self, a, brim=None):
         """The points up one column: from a brim's edge (if any) in to the rim, round a small fillet, up to the crown."""
@@ -762,6 +787,7 @@ def plate(surface, sd, u0, u1, v0, v1, h=0.0028, periodic=False):
             (i0, j0), (i1, j1) = a, b
             f0, f1 = val[j0][i0], val[j1][i1]
             t = f0 / (f0 - f1)
+            t = 0.12 if t < 0.12 else 0.88 if t > 0.88 else t
             ua, ub = us[i0], us[i1]
             if periodic and i1 == 0 and i0 == ncol - 1:
                 ub = u1
@@ -811,8 +837,7 @@ def strap(sk, path, width, height=0.003, off=0.0, sink=0.0025):
     verts, faces = [], []
     for a, y in path:
         if vertical:
-            q = sk.at(a, y)
-            da = width / 2 / max(0.012, math.hypot(q.x, q.z - sk.zc))
+            da = width / 2 / max(0.012, sk.around(a, y))
             ring = [(a - da, y), (a, y), (a + da, y)]
         else:
             ring = [(a, y - width / 2), (a, y), (a, y + width / 2)]
@@ -955,6 +980,319 @@ def crest(points, ups, heights, widths):
     return verts, faces
 
 
+# ---------------------------------------------------------------- the body under the armour
+
+_bodies = {}
+
+
+def body(g='m'):
+    """The reference body (tools/art/blender/body/, dumped from the game by dump.js): the character in its bind pose in
+    the peasant kit armour goes over, each vertex with its skin joints and weights, and a tree to find the nearest."""
+    if g not in _bodies:
+        import gzip
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'body', ('male' if g == 'm' else 'female') + '.json.gz')
+        with gzip.open(path, 'rt', encoding='utf-8') as fh:
+            d = json.load(fh)
+        d['V'] = [Vector(v) for v in d['v']]
+        d['bone_of'] = [d['names'][k] for k in d['b']]
+        d['mesh_of'] = [d['meshes'][k] for k in d['m']] if 'm' in d else [''] * len(d['v'])
+        kd = KDTree(len(d['V']))
+        for i, v in enumerate(d['V']):
+            kd.insert(v, i)
+        kd.balance()
+        d['kd'] = kd
+        _bodies[g] = d
+    return _bodies[g]
+
+
+def bone(name, g='m'):
+    """A bone's pivot in the bind pose."""
+    return Vector(body(g)['bones'][name])
+
+
+def hull(points):
+    """The convex hull of 2D points (monotone chain), counter-clockwise."""
+    pts = sorted(set(points))
+    if len(pts) < 3:
+        return pts
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+    lower, upper = [], []
+    for q in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], q) <= 0:
+            lower.pop()
+        lower.append(q)
+    for q in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], q) <= 0:
+            upper.pop()
+        upper.append(q)
+    return lower[:-1] + upper[:-1]
+
+
+def ray_hull(poly, a):
+    """How far from the origin a ray at angle a leaves a convex polygon round it."""
+    dx, dy = math.cos(a), math.sin(a)
+    best = 0.0
+    n = len(poly)
+    for i in range(n):
+        (x1, y1), (x2, y2) = poly[i], poly[(i + 1) % n]
+        ex, ey = x2 - x1, y2 - y1
+        den = dx * ey - dy * ex
+        if abs(den) < 1e-12:
+            continue
+        t = (x1 * ey - y1 * ex) / den
+        s_ = (x1 * dy - y1 * dx) / den
+        if t > 0 and -1e-9 <= s_ <= 1 + 1e-9:
+            best = max(best, t)
+    return best
+
+
+class Fit:
+    """A form fitted round part of the body: along an axis from o in direction d, at a distance t along it, the section
+    reaches as far as the body does there (the vertices of `bones` that `keep` accepts, leaving out the kit pieces named
+    in `skip`, or keeping only those in `only`) plus `gap`, its outline made convex and smoothed along the axis without
+    shrinking, so a plate cut from it
+    clears the body and reads as one forged surface; `ends` = (start, stop) rounds it off to a point before start and
+    after stop (a toe, a heel). Angles start at `up` and turn towards d x up. The skin's own mesh holds the whole bare
+    body, so with the boots skipped a fit follows the real shin and foot."""
+
+    def __init__(self, bones, o, d, up, t0, t1, gap=0.01, keep=None, na=72, nt=40, smooth_t=5, smooth_a=3, skip=(), only=(), ends=None, g='m'):
+        bd = body(g)
+        self.o, self.d = Vector(o), Vector(d).normalized()
+        self.up = (Vector(up) - self.d * Vector(up).dot(self.d)).normalized()
+        self.side = self.d.cross(self.up)
+        self.t0, self.t1, self.na, self.nt = t0, t1, na, nt
+        rows = [[] for _ in range(nt + 1)]
+        span = (t1 - t0) / nt
+        for v, bn, mn in zip(bd['V'], bd['bone_of'], bd['mesh_of']):
+            if bn not in bones or (keep and not keep(v)) or any(k in mn for k in skip) or (only and not any(k in mn for k in only)):
+                continue
+            rel = v - self.o
+            t = rel.dot(self.d)
+            k = int(round((t - t0) / span))
+            if k < -1 or k > nt + 1:
+                continue
+            q = rel - self.d * t
+            pt = (q.dot(self.up), q.dot(self.side))
+            for kk in (k - 1, k, k + 1):  # each vertex counts for its row and the two beside it
+                if 0 <= kk <= nt:
+                    rows[kk].append(pt)
+        R = []
+        for pts in rows:
+            if len(pts) < 3:
+                R.append(None)
+                continue
+            poly = hull(pts)
+            R.append([ray_hull(poly, 2 * math.pi * i / na) for i in range(na)])
+        filled = [i for i, r in enumerate(R) if r]
+        if not filled:
+            raise ValueError(f'no body for {bones}')
+        R = [r if r else list(R[min(filled, key=lambda f: abs(f - i))]) for i, r in enumerate(R)]
+        n = len(R)
+        for _ in range(smooth_t):  # the largest of each row and its neighbours, then averaged: smooth, never smaller
+            M = [[max(R[j][i] for j in range(max(0, k - 1), min(n, k + 2))) for i in range(na)] for k in range(n)]
+            R = [[(M[max(0, k - 1)][i] + 2 * M[k][i] + M[min(n - 1, k + 1)][i]) / 4 for i in range(na)] for k in range(n)]
+        for _ in range(smooth_a):  # the same round each section
+            M = [[max(row[(i - 1) % na], row[i], row[(i + 1) % na]) for i in range(na)] for row in R]
+            R = [[(row[(i - 1) % na] + 2 * row[i] + row[(i + 1) % na]) / 4 for i in range(na)] for row in M]
+        self.R = [[r + gap for r in row] for row in R]
+        self.ends = ends
+
+    def radius(self, a, t):
+        r = self.raw(a, t)
+        if self.ends:
+            start, stop = self.ends
+            if t < start:
+                r *= math.sqrt(max(0.0, 1.0 - ((start - t) / (start - self.t0)) ** 2))
+            elif t > stop:
+                r *= math.sqrt(max(0.0, 1.0 - ((t - stop) / (self.t1 - stop)) ** 2))
+        return r
+
+    def raw(self, a, t):
+        f = clamp((t - self.t0) / (self.t1 - self.t0), 0.0, 1.0) * self.nt
+        k = min(int(f), self.nt - 1)
+        ft = f - k
+        x = (a % (2 * math.pi)) / (2 * math.pi) * self.na
+        i = int(x) % self.na
+        fa = x - int(x)
+        i2 = (i + 1) % self.na
+        row0, row1 = self.R[k], self.R[k + 1]
+        return lerp(lerp(row0[i], row0[i2], fa), lerp(row1[i], row1[i2], fa), ft)
+
+    def around(self, a, t):
+        return self.radius(a, t)
+
+    def at(self, a, t):
+        return self.o + self.d * t + (self.up * math.cos(a) + self.side * math.sin(a)) * self.radius(a, t)
+
+    def normal(self, a, t):
+        e = 1e-3
+        n = (self.at(a + e, t) - self.at(a - e, t)).cross(self.at(a, t + e) - self.at(a, t - e))
+        radial = self.up * math.cos(a) + self.side * math.sin(a)
+        if n.length < 1e-12:
+            return radial
+        n.normalize()
+        return n if n.dot(radial) >= 0 else -n
+
+    def point(self, a, t, off=0.0):
+        return self.at(a, t) + self.normal(a, t) * off
+
+
+class Cone:
+    """A smooth elliptic cone round a vertical axis (a gorget's form): at height t, half-width rx and reach rz forward
+    and back of z = zc, both going linearly from (rx0, rz0) at t0 to (rx1, rz1) at t1."""
+
+    def __init__(self, zc, t0, rx0, rz0, t1, rx1, rz1):
+        self.zc, self.t0, self.t1, self.r0, self.r1 = zc, t0, t1, (rx0, rz0), (rx1, rz1)
+
+    def at(self, a, t):
+        f = (t - self.t0) / (self.t1 - self.t0)
+        rx, rz = lerp(self.r0[0], self.r1[0], f), lerp(self.r0[1], self.r1[1], f)
+        return Vector((rx * math.sin(a), t, self.zc + rz * math.cos(a)))
+
+    def normal(self, a, t):
+        e = 1e-3
+        n = (self.at(a + e, t) - self.at(a - e, t)).cross(self.at(a, t + e) - self.at(a, t - e))
+        radial = Vector((math.sin(a), 0.0, math.cos(a)))
+        n.normalize()
+        return n if n.dot(radial) >= 0 else -n
+
+    def point(self, a, t, off=0.0):
+        return self.at(a, t) + self.normal(a, t) * off
+
+    def around(self, a, t):
+        q = self.at(a, t)
+        return math.hypot(q.x, q.z - self.zc)
+
+
+def transfer(p, allowed, bd, n=12):
+    """The weights of the body under a point, kept to the allowed bones: the nearest body vertices' weights, blended
+    by distance (the nearest allowed bone if none of them follows one)."""
+    acc = {}
+    for _, i, d in bd['kd'].find_n(p, n):
+        k = 1.0 / (d + 0.006) ** 2
+        for jj, ww in zip(bd['j'][i], bd['w'][i]):
+            name = bd['joints'][jj]
+            if ww > 0 and name in allowed:
+                acc[name] = acc.get(name, 0.0) + ww * k
+    if not acc:
+        acc = {min(allowed, key=lambda b: (bone(b) - p).length): 1.0}
+    return acc
+
+
+def skin_weights(ob, rules, g='m'):
+    """Each vertex's four joints and weights by its part's rule, as the _joints and _weights attributes the client binds
+    the piece with (joint numbers in the order the object's `joints` lists)."""
+    bd = body(g)
+    joints = bd['joints']
+    jix = {name: i for i, name in enumerate(joints)}
+    me = ob.data
+    rule = [0] * len(me.vertices)
+    if 'rule' in me.attributes:
+        me.attributes['rule'].data.foreach_get('value', rule)
+    J, W = [], []
+    for k, v in enumerate(me.vertices):
+        r = rules[rule[k]] if rule[k] < len(rules) else None
+        p = G(v.co)
+        weights = {} if r is None else (r(p) if callable(r) else transfer(p, r, bd))
+        top = sorted(weights.items(), key=lambda kv: -kv[1])[:4]
+        total = sum(w for _, w in top) or 1.0
+        js = [float(jix[name]) for name, _ in top] + [0.0] * (4 - len(top))
+        ws = [w / total for _, w in top] + [0.0] * (4 - len(top))
+        J += js
+        W += ws
+    for name, data in (('_joints', J), ('_weights', W)):
+        a = me.attributes.new(name, 'FLOAT_COLOR', 'POINT')
+        a.data.foreach_set('color', data)
+    ob['joints'] = list(joints)
+
+
+def swap(rule):
+    """A left side's rule for the right side."""
+    if rule is None:
+        return None
+    if callable(rule):
+        return lambda p, r=rule: {k.replace('_l', '_R').replace('_r', '_l').replace('_R', '_r'): w
+                                  for k, w in r(Vector((-p.x, p.y, p.z))).items()}
+    return tuple(n[:-2] + ('_r' if n.endswith('_l') else '_l') if n.endswith(('_l', '_r')) else n for n in rule)
+
+
+def both(p, material, mesh, skin, **kw):
+    """A left-side part and its mirror on the right."""
+    v, f = mesh
+    p.add(material, v, f, skin=skin, **kw)
+    mv, mf = mirror(v, f)
+    flip = lambda q: Vector((-q.x, q.y, q.z))
+
+    def one(fn):  # closures, not default arguments: the deco is told apart by how many arguments it takes
+        return lambda q: fn(flip(q))
+
+    def two(fn):
+        return lambda q, d: fn(flip(q), d)
+    for k in ('bump', 'fine', 'forge'):
+        if callable(kw.get(k)):
+            kw[k] = one(kw[k])
+    deco = kw.get('deco')
+    if callable(deco):
+        kw['deco'] = two(deco) if deco.__code__.co_argcount == 2 else one(deco)
+    elif isinstance(deco, tuple):
+        kw['deco'] = (deco[0], one(deco[1]))
+    p.add(material, mv, mf, skin=swap(skin), **kw)
+
+
+def preview_body(objs, set_id):
+    """The body pieces on the whole reference body: front, three-quarter, side and back, and where they cut into it."""
+    sc = bpy.context.scene
+    bd = body('m')
+    me = bpy.data.meshes.new('mannequin')
+    me.from_pydata([B(v) for v in bd['v']], [], [tuple(f) for f in bd['f']])
+    for poly in me.polygons:
+        poly.use_smooth = True
+    skin = bpy.data.materials.new('skin')
+    skin.diffuse_color = (0.55, 0.5, 0.45, 1.0)
+    me.materials.append(skin)
+    man = bpy.data.objects.new('mannequin', me)
+    sc.collection.objects.link(man)
+    deps = bpy.context.evaluated_depsgraph_get()
+    tree = BVHTree.FromObject(man, deps)
+    for ob in objs:
+        cuts = []
+        for vert in ob.data.vertices:
+            near = tree.find_nearest(vert.co)
+            if near[0] is not None and (vert.co - near[0]).dot(near[1]) < 0 and near[3] > 0.002:
+                cuts.append((near[3], tuple(round(x, 3) for x in G(vert.co))))
+        cuts.sort(reverse=True)
+        print(f'[gear] {set_id}.{ob.name}: {len(cuts)} points inside the body (deepest {cuts[0][0] * 1000 if cuts else 0:.1f} mm) '
+              + ' '.join(str(q) for _, q in cuts[:4]))
+    for m in bpy.data.materials:
+        if m.get('rgb') is not None:
+            m.diffuse_color = _rgb(m['rgb'])
+    world = bpy.data.worlds.new('w')
+    world.color = (0.05, 0.06, 0.08)
+    sc.world = world
+    sc.render.engine = 'BLENDER_WORKBENCH'
+    sh = sc.display.shading
+    sh.light = 'STUDIO'
+    sh.color_type = 'MATERIAL' if FAST else 'TEXTURE'
+    sh.show_cavity = True
+    sh.cavity_type = 'BOTH'
+    sh.show_specular_highlight = True
+    sc.render.resolution_x, sc.render.resolution_y = 520, 760
+    cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
+    cam.data.type = 'ORTHO'
+    cam.data.ortho_scale = 2.05
+    sc.collection.objects.link(cam)
+    sc.camera = cam
+    target = B((0.0, 0.92, 0.0))
+    for name, deg, el in (('a', 0, 4), ('b', 40, 8), ('c', 90, 2), ('d', 155, 8)):
+        az, e = math.radians(deg), math.radians(el)
+        cam.location = B((4 * math.sin(az) * math.cos(e), 0.92 + 4 * math.sin(e), 4 * math.cos(az) * math.cos(e)))
+        cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
+        sc.render.filepath = os.path.join(PREVIEW, f'{set_id}_body_{name}.png')
+        bpy.ops.render.render(write_still=True)
+
+
 # ---------------------------------------------------------------- helmets
 
 def apprentice_helm():
@@ -998,124 +1336,102 @@ def apprentice_helm():
 
 
 def abyssal_helm():
-    """A comb morion: a tall comb raised from the skull with a roped crest, the brim swept up into points front and back
-    and roped round its edge; blued steel with gilt etched bands, brass rosette rivets round the base, a plume holder at
-    the back, a leather lining and a chin strap with a brass buckle."""
+    """A barbute, the deep Italian helmet of the fifteenth century: a close bowl coming down over the cheeks and the
+    nape, leaving a Y-shaped opening for the eyes and mouth, with a fish's fin raised along its crest and curved slits for
+    breath on the cheeks like gills; steel blued near black, etched with waves in a pale blue along every edge, the fin
+    lacquered an ocean blue, a band of pale steel where the bowl meets the face, and rosette rivets."""
     p = Piece('helm')
-    blued = mat('blued', 0x1b2a46, 'blued', engrave='waves', engrave_color=0xc8a24a, rough=0.3, metal=0.8)
-    brass = mat('brass', 0xb08a3c, 'brass', rough=0.35, metal=0.85)
-    leather = mat('lining', 0x4a2e1a, 'leather', rough=0.8)
-    rim = curve([(0, 0.138), (1.57, 0.127), (math.pi, 0.134)])
-    sk = Skull(yc=0.13, zc=0.006, w=0.108, h=0.148, df=0.118, db=0.118, n=2.3, peak=0.25, keel=(0.08, 0.08), keel_from=0.2, rim=rim)
+    blued, accent, gilt = abyssal_mats()
 
-    def brim(a):
-        c = math.cos(a)
-        return 0.034 + 0.03 * c * c, -0.006 + 0.086 * c ** 4, 2.0
+    def lower(a, u):  # close over the cheeks and jaw, a little flare over the nape
+        side = smooth(0.4, 1.4, a) * (1 - smooth(1.8, 2.5, a))
+        return 1.0 - (1.2 + 2.6 * side) * u * u * (1 - smooth(1.8, 2.6, a)) + smooth(2.0, 2.9, a) * 0.3 * (u / 0.16) ** 1.8
+    sk = Skull(yc=0.13, zc=0.006, w=0.11, h=0.134, df=0.122, db=0.12, n=2.2, keel=(0.08, 0.1), keel_from=0.17, rim=0.142, lower=lower)
+    p.add(blued, *sk.mesh(sk.cols(112, extra_cols([0.0, math.pi]))), solid=0.003, deco=lambda q: 0.0)
+    RU = 0.125
+    bottom = curve([(0, -0.03), (0.6, -0.026), (1.3, -0.016), (2.2, -0.02), (math.pi, -0.024)])
+    opening = outline(symmetric([(0.0, 0.09), (0.02, 0.106), (0.045, 0.12), (0.07, 0.122), (0.081, 0.112), (0.068, 0.1), (0.042, 0.093),
+                                 (0.022, 0.077), (0.014, 0.056), (0.015, 0.01), (0.021, -0.05), (0.0, -0.05)]), 6)
+    gills = [((s_ * (0.098 + 0.011 * k), 0.07 - 0.004 * k), (s_ * (0.09 + 0.011 * k), 0.032 - 0.004 * k)) for s_ in (1, -1) for k in range(3)]
 
-    def bands(q):  # etched bands up the skull
-        th = angle_of(q, sk.zc)
-        d = min(abs(wrap(th - b)) for b in (0.5, -0.5, 1.55, -1.55, 2.6, -2.6))
-        return smooth(0.13, 0.1, d) * smooth(rim(abs(th)) + 0.004, rim(abs(th)) + 0.012, q.y)
-    p.add(blued, *sk.mesh(sk.cols(112), brim=brim), solid=0.0035, roll=0.0018, rope=True, deco=bands)
-    path = midline(sk, 0.17, 0.17)
-    hs = [0.056 * math.sin(math.pi * k / (len(path) - 1)) ** 0.7 for k in range(len(path))]
-    p.add(blued, *fin(sk, path, hs), deco=lambda q: 0.0)
-    p.add(blued, *comb_rope(sk, path, hs), deco=lambda q: 0.0)
-    for k in range(14):
-        a = 2 * math.pi * (k + 0.5) / 14
-        p.add(brass, *srivet(sk, a, rim(abs(wrap(a))) + 0.012, 0.0042, washer=0.0075))
-    p.add(leather, *strap(sk, [(lerp(-math.pi, math.pi, k / 120), rim(abs(wrap(lerp(-math.pi, math.pi, k / 120)))) + 0.004) for k in range(121)],
-                          0.016, 0.0, -0.0035, 0.0022))
-    a, y = math.pi, 0.168
-    q, n = sk.point(a, y, 0.0048), sk.normal(a, y)
-    p.add(brass, *tube([q - UP * 0.018, q + UP * 0.02], 0.0055, 12))
-    t_, n_, b_ = frame(n)
-    p.add(brass, *oball(sk.point(a, y - 0.012, 0.0005), (0.009, 0.0022, 0.009), (t_, n_, b_)))
-    p.add(brass, *srivet(sk, a, y - 0.012, 0.003, 0.0022))
-    strap_, buckle_ = chin_strap((0.097, 0.13, 0.034))
-    p.add(leather, *strap_, forge=creased(0.0003))
-    p.add(brass, *buckle_)
+    def sd(u, v):
+        d = max(bottom(abs(u / RU)) - v, v - 0.15)
+        d = max(d, -sd_poly(u, v, opening))
+        return max(d, -min(sd_capsule(u, v, a_, b_, 0.0022) for a_, b_ in gills))
+    nose = lambda q: 0.012 * gauss(angle_of(q, sk.zc) * RU, 0.022) * smooth(0.12, 0.085, q.y)
+    p.add(blued, *plate(lambda u, v: sk.point(u / RU, v, -0.0028), sd, -math.pi * RU, math.pi * RU, -0.04, 0.152, periodic=True),
+          solid=0.003, roll=0.0012, roll_mat=gilt, roll_min=0.15, bump=nose, bead=(0.0055, 0.0012, 0.0014), deco=0.013)
+    p.add(gilt, *strap(sk, [(2 * math.pi * k / 120, 0.143) for k in range(121)], 0.012, 0.0024), forge=hammered(0.0003))
+    # the fin along the crest, its rays standing out of a gilt edge
+    path = midline(sk, 0.165, 0.1)
+    m = len(path)
+    ray = lambda k: 0.6 + 0.4 * (1 - abs(2 * ((k / (m - 1) * 7) % 1) - 1)) ** 2
+    hs = [0.034 * math.sin(math.pi * k / (m - 1)) ** 0.7 * ray(k) for k in range(m)]
+    p.add(accent, *fin(sk, path, hs, top=0.0016, foot=0.007), deco=lambda q: 0.0)
+    p.add(gilt, *comb_rope(sk, path, hs, 0.0022), deco=lambda q: 0.0)
+    for k in range(12):
+        a = 2 * math.pi * (k + 0.5) / 12
+        p.add(gilt, *srivet(sk, a, 0.143, 0.0036, 0.0024, washer=0.0065))
     return p
 
 
 def ashforged_helm():
-    """A sugarloaf great helm, after a reconstruction of one from about 1300: a pointed crown over a face plate creased
-    down the middle to a point at the chin, a brass cross over the face with flared, riveted ends and the vision slits cut
-    through its arm, fields of breathing holes on both cheeks, holes for the lining's lacing and a toggle for the chain
-    that held it to the breastplate; fire-blackened steel and brass."""
+    """A knight's close helm worn through a war: a rounded skull with a ridge down the front, a visor whose raised brow
+    leaves a sight across the eyes, a plain bevor below it creased down the middle with a few holes for breath, both
+    pivoting at the temples, and two gorget lames flaring over the neck; fire-blackened steel, dented and worn."""
     p = Piece('helm')
-    black = mat('blackened', 0x27231f, 'black', rough=0.5, metal=0.7)
-    brass = mat('brass', 0xb8923e, 'brass', rough=0.28, metal=0.9)
-    steel = mat('steel', 0x8e8d8a, 'steel', rough=0.4, metal=0.85)
-    sk = Skull(yc=0.11, zc=0.012, w=0.12, h=0.19, df=0.134, db=0.124, n=2.0, peak=0.9, keel=(0.34, 0.0), keel_from=-1.0,
-               rim=0.112, lower=lambda a, u: 1.0 + 0.1 * u)
-    over_slits = lambda q: smooth(0.7, 0.6, abs(angle_of(q, sk.zc)))
-    p.add(black, *sk.mesh(sk.cols(112, extra_cols([0.0]))), solid=0.0035, roll=0.0014,
-          bump=bumps(lambda q: 0.003 * smooth(0.12, 0.112, q.y) * over_slits(q),
-                     dents((sk.at(0.75, 0.2), 0.014, 0.0015), (sk.at(-1.9, 0.165), 0.012, 0.0012))))
-    RU = 0.13
-    bottom = curve([(0, -0.066), (0.3, -0.05), (0.7, -0.036), (1.5, -0.028), (math.pi, -0.038)])
+    steel, mail, leather, wool = ash_mats()
+    rim = curve([(0, 0.15), (0.95, 0.148), (1.08, 0.1), (1.2, -0.006), (math.pi, -0.008)])
+    sk = Skull(yc=0.125, zc=0.008, w=0.113, h=0.142, df=0.124, db=0.118, n=2.2, peak=0.32, keel=(0.16, 0.12), keel_from=0.15, rim=rim,
+               lower=lambda a, u: 1.0 - 1.6 * u * u)
+    worn = dents((sk.at(0.9, 0.21), 0.016, 0.002), (sk.at(-2.2, 0.18), 0.014, 0.0016))
+    p.add(steel, *sk.mesh(sk.cols(112, extra_cols([0.0, math.pi]))), solid=0.0035, roll=0.0015, bump=worn)
+    RU = 0.125
+    ridge = lambda u, v, hi, at, spread: hi * beak(u, 0.09) * gauss(v - at, spread)
+    voff = lambda u, v: 0.0065 + ridge(u, v, 0.032, 0.115, 0.05) + 0.005 * smooth(0.112, 0.1, v)  # a beak, and the brow lip over the sight
+    boff = lambda u, v: 0.0045 + ridge(u, v, 0.026, 0.07, 0.07)
+    visor = outline(symmetric([(0.0, 0.162), (0.08, 0.161), (0.155, 0.158), (0.163, 0.135), (0.155, 0.113), (0.08, 0.104), (0.0, 0.097)]), 6)
+    p.add(steel, *plate(lambda u, v: sk.point(u / RU, v, voff(u, v)), lambda u, v: sd_poly(u, v, visor), -0.17, 0.17, 0.095, 0.17),
+          solid=0.003, roll=0.0014, roll_min=0.2, sharp=25, bump=dents((sk.at(0.35, 0.14), 0.012, 0.0015),))
+    bevor = outline(symmetric([(0.0, 0.088), (0.08, 0.095), (0.157, 0.102), (0.163, 0.06), (0.15, 0.01), (0.12, -0.012), (0.06, -0.03),
+                               (0.0, -0.042)]), 6)
+    breaths = [(s_ * (0.05 + 0.011 * k), 0.052 - 0.009 * r_) for s_ in (1, -1) for k in range(3) for r_ in range(3)]
 
-    def sd(u, v):
-        d = max(bottom(abs(u / RU)) - v, v - 0.125)
-        for s in (1, -1):
-            d = max(d, -sd_box(u, v, s * 0.036, 0.109, 0.022, 0.011, 0.002))  # the slits, open up under the crown
-            for row in range(6):  # breathing holes, a field narrowing downwards
-                for k in range(5 - row // 2):
-                    d = max(d, -sd_ellipse(u, v, s * (0.024 + 0.0125 * k + 0.006 * (row % 2)), 0.072 - 0.0135 * row, 0.0021, 0.0021))
-        uu = round(u / 0.022) * 0.022  # the lining's lacing holes along the bottom
-        return max(d, -sd_ellipse(u, v, uu, bottom(abs(uu / RU)) + 0.009, 0.0014, 0.0014))
-    face = plate(lambda u, v: sk.point(u / RU, v, -0.0035), sd, -math.pi * RU, math.pi * RU, -0.07, 0.127, periodic=True)
-    p.add(black, *face, solid=0.0035, roll=0.0014, roll_min=0.3,
-          bump=bumps(lambda q: 0.0025 * smooth(0.09, 0.098, q.y) * smooth(0.12, 0.1, q.y) * over_slits(q),
-                     dents((sk.at(-0.45, 0.0), 0.012, 0.001))))
-    # the brass cross: bent over the crown's edge where it passes from the face plate to the crown
+    def bevor_sd(u, v):
+        return max(sd_poly(u, v, bevor), -min(sd_ellipse(u, v, hu, hv, 0.0019, 0.0019) for hu, hv in breaths))
+    p.add(steel, *plate(lambda u, v: sk.point(u / RU, v, boff(u, v)), bevor_sd, -0.17, 0.17, -0.05, 0.1),
+          solid=0.003, roll=0.0014, roll_min=0.2, sharp=25)
+    for s_ in (1, -1):
+        a = s_ * 1.25
+        p.add(steel, *srivet(sk, a, 0.125, 0.0062, voff(a * RU, 0.125) + 0.0004, washer=0.0095))
 
-    def boff(v):
-        return lerp(-0.0019, 0.0016, smooth(0.106, 0.114, v))
-    ends = [[(-0.0105, 0.236), (-0.023, 0.248), (-0.012, 0.252), (0.0, 0.268), (0.012, 0.252), (0.023, 0.248), (0.0105, 0.236)],
-            [(-0.0105, -0.036), (-0.023, -0.048), (-0.012, -0.052), (0.0, -0.064), (0.012, -0.052), (0.023, -0.048), (0.0105, -0.036)]]
-    for s in (1, -1):
-        ends.append([(s * 0.11, 0.0885), (s * 0.124, 0.079), (s * 0.128, 0.09), (s * 0.144, 0.106), (s * 0.128, 0.122), (s * 0.124, 0.133), (s * 0.11, 0.1235)])
-
-    def cross_sd(u, v):
-        d = min([sd_box(u, v, 0.0, 0.1, 0.0105, 0.152), sd_box(u, v, 0.0, 0.106, 0.128, 0.0175)] + [sd_poly(u, v, e) for e in ends])
-        for s in (1, -1):
-            d = max(d, -sd_box(u, v, s * 0.036, 0.1045, 0.0215, 0.0062, 0.002))
-        return d
-    p.add(brass, *plate(lambda u, v: sk.point(u / RU, v, boff(v)), cross_sd, -0.16, 0.16, -0.075, 0.275, h=0.002),
-          solid=0.0022, roll=0.0004, forge=hammered(0.0003))
-    rivets = [(s * 0.016, 0.244) for s in (1, -1)] + [(s * 0.016, -0.044) for s in (1, -1)] + [(0.0, 0.04), (0.0, 0.0), (0.0, 0.17), (0.0, 0.21)]
-    rivets += [(s * 0.132, v) for s in (1, -1) for v in (0.094, 0.118)] + [(s * u, v) for s in (1, -1) for u in (0.07, 0.1) for v in (0.092, 0.12)]
-    for u, v in rivets:
-        p.add(brass, *srivet(sk, u / RU, v, 0.0034, boff(v) + 0.0004))
-    for k in range(12):  # brass rivets round the crown's edge at the sides and back
-        a = 1.15 + (2 * math.pi - 2.3) * k / 11
-        p.add(brass, *srivet(sk, a, 0.118, 0.0036, 0.0003))
-    # the chain toggle on the left: a stud, a ring hanging from it, a cross-shaped toggle on the ring
-    a, y = 0.95, -0.004
-    stud, n = sk.point(a, y, -0.0035), sk.normal(a, y)
-    t_, n_, b_ = frame(n)
-    c = stud + n * 0.004 - UP * 0.008
-    p.add(steel, *rivet(stud, n, 0.0042))
-    p.add(steel, *tube([c + (UP * math.cos(f) + n_ * math.sin(f)) * 0.0075 for f in (2 * math.pi * k / 20 for k in range(20))], 0.0014, 6, closed=True))
-    bot = c - UP * 0.0075
-    p.add(steel, *merge(tube([bot - t_ * 0.009, bot + t_ * 0.009], 0.0016, 6), tube([bot - UP * 0.009, bot + UP * 0.002], 0.0016, 6)))
+    def gorget(off_, v0, v1):
+        def surf(u, v):
+            a = u / RU
+            base = sk.point(a, -0.004, off_)
+            n = sk.normal(a, -0.004)
+            out = Vector((n.x, 0, n.z)).normalized()
+            return base + UP * (v + 0.004) + out * (0.75 * (-0.004 - v))
+        return plate(surf, lambda u, v: max(v0 - v, v - v1), -math.pi * RU, math.pi * RU, v0 - 0.004, v1 + 0.004, periodic=True)
+    p.add(steel, *gorget(0.0005, -0.026, -0.004), solid=0.003, roll=0.0013)
+    p.add(steel, *gorget(0.003, -0.042, -0.02), solid=0.003, roll=0.0013)
+    for k in range(10):
+        a = 2 * math.pi * (k + 0.5) / 10
+        p.add(steel, *srivet(sk, a, -0.012, 0.0034, 0.0014))
     return p
 
 
 def dragon_helm():
     """A close helmet, after the English and German ones of the later 16th century: a crested skull with a roped comb,
     a visor drawn out into a sharp beak with two sights, a bevor below it with a rosette of breathing holes, both
-    pivoting at the temples, and two gorget plates at the back; crimson-painted steel with gilt etched borders of
-    scales, gilt roped edges and gilt rivets."""
+    pivoting at the temples, and two gorget plates at the back; dark steel worked with scales like the rest of the
+    dragon harness, the comb and visor in red-lacquered scales, polished edges and rivets."""
     p = Piece('helm')
-    red = mat('crimson', 0x7a1620, 'enamel', engrave='scales', engrave_color=0xc9a040, rough=0.35, metal=0.3)
-    gold = mat('gold', 0xc49a3a, 'gold', rough=0.3, metal=0.9)
+    dark, red, gold = dragon_mats()
     rim = curve([(0, 0.142), (0.9, 0.14), (1.08, 0.1), (1.2, -0.006), (math.pi, -0.008)])
     sk = Skull(yc=0.125, zc=0.008, w=0.108, h=0.13, df=0.118, db=0.116, n=2.3, keel=(0.08, 0.08), keel_from=0.17, rim=rim,
                lower=lambda a, u: 1.0 - 1.6 * u * u)
-    p.add(red, *sk.mesh(sk.cols(112, extra_cols([0.0, math.pi]))), solid=0.0035, roll=0.0018, rope=True, roll_mat=gold, deco=0.014)
+    p.add(dark, *sk.mesh(sk.cols(112, extra_cols([0.0, math.pi]))), solid=0.0035, roll=0.0018, roll_mat=gold, deco=scaled)
     path = midline(sk, 0.2, 0.06)
     hs = [0.036 * math.sin(math.pi * k / (len(path) - 1)) ** 0.8 for k in range(len(path))]
     p.add(red, *fin(sk, path, hs, top=0.0022, foot=0.008), deco=lambda q: 0.0)
@@ -1133,7 +1449,7 @@ def dragon_helm():
     def visor_sd(u, v):
         return max(sd_poly(u, v, visor), -min(sd_poly(u, v, sights[0]), sd_poly(u, v, sights[1])))
     p.add(red, *plate(lambda u, v: sk.point(u / RU, v, voff(u, v)), visor_sd, -0.17, 0.17, 0.07, 0.16),
-          solid=0.003, roll=0.0015, rope=True, roll_mat=gold, roll_min=0.2, deco=0.011, sharp=25)
+          solid=0.003, roll=0.0015, roll_mat=gold, roll_min=0.2, deco=scaled, sharp=25)
     bevor = outline([(-0.159, 0.125), (-0.1, 0.11), (-0.045, 0.098), (0.0, 0.09), (0.045, 0.098), (0.1, 0.11), (0.159, 0.125),
                      (0.162, 0.06), (0.15, 0.01), (0.12, -0.012), (0.06, -0.03), (0.0, -0.046), (-0.06, -0.03), (-0.12, -0.012),
                      (-0.15, 0.01), (-0.162, 0.06)])
@@ -1141,8 +1457,8 @@ def dragon_helm():
 
     def bevor_sd(u, v):
         return max(sd_poly(u, v, bevor), -min(sd_ellipse(u, v, hu, hv, 0.0021, 0.0021) for hu, hv in holes))
-    p.add(red, *plate(lambda u, v: sk.point(u / RU, v, boff(u, v)), bevor_sd, -0.17, 0.17, -0.05, 0.13),
-          solid=0.003, roll=0.0015, rope=True, roll_mat=gold, roll_min=0.2, deco=0.011, sharp=25)
+    p.add(dark, *plate(lambda u, v: sk.point(u / RU, v, boff(u, v)), bevor_sd, -0.17, 0.17, -0.05, 0.13),
+          solid=0.003, roll=0.0015, roll_mat=gold, roll_min=0.2, deco=scaled, sharp=25)
     for s in (1, -1):  # the pivots, and a rivet each side where the bevor's strap fastens
         a = s * 1.25
         p.add(gold, *srivet(sk, a, 0.127, 0.0068, voff(a * RU, 0.127) + 0.0004, washer=0.011))
@@ -1157,8 +1473,8 @@ def dragon_helm():
             return base + UP * (v + 0.004) + out * (0.75 * (-0.004 - v))
         return plate(surf, lambda u, v: sd_box(u, v, math.pi * RU, (v0 + v1) / 2, (math.pi - 1.05) * RU, (v1 - v0) / 2, 0.004),
                      1.0 * RU, (2 * math.pi - 1.0) * RU, v0 - 0.004, v1 + 0.004)
-    p.add(red, *gorget(-0.0012, -0.028, -0.004), solid=0.003, roll=0.0014, rope=True, roll_mat=gold, deco=0.009)
-    p.add(red, *gorget(0.0018, -0.044, -0.022), solid=0.003, roll=0.0014, rope=True, roll_mat=gold, deco=0.009)
+    p.add(dark, *gorget(-0.0012, -0.028, -0.004), solid=0.003, roll=0.0014, roll_mat=gold, deco=scaled)
+    p.add(dark, *gorget(0.0018, -0.044, -0.022), solid=0.003, roll=0.0014, roll_mat=gold, deco=scaled)
     for k in range(9):
         a = 1.15 + (2 * math.pi - 2.3) * k / 8
         p.add(gold, *srivet(sk, a, -0.006, 0.0036, 0.0016))
@@ -1333,16 +1649,673 @@ def infernal_helm():
     return p
 
 
+# ---------------------------------------------------------------- body armour
+
+TORSO = ('pelvis', 'spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r', 'neck_01')
+FINGERS_L = tuple(f'{f}_0{k}_l' for f in ('index', 'middle', 'ring', 'pinky') for k in (1, 2, 3))
+THUMB_L = ('thumb_01_l', 'thumb_02_l', 'thumb_03_l')
+_fits = {}
+
+
+def fitted(key, make):
+    """A Fit built once per run (each piece is built twice, dense and light)."""
+    if key not in _fits:
+        _fits[key] = make()
+    return _fits[key]
+
+
+def forms(gap=0.0):
+    """The forms body armour is cut from, fitted to the reference body's bare skin (left side; the right mirrors it):
+    under a set's armour the client draws the bare body, dyed, instead of the cloth it covers, so the plates can sit a
+    few millimetres off the body. The hips also clear the kit's breeches, which stay on when only the cuirass is worn.
+    `gap` is added to each one's own clearance."""
+    foot, ball = bone('foot_l'), bone('ball_l')
+    bare = ('Head_',)
+    return {
+        'torso': fitted(('torso', gap), lambda: Fit(TORSO, (0, 0, 0), UP, (0, 0, 1), 0.9, 1.56, gap=0.006 + gap, only=bare,
+                                                    keep=lambda v: abs(v.x) < 0.17)),
+        'hips': fitted(('hips', gap), lambda: Fit(('pelvis', 'spine_01', 'thigh_l', 'thigh_r'), (0, 0, 0), UP, (0, 0, 1), 0.72, 1.07,
+                                                  gap=0.006 + gap, only=bare + ('Legs',), keep=lambda v: v.y > 0.72)),
+        'arm': fitted(('arm', gap), lambda: Fit(('upperarm_l', 'clavicle_l'), bone('upperarm_l'), (1, 0, 0), (0, 1, 0), -0.08, 0.27,
+                                                gap=0.006 + gap, only=bare, keep=lambda v: v.x > 0.12)),
+        'forearm': fitted(('forearm', gap), lambda: Fit(('lowerarm_l', 'upperarm_l'), bone('lowerarm_l'), (1, 0, 0), (0, 1, 0), -0.07, 0.25,
+                                                        gap=0.005 + gap, only=bare, keep=lambda v: v.x > 0.37)),
+        'hand': fitted(('hand', gap), lambda: Fit(('hand_l', 'lowerarm_l') + FINGERS_L + THUMB_L, bone('hand_l'), (1, 0, 0), (0, 1, 0), -0.09, 0.22,
+                                                  gap=0.004 + gap, only=bare, keep=lambda v: v.x > 0.6)),
+        'thigh': fitted(('thigh', gap), lambda: Fit(('thigh_l',), bone('thigh_l'), (0, -1, 0), (0, 0, 1), 0.0, 0.45, gap=0.006 + gap, only=bare)),
+        'knee': fitted(('knee', gap), lambda: Fit(('thigh_l', 'calf_l'), bone('calf_l'), (0, -1, 0), (0, 0, 1), -0.1, 0.1, gap=0.007 + gap,
+                                                  only=bare, keep=lambda v: abs(v.y - 0.542) < 0.14)),
+        'calf': fitted(('calf', gap), lambda: Fit(('calf_l',), bone('calf_l'), (0, -1, 0), (0, 0, 1), 0.0, 0.47, gap=0.006 + gap, only=bare)),
+        'foot': fitted(('foot', gap), lambda: Fit(('foot_l', 'ball_l'), foot, ball - foot, (0, 1, 0), -0.085, 0.25, gap=0.006 + gap, only=bare,
+                                                  ends=(-0.05, 0.2))),
+    }
+
+
+def band_plate(f, RU, a0, a1, t0, t1, off, r=0.006, h=0.0034):
+    """A plate over a band of a form: angles a0..a1, distances t0..t1, its corners rounded."""
+    sd = lambda u, v: sd_box(u, v, (a0 + a1) / 2 * RU, (t0 + t1) / 2, (a1 - a0) / 2 * RU, (t1 - t0) / 2, r)
+    of = off if callable(off) else (lambda u, v, o=off: o)
+    return plate(lambda u, v: f.point(u / RU, v, of(u, v)), sd, a0 * RU - 0.004, a1 * RU + 0.004, t0 - 0.004, t1 + 0.004, h=h)
+
+
+def ring_plate(f, RU, t0, t1, off, h=0.0034):
+    """A plate all round a form between t0 and t1 (vambraces, greaves, rerebraces)."""
+    of = off if callable(off) else (lambda u, v, o=off: o)
+    return plate(lambda u, v: f.point(u / RU, v, of(u, v)), lambda u, v: max(t0 - v, v - t1), -math.pi * RU, math.pi * RU,
+                 t0 - 0.004, t1 + 0.004, h=h, periodic=True)
+
+
+def wing(root, wrist, tips, lower):
+    """A small dragon's wing of steel: a leading edge from its root to the wrist, fingers fanning out from the wrist to
+    `tips`, a membrane between them with a scalloped trailing edge back to `lower`, and a claw at the wrist. Returns its
+    membrane and its bones (leading edge, fingers, claw) as meshes."""
+    R, W = Vector(root), Vector(wrist)
+    U = (W - R).normalized()
+    N = U.cross(Vector(tips[1]) - R).normalized()
+    if N.z > 0:  # the membrane's face looks back, away from the body
+        N = -N
+    V = N.cross(U)
+    flat = lambda q: ((Vector(q) - R).dot(U), (Vector(q) - R).dot(V))
+    pts = [flat(R), flat(W)]
+    for i, t in enumerate(tips):
+        pts.append(flat(t))
+        nxt = Vector(tips[i + 1]) if i + 1 < len(tips) else Vector(lower)
+        pts.append(flat(((Vector(t) + nxt) / 2).lerp(W, 0.3)))  # the scallop between two fingers
+    pts.append(flat(lower))
+    edge = outline(pts, 6)
+    us, vs = [q[0] for q in edge], [q[1] for q in edge]
+    span = max(us) - min(us)
+    billow = lambda u, v: 0.012 * math.sin(math.pi * clamp((u - min(us)) / span)) * smooth(-0.02, 0.06, v)
+    membrane = plate(lambda u, v: R + U * u + V * v + N * billow(u, v), lambda u, v: sd_poly(u, v, edge),
+                     min(us) - 0.01, max(us) + 0.01, min(vs) - 0.01, max(vs) + 0.01, h=0.003)
+    lift = lambda q: Vector(q) + N * 0.002
+    bones_ = [tube([lift(R), lift(R.lerp(W, 0.5)) + N * 0.004, lift(W)], [0.0065, 0.0055, 0.0045], 10)]
+    for t in tips:
+        bones_.append(tube([lift(W), lift(W.lerp(Vector(t), 0.5)) + N * 0.003, lift(t)], [0.0042, 0.003, 0.0012], 8))
+    bones_.append(tube([lift(W), lift(W) + U * 0.022 + V * 0.006 + N * 0.004], [0.004, 0.0004], 8))  # the claw
+    return {'membrane': membrane, 'bones': merge(*bones_)}
+
+
+def teeth_sd(u, v, u0, u1, t0, t1, points=3, depth=0.02, free='high', shape='point'):
+    """A band from u0 to u1 and t0 to t1 whose free edge (t1 for 'high', t0 for 'low') is cut into `points` pointed
+    scales (or rounded lobes, shape 'round'), as a signed distance (good enough for its outline to be traced)."""
+    x = clamp((u - u0) / (u1 - u0)) * points
+    f = abs(2 * (x - math.floor(x)) - 1)
+    notch = depth * (1 - math.sqrt(max(0.0, 1 - f * f)) if shape == 'round' else f ** 0.85)
+    side = abs(u - (u0 + u1) / 2) - (u1 - u0) / 2
+    if free == 'low':
+        return max(side, v - t1, t0 + notch - v)
+    return max(side, t0 - v, v - (t1 - notch))
+
+
+def teeth_plate(f, RU, a0, a1, t0, t1, off, points=3, depth=0.02, free='high', h=0.0034, shape='point'):
+    """A lame over a band of a form, its free edge cut into pointed scales (or rounded lobes)."""
+    of = off if callable(off) else (lambda u, v, o=off: o)
+    u0, u1 = a0 * RU, a1 * RU
+    return plate(lambda u, v: f.point(u / RU, v, of(u, v)), lambda u, v: teeth_sd(u, v, u0, u1, t0, t1, points, depth, free, shape),
+                 u0 - 0.004, u1 + 0.004, t0 - 0.004, t1 + 0.004, h=h)
+
+
+def spike(base, direction, length, r, bend=(0, 0, 0)):
+    """A short horn of steel: from inside its base out along `direction`, curving towards `bend`, tapering to a point."""
+    d, b = Vector(direction).normalized(), Vector(bend)
+    pts = [Vector(base) + d * (length * t - r * 0.6) + b * (length * 0.4 * t * t) for t in (i / 10 for i in range(11))]
+    return tube(pts, [r * (1 - t) ** 1.1 + 0.0004 for t in (i / 10 for i in range(11))], 10)
+
+
+def dragon_mats():
+    """Blued, near-black steel worked all over with scales, red-lacquered scale plates over it, polished steel edges."""
+    return (mat('dragon_steel', 0x2a2d34, 'steel', engrave='scales', emboss=True, rough=0.3, metal=0.9, bump=0.9),
+            mat('dragon_scale', 0x9c2216, 'enamel', engrave='scales', emboss=True, rough=0.3, metal=0.4, bump=1.0),
+            mat('dragon_rim', 0x80868f, 'steel', rough=0.22, metal=0.95))
+
+
+def scaled(q, d):
+    """Scales all over a plate but for a plain band along its edges."""
+    return smooth(0.006, 0.011, d)
+
+
+def dragon_chest():
+    """The dragon harness's cuirass: a breastplate of dark steel creased down the middle with a plastron of red scales
+    over the chest, cut in points below, a backplate with two small steel wings of a dragon on a mount, a collar standing
+    round the back of the neck, a gorget in front, a fauld and tassets of pointed red scales, pauldrons of layered,
+    pointed red scales with a horn, rerebraces and couters with a spur."""
+    p = Piece('chest')
+    dark, red, rim = dragon_mats()
+    F = forms()
+    torso, hips, arm, fore = F['torso'], F['hips'], F['arm'], F['forearm']
+    trunk = ('spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r')
+    edge = dict(solid=0.003, roll=0.0014, roll_mat=rim)
+    RU = 0.17
+    front = outline(symmetric([(0.0, 1.488), (0.045, 1.494), (0.08, 1.51), (0.115, 1.528), (0.145, 1.505), (0.17, 1.42),
+                               (0.205, 1.345), (0.24, 1.31), (0.258, 1.2), (0.258, 1.065), (0.17, 1.038), (0.08, 1.004), (0.0, 0.988)]), 6)
+
+    def foff(u, v):  # a ridge down the middle, swelling a little over the belly
+        return 0.003 + 0.013 * beak(u, 0.12) + 0.012 * beak(u, 0.1) * gauss(v - 1.08, 0.08)
+    p.add(dark, *plate(lambda u, v: torso.point(u / RU, v, foff(u, v)), lambda u, v: sd_poly(u, v, front), -0.27, 0.27, 0.97, 1.54),
+          deco=scaled, sharp=25, skin=trunk, **edge)
+    p.add(red, *plate(lambda u, v: torso.point(u / RU, v, foff(u, v) + 0.0035),
+                      lambda u, v: max(teeth_sd(u, v, -0.215, 0.215, 1.315, 1.56, 5, 0.04, 'low'), sd_poly(u, v, front) + 0.011),
+                      -0.23, 0.23, 1.3, 1.54), deco=scaled, sharp=25, skin=trunk, **edge)
+    back = outline(symmetric([(0.0, 1.53), (0.05, 1.532), (0.09, 1.535), (0.13, 1.51), (0.17, 1.41), (0.21, 1.34), (0.25, 1.3),
+                              (0.29, 1.2), (0.29, 1.06), (0.15, 1.012), (0.0, 1.002)]), 6)
+    p.add(dark, *plate(lambda u, v: torso.point(math.pi + u / RU, v, 0.0), lambda u, v: sd_poly(u, v, back), -0.3, 0.3, 0.99, 1.545),
+          deco=scaled, skin=trunk, **edge)
+    # two small steel wings of a dragon on a mount between the shoulder blades
+    root = torso.point(math.pi - 0.3, 1.405, 0.004)
+    wrist = root + Vector((0.075, 0.19, -0.1))
+    wing_parts = wing(root, wrist, [wrist + Vector((0.12, 0.07, -0.08)), wrist + Vector((0.16, -0.06, -0.07)), wrist + Vector((0.12, -0.18, -0.05))],
+                      root + Vector((0.03, -0.09, -0.02)))
+    both(p, red, wing_parts['membrane'], ('spine_03',), solid=0.002, roll=0.0009, roll_mat=rim, deco=scaled, sharp=30)
+    both(p, rim, wing_parts['bones'], ('spine_03',))
+    both(p, dark, teeth_plate(torso, RU, math.pi - 0.52, math.pi - 0.08, 1.35, 1.45, 0.006, 2, 0.02, 'low'), ('spine_03',), deco=scaled,
+         solid=0.002, roll=0.001, roll_mat=rim)
+    for a, y in ((math.pi - 0.45, 1.43), (math.pi - 0.15, 1.43)):
+        both(p, rim, rivet(torso.point(a, y, 0.0062), torso.normal(a, y), 0.0032), ('spine_03',))
+    # the collar standing round the sides and back of the neck, flaring at the top; the gorget's two lames in front
+    neck = Cone(-0.035, 1.48, 0.112, 0.1, 1.57, 0.075, 0.075)
+    top = lambda a: 1.585 - 0.035 * smooth(1.7, 2.7, abs(wrap(a)))
+    p.add(red, *plate(lambda u, v: neck.point(u / 0.09, v, 0.006 + 0.028 * smooth(1.51, 1.585, v)),
+                      lambda u, v: max(1.478 - v, v - top(u / 0.09), abs(u / 0.09 - math.pi) - (math.pi - 0.75)),
+                      0.6 * 0.09, (2 * math.pi - 0.6) * 0.09, 1.47, 1.6), deco=scaled, skin=('neck_01', 'spine_03'), **edge)
+    for k, (lo_, hi_) in enumerate(((1.483, 1.525), (1.517, 1.56))):
+        p.add(dark, *band_plate(neck, 0.09, -0.95, 0.95, lo_, hi_, 0.0065 - 0.0025 * k, 0.008), deco=scaled, skin=('neck_01', 'spine_03'), **edge)
+    # the fauld round the waist, its lower lame cut in points, and tassets of three pointed red lames over each thigh
+    p.add(dark, *plate(lambda u, v: hips.point(u / 0.16, v, 0.0), lambda u, v: max(0.966 - v, v - 1.05), -math.pi * 0.16, math.pi * 0.16,
+                       0.962, 1.054, periodic=True), deco=scaled, skin=('pelvis', 'spine_01'), **edge)
+    p.add(dark, *plate(lambda u, v: hips.point(u / 0.16, v, 0.0025), lambda u, v: teeth_sd(u, v, -math.pi * 0.16, math.pi * 0.16, 0.918, 0.98, 16, 0.016, 'low'),
+                       -math.pi * 0.16, math.pi * 0.16, 0.912, 0.984, periodic=True), deco=scaled, skin=('pelvis', 'spine_01'), **edge)
+    tasset = lambda p_: {'pelvis': 0.3 + 0.7 * smooth(0.79, 0.95, p_.y), 'thigh_l': 0.7 * (1 - smooth(0.79, 0.95, p_.y))}
+    for k, (lo_, hi_) in enumerate(((0.875, 0.94), (0.825, 0.89), (0.765, 0.84))):
+        both(p, red, teeth_plate(hips, 0.16, 0.12, 1.24, lo_, hi_, 0.006 + 0.0025 * k, 3, 0.022, 'low'), tasset, deco=scaled, **edge)
+    # pauldrons: a cap with a ridge and a horn, four lames down the arm cut in points, each over the next
+    capoff = lambda u, v: 0.013 + 0.005 * beak(u, 0.03)
+    dome = lambda q: 0.008 * gauss((q - arm.at(0.0, -0.01)).length, 0.06)
+    both(p, red, band_plate(arm, 0.09, -2.05, 2.05, -0.085, 0.075, capoff, 0.03), ('clavicle_l', 'upperarm_l'), bump=dome, deco=scaled, sharp=30, **edge)
+    horn_at = arm.point(0.0, -0.02, 0.024)
+    both(p, rim, spike(horn_at, (0.25, 1.0, -0.35), 0.05, 0.009, (0.4, 0.0, -0.6)), ('clavicle_l', 'upperarm_l'))
+    for k, (t0, t1) in enumerate(((0.055, 0.1), (0.083, 0.128), (0.111, 0.156), (0.139, 0.184))):
+        both(p, red, teeth_plate(arm, 0.09, -1.85, 1.85, t0, t1, 0.011 - 0.0025 * k, 4, 0.014), ('upperarm_l',), deco=scaled, **edge)
+    both(p, dark, ring_plate(arm, 0.09, 0.17, 0.25, 0.0), ('upperarm_l',), deco=scaled, **edge)
+    # couters: a cup over the back of the elbow with a short spur
+    cup = lambda q: 0.008 * gauss((q - fore.at(-math.pi / 2, 0.0)).length, 0.035)
+    both(p, dark, plate(lambda u, v: fore.point(u / 0.07, v, 0.006), lambda u, v: sd_ellipse(u, v, -math.pi / 2 * 0.07, 0.0, 0.085, 0.052),
+                        -math.pi * 0.07, 0.0, -0.06, 0.06), ('upperarm_l', 'lowerarm_l'), bump=cup, deco=scaled, **edge)
+    both(p, rim, spike(fore.point(-math.pi / 2, 0.0, 0.012), (0.3, 0.0, -1.0), 0.03, 0.007), ('upperarm_l', 'lowerarm_l'))
+    return p
+
+
+def dragon_gloves():
+    """Vambraces of dark steel with a plate of red scales over the forearm pointing to the hand, and gauntlets: a
+    flared cuff, a plate over the back of the hand, a red knuckle plate cut in points, four lames over the fingers and
+    one over the thumb."""
+    p = Piece('gloves')
+    dark, red, rim = dragon_mats()
+    F = forms()
+    fore, hand = F['forearm'], F['hand']
+    edge = dict(solid=0.0025, roll=0.0012, roll_mat=rim)
+    both(p, dark, ring_plate(fore, 0.07, 0.045, 0.2, lambda u, v: 0.003 + 0.004 * beak(u, 0.05)), ('lowerarm_l',), deco=scaled, sharp=28, **edge)
+    both(p, red, teeth_plate(fore, 0.07, -1.0, 1.0, 0.06, 0.205, lambda u, v: 0.006 + 0.004 * beak(u, 0.05), 3, 0.028), ('lowerarm_l',),
+         deco=scaled, sharp=28, **edge)
+    both(p, dark, ring_plate(hand, 0.06, -0.085, 0.006, lambda u, v: 0.003 + 0.02 * smooth(-0.005, -0.085, v)), ('hand_l', 'lowerarm_l'),
+         deco=scaled, **edge)
+    both(p, dark, band_plate(hand, 0.06, -1.15, 1.15, -0.002, 0.098, 0.006, 0.012), ('hand_l',), deco=scaled, **edge)
+    both(p, red, teeth_plate(hand, 0.06, -1.1, 1.1, 0.06, 0.104, 0.009, 4, 0.012), ('hand_l',), deco=scaled, **edge)
+    for k, (t0, t1) in enumerate(((0.096, 0.126), (0.122, 0.152), (0.148, 0.178), (0.174, 0.205))):
+        both(p, dark, band_plate(hand, 0.06, -1.05, 1.05, t0, t1, 0.004 - 0.0006 * k, 0.012 if k == 3 else 0.004), ('hand_l',) + FINGERS_L,
+             deco=scaled, **edge)
+    both(p, dark, band_plate(hand, 0.06, 1.3, 2.4, 0.015, 0.085, 0.004, 0.012), ('hand_l',) + THUMB_L, deco=scaled, **edge)
+    return p
+
+
+def dragon_legs():
+    """Cuisses of dark steel with three lames of red scales cut in points down the front, and poleyns with a wing and a
+    spur at the knees."""
+    p = Piece('legs')
+    dark, red, rim = dragon_mats()
+    F = forms()
+    thigh, knee = F['thigh'], F['knee']
+    edge = dict(solid=0.003, roll=0.0014, roll_mat=rim)
+    both(p, dark, band_plate(thigh, 0.085, -2.0, 1.1, 0.1, 0.4, lambda u, v: 0.003 + 0.005 * beak(u, 0.05), 0.02), ('thigh_l',), deco=scaled,
+         sharp=28, **edge)
+    for k, (t0, t1) in enumerate(((0.1, 0.2), (0.18, 0.28), (0.26, 0.36))):
+        both(p, red, teeth_plate(thigh, 0.085, -1.6, 0.85, t0, t1, 0.007 - 0.0012 * k, 3, 0.03), ('thigh_l',), deco=scaled, **edge)
+    dome = lambda q: 0.006 * gauss((q - knee.at(0.0, 0.0)).length, 0.035)
+    both(p, dark, band_plate(knee, 0.065, -1.3, 1.3, -0.055, 0.055, 0.005, 0.03), ('thigh_l', 'calf_l'), bump=dome, deco=scaled, **edge)
+    both(p, dark, plate(lambda u, v: knee.point(u / 0.065, v, 0.004), lambda u, v: sd_ellipse(u, v, -1.6 * 0.065, 0.004, 0.04, 0.034),
+                        -2.4 * 0.065, -0.8 * 0.065, -0.036, 0.044), ('thigh_l', 'calf_l'), deco=scaled, **edge)
+    both(p, rim, spike(knee.point(0.0, 0.012, 0.014), (0.0, -0.45, 1.0), 0.028, 0.0075), ('thigh_l', 'calf_l'))
+    return p
+
+
+def dragon_feet():
+    """From the knee down, in place of the boots: greaves of dark steel closed round the shins with a red plate of
+    scales over the shin rising to a point at the knee, and sabatons - a leather shoe with steel lames over the instep,
+    each over the next, a rounded toe cap and a heel plate."""
+    p = Piece('feet')
+    dark, red, rim = dragon_mats()
+    leather = mat('sole', 0x2a1a12, 'leather', rough=0.85)
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = dict(solid=0.0025, roll=0.0012, roll_mat=rim)
+    both(p, dark, ring_plate(calf, 0.06, 0.065, 0.43, lambda u, v: 0.003 + 0.01 * smooth(0.39, 0.43, v)), ('calf_l',), deco=scaled, **edge)
+    both(p, red, teeth_plate(calf, 0.06, -0.95, 0.95, 0.07, 0.385, lambda u, v: 0.0058 + 0.005 * beak(u, 0.04), 1, 0.06, 'low'), ('calf_l',),
+         deco=scaled, sharp=28, **edge)
+    shoe = ('foot_l', 'ball_l')
+    both(p, leather, ring_plate(foot, 0.045, -0.085, 0.25, 0.0), shoe, solid=0.002)
+    for k, (t0, t1) in enumerate(((-0.01, 0.04), (0.035, 0.08), (0.075, 0.12), (0.115, 0.16), (0.155, 0.25))):
+        mat_ = red if k == 1 else dark
+        both(p, mat_, band_plate(foot, 0.045, -1.6, 1.6, t0, t1, 0.011 - 0.0025 * k, 0.012 if k == 4 else 0.004),
+             ('foot_l',) if k < 2 else shoe, deco=scaled, **edge)
+    both(p, dark, band_plate(foot, 0.045, math.pi - 1.2, math.pi + 1.2, -0.085, -0.02, 0.004, 0.01), ('foot_l',), deco=scaled, **edge)
+    return p
+
+
+def limb_fin(f, a, t0, t1, height, spines=5, top=0.0014, foot=0.006, sink=0.004, n=40):
+    """A fish's fin of steel standing out of a form along the line at angle a from t0 to t1: rising from nothing at
+    both ends, its edge cut into `spines` rays."""
+    prof = [(-foot, 0, -sink), (-foot * 0.5, 0, 0.0), (-top * 1.5, 0.3, 0.0), (-top, 0.75, 0.0), (-top * 0.7, 1.0, -top * 0.5),
+            (0.0, 1.0, 0.0), (top * 0.7, 1.0, -top * 0.5), (top, 0.75, 0.0), (top * 1.5, 0.3, 0.0), (foot * 0.5, 0, 0.0), (foot, 0, -sink)]
+    verts, faces = [], []
+    e = 1e-3
+    for k in range(n + 1):
+        s_ = k / n
+        t = lerp(t0, t1, s_)
+        p, nrm = f.at(a, t), f.normal(a, t)
+        d = (f.at(a, t + e) - f.at(a, t - e)).normalized()
+        side = d.cross(nrm).normalized()
+        x = s_ * spines
+        ray = 0.55 + 0.45 * (1 - abs(2 * (x - math.floor(x)) - 1)) ** 2  # each ray a point, a dip between
+        h = height * math.sin(math.pi * s_) ** 0.6 * ray + 0.0005
+        for px_, fh, dy in prof:
+            verts.append(p + side * px_ + nrm * (fh * h + dy))
+    np_ = len(prof)
+    for k in range(n):
+        for j in range(np_):
+            j2 = (j + 1) % np_
+            faces.append((k * np_ + j, k * np_ + j2, (k + 1) * np_ + j2, (k + 1) * np_ + j))
+    faces.append(tuple(range(np_))[::-1])
+    faces.append(tuple(range(n * np_, (n + 1) * np_)))
+    return verts, faces
+
+
+def shell_plate(f, RU, a0, a1, t0, t1, off, ribs=7, depth=0.02, free='high', rib_h=0.0035, h=0.0034):
+    """A scallop shell of steel over a band of a form: fluted in `ribs` ribs running to its free edge, which is cut into a
+    rounded lobe at the end of each rib."""
+    of = off if callable(off) else (lambda u, v, o=off: o)
+    u0, u1 = a0 * RU, a1 * RU
+
+    def surface(u, v):
+        x = clamp((u - u0) / (u1 - u0)) * ribs
+        flute = rib_h * (0.5 + 0.5 * math.cos(2 * math.pi * (x - math.floor(x) - 0.5)))
+        grow = smooth(t0, t1, v) if free == 'high' else smooth(t1, t0, v)  # the flutes deepen towards the free edge
+        return f.point(u / RU, v, of(u, v) + flute * (0.35 + 0.65 * grow))
+    return plate(surface, lambda u, v: teeth_sd(u, v, u0, u1, t0, t1, ribs, depth, free, 'round'),
+                 u0 - 0.004, u1 + 0.004, t0 - 0.004, t1 + 0.004, h=h)
+
+
+def abyssal_mats():
+    """The sea in its blues: steel blued near black, etched with waves in a pale blue where the deco allows; plates
+    lacquered an ocean blue (the shells, the scalloped lames, the fins), etched the same; polished edges of a pale,
+    bluish steel."""
+    return (mat('abyssal_steel', 0x0b1322, 'blued', engrave='waves', engrave_color=0x2e5680, rough=0.28, metal=0.85),
+            mat('abyssal_lacquer', 0x0f3462, 'enamel', engrave='waves', engrave_color=0x3b6e9e, rough=0.3, metal=0.4),
+            mat('abyssal_rim', 0x55708a, 'steel', rough=0.22, metal=0.95))
+
+
+def abyssal_chest():
+    """The abyssal harness's cuirass, after a conquistador's: a breastplate of blued steel with a keel and bands etched
+    with waves, a backplate, a gorget, a fauld and tassets of overlapping scallop shells, pauldrons of a fluted shell and
+    scalloped lames, rerebraces, and couters fluted like shells; the shells and lames lacquered an ocean blue."""
+    p = Piece('chest')
+    steel, accent, gilt = abyssal_mats()
+    F = forms()
+    torso, hips, arm, fore = F['torso'], F['hips'], F['arm'], F['forearm']
+    trunk = ('spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r')
+    edge = dict(solid=0.003, roll=0.0014, roll_mat=gilt)
+    RU = 0.17
+    front = outline(symmetric([(0.0, 1.488), (0.045, 1.494), (0.08, 1.51), (0.115, 1.528), (0.145, 1.505), (0.17, 1.42),
+                               (0.205, 1.345), (0.24, 1.31), (0.258, 1.2), (0.258, 1.065), (0.17, 1.038), (0.08, 1.004), (0.0, 0.985)]), 6)
+
+    def foff(u, v):  # the keel, drawn out over the belly as the peascods of the 1560s were
+        return 0.003 + 0.014 * beak(u, 0.12) + 0.02 * beak(u, 0.1) * gauss(v - 1.06, 0.075)
+    centre = lambda q: max(smooth(0.016, 0.012, abs(q.x)), smooth(0.01, 0.007, abs(abs(math.atan2(q.x, q.z)) * RU - 0.15))) \
+        * smooth(1.0, 1.03, q.y) * (1 if q.z > 0 else 0)
+    p.add(steel, *plate(lambda u, v: torso.point(u / RU, v, foff(u, v)), lambda u, v: sd_poly(u, v, front), -0.27, 0.27, 0.97, 1.54),
+          deco=(0.014, centre), sharp=25, skin=trunk, **edge)
+    back = outline(symmetric([(0.0, 1.53), (0.05, 1.532), (0.09, 1.535), (0.13, 1.51), (0.17, 1.41), (0.21, 1.34), (0.25, 1.3),
+                              (0.29, 1.2), (0.29, 1.06), (0.15, 1.012), (0.0, 1.002)]), 6)
+    p.add(steel, *plate(lambda u, v: torso.point(math.pi + u / RU, v, 0.0), lambda u, v: sd_poly(u, v, back), -0.3, 0.3, 0.99, 1.545),
+          deco=(0.014, lambda q: smooth(0.016, 0.012, abs(q.x)) * smooth(1.02, 1.05, q.y)), skin=trunk, **edge)
+    for u, v in ((0.105, 1.505), (0.24, 1.09)):
+        for s in (1, -1):
+            p.add(gilt, *rivet(torso.point(s * u / RU, v, foff(s * u, v) + 0.0004), torso.normal(s * u / RU, v), 0.004, washer=0.007), skin=trunk)
+    neck = Cone(-0.035, 1.48, 0.112, 0.1, 1.57, 0.075, 0.075)
+    for k, (lo_, hi_) in enumerate(((1.483, 1.525), (1.517, 1.56))):
+        p.add(steel, *band_plate(neck, 0.09, -1.65, 1.65, lo_, hi_, 0.0065 - 0.0025 * k, 0.008), deco=0.008, skin=('neck_01', 'spine_03'), **edge)
+    # the fauld, and tassets of three scallop shells over each thigh, each over the next
+    p.add(steel, *plate(lambda u, v: hips.point(u / 0.16, v, 0.0), lambda u, v: max(0.966 - v, v - 1.05), -math.pi * 0.16, math.pi * 0.16,
+                        0.962, 1.054, periodic=True), deco=0.008, skin=('pelvis', 'spine_01'), **edge)
+    tasset = lambda p_: {'pelvis': 0.3 + 0.7 * smooth(0.79, 0.95, p_.y), 'thigh_l': 0.7 * (1 - smooth(0.79, 0.95, p_.y))}
+    for k, (lo_, hi_) in enumerate(((0.88, 0.975), (0.83, 0.905), (0.77, 0.85))):
+        both(p, accent, shell_plate(hips, 0.16, 0.1, 1.28, lo_, hi_, 0.006 + 0.0025 * k, 5, 0.018, 'low', 0.0028), tasset, deco=0.009, **edge)
+    # pauldrons: a fluted shell over the shoulder, three scalloped lames down the arm, the rerebrace below
+    capoff = lambda u, v: 0.012
+    dome = lambda q: 0.008 * gauss((q - arm.at(0.0, -0.01)).length, 0.06)
+    both(p, accent, shell_plate(arm, 0.09, -2.05, 2.05, -0.085, 0.08, capoff, 9, 0.016, 'high', 0.004), ('clavicle_l', 'upperarm_l'),
+         bump=dome, deco=0.01, sharp=30, **edge)
+    for k, (t0, t1) in enumerate(((0.065, 0.11), (0.095, 0.14), (0.125, 0.17))):
+        both(p, accent, teeth_plate(arm, 0.09, -1.85, 1.85, t0, t1, 0.0085 - 0.0025 * k, 6, 0.01, 'high', shape='round'), ('upperarm_l',),
+             deco=0.007, **edge)
+    both(p, steel, ring_plate(arm, 0.09, 0.16, 0.25, 0.0), ('upperarm_l',), deco=0.007, **edge)
+    shell_at = fore.at(-math.pi / 2, 0.0)
+    cup = lambda q: 0.008 * gauss((q - shell_at).length, 0.035)
+    both(p, accent, plate(lambda u, v: fore.point(u / 0.07, v, 0.006 + 0.0025 * (0.5 + 0.5 * math.cos(9 * math.atan2(v, u / 0.07 + math.pi / 2)))),
+                         lambda u, v: sd_ellipse(u, v, -math.pi / 2 * 0.07, 0.0, 0.085, 0.052), -math.pi * 0.07, 0.0, -0.06, 0.06),
+         ('upperarm_l', 'lowerarm_l'), bump=cup, deco=0.008, **edge)
+    return p
+
+
+def abyssal_gloves():
+    """Vambraces of blued steel with a lacquered fin along the outside of the forearm, and gauntlets with a scalloped,
+    lacquered knuckle plate."""
+    p = Piece('gloves')
+    steel, accent, gilt = abyssal_mats()
+    F = forms()
+    fore, hand = F['forearm'], F['hand']
+    edge = dict(solid=0.0025, roll=0.0012, roll_mat=gilt)
+    both(p, steel, ring_plate(fore, 0.07, 0.045, 0.2, lambda u, v: 0.003 + 0.004 * beak(u, 0.05)), ('lowerarm_l',), deco=0.008, sharp=28, **edge)
+    both(p, accent, limb_fin(fore, 0.0, 0.05, 0.2, 0.022, 4), ('lowerarm_l',), deco=lambda q: 0.0)
+    both(p, steel, ring_plate(hand, 0.06, -0.085, 0.006, lambda u, v: 0.003 + 0.02 * smooth(-0.005, -0.085, v)), ('hand_l', 'lowerarm_l'),
+         deco=0.007, **edge)
+    both(p, steel, band_plate(hand, 0.06, -1.15, 1.15, -0.002, 0.098, 0.006, 0.012), ('hand_l',), deco=0.006, **edge)
+    both(p, accent, teeth_plate(hand, 0.06, -1.1, 1.1, 0.065, 0.104, 0.009, 4, 0.01, shape='round'), ('hand_l',), solid=0.002, roll=0.001,
+         roll_mat=gilt, deco=0.004)
+    for k, (t0, t1) in enumerate(((0.096, 0.126), (0.122, 0.152), (0.148, 0.178), (0.174, 0.205))):
+        both(p, steel, band_plate(hand, 0.06, -1.05, 1.05, t0, t1, 0.004 - 0.0006 * k, 0.012 if k == 3 else 0.004), ('hand_l',) + FINGERS_L,
+             deco=0.005, **edge)
+    both(p, steel, band_plate(hand, 0.06, 1.3, 2.4, 0.015, 0.085, 0.004, 0.012), ('hand_l',) + THUMB_L, deco=0.005, **edge)
+    return p
+
+
+def abyssal_legs():
+    """Cuisses of blued steel with bands etched with waves and three lacquered, scalloped lames down the front, and
+    poleyns fluted like shells."""
+    p = Piece('legs')
+    steel, accent, gilt = abyssal_mats()
+    F = forms()
+    thigh, knee = F['thigh'], F['knee']
+    edge = dict(solid=0.003, roll=0.0014, roll_mat=gilt)
+    band = lambda q: smooth(0.011, 0.008, abs(math.atan2(q.x - bone('thigh_l').x, q.z - bone('thigh_l').z)) * 0.085)
+    both(p, steel, band_plate(thigh, 0.085, -2.0, 1.1, 0.1, 0.4, lambda u, v: 0.003 + 0.005 * beak(u, 0.05), 0.02), ('thigh_l',),
+         deco=(0.011, band), sharp=28, **edge)
+    for k, (t0, t1) in enumerate(((0.26, 0.31), (0.3, 0.35), (0.34, 0.39))):
+        both(p, accent, teeth_plate(thigh, 0.085, -1.7, 0.95, t0, t1, 0.0065 - 0.0012 * k, 5, 0.012, shape='round'), ('thigh_l',), deco=0.006, **edge)
+    both(p, accent, shell_plate(knee, 0.065, -1.3, 1.3, -0.055, 0.055, 0.005, 7, 0.012, 'high', 0.003), ('thigh_l', 'calf_l'),
+         bump=lambda q: 0.006 * gauss((q - knee.at(0.0, 0.0)).length, 0.035), deco=0.008, **edge)
+    return p
+
+
+def abyssal_feet():
+    """From the knee down, in place of the boots: greaves of blued steel etched with waves and a lacquered fin down the
+    back of the calf, and sabatons of scalloped lames over a leather shoe."""
+    p = Piece('feet')
+    steel, accent, gilt = abyssal_mats()
+    leather = mat('sole', 0x221a14, 'leather', rough=0.85)
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = dict(solid=0.0025, roll=0.0012, roll_mat=gilt)
+    shin = lambda q: smooth(0.011, 0.008, abs(math.atan2(q.x - bone('calf_l').x, q.z - bone('calf_l').z)) * 0.06) * smooth(0.12, 0.16, q.y)
+    both(p, steel, ring_plate(calf, 0.06, 0.065, 0.43, lambda u, v: 0.003 + 0.004 * beak(u, 0.045) + 0.01 * smooth(0.39, 0.43, v)), ('calf_l',),
+         deco=(0.01, shin), sharp=28, **edge)
+    both(p, accent, limb_fin(calf, math.pi, 0.1, 0.34, 0.02, 5), ('calf_l',), deco=lambda q: 0.0)
+    shoe = ('foot_l', 'ball_l')
+    both(p, leather, ring_plate(foot, 0.045, -0.085, 0.25, 0.0), shoe, solid=0.002)
+    for k, (t0, t1) in enumerate(((-0.01, 0.045), (0.035, 0.085), (0.075, 0.125), (0.115, 0.165), (0.155, 0.25))):
+        off = 0.011 - 0.0025 * k
+        lame = band_plate(foot, 0.045, -1.6, 1.6, t0, t1, off, 0.012) if k == 4 else             teeth_plate(foot, 0.045, -1.6, 1.6, t0, t1, off, 4, 0.008, shape='round')
+        both(p, accent if k in (1, 3) else steel, lame, ('foot_l',) if k < 2 else shoe, deco=0.006, **edge)
+    both(p, steel, band_plate(foot, 0.045, math.pi - 1.2, math.pi + 1.2, -0.085, -0.02, 0.004, 0.01), ('foot_l',), deco=0.006, **edge)
+    return p
+
+
+def form_strap(f, path, width, off, thick=0.0028):
+    """A leather strap lying on a form along (a, t) points, `off` metres out from it (a number or a function of (a, t))."""
+    of = off if callable(off) else (lambda a, t, o=off: o)
+    pts = [f.point(a, t, of(a, t) + thick / 2) for a, t in path]
+    ups = [f.normal(a, t) for a, t in path]
+    verts, faces = [], []
+    m = len(pts)
+    for k in range(m):
+        p, up = pts[k], ups[k]
+        d = (pts[min(k + 1, m - 1)] - pts[max(k - 1, 0)]).normalized()
+        side = d.cross(up).normalized() * (width / 2)
+        t_ = up * (thick / 2)
+        verts += [p + side + t_, p - side + t_, p - side - t_, p + side - t_]
+    for k in range(m - 1):
+        a_, b_ = k * 4, k * 4 + 4
+        faces += [(a_, a_ + 1, b_ + 1, b_), (a_ + 1, a_ + 2, b_ + 2, b_ + 1), (a_ + 2, a_ + 3, b_ + 3, b_ + 2), (a_ + 3, a_, b_, b_ + 3)]
+    last = (m - 1) * 4
+    faces += [(0, 3, 2, 1), (last, last + 1, last + 2, last + 3)]
+    return verts, faces
+
+
+def line(a0, t0, a1, t1, n=40):
+    """(a, t) points from one place on a form to another."""
+    return [(lerp(a0, a1, k / n), lerp(t0, t1, k / n)) for k in range(n + 1)]
+
+
+def ragged_plate(f, RU, a0, a1, t0, t1, off, seed=0.0, depth=0.02, h=0.0034):
+    """A strip of worn leather hanging over a band of a form: its lower edge (t1) torn unevenly."""
+    of = off if callable(off) else (lambda u, v, o=off: o)
+    u0, u1 = a0 * RU, a1 * RU
+
+    def sd(u, v):
+        x = (u - u0) / (u1 - u0)
+        tear = depth * (0.5 + 0.5 * noise.noise(Vector((x * 6.0 + seed, seed * 1.3, 0.0)))) * (0.6 + 0.4 * abs(math.sin(x * 9 + seed)))
+        side = abs(u - (u0 + u1) / 2) - (u1 - u0) / 2
+        return max(side, t0 - v, v - (t1 - tear))
+    return plate(lambda u, v: f.point(u / RU, v, of(u, v)), sd, u0 - 0.004, u1 + 0.004, t0 - 0.004, t1 + 0.004, h=h)
+
+
+def ash_mats():
+    """Fire-blackened steel, worn bright on the edges, sooty and rusting in the hollows; dark mail; old leather; a
+    charcoal wool."""
+    return (mat('ash_steel', 0x2b2b2e, 'black', rough=0.68, metal=0.7),
+            mat('ash_mail', 0x48494d, 'mail', rough=0.6, metal=0.85),
+            mat('ash_leather', 0x33211a, 'leather', rough=0.8),
+            mat('ash_wool', 0x2e2b28, 'cloth', rough=0.95))
+
+
+def ashforged_chest():
+    """The ashforged knight's harness, worn through a war: a hauberk of dark mail down to the thighs with sleeves to the
+    wrists, over it a ridged breastplate and a backplate of blackened steel, pauldrons of three lames, couters; leather
+    straps crossed over the chest through an iron ring, a belt with a buckle and torn leather strips hanging from it
+    over the mail; a thick wool scarf wound round the neck."""
+    p = Piece('chest')
+    steel, mail, leather, wool = ash_mats()
+    F = forms()
+    torso, hips, arm, fore = F['torso'], F['hips'], F['arm'], F['forearm']
+    trunk = ('spine_01', 'spine_02', 'spine_03', 'clavicle_l', 'clavicle_r')
+    edge = dict(solid=0.003, roll=0.0013)
+    RU = 0.17
+    # the hauberk: the body, the sleeves to the wrist, the skirt over both legs to mid-thigh
+    p.add(mail, *ring_plate(torso, RU, 0.99, 1.505, 0.0018), solid=0.002, skin=trunk + ('pelvis', 'upperarm_l', 'upperarm_r', 'neck_01'))
+    both(p, mail, ring_plate(arm, 0.08, -0.03, 0.255, 0.0018), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), solid=0.002)
+    both(p, mail, ring_plate(fore, 0.06, -0.03, 0.23, 0.0016), ('upperarm_l', 'lowerarm_l', 'hand_l'), solid=0.002)
+    p.add(mail, *ring_plate(hips, 0.16, 0.74, 1.005, lambda u, v: 0.002 + 0.012 * smooth(0.95, 0.74, v)), solid=0.002,
+          skin=('pelvis', 'spine_01', 'thigh_l', 'thigh_r'))
+    # breastplate and backplate over it
+    front = outline(symmetric([(0.0, 1.488), (0.045, 1.494), (0.08, 1.51), (0.115, 1.528), (0.145, 1.505), (0.17, 1.42),
+                               (0.205, 1.345), (0.24, 1.3), (0.25, 1.2), (0.22, 1.135), (0.12, 1.11), (0.0, 1.1)]), 6)
+    foff = lambda u, v: 0.0065 + 0.011 * beak(u, 0.12) + 0.008 * beak(u, 0.1) * gauss(v - 1.2, 0.08)
+    p.add(steel, *plate(lambda u, v: torso.point(u / RU, v, foff(u, v)), lambda u, v: sd_poly(u, v, front), -0.27, 0.27, 1.09, 1.54),
+          bump=dents((torso.point(0.6, 1.3), 0.02, 0.0025), (torso.point(-0.9, 1.22), 0.016, 0.002)), sharp=25, skin=trunk, **edge)
+    for s_ in (1, -1):
+        for u, v in ((0.03, 1.478), (0.075, 1.494), (0.13, 1.49), (0.165, 1.41), (0.2, 1.34), (0.235, 1.27), (0.215, 1.15), (0.12, 1.122)):
+            a = s_ * u / RU
+            p.add(steel, *rivet(torso.point(a, v, foff(s_ * u, v) + 0.0003), torso.normal(a, v), 0.0032), skin=trunk)
+    back = outline(symmetric([(0.0, 1.53), (0.05, 1.532), (0.09, 1.535), (0.13, 1.51), (0.17, 1.41), (0.21, 1.34), (0.25, 1.3),
+                              (0.27, 1.2), (0.2, 1.15), (0.0, 1.14)]), 6)
+    p.add(steel, *plate(lambda u, v: torso.point(math.pi + u / RU, v, 0.0055), lambda u, v: sd_poly(u, v, back), -0.3, 0.3, 1.13, 1.545),
+          skin=trunk, **edge)
+    # straps crossed over the breastplate through an iron ring, and the belt
+    over = lambda a, t: foff(a * RU, t) + 0.0004
+    for s in (1, -1):
+        p.add(leather, *form_strap(torso, line(s * 0.66, 1.49, -s * 0.62, 1.07), 0.03, over), skin=trunk)
+    ring_at, ring_n = torso.point(0.0, 1.29, foff(0.0, 1.29) + 0.004), torso.normal(0.0, 1.29)
+    t_, n_, b_ = frame(ring_n)
+    p.add(steel, *tube([ring_at + (t_ * math.cos(k * math.pi / 12) + b_ * math.sin(k * math.pi / 12)) * 0.016 for k in range(24)], 0.0032, 8,
+                       closed=True), skin=trunk)
+    p.add(leather, *strap(hips, [(2 * math.pi * k / 96, 1.02) for k in range(97)], 0.036, 0.004, 0.015), skin=('pelvis', 'spine_01'))
+    bk = hips.point(0.0, 1.02, 0.021)
+    p.add(steel, *buckle(bk, hips.normal(0.0, 1.02), Vector((1, 0, 0)), 0.034, 0.042, 0.0025), skin=('pelvis',))
+    # torn leather strips hanging from the belt over the skirt, front, sides and back
+    strip = lambda side: (lambda p_: {'pelvis': 0.35 + 0.65 * smooth(0.8, 1.0, p_.y), f'thigh_{side}': 0.65 * (1 - smooth(0.8, 1.0, p_.y))})
+    for k, (a0, a1) in enumerate(((0.05, 0.42), (0.47, 0.84), (0.95, 1.3), (2.35, 2.75), (2.8, 3.1))):
+        lo_ = 0.8 if k < 3 else 0.84
+        both(p, leather, ragged_plate(hips, 0.16, a0, a1, lo_, 1.01, 0.0175, seed=k * 2.3, depth=0.03), strip('l'), solid=0.0025)
+    # pauldrons of a cap and three lames, couters
+    both(p, steel, band_plate(arm, 0.09, -2.0, 2.0, -0.08, 0.075, 0.013, 0.03), ('clavicle_l', 'upperarm_l'),
+         bump=lambda q: 0.007 * gauss((q - arm.at(0.0, -0.01)).length, 0.06), **edge)
+    for k, (t0, t1) in enumerate(((0.06, 0.105), (0.09, 0.135), (0.12, 0.165))):
+        both(p, steel, band_plate(arm, 0.09, -1.8, 1.8, t0, t1, 0.0105 - 0.0025 * k, 0.01), ('upperarm_l',), **edge)
+        for a in (-1.6, 1.6):
+            both(p, steel, rivet(arm.point(a, (t0 + t1) / 2 + 0.008, 0.012 - 0.0025 * k), arm.normal(a, (t0 + t1) / 2 + 0.008), 0.0032), ('upperarm_l',))
+    cup = lambda q: 0.008 * gauss((q - fore.at(-math.pi / 2, 0.0)).length, 0.035)
+    both(p, steel, plate(lambda u, v: fore.point(u / 0.07, v, 0.008), lambda u, v: sd_ellipse(u, v, -math.pi / 2 * 0.07, 0.0, 0.085, 0.052),
+                         -math.pi * 0.07, 0.0, -0.06, 0.06), ('upperarm_l', 'lowerarm_l'), bump=cup, **edge)
+    # the scarf, wound thick round the neck
+    neck = Cone(-0.045, 1.46, 0.12, 0.125, 1.57, 0.08, 0.08)
+    fold = lambda u, v: 0.004 + 0.016 * math.sin(math.pi * clamp((v - 1.455) / 0.095)) ** 0.7 + 0.004 * noise.noise(Vector((u * 40, v * 60, 0.3)))
+    p.add(wool, *ring_plate(neck, 0.1, 1.455, 1.55, fold), solid=0.004, skin=('neck_01', 'spine_03', 'clavicle_l', 'clavicle_r'))
+    return p
+
+
+def ashforged_gloves():
+    """Vambraces of blackened steel strapped on over the mail sleeves, and plain gauntlets."""
+    p = Piece('gloves')
+    steel, mail, leather, wool = ash_mats()
+    F = forms()
+    fore, hand = F['forearm'], F['hand']
+    edge = dict(solid=0.0025, roll=0.0011)
+    both(p, steel, band_plate(fore, 0.07, -2.2, 2.2, 0.05, 0.2, lambda u, v: 0.006 + 0.004 * beak(u, 0.05), 0.012), ('lowerarm_l',), sharp=28, **edge)
+    for t in (0.08, 0.17):
+        both(p, leather, ring_plate(fore, 0.07, t - 0.008, t + 0.008, 0.0105), ('lowerarm_l',), solid=0.0022)
+    both(p, steel, ring_plate(hand, 0.06, -0.085, 0.006, lambda u, v: 0.004 + 0.018 * smooth(-0.005, -0.085, v)), ('hand_l', 'lowerarm_l'), **edge)
+    both(p, steel, band_plate(hand, 0.06, -1.15, 1.15, -0.002, 0.098, 0.006, 0.012), ('hand_l',),
+         bump=lambda q: 0.0025 * gauss(q.x - bone('hand_l').x - 0.09, 0.006), **edge)
+    for k, (t0, t1) in enumerate(((0.096, 0.126), (0.122, 0.152), (0.148, 0.178), (0.174, 0.205))):
+        both(p, steel, band_plate(hand, 0.06, -1.05, 1.05, t0, t1, 0.004 - 0.0006 * k, 0.012 if k == 3 else 0.004), ('hand_l',) + FINGERS_L, **edge)
+    both(p, steel, band_plate(hand, 0.06, 1.3, 2.4, 0.015, 0.085, 0.004, 0.012), ('hand_l',) + THUMB_L, **edge)
+    return p
+
+
+def ashforged_legs():
+    """Mail chausses over the thighs, with a small worn plate over the front of each, and poleyns with a wing."""
+    p = Piece('legs')
+    steel, mail, leather, wool = ash_mats()
+    F = forms()
+    thigh, knee = F['thigh'], F['knee']
+    edge = dict(solid=0.003, roll=0.0013)
+    both(p, mail, ring_plate(thigh, 0.08, 0.15, 0.46, 0.0018), ('thigh_l', 'calf_l'), solid=0.002)
+    both(p, steel, band_plate(thigh, 0.085, -1.3, 0.8, 0.24, 0.42, lambda u, v: 0.006 + 0.004 * beak(u, 0.05), 0.02), ('thigh_l',), sharp=28, **edge)
+    dome = lambda q: 0.006 * gauss((q - knee.at(0.0, 0.0)).length, 0.035)
+    both(p, steel, band_plate(knee, 0.065, -1.3, 1.3, -0.055, 0.055, 0.007, 0.03), ('thigh_l', 'calf_l'), bump=dome, **edge)
+    both(p, steel, plate(lambda u, v: knee.point(u / 0.065, v, 0.006), lambda u, v: sd_ellipse(u, v, -1.6 * 0.065, 0.004, 0.04, 0.034),
+                         -2.4 * 0.065, -0.8 * 0.065, -0.036, 0.044), ('thigh_l', 'calf_l'), **edge)
+    for t in (-0.045, 0.05):
+        both(p, leather, ring_plate(knee, 0.065, t - 0.007, t + 0.007, 0.004), ('thigh_l', 'calf_l'), solid=0.0022)
+    return p
+
+
+def ashforged_feet():
+    """From the knee down, in place of the boots: tall boots of old leather with a steel greave strapped over each shin
+    and a toe cap."""
+    p = Piece('feet')
+    steel, mail, leather, wool = ash_mats()
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = dict(solid=0.0025, roll=0.0012)
+    p_boot = lambda u, v: 0.002 + 0.006 * smooth(0.12, 0.05, v)  # the leg of the boot, a fold at the top
+    both(p, leather, ring_plate(calf, 0.06, 0.05, 0.47, p_boot), ('calf_l',), solid=0.003, roll=0.0016,
+         forge=creased(0.0007))
+    shoe = ('foot_l', 'ball_l')
+    both(p, leather, ring_plate(foot, 0.045, -0.085, 0.25, 0.0), shoe, solid=0.0025, forge=creased(0.0006))
+    both(p, steel, band_plate(calf, 0.06, -1.35, 1.35, 0.06, 0.38, lambda u, v: 0.008 + 0.004 * beak(u, 0.045), 0.015), ('calf_l',), sharp=28,
+         bump=dents((calf.at(0.3, 0.22), 0.015, 0.002),), **edge)
+    for t in (0.12, 0.3):
+        both(p, leather, ring_plate(calf, 0.06, t - 0.008, t + 0.008, 0.0125), ('calf_l',), solid=0.0022)
+    both(p, steel, band_plate(foot, 0.045, -1.5, 1.5, 0.16, 0.25, 0.0035, 0.012), shoe, **edge)
+    return p
+
+
 # ---------------------------------------------------------------- finish: bake the dense model onto the light one
 
 TEX = 1024
 BUMP = {'steel': 0.25, 'blued': 0.25, 'black': 0.12, 'iron': 0.15, 'enamel': 0.2, 'brass': 0.2, 'gold': 0.2, 'bronze': 0.3,
-        'leather': 0.45, 'mail': 1.0, 'hair': 0.8}
+        'leather': 0.45, 'mail': 1.0, 'hair': 0.8, 'cloth': 0.5}
 
 
 def _rgb(hexc):
     c = [((hexc >> s_) & 255) / 255 for s_ in (16, 8, 0)]
     return [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c] + [1.0]
+
+
+def scale_tile(n=256, per=4):
+    """A tileable height map of overlapping scales, `per` to a row, each row lying over the one below and hanging down
+    past its own row: high on a scale's crown, falling to its rounded edge."""
+    name = f'scale_tile_{n}'
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    img = bpy.data.images.new(name, n, n, alpha=False, is_data=True)  # data, not colour: setting that later would wipe it
+    s_ = n / per
+    R = 0.76 * s_  # big enough that the rows leave no gaps
+    px = [0.0] * (n * n * 4)
+    for y in range(n):
+        jr = int(y / s_)
+        for x in range(n):
+            best, h = -10 ** 9, 0.0
+            for j in range(jr - 1, jr + 3):
+                off = (j % 2) * s_ / 2
+                for i in range(-1, per + 2):
+                    d = math.hypot(x - (i * s_ + off), y - j * s_)
+                    if d < R and j > best:  # the higher row lies over the lower
+                        best, h = j, 1.0 - (d / R) ** 2
+            k = (y * n + x) * 4
+            px[k] = px[k + 1] = px[k + 2] = clamp(h)
+            px[k + 3] = 1.0
+    img.pixels[:] = px
+    img.update()
+    img.pack()  # Cycles only sees an image made in memory once it is packed
+    return img
+
+
+def mail_tile(n=256, per=4):
+    """A tileable height map of mail, rings linked four to one: two lattices of rings half a ring apart, one lying over
+    the other; high on the wire, nothing in the holes."""
+    name = f'mail_tile_{n}'
+    if name in bpy.data.images:
+        return bpy.data.images[name]
+    img = bpy.data.images.new(name, n, n, alpha=False, is_data=True)
+    c = n / per
+    px = [0.0] * (n * n * 4)
+    for y in range(n):
+        for x in range(n):
+            h = 0.0
+            for off, lift in ((0.0, 0.0), (0.5, 0.15)):  # the second lattice lies over the first
+                fx, fy = (x / c + off) % 1.0 - 0.5, (y / c + off) % 1.0 - 0.5
+                r = math.hypot(fx, fy * 1.15)
+                wire = 1.0 - abs(r - 0.36) / 0.1
+                if wire > 0:
+                    h = max(h, wire ** 0.6 * 0.85 + lift) if lift else max(h, wire ** 0.6 * 0.85)
+            k = (y * n + x) * 4
+            px[k] = px[k + 1] = px[k + 2] = clamp(h)
+            px[k + 3] = 1.0
+    img.pixels[:] = px
+    img.update()
+    img.pack()
+    return img
 
 
 class NT:
@@ -1447,6 +2420,22 @@ class NT:
             out = ring if out is None else self.math('MAXIMUM', out, ring)
         return out
 
+    def scales(self, size=0.085):
+        """Overlapping scales (scale_tile, four to a tile `size` metres wide), projected on every side; 1 on a scale's
+        crown, 0 in the groove where the next row comes out."""
+        t = self.node('ShaderNodeTexImage', projection='BOX', projection_blend=0.3)
+        t.image = scale_tile()
+        self.L(self.mapped((1 / size, 1 / size, 1 / size)), t.inputs['Vector'])
+        return t.outputs['Color']
+
+    def mail(self, ring=0.0042):
+        """Mail (mail_tile, four rings to a tile), projected on every side: 1 on a ring's wire, 0 in its hole."""
+        t = self.node('ShaderNodeTexImage', projection='BOX', projection_blend=0.3)
+        t.image = mail_tile()
+        size = ring * 4 * 1.3
+        self.L(self.mapped((1 / size, 1 / size, 1 / size)), t.inputs['Vector'])
+        return t.outputs['Color']
+
     def strands(self):
         """Horsehair: fine strands across the crest, uneven."""
         return self.math('MULTIPLY', self.wave(260, 3.0, 3.0, 'Y', 'SIN'), self.rng(self.noise((60, 60, 300), 4), 0.3, 0.7, 0.6, 1.0))
@@ -1457,7 +2446,7 @@ def engraving(g, kind):
     if kind == 'waves':
         return g.rng(g.wave(70, 6, 2, 'Z', 'SIN'), 0.0, 0.12, 1.0, 0.0)
     if kind == 'scales':
-        return g.rng(g.voronoi((150, 150, 150), 'DISTANCE_TO_EDGE'), 0.0, 0.06, 1.0, 0.0)
+        return g.scales()
     if kind == 'vines':  # scrolling foliage
         return g.math('MAXIMUM', g.rng(g.wave(45, 12, 4, 'X', 'SIN'), 0.0, 0.14, 1.0, 0.0), g.rng(g.wave(45, 12, 4, 'Z', 'SIN'), 0.0, 0.14, 1.0, 0.0))
     if kind == 'lattice':
@@ -1491,7 +2480,10 @@ def height(g, m):
     elif kind == 'leather':
         h = g.math('ADD', g.noise((150, 150, 150), 8, 0.65), g.math('MULTIPLY', g.noise((18, 18, 18), 3), 0.6))
     elif kind == 'mail':
-        h = g.rings(m['ring'])
+        h = g.mail(m['ring'])
+    elif kind == 'cloth':  # woven wool, with soft folds
+        weave = g.math('MULTIPLY', g.wave(120, 0, 0, 'X', 'SIN'), g.wave(120, 0, 0, 'Z', 'SIN'))
+        h = g.math('ADD', g.math('MULTIPLY', weave, 0.4), g.noise((25, 25, 25), 3, 0.5))
     elif kind == 'hair':
         h = g.strands()
     e = engraving(g, m['engrave']) if m['engrave'] else None
@@ -1519,6 +2511,7 @@ def look(g, m):
             c = g.mix(c, _rgb(0x3a2a52), g.rng(g.noise((6, 6, 6), 2), 0.4, 0.7, 0.0, 0.35))  # the bluing's purple sheen
         if kind in ('black', 'iron'):
             c = g.mix(c, dark, g.rng(g.voronoi((40, 40, 40)), 0.0, 0.7, 0.4, 0.0))  # hammer marks
+            c = g.mix(c, _rgb(0x5a3a22), g.rng(g.noise((30, 30, 30), 5, 0.6), 0.62, 0.78, 0.0, 0.35))  # rust here and there
         if kind == 'brass':
             c = g.mix(c, _rgb(0x4a5a30), g.rng(g.noise((40, 40, 40), 3), 0.62, 0.75, 0.0, 0.2))  # verdigris in spots
         if kind == 'bronze':  # the patina: green in the hollows and in patches, the bronze showing where it is handled
@@ -1531,7 +2524,10 @@ def look(g, m):
         c = g.mix(c, dark, g.rng(g.noise((150, 150, 150), 8, 0.65), 0.35, 0.7, 0.35, 0.0))
         c = g.mix(c, light, g.rng(g.noise((18, 18, 18), 3), 0.55, 0.75, 0.0, 0.22))
     elif kind == 'mail':
-        c = g.mix([0.03, 0.03, 0.035, 1.0], c, g.rings(m['ring']))  # the dark between the rings
+        c = g.mix([0.03, 0.03, 0.035, 1.0], c, g.rng(g.mail(m['ring']), 0.05, 0.4, 0.0, 1.0))  # the dark between the rings
+    elif kind == 'cloth':
+        c = g.mix(c, dark, g.rng(g.noise((25, 25, 25), 3, 0.5), 0.35, 0.7, 0.0, 0.5))
+        c = g.mix(c, light, g.rng(g.noise((90, 90, 90), 4), 0.6, 0.8, 0.0, 0.15))
     elif kind == 'hair':
         c = g.mix([x * 0.3 for x in base[:3]] + [1.0], light, g.math('POWER', g.strands(), 1.5))
     e = engraving(g, m['engrave']) if m['engrave'] else None
@@ -1540,8 +2536,8 @@ def look(g, m):
         if m['engrave'] == 'stitch':
             c = g.mix(c, [x * 0.35 for x in base[:3]] + [1.0], g.math('MULTIPLY', e, band))
         elif m['emboss']:  # raised and polished, the ground between sunk and dark
-            c = g.mix(c, [x * 0.6 for x in base[:3]] + [1.0], g.math('MULTIPLY', band, g.math('SUBTRACT', 1.0, e)))
-            c = g.mix(c, light, g.math('MULTIPLY', g.math('MULTIPLY', e, band), 0.45))
+            c = g.mix(c, [x * 0.32 for x in base[:3]] + [1.0], g.math('MULTIPLY', band, g.rng(e, 0.0, 0.45, 1.0, 0.0)))
+            c = g.mix(c, light, g.math('MULTIPLY', g.math('MULTIPLY', e, band), 0.5))
         else:
             if m['engrave_rgb'] >= 0:  # gilt: the band gilded, the pattern etched dark into the gilding
                 gc = _rgb(m['engrave_rgb'])
@@ -1577,9 +2573,18 @@ def select(*objs, active=None):
     bpy.context.view_layer.objects.active = active or objs[-1]
 
 
+def shine_of(m):
+    """How much a material shines, 0..1 (it goes in the colour map's alpha; the client scales the highlight by it)."""
+    if m['kind'] in METAL or m['kind'] == 'mail':
+        return clamp(0.35 + 0.65 * (1 - m['rough']))
+    return {'enamel': 0.45, 'inner': 0.08}.get(m['kind'], 0.12)
+
+
 def finish(hi, lo, name):
-    """Bake the dense model's colour and relief onto the light one (unwrapped with the insides and the plain parts left
-    out) and give it the game's materials, carrying what each is made of for the client."""
+    """Bake the dense model's colour and relief onto the light one and give it one material, so the game draws each
+    piece in one go: the unwrapped parts fill the maps but for a band along the top, where every flat-coloured part
+    (insides, rivets, plain edges) gets a patch of its colour, and how much each part shines goes in the colour map's
+    alpha. What the piece is mostly made of rides along for the client."""
     sc = bpy.context.scene
     select(hi)
     bev = hi.modifiers.new('bevel', 'BEVEL')
@@ -1599,13 +2604,14 @@ def finish(hi, lo, name):
     bpy.ops.uv.smart_project(angle_limit=math.radians(55), island_margin=0.004)
     bpy.ops.object.mode_set(mode='OBJECT')
     uv = lo.data.uv_layers.active.data
+    patch = {i: ((k + 0.5) / 32, 0.985) for k, i in enumerate(skip)}
     for poly in lo.data.polygons:
-        if poly.material_index in skip:
-            for li in poly.loop_indices:
-                uv[li].uv = (0.0005, 0.0005)
-    col_img = bpy.data.images.new(f'{name}_color', TEX, TEX, alpha=False)
-    nor_img = bpy.data.images.new(f'{name}_normal', TEX, TEX, alpha=False)
-    nor_img.colorspace_settings.name = 'Non-Color'
+        for li in poly.loop_indices:
+            uv[li].uv = patch[poly.material_index] if poly.material_index in skip else (uv[li].uv[0], uv[li].uv[1] * 0.965)
+    size = 2048 if name == 'chest' else TEX  # the cuirass is most of the armour's surface
+    col_img = bpy.data.images.new(f'{name}_color', size, size, alpha=True)
+    nor_img = bpy.data.images.new(f'{name}_normal', size, size, alpha=False, is_data=True)
+    shine_img = bpy.data.images.new(f'{name}_shine', size, size, alpha=False, is_data=True)
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'CPU'
     sc.cycles.samples = 24
@@ -1627,7 +2633,8 @@ def finish(hi, lo, name):
         bsdf = g.node('ShaderNodeBsdfDiffuse')
         h = height(g, m)
         if h is not None:
-            bump = g.node('ShaderNodeBump', in_Strength=BUMP.get(m['kind'], 0.3), in_Distance=0.003)
+            strength = m.get('bump', -1.0) if m.get('bump', -1.0) >= 0 else BUMP.get(m['kind'], 0.3)
+            bump = g.node('ShaderNodeBump', in_Strength=strength, in_Distance=0.003)
             g.L(h, bump.inputs['Height'])
             g.L(bump.outputs['Normal'], bsdf.inputs['Normal'])
         return bsdf.outputs['BSDF']
@@ -1637,40 +2644,69 @@ def finish(hi, lo, name):
         g.L(look(g, m), em.inputs['Color'])
         return em.outputs['Emission']
 
-    bake = dict(use_selected_to_active=True, cage_extrusion=0.003, max_ray_distance=0.02, margin=6)
+    def shine(g, m):
+        em = g.node('ShaderNodeEmission')
+        v = shine_of(m)
+        em.inputs['Color'].default_value = (v, v, v, 1.0)
+        return em.outputs['Emission']
+
+    # short rays: plates overlap a few millimetres apart, and a long ray from one finds the next
+    bake = dict(use_selected_to_active=True, cage_extrusion=0.002, max_ray_distance=0.005, margin=6)
     prep(nor_img, relief)
     select(hi, lo, active=lo)
     bpy.ops.object.bake(type='NORMAL', normal_space='TANGENT', **bake)
     prep(col_img, colour)
     bpy.ops.object.bake(type='EMIT', **bake)
+    prep(shine_img, shine)
+    bpy.ops.object.bake(type='EMIT', **bake)
+    # the patches of flat colour (sRGB, as the colour map stores it), flat relief, and the shine in the colour's alpha
+    import numpy as np
+    px = {}
+    for key, img in (('col', col_img), ('nor', nor_img), ('shine', shine_img)):
+        a = np.empty(size * size * 4, dtype=np.float32)
+        img.pixels.foreach_get(a)
+        px[key] = a.reshape(size, size, 4)
+    top = int(0.97 * size)
+    for k, i in enumerate(skip):
+        m, x0, x1 = olds[i], int(k / 32 * size), int((k + 1) / 32 * size)
+        px['col'][top:, x0:x1, :3] = [((m['rgb'] >> s_) & 255) / 255 for s_ in (16, 8, 0)]
+        px['nor'][top:, x0:x1, :3] = (0.5, 0.5, 1.0)
+        px['shine'][top:, x0:x1, 0] = shine_of(m)
+    px['col'][:, :, 3] = px['shine'][:, :, 0]
+    col_img.pixels.foreach_set(px['col'].ravel())
+    nor_img.pixels.foreach_set(px['nor'].ravel())
     if PREVIEW:  # keep the maps to look at
         for img in (col_img, nor_img):
             img.filepath_raw = os.path.join(PREVIEW, f'{img.name}.png')
             img.file_format = 'PNG'
             img.save()
     bpy.data.objects.remove(hi)
-    for i, m in enumerate(olds):
-        f = bpy.data.materials.new(m.name + '_baked')
-        f.use_nodes = True
-        for k in ('kind', 'rgb', 'rough', 'metal'):
-            f[k] = m[k]
-        nt = f.node_tree
-        bsdf = nt.nodes['Principled BSDF']
-        bsdf.inputs['Roughness'].default_value = m['rough']
-        bsdf.inputs['Metallic'].default_value = m['metal']
-        if i in skip:
-            bsdf.inputs['Base Color'].default_value = _rgb(m['rgb'])
-        else:
-            tn = nt.nodes.new('ShaderNodeTexImage')
-            tn.image = nor_img
-            nm = nt.nodes.new('ShaderNodeNormalMap')
-            nt.links.new(tn.outputs['Color'], nm.inputs['Color'])
-            nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
-            tc = nt.nodes.new('ShaderNodeTexImage')
-            tc.image = col_img
-            nt.links.new(tc.outputs['Color'], bsdf.inputs['Base Color'])
-            nt.nodes.active = tc
-        lo.data.materials[i] = f
+    counts = [0] * len(olds)
+    for poly in lo.data.polygons:
+        counts[poly.material_index] += 1
+    main = max((i for i in range(len(olds)) if i not in skip), key=lambda i: counts[i], default=0)
+    f = bpy.data.materials.new(name + '_baked')
+    f.use_nodes = True
+    for k in ('kind', 'rgb', 'rough', 'metal'):
+        f[k] = olds[main][k]
+    f['shine'] = 1  # the colour map's alpha says how much each part shines
+    nt = f.node_tree
+    bsdf = nt.nodes['Principled BSDF']
+    bsdf.inputs['Roughness'].default_value = olds[main]['rough']
+    bsdf.inputs['Metallic'].default_value = olds[main]['metal']
+    tn = nt.nodes.new('ShaderNodeTexImage')
+    tn.image = nor_img
+    nm = nt.nodes.new('ShaderNodeNormalMap')
+    nt.links.new(tn.outputs['Color'], nm.inputs['Color'])
+    nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
+    tc = nt.nodes.new('ShaderNodeTexImage')
+    tc.image = col_img
+    nt.links.new(tc.outputs['Color'], bsdf.inputs['Base Color'])
+    nt.nodes.active = tc
+    lo.data.materials.clear()
+    lo.data.materials.append(f)
+    for poly in lo.data.polygons:
+        poly.material_index = 0
     return lo
 
 
@@ -1747,9 +2783,9 @@ def preview(ob, set_id):
 
 SETS = {
     'apprentice': {'helm': apprentice_helm},
-    'abyssal': {'helm': abyssal_helm},
-    'ashforged': {'helm': ashforged_helm},
-    'dragon': {'helm': dragon_helm},
+    'abyssal': {'helm': abyssal_helm, 'chest': abyssal_chest, 'gloves': abyssal_gloves, 'legs': abyssal_legs, 'feet': abyssal_feet},
+    'ashforged': {'helm': ashforged_helm, 'chest': ashforged_chest, 'gloves': ashforged_gloves, 'legs': ashforged_legs, 'feet': ashforged_feet},
+    'dragon': {'helm': dragon_helm, 'chest': dragon_chest, 'gloves': dragon_gloves, 'legs': dragon_legs, 'feet': dragon_feet},
     'glacial': {'helm': glacial_helm},
     'emerald': {'helm': emerald_helm},
     'infernal': {'helm': infernal_helm},
@@ -1766,28 +2802,38 @@ def run(set_id, pieces):
     _mats.clear()
     objs = []
     for name, fn in pieces.items():
+        if PART and name not in PART.split(','):
+            continue
         RES = 1.0
-        hi = fn().build()
+        piece = fn()
+        hi = piece.build()
         dense = tris(hi)
         if FAST:
             ob = hi
         else:
             RES = LIGHT
-            lo = fn().build()
+            piece = fn()
+            lo = piece.build()
             RES = 1.0
             ob = finish(hi, lo, name)
+        if any(piece.rules[1:]):
+            skin_weights(ob, piece.rules)
         objs.append(ob)
         print(f'[gear] {set_id}.{name}: {dense} tris dense, {tris(ob)} for the game')
     if PREVIEW:
         os.makedirs(PREVIEW, exist_ok=True)
-        preview(objs[0], set_id)
+        heads = [o for o in objs if o.name.startswith('helm')]
+        if heads:
+            preview(heads[0], set_id)
+        if len(heads) < len(objs):
+            preview_body([o for o in objs if o not in heads], set_id)
         return
     select(*objs)
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, f'{set_id}.glb')
     bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_yup=True, export_apply=True,
                               export_texcoords=True, export_normals=True, export_materials='EXPORT', export_image_format='WEBP',
-                              export_extras=True)
+                              export_extras=True, export_attributes=True, export_vertex_color='NONE')
     print(f'[gear] {set_id}: {", ".join(pieces)} -> {path} ({os.path.getsize(path) // 1024} KB)')
 
 

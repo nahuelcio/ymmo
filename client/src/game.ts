@@ -378,6 +378,8 @@ export class Game {
     addEventListener('resize', () => this.resize());
     addEventListener('focus', () => (this.focused = true));
     addEventListener('blur', () => (this.focused = false));
+    // an armour set came in: players drawn without its pieces get them
+    addEventListener('gear-loaded', () => this.ents.forEach((c) => this.remodel(c)));
     this.applySettings(settings.s, Object.keys(settings.s) as (keyof Settings)[]);
     settings.on((s, changed) => this.applySettings(s, changed));
     this.ui.onMe();
@@ -875,6 +877,25 @@ export class Game {
     c.hpFill.className = this.isHostile(c) || c.rec.k === 'm' ? 'hp-foe' : 'hp-friend';
     const bar = c.hpFill.parentElement!;
     bar.style.display = (c.hp < 100 || c.id === this.targetId) && !(c.flags & F_DEAD) ? 'block' : 'none';
+  }
+
+  /** A player's model again, in place (an armour set it wears came in: render/quaternius.ts loads them when first worn). */
+  private remodel(c: CEnt) {
+    const r = c.rec;
+    if (r.k !== 'p' || !c.rig) return;
+    const rig = playerModel(r.race, r.cls, r.w, r.a, r.lk, r.eq ?? [], r.we ?? 0);
+    rimLit(rig.root);
+    const skels = new Set<THREE.Skeleton>();
+    rig.root.traverse((o) => o instanceof THREE.SkinnedMesh && skels.add(o.skeleton));
+    for (const sk of skels) {
+      const update = sk.update.bind(sk);
+      sk.update = () => c.root.matrixWorldAutoUpdate && update();
+    }
+    c.root.remove(c.model);
+    c.rig.dispose?.();
+    c.root.add(rig.root);
+    c.rig = rig;
+    c.model = rig.root;
   }
 
   private buildEnt(r: EntAdd): CEnt {
