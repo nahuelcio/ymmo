@@ -10,7 +10,7 @@ const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
+import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
 import { isTouchDevice } from './touch';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
@@ -19,10 +19,10 @@ const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
 /** the item whose icon outlines each empty equipment slot */
 /** Where each slot sits on the doll: [column, row] - what is worn down the left, what is held and the jewels down the right */
 const DOLL_AT: Record<Slot, [number, number]> = {
-  head: [1, 1], chest: [1, 2], legs: [1, 3], feet: [1, 4], amulet: [1, 5],
+  head: [1, 1], chest: [1, 2], cape: [1, 3], legs: [1, 4], feet: [1, 5], amulet: [1, 6],
   weapon: [3, 1], shield: [3, 2], gloves: [3, 3], earring: [3, 4], ring: [3, 5],
 };
-const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', shield: 'brigandine_shield', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
+const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', shield: 'brigandine_shield', chest: 'full_plate_armor', cape: 'knight_cape', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
 
 export class InventoryPanel {
   win: Win;
@@ -155,6 +155,8 @@ export class InventoryPanel {
     }).filter(Boolean);
     const db = Math.round((blockPct(d, it.e) - (c ? blockPct(c, worn?.e) : 0)) * 10) / 10;
     if (db) rows.push(`<span class="${db > 0 ? 'tt-up' : 'tt-down'}">${tx('Bloqueo', 'Block')} ${db > 0 ? '+' : ''}${db}%</span>`);
+    const ds = Math.round((speedPct(d) - (c ? speedPct(c) : 0)) * 10) / 10;
+    if (ds) rows.push(`<span class="${ds > 0 ? 'tt-up' : 'tt-down'}">${tx('Velocidad', 'Speed')} ${ds > 0 ? '+' : ''}${ds}%</span>`);
     const head = c ? `${tx('Contra lo equipado', 'Against equipped')}: ${esc(itemName(c.id, lang))}` : tx('No tenés nada equipado en ese lugar', 'Nothing equipped in that slot');
     return `<div class="tt-cmp"><span class="tt-dim">${head}</span><br>${rows.join(' &nbsp; ') || tx('Mismas estadísticas', 'Same stats')}</div>`;
   }

@@ -59,6 +59,8 @@ pub struct ItemDef {
     pub cdr: Option<f64>,
     /** a shield's chance to catch a physical hit (which then does half its damage) */
     pub block: Option<f64>,
+    /** how much faster its wearer runs, a fraction (a cape's: 0.03 is 3%) */
+    pub speed: Option<f64>,
     /** a weapon held in both hands: no shield with it */
     pub two_handed: Option<bool>,
     pub price: i64,

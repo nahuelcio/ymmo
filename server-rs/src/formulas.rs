@@ -78,7 +78,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let ench = &d().enchant;
     let lm = level_mod(level);
     let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    let mut block = 0.0;
+    let (mut block, mut run) = (0.0, 0.0);
     let (mut mw_atk, mut mw_cast) = (0.0, 0.0);
     for &(it, e, mw) in equipped {
         let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
@@ -95,6 +95,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         hp_bonus += ib("hp", it.hp);
         mp_bonus += ib("mp", it.mp);
         cdr_sum += ib("cdr", it.cdr);
+        run += ib("speed", it.speed); // a cape's quicker stride: enchanting adds to its defences, not to this
         if mw {
             let (a, c, cd) = masterwork_bonus(race, cls, it.kind == "weapon");
             mw_atk += a;
@@ -127,7 +128,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit,
         atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk))),
         cast_mul: 1.0 / (r.cast_spd * (1.0 + mw_cast)),
-        speed: BASE_SPEED * r.speed * bs,
+        speed: BASE_SPEED * r.speed * bs * (1.0 + run.min(0.1)),
         hp_regen: max_hp * 0.008 + 0.5,
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
         cp_regen: max_cp * 0.03,
@@ -226,6 +227,30 @@ mod tests {
             assert_eq!(it(w).two_handed, Some(true), "{w}");
         }
         for w in ["apprentice_wand", "short_sword", "infernal_blade", "dagger", "iron_hammer", "hand_axe"] { assert!(it(w).two_handed.is_none(), "{w}"); }
+    }
+
+    #[test]
+    fn capes_guard_a_little_and_quicken_the_stride() {
+        let data = d();
+        let it = |id: &str| data.item(id).unwrap();
+        let stats = |eq: &[(&ItemDef, i64, bool)]| compute_stats("human", "fighter", 20, eq, &[], "m");
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        let bare = stats(&[]);
+        for (p, g, sp) in [("abyssal", "D", 0.025), ("ashforged", "D", 0.025), ("dragon", "C", 0.03), ("glacial", "B", 0.035), ("emerald", "A", 0.04), ("infernal", "S", 0.05)] {
+            let cape = it(&format!("{p}_cape"));
+            assert_eq!(cape.slot.as_deref(), Some("cape"), "{p}");
+            assert_eq!(cape.grade.as_deref(), Some(g), "{p}");
+            assert!(near(cape.speed.unwrap(), sp), "{p}");
+            let worn = stats(&[(cape, 0, false)]);
+            assert!(near(worn.speed, bare.speed * (1.0 + sp)), "{p}");
+            assert!(worn.p_def > bare.p_def && worn.m_def > bare.m_def, "{p}");
+            // enchanting adds to its defences, not to its speed
+            let plus = stats(&[(cape, 6, false)]);
+            assert!(near(plus.speed, worn.speed) && plus.p_def > worn.p_def, "{p}");
+        }
+        for (id, sp) in [("wool_cape", 0.015), ("hunter_cape", 0.02), ("knight_cape", 0.025)] {
+            assert!(near(stats(&[(it(id), 0, false)]).speed, bare.speed * (1.0 + sp)), "{id}");
+        }
     }
 
     #[test]

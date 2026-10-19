@@ -55,7 +55,17 @@ const SHIELDS: Record<string, string> = {
   wooden_buckler: 'buckler', brigandine_shield: 'brigandine', full_plate_shield: 'plate', abyssal_shield: 'abyssal', ashforged_shield: 'ashforged',
   dragon_shield: 'dragon', glacial_shield: 'glacial', emerald_shield: 'emerald', infernal_shield: 'infernal',
 };
-type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | MageFile;
+/**
+ * Each cape is a file of its own (q/gear/cape_<key>.glb): its node, 'cape', skinned to a grid of points of its own
+ * (`cape_<row>_<column>`), whose places in the male bind pose come in the node's extras (`cape_grid`). The rig has no
+ * such bones: the client makes one for each point and simulates the grid as cloth each frame (capeCloth), its top row
+ * pinned to the upper spine.
+ */
+const CAPES: Record<string, string> = {
+  wool_cape: 'wool', hunter_cape: 'hunter', knight_cape: 'knight', abyssal_cape: 'abyssal', ashforged_cape: 'ashforged', dragon_cape: 'dragon',
+  glacial_cape: 'glacial', emerald_cape: 'emerald', infernal_cape: 'infernal',
+};
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile;
 /** A region set's mage gear, a file a set (q/gear/mage_<set>.glb): `robe`, `circlet`, `gloves` and `feet`. */
 type MageFile = `mage_${string}`;
 const gear: Partial<Record<GearFile, THREE.Object3D>> = {};
@@ -111,13 +121,20 @@ export function shieldPiece(id: string): THREE.Object3D | undefined {
   const key = SHIELDS[id];
   return (key && wantGear(`shield_${key}`)?.getObjectByName('shield')) || undefined;
 }
+/** A cape's model, when it has one (capePiece -> QOpts.cape): its node, with its cloth's grid in its extras. */
+export function capePiece(id: string): THREE.Object3D | undefined {
+  const key = CAPES[id];
+  return (key && wantGear(`cape_${key}`)?.getObjectByName('cape')) || undefined;
+}
 /** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
- * a skin in our joint order. */
+ * a skin in our joint order (a cape's own bones after the rig's 65). */
 function toSkin(m: THREE.Mesh) {
   const g = m.geometry, j = g.getAttribute('_joints'), w = g.getAttribute('_weights');
   const names = (m.userData.joints ?? m.parent?.userData.joints) as string[] | undefined;
   if (!j || !w || !names) return;
-  const map = names.map((n) => Math.max(0, joints.indexOf(n)));
+  const grid = (m.userData.cape_grid ?? m.parent?.userData.cape_grid) as number[] | undefined;
+  const all = grid ? joints.concat(Array.from({ length: grid[0] * grid[1] }, (_, i) => `cape_${Math.floor(i / grid[1])}_${i % grid[1]}`)) : joints;
+  const map = names.map((n) => Math.max(0, all.indexOf(n)));
   const idx = new Uint16Array(j.count * 4), wt = new Float32Array(j.count * 4);
   for (let i = 0; i < j.count; i++) {
     for (let k = 0; k < 4; k++) {
@@ -259,6 +276,7 @@ function wantGear(s: GearFile): THREE.Object3D | undefined {
       m.material = mat;
       m.castShadow = true;
       toSkin(m);
+      if (m.name === 'chest' || m.name === 'robe') m.userData.back = backOf(m.geometry);
     });
     gear[s] = g.scene;
     dispatchEvent(new CustomEvent('gear-loaded', { detail: s }));
@@ -426,6 +444,8 @@ export interface QOpts {
   helm?: Helm;
   /** body pieces of the armour sets (armorPiece), worn over the cloth */
   armor?: THREE.Object3D[];
+  /** a cape (capePiece): its node, skinned to a grid of points animateQ simulates as cloth */
+  cape?: THREE.Object3D;
   /** no boots: a set's own feet piece (greaves and sabatons) takes their place */
   bareFeet?: boolean;
   /** no cloth on the trunk and arms, or on the legs: a set's armour covers them, over the bare body dyed `suit` */
@@ -439,6 +459,171 @@ export interface QAnim {
   /** knees and ankles with their straight rest pose, and how far a floor sit has straightened them (0..1) */
   legs: { bone: THREE.Object3D; rest: THREE.Quaternion }[];
   floor: number;
+  /** a cape's cloth, as capeCloth moves it */
+  cape?: QCape;
+}
+
+/** How far behind the body a chest piece or robe stands (z, the male bind pose) over the shoulder blades and at the
+ * knee: a cape is fitted clear of most, and pushed back off the few that stand out further (a hood, a fur pelt) or
+ * swung back off a skirt that does (a fur hem). A dragon's wings hold it up instead (qPlayer). */
+function backOf(g: THREE.BufferGeometry) {
+  const p = g.getAttribute('position');
+  let top = 0, low = 0;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i), x = Math.abs(p.getX(i));
+    if (y > 1.36 && y < 1.56 && x < 0.14) top = Math.min(top, p.getZ(i));
+    else if (y > 0.55 && y < 0.75 && x < 0.2) low = Math.min(low, p.getZ(i));
+  }
+  return { top, low };
+}
+/** A cape's cloth as capeCloth simulates it: its grid of points (rows down from the pinned top row, columns across),
+ * their bones and bind places, where they are in the world now and a step ago, what holds them together and what of
+ * the body they bump into. */
+interface QCape {
+  root: THREE.Object3D; body: THREE.Object3D; spine: THREE.Object3D;
+  rows: number; cols: number; bones: THREE.Bone[];
+  /** each point's place and the cloth's turn there in the bind pose (the turn transposed, to take it off) */
+  bind: THREE.Vector3[]; frame0: THREE.Matrix4[];
+  /** each point where it hangs at rest, in spine_03's own space (where it starts) */
+  home: THREE.Vector3[];
+  /** the top row's pins: for each, the bones it follows, where it is in each one's own space, and how much (as the
+   * armour over the shoulder blades follows them: the spine and, out to the side, its collarbone; hung from a pair of
+   * wings, the spine they are on) */
+  pins: [THREE.Object3D, THREE.Vector3, number][][];
+  pos: THREE.Vector3[]; prev: THREE.Vector3[];
+  /** the points in the body's own space, worked out each frame for their bones */
+  local: THREE.Vector3[];
+  /** pairs of points and how far apart they are in the bind pose (model metres) */
+  links: [number, number, number][];
+  /** what the cloth may not pass through: capsules between two bones (one for a sphere), their radius in model metres */
+  hit: [THREE.Object3D, THREE.Object3D, number][];
+  /** for each point, the vertices of the armour or robe worn under it that stand out furthest behind round it: the
+   * cloth is kept behind them as they are posed (each frame where they are, skinned), so nothing worn comes through
+   * it, whatever the race, the body or the move */
+  anchors: [THREE.SkinnedMesh, number][][];
+  /** spine_03's turn in the male bind pose, taken off its turn now: how the back has turned since (its outward way) */
+  spineRest: THREE.Quaternion;
+  last: THREE.Vector3 | null; started: boolean;
+}
+const _m = new THREE.Matrix4(), _b = new THREE.Matrix4(), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _a = new THREE.Vector3(),
+  _c = new THREE.Vector3(), _d = new THREE.Vector3(), _y = new THREE.Vector3(), _p = new THREE.Vector3(), _air = new THREE.Vector3(), _air2 = new THREE.Vector3(),
+  _up = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+/** the cloth's turn at a point of the grid, from its neighbours: across the cape, and up it */
+function clothFrame(L: THREE.Vector3[], rows: number, cols: number, i: number, out: THREE.Matrix4) {
+  const r = Math.floor(i / cols), c = i % cols;
+  _a.subVectors(L[r * cols + Math.min(cols - 1, c + 1)], L[r * cols + Math.max(0, c - 1)]).normalize();
+  _y.subVectors(L[Math.max(0, r - 1) * cols + c], L[Math.min(rows - 1, r + 1) * cols + c]);
+  _y.addScaledVector(_a, -_y.dot(_a)).normalize();
+  _c.crossVectors(_a, _y);
+  return out.makeBasis(_a, _y, _c);
+}
+/**
+ * A cape's cloth, after the clip has posed the body: its top row pinned over the shoulder blades, the rest falling
+ * under gravity and dragged by the air - running, its hem streams out behind, where the legs cannot reach it; standing
+ * a breeze stirs it; on a turn it swings out; sitting or fallen it drapes over the body and lies on the ground. The
+ * points keep their distances (a few rounds of relaxing each link), and are pushed out of the back, the hips and the
+ * legs, then each one's bone takes its place and the cloth's turn there.
+ */
+function capeCloth(c: QCape, s: AnimState, dt: number) {
+  if (dt <= 0) return;
+  c.root.updateWorldMatrix(true, true);
+  const bodyW = c.body.matrixWorld, spineW = c.spine.matrixWorld;
+  const scale = (_v.setFromMatrixColumn(bodyW, 0).length() + _v.setFromMatrixColumn(bodyW, 1).length()) / 2;
+  const n = c.pos.length, cols = c.cols;
+  const rootPos = c.root.getWorldPosition(_w);
+  // first frame, or a jump (a teleport, a world change): every point straight to where it hangs
+  if (!c.started || (c.last && c.last.distanceTo(rootPos) > 3)) {
+    for (let i = 0; i < n; i++) {
+      c.pos[i].copy(c.home[i]).applyMatrix4(spineW);
+      c.prev[i].copy(c.pos[i]);
+    }
+    c.started = true;
+  }
+  const speed = c.last ? c.last.distanceTo(rootPos) / dt : 0;
+  c.last = (c.last ?? new THREE.Vector3()).copy(rootPos);
+  // the air: still, but for a breeze standing; running in place (the gallery) it blows back as running would
+  c.root.getWorldQuaternion(_q);
+  const fwd = _d.set(0, 0, 1).applyQuaternion(_q).setY(0).normalize();
+  const side = _p.set(fwd.z, 0, -fwd.x);
+  const air = _air.set(0, 0, 0);
+  if (s.moving && speed < 1.5 && s.deadAge < 0) air.addScaledVector(fwd, -3.6 * scale);
+  if (s.moving || speed > 1.5) air.addScaledVector(side, 0.9 * scale * Math.sin(s.t * 7.1)).y += 0.7 * scale * Math.sin(s.t * 5.3); // flutter
+  air.addScaledVector(fwd, -0.5 * scale).addScaledVector(side, 0.45 * scale * Math.sin(s.t * 0.9) + 0.25 * scale * Math.sin(s.t * 2.3));
+  const ground = rootPos.y + 0.02 * scale;
+  // the back's outward way now, and where the armour under each point is
+  const out = _air2.set(0, 0, -1).applyQuaternion(c.spine.getWorldQuaternion(_q2).multiply(c.spineRest)).normalize();
+  const under = c.anchors.map((list) => list.map(([m, k]) => m.getVertexPosition(k, new THREE.Vector3()).applyMatrix4(m.matrixWorld)));
+  const clear = 0.018 * scale; // the points lie on the cloth's middle: its folds dip a centimetre nearer, and it has a thickness
+  // the back's upward way: however the body whips round (a sword swing), the cloth never rises over the shoulders
+  const up = _up.set(0, 1, 0).applyQuaternion(_q2).normalize();
+  const vmax = 9 * scale; // nor moves faster than this (m/s): a pose snapping (a swing begun again) must not fling it
+  const steps = Math.min(6, Math.max(1, Math.ceil(dt * 90))), h = dt / steps;
+  const g = 9.8 * scale, drag = 2.4;
+  for (let k = 0; k < steps; k++) {
+    for (let i = 0; i < cols; i++) { // the pinned row, where the bones it follows put it
+      c.pos[i].set(0, 0, 0);
+      for (const [b, at, w] of c.pins[i]) c.pos[i].addScaledVector(_v.copy(at).applyMatrix4(b.matrixWorld), w);
+      c.prev[i].copy(c.pos[i]);
+    }
+    for (let i = cols; i < n; i++) {
+      const p = c.pos[i], q = c.prev[i];
+      let vx = (p.x - q.x) / h, vy = (p.y - q.y) / h, vz = (p.z - q.z) / h;
+      const sp = Math.hypot(vx, vy, vz);
+      if (sp > vmax) [vx, vy, vz] = [(vx * vmax) / sp, (vy * vmax) / sp, (vz * vmax) / sp];
+      const ax = drag * (air.x - vx), ay = drag * (air.y - vy) - g, az = drag * (air.z - vz);
+      q.copy(p);
+      p.set(p.x + vx * h * 0.995 + ax * h * h, p.y + vy * h * 0.995 + ay * h * h, p.z + vz * h * 0.995 + az * h * h);
+    }
+    for (let it = 0; it < 5; it++) {
+      for (const [i, j, rest] of c.links) {
+        const pi = c.pos[i], pj = c.pos[j];
+        _a.subVectors(pj, pi);
+        const d = _a.length();
+        if (d < 1e-9) continue;
+        const wi = i < cols ? 0 : 1, wj = j < cols ? 0 : 1;
+        if (!wi && !wj) continue;
+        const f = (d - rest * scale) / d / (wi + wj);
+        if (wi) pi.addScaledVector(_a, f * wi);
+        if (wj) pj.addScaledVector(_a, -f * wj);
+      }
+      for (let i = cols; i < n; i++) {
+        const p = c.pos[i];
+        for (const [b0, b1, r] of c.hit) {
+          const a0 = b0.getWorldPosition(_c), a1 = b1 === b0 ? a0 : b1.getWorldPosition(_y);
+          _a.subVectors(a1, a0);
+          const len2 = _a.lengthSq();
+          const t = len2 > 1e-9 ? THREE.MathUtils.clamp(_v.subVectors(p, a0).dot(_a) / len2, 0, 1) : 0;
+          _v.copy(a0).addScaledVector(_a, t);
+          _w.subVectors(p, _v);
+          const d = _w.length(), rr = r * scale;
+          if (d < rr) p.copy(_v).addScaledVector(d > 1e-6 ? _w.divideScalar(d) : _w.copy(fwd).negate(), rr);
+        }
+        if (p.y < ground) p.y = ground;
+      }
+      _c.set(0, 0, 0);
+      for (let i = 0; i < cols; i++) _c.add(c.pos[i]);
+      _c.divideScalar(cols);
+      for (let i = cols; i < n; i++) { // no higher than a little over the pinned row
+        const over = _w.subVectors(c.pos[i], _c).dot(up) - 0.05 * scale;
+        if (over > 0) c.pos[i].addScaledVector(up, -over);
+      }
+      for (let i = 0; i < n; i++) { // behind what is worn under the cloth (the pinned row too)
+        const p = c.pos[i];
+        for (const a of under[i]) {
+          const d = _w.subVectors(p, a).dot(out);
+          if (d < clear) p.addScaledVector(out, Math.min(clear - d, 0.04 * scale)); // a little at a time: never flung
+        }
+      }
+    }
+  }
+  // each point's bone: its place in the body's own space, and the cloth's turn there against the bind pose
+  _m.copy(bodyW).invert();
+  const L = c.local;
+  for (let i = 0; i < n; i++) L[i].copy(c.pos[i]).applyMatrix4(_m);
+  for (let i = 0; i < n; i++) {
+    clothFrame(L, c.rows, cols, i, _b);
+    c.bones[i].matrix.multiplyMatrices(_b, c.frame0[i]).setPosition(L[i]);
+  }
 }
 
 /** Hangs `o` from a bone keeping the orientation it was modelled in (bones have arbitrary axes). */
@@ -461,6 +646,7 @@ export function qPlayer(o: QOpts): Rig {
   arm.traverse((b) => (byName[b.name] = b));
   const bones = joints.map((n) => byName[n] as THREE.Bone);
   const skeletons = new Map<number, THREE.Skeleton>();
+  const worn: THREE.SkinnedMesh[] = []; // everything worn on the body (the kit's cloth, the armour): what a cape hangs over
   const add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean]) => {
     for (const p of prims.get(file) ?? []) {
       let sk = skeletons.get(p.fam);
@@ -472,6 +658,7 @@ export function qPlayer(o: QOpts): Rig {
       m.castShadow = true;
       m.frustumCulled = false; // the bounding sphere is the bind pose's; the game culls whole entities itself
       body.add(m);
+      if (!/^(Head_|Hair_)/.test(file)) worn.push(m);
     }
   };
   const S = SEX[o.g];
@@ -500,7 +687,8 @@ export function qPlayer(o: QOpts): Rig {
     const sk = new THREE.Skeleton(bones, restInv);
     skeletons.set(-1, sk);
     for (const node of o.armor) {
-      const bust = o.g === 'f' && (node.name === 'chest' || node.name === 'robe');
+      const torsoPiece = node.name === 'chest' || node.name === 'robe';
+      const bust = o.g === 'f' && torsoPiece;
       node.traverse((x) => {
         if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
         const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
@@ -508,8 +696,139 @@ export function qPlayer(o: QOpts): Rig {
         m.castShadow = true;
         m.frustumCulled = false;
         body.add(m);
+        worn.push(m);
       });
     }
+  }
+
+  let cape: QCape | undefined;
+  const grid = o.cape?.userData.cape_grid as number[] | undefined;
+  if (o.cape && grid && grid.length === 2 + grid[0] * grid[1] * 3) {
+    const [rows, cols] = grid;
+    const bind = Array.from({ length: rows * cols }, (_, i) => new THREE.Vector3(grid[2 + i * 3], grid[3 + i * 3], grid[4 + i * 3]));
+    // pushed back off a chest or robe standing out behind further than it was fitted to (a hood, fur: at most 5 cm),
+    // unless the chest has wings to hang it from (the dragon's: their claws, in its extras, the male bind pose)
+    let top = 0, low = 0, hooks: number[] | undefined;
+    for (const n of o.armor ?? []) n.traverse((x) => {
+      const b = x.userData.back as { top: number; low: number } | undefined;
+      if (b) [top, low] = [Math.min(top, b.top), Math.min(low, b.low)];
+      if ((x.userData.cape_hooks as number[] | undefined)?.length === 6) hooks = x.userData.cape_hooks;
+    });
+    const push = hooks ? 0 : THREE.MathUtils.clamp(((o.cape.userData.cape_back as number | undefined) ?? -0.22) - top + 0.004, 0, 0.05);
+    const robe = !!o.armor?.some((n) => n.name === 'robe');
+    // where each point hangs at rest in the male bind pose: where it was fitted or, hooked on wings, its top row slung
+    // between their claws (sagging a little in the middle) and the cloth let down from there to the hem, still at the knee
+    const hang = bind.map((p) => new THREE.Vector3(p.x, p.y, p.z - push));
+    if (hooks) {
+      const [right, left] = [new THREE.Vector3().fromArray(hooks, 3), new THREE.Vector3().fromArray(hooks, 0)]; // column 0 is on the right (-x)
+      for (let c = 0; c < cols; c++) {
+        const u = c / (cols - 1), d = new THREE.Vector3().lerpVectors(right, left, u);
+        d.y -= 0.025 * (1 - (2 * u - 1) ** 2);
+        d.sub(bind[c]);
+        for (let r = 0; r < rows; r++) hang[r * cols + c].addScaledVector(d, 1 - r / (rows - 1));
+      }
+    }
+    // and there on this rig's spine_03, carried over from the male bind pose (as the armour is)
+    const spineRest = armature.m!.getObjectByName('spine_03')!.matrixWorld.clone().invert();
+    const home = hang.map((p) => p.clone().applyMatrix4(spineRest));
+    const restOf = (n: string) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert();
+    const [clavL, clavR] = [restOf('clavicle_l'), restOf('clavicle_r')];
+    const pins = hang.slice(0, cols).map((q) => {
+      if (hooks) return [[byName.spine_03, q.clone().applyMatrix4(spineRest), 1]] as [THREE.Object3D, THREE.Vector3, number][]; // the wings are on spine_03 alone
+      const side = THREE.MathUtils.smoothstep(q.x, -0.1, 0.1);
+      return [[byName.spine_03, q.clone().applyMatrix4(spineRest), 0.6], [byName.clavicle_l, q.clone().applyMatrix4(clavL), 0.4 * side],
+        [byName.clavicle_r, q.clone().applyMatrix4(clavR), 0.4 * (1 - side)]] as [THREE.Object3D, THREE.Vector3, number][];
+    });
+    const pts = hang.map((p, i) => {
+      const b = new THREE.Bone();
+      b.name = `cape_${Math.floor(i / cols)}_${i % cols}`;
+      b.matrixAutoUpdate = false;
+      b.matrix.makeTranslation(p.x, p.y, p.z);
+      body.add(b);
+      return b;
+    });
+    const sk = new THREE.Skeleton([...bones, ...pts], [...restInv, ...bind.map((p) => new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z))]);
+    skeletons.set(-2, sk);
+    o.cape.traverse((x) => {
+      if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
+      const m = new THREE.SkinnedMesh(x.geometry, x.material);
+      m.bind(sk, new THREE.Matrix4());
+      m.castShadow = true;
+      m.frustumCulled = false;
+      body.add(m);
+    });
+    // what holds the cloth together: each point to the next across and down, the diagonals (no shearing), and two down
+    // (no folding back on itself)
+    const links: [number, number, number][] = [];
+    const link = (r0: number, c0: number, r1: number, c1: number) => {
+      if (r1 < rows && c1 >= 0 && c1 < cols) links.push([r0 * cols + c0, r1 * cols + c1, hang[r0 * cols + c0].distanceTo(hang[r1 * cols + c1])]);
+    };
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      link(r, c, r, c + 1);
+      link(r, c, r + 1, c);
+      link(r, c, r + 1, c + 1);
+      link(r, c, r + 1, c - 1);
+      link(r, c, r + 2, c);
+    }
+    // the back, as far out as what is worn on it stands from the spine (z -0.042 in the bind pose), the hips and the legs
+    // (a robe's skirt round them wider), in model metres
+    const [lt, lc] = robe ? [0.15, 0.17] : [0.1, 0.08];
+    const torso = THREE.MathUtils.clamp(-top - 0.042 + 0.006, 0.14, 0.157 + push); // at most where the cloth hangs at rest
+    const hit: [THREE.Object3D, THREE.Object3D, number][] = [
+      [byName.pelvis, byName.neck_01, torso], [byName.pelvis, byName.pelvis, 0.16],
+      [byName.thigh_l, byName.calf_l, lt], [byName.calf_l, byName.foot_l, lc], [byName.thigh_r, byName.calf_r, lt], [byName.calf_r, byName.foot_r, lc],
+    ];
+    // the shoulder blades, which the collarbones carry back as the arms come down, and the armour over them: a sphere on
+    // each collarbone there, out to what is worn (at most where the cloth hangs)
+    for (const [bn, sx, rest] of [['clavicle_l', 1, clavL], ['clavicle_r', -1, clavR]] as const) {
+      const m = new THREE.Object3D();
+      m.position.set(sx * 0.07, 1.4, -0.035).applyMatrix4(rest);
+      byName[bn].add(m);
+      hit.push([m, m, THREE.MathUtils.clamp(-top - 0.035 + 0.004, 0.13, 0.164 + push)]);
+    }
+    // a robe's skirt standing out behind the knees, between the legs where they do not reach: a capsule down the middle
+    // there, held by the pelvis, as far out as the skirt goes
+    const fitLow = (o.cape.userData.cape_low as number | undefined) ?? -0.23;
+    if (low < fitLow + 0.01) {
+      const pelvisRest = armature.m!.getObjectByName('pelvis')!.matrixWorld.clone().invert();
+      const mark = (y: number) => {
+        const m = new THREE.Object3D();
+        m.position.set(0, y, -0.045).applyMatrix4(pelvisRest);
+        byName.pelvis.add(m);
+        return m;
+      };
+      hit.push([mark(0.72), mark(0.46), -low - 0.045 + 0.008]);
+    }
+    // under each point, the three vertices of what is worn (the armour, the kit's cloth) standing out furthest behind
+    // within its reach (the cells of the grid round it, inside the cape's width): the cloth between points is kept behind
+    // them too. Only what the trunk and the legs carry: a pauldron goes up and back with a raised arm, and would fling the
+    // cloth over the head. None for a row hooked on wings: it stays on their claws; under them, only what is about as high
+    // as each point (the wings rise from under the cloth to the claws: what is higher is behind the row above)
+    const dy = (hang[0].y - hang[(rows - 1) * cols].y) / (rows - 1) / (hooks ? 2 : 1);
+    const anchors = hang.map((b, i) => {
+      const r = Math.floor(i / cols), dx = Math.abs(hang[r * cols + 1].x - hang[r * cols].x), wide = Math.abs(hang[r * cols].x) + 0.02;
+      const best: [THREE.SkinnedMesh, number, number][] = [];
+      if (hooks && r === 0) return [];
+      for (const m of worn) {
+        const p = m.geometry.getAttribute('position'), si = m.geometry.getAttribute('skinIndex'), sw = m.geometry.getAttribute('skinWeight');
+        const names = m.skeleton.bones.map((bn) => bn.name);
+        for (let k = 0; k < p.count; k++) {
+          const v = _v.fromBufferAttribute(p, k); // the bind pose, where the cape was fitted (the kit's bindMatrix is its root bone's, not this)
+          if (v.z > -0.08 || Math.abs(v.x) > wide || Math.abs(v.x - b.x) > dx || Math.abs(v.y - b.y) > dy) continue;
+          let arm = 0;
+          for (let j = 0; j < 4; j++) if (/arm|hand|thumb|index|middle|ring|pinky|Head/.test(names[si.getComponent(k, j)] ?? '')) arm += sw.getComponent(k, j);
+          if (arm > 0.2) continue;
+          best.push([m, k, v.z]);
+          best.sort((u, v) => u[2] - v[2]);
+          if (best.length > 3) best.pop();
+        }
+      }
+      return best.map(([m, k]) => [m, k] as [THREE.SkinnedMesh, number]);
+    });
+    const frame0 = bind.map((_, i) => clothFrame(bind, rows, cols, i, new THREE.Matrix4()).transpose());
+    cape = { root, body, spine: byName.spine_03, rows, cols, bones: pts, bind, frame0, home, pins, pos: bind.map(() => new THREE.Vector3()),
+      prev: bind.map(() => new THREE.Vector3()), local: bind.map(() => new THREE.Vector3()), links, hit, anchors,
+      spineRest: armature.m!.getObjectByName('spine_03')!.getWorldQuaternion(new THREE.Quaternion()).invert(), last: null, started: false };
   }
 
   if (o.tusks) {
@@ -549,7 +868,7 @@ export function qPlayer(o: QOpts): Rig {
   body.scale.set(o.bulk, 1, o.bulk);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0,
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0, cape,
       legs: ['calf_l', 'calf_r', 'foot_l', 'foot_r'].map((n) => ({ bone: byName[n], rest: byName[n].quaternion.clone() })) },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
@@ -609,6 +928,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.floor += (floor - q.floor) * Math.min(1, dt * 8);
   if (q.floor < 0.01) q.floor = 0;
   if (q.floor > 0) for (const l of q.legs) l.bone.quaternion.slerp(l.rest, q.floor);
+  if (q.cape) capeCloth(q.cape, s, dt);
   return steps;
 }
 
@@ -644,12 +964,12 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   addEventListener('resize', resize);
   await loadQ();
 
-  // [weapon, chest, head, gloves, legs, feet]
+  // [weapon, chest, head, gloves, legs, feet, shield, cape]
   const TIERS: Record<string, (string | null)[]> = {
     'Sin equipo': [null, null, null, null, null, null],
-    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals', 'wooden_buckler'],
-    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', 'brigandine_shield'],
-    C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals', 'wooden_buckler', 'wool_cape'],
+    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', 'brigandine_shield', 'hunter_cape'],
+    C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', null, 'knight_cape'],
     'Místico NG': ['apprentice_wand', 'apprentice_tunic', null, null, 'apprentice_stockings', null],
     'Místico D': ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
     Hacha: ['battle_axe', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
@@ -660,7 +980,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     // the region sets (tools/art/blender/gear.py)
     ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
       { abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s],
-      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, `${s}_shield`],
+      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, `${s}_shield`, `${s}_cape`],
     ])),
     // every helmet side by side, on one race (?race=, default human; ?g=f for women)
     Cascos: [null, 'brigandine_tunic', null, null, null, null],
@@ -671,12 +991,14 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     // each region set's mage gear (tools/art/blender/gear.py mage_<set>), and all the crowns side by side
     ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
       `Místico ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
-      [`${s}_staff`, `${s}_robe`, `${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null],
+      [`${s}_staff`, `${s}_robe`, `${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null, `${s}_cape`],
     ])),
     Coronas: [null, null, null, null, null, null, null],
+    // every cape side by side, over a set's plate or robe (see it from behind: ?ry=3.14)
+    Capas: [null, null, null, null, null, null, null, null],
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
-  const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
+  const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Sentar: { sitAge: 5000 }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
   let rigs: Rig[] = [];
@@ -705,6 +1027,20 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       rigs = crowns.map((c, i) => {
         const rig = playerModel(race, 'mystic', null, c.replace('_circlet', '_robe'), { g, hs: (i % 3) + 1, hc: 0 }, [c, null, null, null, null]);
         rig.root.position.set((i - (crowns.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
+    if (tier === 'Capas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const list = Object.keys(CAPES);
+      rigs = list.map((c, i) => {
+        // each set's cape over its own harness (a robe on every other one, to see it over a mage's too), the plain ones over brigandine
+        const set = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_/.exec(c)?.[1];
+        const chest = set ? `${set}_${i % 2 ? 'robe' : 'plate'}` : 'brigandine_tunic';
+        const rig = playerModel(race, set && i % 2 ? 'mystic' : 'fighter', null, chest, { g, hs: (i % 3) + 1, hc: 0 }, [set ? `${set}_${i % 2 ? 'circlet' : 'helm'}` : null, null, null, null, null, c]);
+        rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
         scene.add(rig.root);
         return rig;
       });

@@ -486,7 +486,7 @@ impl World {
                 let eqi = |s: &str| p.equipped_in(s).map(|i| Value::String(i.i.clone())).unwrap_or(Value::Null);
                 json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "p", "n": p.name, "l": p.level, "race": p.race, "cls": p.cls, "spec": p.spec,
                     "lk": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc }, "w": eqi("weapon"), "we": p.equipped_in("weapon").map_or(0, |i| i.e), "a": eqi("chest"), "nc": p.name_color(now),
-                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet"), eqi("shield")],
+                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet"), eqi("shield"), eqi("cape")],
                     // clan, its name and crest version, and the character's title (absent without a clan)
                     "cl": p.clan_look.as_ref().map(|c| c.id), "cn": p.clan_look.as_ref().map(|c| c.name.clone()),
                     "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()),
