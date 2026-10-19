@@ -10,7 +10,7 @@ export interface CharSummary { id: number; name: string; race: Race; cls: ClassT
 export interface EntPlayer {
   id: number; k: 'p'; x: number; z: number; ry: number; n: string; l: number; hp: number;
   race: Race; cls: ClassType; spec?: Spec | null; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
-  /** other visible gear: [head, gloves, legs, feet, shield] item ids */
+  /** other visible gear: [head, gloves, legs, feet, shield, cape] item ids */
   eq: (string | null)[];
   /** the held weapon's enchantment (its glow, render/enchant-fx.ts) */
   we?: number;

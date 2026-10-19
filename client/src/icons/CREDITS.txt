@@ -28,3 +28,6 @@ skill: aegis_charge <- delapouite/charging-bull, iron_bulwark <- delapouite/bric
 
 Added for the shields (same source and licence), file <- original:
 item: shield <- lorc/bordered-shield (the holy_shield skill's drawing)
+
+Added for the capes:
+item: cape <- drawn for this game (a cloak with its clasp), no outside source

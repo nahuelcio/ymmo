@@ -1,11 +1,13 @@
 import { RACES, type ClassType, type Race } from './classes';
 
-export type Slot = 'weapon' | 'shield' | 'head' | 'chest' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
+export type Slot = 'weapon' | 'shield' | 'head' | 'chest' | 'cape' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
 // ponytail: one ring, so an item's slot is always where it is worn; a second ring needs ring1/ring2 and a "first free" rule in equip
-export const SLOTS: Slot[] = ['head', 'weapon', 'shield', 'chest', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
+export const SLOTS: Slot[] = ['head', 'weapon', 'shield', 'chest', 'cape', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
 export type Grade = 'NG' | 'D' | 'C' | 'B' | 'A' | 'S';
 /** A shield's chance to block, by its grade: 15% at NG, 3% more each grade, 30% at S. */
 export const SHIELD_BLOCK: Record<Grade, number> = { NG: 0.15, D: 0.18, C: 0.21, B: 0.24, A: 0.27, S: 0.3 };
+/** How much faster a cape lets its wearer run, by its grade: 2% at NG up to 5% at S (enchanting adds to its defences, not this). */
+export const CAPE_SPEED: Record<Grade, number> = { NG: 0.02, D: 0.025, C: 0.03, B: 0.035, A: 0.04, S: 0.05 };
 
 export interface ItemDef {
   id: string;
@@ -22,6 +24,8 @@ export interface ItemDef {
   cdr?: number;
   /** a shield's chance to catch a physical hit, which then does half its damage (0.15 = 15%) */
   block?: number;
+  /** how much faster its wearer runs, as a fraction: 0.03 = 3% (a cape's) */
+  speed?: number;
   /** a weapon held in both hands: no shield with it */
   twoHanded?: boolean;
   price: number;
@@ -54,6 +58,8 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
     armor('plate', `Coraza ${sg}`, 'chest', '🛡️', 4, { pDef: a, mDef: r(a * 0.15) }),
     armor('robe', `Túnica ${sg}`, 'chest', '👘', 4, { pDef: r(a * 0.67), mDef: r(a * 0.6), mp: j * 2 }),
     armor('shield', `Escudo ${sg}`, 'shield', '🛡️', 2, { block: SHIELD_BLOCK[grade] }),
+    // a cape: a little of both defences and a quicker stride
+    armor('cape', `Capa ${sg}`, 'cape', '🧥', 1.5, { pDef: r(a * 0.12), mDef: r(a * 0.12), speed: CAPE_SPEED[grade] }),
     armor('greaves', `Grebas ${pl}`, 'legs', '👖', 3, { pDef: r(a * 0.53), mDef: r(a * 0.1) }),
     armor('gauntlets', `Guanteletes ${pl}`, 'gloves', '🧤', 1.5, { pDef: r(a * 0.23), mDef: r(a * 0.05) }),
     armor('gloves', `Guantes ${pl}`, 'gloves', '🧤', 1.5, { pDef: r(a * 0.15), mDef: r(a * 0.14), mp: r(j * 0.4) }),
@@ -91,6 +97,7 @@ const list: ItemDef[] = [
   { id: 'leather_cap', name: 'Gorro de Cuero', type: 'armor', slot: 'head', grade: 'NG', pDef: 3, mDef: 1, price: 60, icon: '⛑️', color: 0x8b5a2b },
   // a buckler is small: it catches fewer blows than an NG shield proper
   { id: 'wooden_buckler', name: 'Rodela de Madera', type: 'armor', slot: 'shield', grade: 'NG', block: 0.12, price: 90, icon: '🛡️', color: 0x9a7048 },
+  { id: 'wool_cape', name: 'Capa de Lana', type: 'armor', slot: 'cape', grade: 'NG', pDef: 1, mDef: 1, speed: 0.015, price: 80, icon: '🧥', color: 0x7a5a3a },
   { id: 'apprentice_tunic', name: 'Túnica de Aprendiz', type: 'armor', slot: 'chest', grade: 'NG', pDef: 7, mDef: 2, price: 50, icon: '👕', color: 0x8c7a5b },
   { id: 'apprentice_stockings', name: 'Calzas de Aprendiz', type: 'armor', slot: 'legs', grade: 'NG', pDef: 5, mDef: 1, price: 40, icon: '👖', color: 0x6b5a3b },
   { id: 'short_gloves', name: 'Guantes Cortos', type: 'armor', slot: 'gloves', grade: 'NG', pDef: 2, price: 40, icon: '🧤', color: 0x8b5a2b },
@@ -98,6 +105,7 @@ const list: ItemDef[] = [
   // Armor NG, once D
   { id: 'brigandine_helm', name: 'Yelmo de Brigantina', type: 'armor', slot: 'head', grade: 'NG', look: 'D', pDef: 6, mDef: 2, price: 1800, icon: '⛑️', color: 0x7c8a99 },
   { id: 'brigandine_shield', name: 'Escudo de Brigantina', type: 'armor', slot: 'shield', grade: 'NG', look: 'D', block: 0.15, price: 2200, icon: '🛡️', color: 0x7c8a99 },
+  { id: 'hunter_cape', name: 'Capa de Cazador', type: 'armor', slot: 'cape', grade: 'NG', look: 'D', pDef: 2, mDef: 2, speed: 0.02, price: 1600, icon: '🧥', color: 0x2f4a2a },
   { id: 'karmian_hat', name: 'Sombrero Karmiano', type: 'armor', slot: 'head', grade: 'NG', look: 'D', pDef: 4, mDef: 4, mp: 15, price: 1800, icon: '🎩', color: 0x3c5aa8 },
   { id: 'brigandine_tunic', name: 'Túnica de Brigantina', type: 'armor', slot: 'chest', grade: 'NG', look: 'D', pDef: 15, mDef: 3, price: 4200, icon: '🛡️', color: 0x7c8a99 },
   { id: 'brigandine_gaiters', name: 'Grebas de Brigantina', type: 'armor', slot: 'legs', grade: 'NG', look: 'D', pDef: 10, mDef: 2, price: 3000, icon: '👖', color: 0x5f6b78 },
@@ -108,6 +116,7 @@ const list: ItemDef[] = [
   // Armor D, once C (drop only)
   { id: 'full_plate_helmet', name: 'Yelmo de Placas', type: 'armor', slot: 'head', grade: 'D', look: 'C', pDef: 9, mDef: 3, price: 9000, icon: '⛑️', color: 0xc0c8d0 },
   { id: 'full_plate_shield', name: 'Escudo de Placas', type: 'armor', slot: 'shield', grade: 'D', look: 'C', block: 0.18, price: 10000, icon: '🛡️', color: 0xc0c8d0 },
+  { id: 'knight_cape', name: 'Capa de Caballero', type: 'armor', slot: 'cape', grade: 'D', look: 'C', pDef: 3, mDef: 3, speed: 0.025, price: 8000, icon: '🧥', color: 0x8a1f1f },
   { id: 'demons_circlet', name: 'Diadema del Demonio', type: 'armor', slot: 'head', grade: 'D', look: 'C', pDef: 6, mDef: 7, mp: 30, price: 9000, icon: '👑', color: 0x8a1f3a },
   { id: 'full_plate_armor', name: 'Armadura de Placas', type: 'armor', slot: 'chest', grade: 'D', look: 'C', pDef: 24, mDef: 4, price: 22000, icon: '🛡️', color: 0xc0c8d0 },
   { id: 'demons_tunic', name: 'Túnica del Demonio', type: 'armor', slot: 'chest', grade: 'D', look: 'C', pDef: 16, mDef: 14, mp: 80, price: 22000, icon: '👘', color: 0x8a1f3a },

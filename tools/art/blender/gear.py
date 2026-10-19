@@ -374,6 +374,7 @@ class Piece:
         self.centre = HEAD_C  # what a rigid piece's open sheets face away from (a helmet's: the head's middle)
         self.budget = BUDGET.get(name, 8000)
         self.tex = None  # its maps' size (else TEX, the cuirass twice that)
+        self.extras = {}  # what the client reads off its node (glTF extras): a cape's bones
 
     def add(self, material, verts, faces, solid=0.0, roll=0.0, roll_min=0.0, roll_mat=None, rope=False, bump=None,
             fine=None, forge=None, bead=None, deco=None, sharp=40, skin=None, whole=False, wound=False):
@@ -1094,7 +1095,8 @@ class Fit:
     after stop (a toe, a heel). Angles start at `up` and turn towards d x up. The skin's own mesh holds the whole bare
     body, so with the boots skipped a fit follows the real shin and foot."""
 
-    def __init__(self, bones, o, d, up, t0, t1, gap=0.01, keep=None, na=72, nt=40, smooth_t=5, smooth_a=3, skip=(), only=(), ends=None, g='m'):
+    def __init__(self, bones, o, d, up, t0, t1, gap=0.01, keep=None, na=72, nt=40, smooth_t=5, smooth_a=3, skip=(), only=(), ends=None, g='m',
+                 snug=None):
         bd = body(g)
         self.o, self.d = Vector(o), Vector(d).normalized()
         self.up = (Vector(up) - self.d * Vector(up).dot(self.d)).normalized()
@@ -1127,12 +1129,19 @@ class Fit:
             raise ValueError(f'no body for {bones}')
         R = [r if r else list(R[min(filled, key=lambda f: abs(f - i))]) for i, r in enumerate(R)]
         n = len(R)
+        # where snug(a) says (0..1), the form keeps to the body under it instead: each row only as large as its
+        # neighbours (a back hugged, its hollows followed, never cut into) - the smoothing round each section would
+        # take a wide trunk's sides round onto its back and stand it off by centimetres
+        close = [[max(R[j][i] for j in range(max(0, k - 1), min(n, k + 2))) for i in range(na)] for k in range(n)] if snug else None
         for _ in range(smooth_t):  # the largest of each row and its neighbours, then averaged: smooth, never smaller
             M = [[max(R[j][i] for j in range(max(0, k - 1), min(n, k + 2))) for i in range(na)] for k in range(n)]
             R = [[(M[max(0, k - 1)][i] + 2 * M[k][i] + M[min(n - 1, k + 1)][i]) / 4 for i in range(na)] for k in range(n)]
         for _ in range(smooth_a):  # the same round each section
             M = [[max(row[(i - 1) % na], row[i], row[(i + 1) % na]) for i in range(na)] for row in R]
             R = [[(row[(i - 1) % na] + 2 * row[i] + row[(i + 1) % na]) / 4 for i in range(na)] for row in M]
+        if snug:
+            w = [snug(2 * math.pi * i / na) for i in range(na)]
+            R = [[lerp(R[k][i], close[k][i], w[i]) for i in range(na)] for k in range(n)]
         self.R = [[r + gap for r in row] for row in R]
         self.ends = ends
 
@@ -1222,7 +1231,7 @@ def skin_weights(ob, rules, g='m'):
     """Each vertex's four joints and weights by its part's rule, as the _joints and _weights attributes the client binds
     the piece with (joint numbers in the order the object's `joints` lists)."""
     bd = body(g)
-    joints = bd['joints']
+    joints = list(bd['joints']) + list(CAPE_BONES)  # the rig's, and a cape's cloth points after them
     jix = {name: i for i, name in enumerate(joints)}
     me = ob.data
     rule = [0] * len(me.vertices)
@@ -1730,7 +1739,7 @@ def forms(gap=0.0):
     bare = ('Head_',)
     return {
         'torso': fitted(('torso', gap), lambda: Fit(TORSO, (0, 0, 0), UP, (0, 0, 1), 0.9, 1.56, gap=0.006 + gap, only=bare,
-                                                    keep=lambda v: abs(v.x) < 0.17)),
+                                                    keep=lambda v: abs(v.x) < 0.17, snug=lambda a: smooth(1.15, 0.75, abs(wrap(a - math.pi))))),
         'hips': fitted(('hips', gap), lambda: Fit(('pelvis', 'spine_01', 'thigh_l', 'thigh_r'), (0, 0, 0), UP, (0, 0, 1), 0.72, 1.07,
                                                   gap=0.006 + gap, only=bare + ('Legs',), keep=lambda v: v.y > 0.72)),
         'arm': fitted(('arm', gap), lambda: Fit(('upperarm_l', 'clavicle_l'), bone('upperarm_l'), (1, 0, 0), (0, 1, 0), -0.08, 0.27,
@@ -1765,7 +1774,8 @@ def ring_plate(f, RU, t0, t1, off, h=0.0034):
 def wing(root, wrist, tips, lower):
     """A small dragon's wing of steel: a leading edge from its root to the wrist, fingers fanning out from the wrist to
     `tips`, a membrane between them with a scalloped trailing edge back to `lower`, and a claw at the wrist. Returns its
-    membrane and its bones (leading edge, fingers, claw) as meshes."""
+    membrane and its bones (leading edge, fingers, claw) as meshes, and where something hung on the claw hangs (just
+    behind the wrist, clear of the bones)."""
     R, W = Vector(root), Vector(wrist)
     U = (W - R).normalized()
     N = U.cross(Vector(tips[1]) - R).normalized()
@@ -1790,7 +1800,7 @@ def wing(root, wrist, tips, lower):
     for t in tips:
         bones_.append(tube([lift(W), lift(W.lerp(Vector(t), 0.5)) + N * 0.003, lift(t)], [0.0042, 0.003, 0.0012], 8))
     bones_.append(tube([lift(W), lift(W) + U * 0.022 + V * 0.006 + N * 0.004], [0.004, 0.0004], 8))  # the claw
-    return {'membrane': membrane, 'bones': merge(*bones_)}
+    return {'membrane': membrane, 'bones': merge(*bones_), 'claw': W + N * 0.012}
 
 
 def teeth_sd(u, v, u0, u1, t0, t1, points=3, depth=0.02, free='high', shape='point'):
@@ -1884,6 +1894,9 @@ def dragon_chest():
                       root + Vector((0.03, -0.09, -0.02)))
     both(p, red, wing_parts['membrane'], ('spine_03',), solid=0.002, roll=0.0009, roll_mat=rim, deco=scaled, sharp=30)
     both(p, rim, wing_parts['bones'], ('spine_03',))
+    # a cape worn over it hangs from the claws at the wings' wrists, its top corners hooked on them (quaternius.ts qPlayer)
+    claw = wing_parts['claw']
+    p.extras['cape_hooks'] = [claw.x, claw.y, claw.z, -claw.x, claw.y, claw.z]
     both(p, dark, teeth_plate(torso, RU, math.pi - 0.52, math.pi - 0.08, 1.35, 1.45, 0.006, 2, 0.02, 'low'), ('spine_03',), deco=scaled,
          solid=0.002, roll=0.001, roll_mat=rim)
     for a, y in ((math.pi - 0.45, 1.43), (math.pi - 0.15, 1.43)):
@@ -5123,6 +5136,347 @@ def emerald_shoes():
     return p
 
 
+# ---------------------------------------------------------------- capes
+
+# A cape is cloth the client simulates (client/src/render/quaternius.ts capeCloth): a grid of points, rows down from
+# its top to its hem and columns across it, each a bone of its own; the cape is skinned to the four points round each
+# of its vertices, and the top row is pinned to the upper spine. Gravity, the air, the points' distances and the body
+# move the rest.
+CAPE_ROWS, CAPE_COLS = 7, 5
+CAPE_BONES = tuple(f'cape_{r}_{c}' for r in range(CAPE_ROWS) for c in range(CAPE_COLS))
+CAPE_TOP, CAPE_HEM = 1.49, 0.48  # pinned over the shoulder blades; to the knee
+CAPE_PIN = 1.475  # the height of the pinned top row
+
+
+def cape_back(y):
+    """How far behind the body a cape's middle hangs at height y (z): just clear of every set's backplate over the
+    shoulder blades (body/back.json.gz), falling plumb from there and flaring out below the knee over the robes'
+    skirts."""
+    return -0.202 - 0.1 * smooth(0.75, CAPE_HEM, y) ** 1.2
+
+
+def cape_half(y):
+    """How wide a cape is either side of its middle at height y: between the shoulder blades at the top, out past the
+    legs at the hem."""
+    return lerp(0.15, 0.275, smooth(CAPE_TOP, CAPE_HEM, y) ** 0.8)
+
+
+def cape_at(x, y, off=0.0, folds=9, fold=0.008):
+    """A point of a cape (x across, y up), `off` metres further out: its middle at cape_back, flat across the shoulder
+    blades (the backplates and pauldrons stand out behind as far there), curving forward past them towards its edges,
+    hanging in `folds` deepening towards the hem."""
+    bend = 1.5 * max(0.0, abs(x) - 0.12) ** 2
+    f = fold * smooth(1.3, CAPE_HEM, y) * math.sin(x * folds * math.pi / (2 * cape_half(y)))
+    return Vector((x, y, cape_back(y) + bend - off + f))
+
+
+def cape_grid():
+    """The cloth's points in the bind pose, row by row down from the pinned top, each row across the cape's width there,
+    in the middle of the cloth (its folds left out)."""
+    pts = []
+    for r in range(CAPE_ROWS):
+        y = lerp(CAPE_PIN, CAPE_HEM, r / (CAPE_ROWS - 1))
+        hw = cape_half(y)
+        for c in range(CAPE_COLS):
+            pts.append(cape_at(lerp(-hw, hw, c / (CAPE_COLS - 1)), y, 0.0, 0, 0.0) + Vector((0.0, 0.0, 0.0015)))
+    return pts
+
+
+def cape_skin():
+    """The weights of a cape: each vertex on the four points of the cloth's grid round it (by its height and how far
+    across the cape it is), so the cloth's points bend it smoothly between them; above the top row, on the top row."""
+    def f(p):
+        rf = clamp((CAPE_PIN - p.y) / (CAPE_PIN - CAPE_HEM)) * (CAPE_ROWS - 1)
+        r0 = min(int(rf), CAPE_ROWS - 2)
+        fy = rf - r0
+        cf = clamp((p.x / cape_half(p.y) + 1) / 2) * (CAPE_COLS - 1)
+        c0 = min(int(cf), CAPE_COLS - 2)
+        fx = cf - c0
+        w = {}
+        for dr, wy in ((0, 1 - fy), (1, fy)):
+            for dc, wx in ((0, 1 - fx), (1, fx)):
+                if wy * wx > 1e-5:
+                    w[f'cape_{r0 + dr}_{c0 + dc}'] = wy * wx
+        return w
+    return f
+
+
+def cape_sheet(edge=None, lobes=0, top=CAPE_TOP, hem=CAPE_HEM, off=0.0, folds=9, fold=0.008, h=0.004):
+    """A cape's cloth: across the back from edge to edge, from its top over the shoulder blades down to the hem, cut in
+    `lobes` of `edge` (hem_edge) along the hem."""
+    W = cape_half(hem) + 0.01
+
+    def sd(u, v):
+        hw = cape_half(v)
+        low = hem + (edge(lobes * clamp((u + hw) / (2 * hw))) if edge else 0.0)
+        return max(abs(u) - hw, low - v, v - top)
+    return plate(lambda u, v: cape_at(u, v, off, folds, fold), sd, -W, W, hem - 0.004, top + 0.004, h=h)
+
+
+_backs = {}
+
+
+def cape_report(name, solid=0.0025, folds=9, fold=0.008):
+    """How much of every set's chest and robe (body/back.json.gz) would come through a cape: their points behind its
+    inner face, within its width, piece by piece."""
+    if not _backs:
+        import gzip
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'body', 'back.json.gz')
+        with gzip.open(path, 'rt', encoding='utf-8') as fh:
+            _backs.update(json.load(fh)['pieces'])
+    out = []
+    for piece, pts in _backs.items():
+        n, worst = 0, 0.0
+        for x, y, z in pts:
+            if CAPE_HEM < y < CAPE_TOP and abs(x) < cape_half(y):
+                inner = cape_at(x, y, 0.0, folds, fold).z + solid
+                if z < inner:
+                    n, worst = n + 1, max(worst, inner - z)
+        if n:
+            out.append(f'{piece} {n} ({worst * 1000:.0f} mm)')
+    print(f'[gear] {name}: through the cape: ' + (', '.join(out) or 'nothing'))
+
+
+def cape_piece():
+    """A cape's piece: its budget, map size and its cloth's grid for the client (the node's extras: rows, columns, then
+    each point's place in the bind pose)."""
+    p = Piece('cape')
+    p.budget, p.tex, p.min_ratio = 4000, 1024, 0.04
+    p.extras['cape_grid'] = [CAPE_ROWS, CAPE_COLS] + [c for q in cape_grid() for c in q]
+    p.extras['cape_back'] = cape_back(CAPE_TOP - 0.03) + 0.0025  # its inner face over the shoulder blades
+    p.extras['cape_low'] = cape_back(0.65) + 0.0025  # and at the knee
+    return p
+
+
+def infernal_cape():
+    """The black knight's cape: black silk to the knee, its hem drawn into five long points, bordered in gold braid and
+    embroidered in gold scrollwork above the hem and down its edges; a stiff yoke of black lacquer across the top worked
+    in raised gilt scrollwork, a gold star set with the dark stone pinning each corner."""
+    p = cape_piece()
+    silk = infernal_silk()
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    cloth = dict(solid=0.0025, roll=0.0013, roll_mat=gold)
+    band = lambda q: max(smooth(CAPE_HEM + 0.16, CAPE_HEM + 0.12, q.y), smooth(cape_half(q.y) - 0.05, cape_half(q.y) - 0.035, abs(q.x)))
+    p.add(silk, *cape_sheet(hem_edge('point', 0.07), 5), deco=ornate(0.013, band), skin=cape_skin(), **cloth)
+    cape_report('cape_infernal')
+    yoke = lambda u, v: max(abs(u) - cape_half(v) - 0.004, abs(v - 1.465) - 0.027)
+    p.add(orn, *plate(lambda u, v: cape_at(u, v, 0.004), yoke, -0.17, 0.17, 1.434, 1.496, h=0.0028), deco=ornate(0.008), skin=cape_skin(),
+          solid=0.003, roll=0.0013, roll_mat=gold, sharp=30)
+    for s_ in (1, -1):
+        c = cape_at(s_ * 0.118, 1.466, 0.0085)
+        n = (cape_at(s_ * 0.118, 1.466, 0.01) - cape_at(s_ * 0.118, 1.466, 0.0)).normalized()
+        med = outline(star((s_ * 0.118, 1.466), 0.024, 0.016, 8), 4)
+        p.add(gold, *plate(lambda u, v: cape_at(u, v, 0.0085), lambda u, v, med=med: sd_poly(u, v, med), s_ * 0.118 - 0.03, s_ * 0.118 + 0.03, 1.436,
+                           1.496, h=0.0012), solid=0.0025, roll=0.001, skin=cape_skin(),
+              bump=lambda q, s_=s_: 0.003 * gauss(math.hypot(q.x - s_ * 0.118, q.y - 1.466), 0.014))
+        p.add(stone, *gem(c + n * 0.0045, n, 0.0072), skin=cape_skin())
+    return p
+
+
+def wool_cape():
+    """A traveller's cape of brown wool to the knee, its hem and edges stitched, hanging in deep folds, a leather band
+    stitched across the top, a bronze brooch at each corner."""
+    p = cape_piece()
+    wool = mat('wool_cape_cloth', 0x6a4a30, 'cloth', engrave='stitch', rough=0.95)
+    band = mat('wool_cape_band', 0x4a2e1c, 'leather', engrave='stitch', rough=0.8)
+    bronze = mat('wool_cape_bronze', 0x9a6a3a, 'bronze', rough=0.45, metal=0.85)
+    p.add(wool, *cape_sheet(hem_edge('ragged', 0.012, 2.0), 18, folds=11, fold=0.011), deco=0.012, skin=cape_skin(), solid=0.0028, roll=0.0012)
+    cape_report('cape_wool', folds=11, fold=0.011)
+    strip = lambda u, v: max(abs(u) - cape_half(v) - 0.003, abs(v - 1.47) - 0.018)
+    p.add(band, *plate(lambda u, v: cape_at(u, v, 0.004, 11, 0.011), strip, -0.17, 0.17, 1.448, 1.492, h=0.0028), deco=0.006, skin=cape_skin(),
+          solid=0.0028, roll=0.001, forge=creased(0.0005))
+    for s_ in (1, -1):
+        c = cape_at(s_ * 0.12, 1.47, 0.0085, 11, 0.011)
+        n = (cape_at(s_ * 0.12, 1.47, 0.01, 11, 0.011) - cape_at(s_ * 0.12, 1.47, 0.0, 11, 0.011)).normalized()
+        p.add(bronze, *rivet(c, n, 0.011, washer=0.015), skin=cape_skin())
+    return p
+
+
+def cape_strip(y0, y1, off, edge=None, lobes=0, wider=0.004, folds=9, fold=0.008, h=0.0028):
+    """A band across a cape from y0 up to y1 (a yoke, a capelet, a fur collar's ground), `off` metres out from it and a
+    little wider, its lower edge cut in `lobes` of `edge` (hem_edge)."""
+    W = cape_half(y0) + wider + 0.01
+
+    def sd(u, v):
+        hw = cape_half(v) + wider
+        low = y0 + (edge(lobes * clamp((u + hw) / (2 * hw))) if edge else 0.0)
+        return max(abs(u) - hw, low - v, v - y1)
+    return plate(lambda u, v: cape_at(u, v, off, folds, fold), sd, -W, W, y0 - 0.004, y1 + 0.004, h=h)
+
+
+def cape_pin(x, y, off, folds=9, fold=0.008):
+    """A point on a cape `off` metres out, and the way out from it there (for a brooch)."""
+    c = cape_at(x, y, off, folds, fold)
+    return c, (cape_at(x, y, off + 0.01, folds, fold) - c).normalized()
+
+
+def cape_band(width=0.05):
+    """A cape's embroidery: a band above its hem and down both its edges."""
+    return lambda q: max(smooth(CAPE_HEM + 0.16, CAPE_HEM + 0.12, q.y), smooth(cape_half(q.y) - width, cape_half(q.y) - width + 0.015, abs(q.x)))
+
+
+def abyssal_cape():
+    """The abyssal cape: deep sea-blue silk to the knee, its hem cut in scallops like a shell's edge, embroidered with
+    pale waves above them and down its edges; a yoke of sea-green silk across the top worked with waves; a scallop
+    shell of pale nacre with a pearl pinning each corner."""
+    p = cape_piece()
+    silk, sash, pearl, shell_ = abyssal_cloth()
+    steel, lacquer, rim = abyssal_mats()
+    cloth = dict(solid=0.0025, roll=0.0012, roll_mat=rim)
+    p.add(silk, *cape_sheet(hem_edge('round', 0.035), 9), deco=ornate(0.012, cape_band()), skin=cape_skin(), **cloth)
+    cape_report('cape_abyssal')
+    p.add(sash, *cape_strip(1.438, 1.496, 0.004), deco=ornate(0.007), skin=cape_skin(), **cloth)
+    for s_ in (1, -1):
+        x = s_ * 0.118
+        sh = outline(fan((x, 1.456), 0.024), 3)
+        p.add(shell_, *plate(lambda u, v, x=x: cape_at(u, v, 0.0082 + 0.0013 * (0.5 + 0.5 * math.cos(9 * math.atan2(v - 1.456, u - x)))),
+                             lambda u, v, sh=sh: sd_poly(u, v, sh), x - 0.03, x + 0.03, 1.448, 1.484, h=0.001), solid=0.002, roll=0.0009, roll_mat=rim,
+              deco=lambda q: 0.0, skin=cape_skin())
+        c, n = cape_pin(x, 1.462, 0.0105)
+        p.add(pearl, *oball(c + n * 0.003, 0.0065), skin=cape_skin())
+    return p
+
+
+def ashforged_cape():
+    """The ashforged cape: charcoal wool to the knee, its hem worn ragged, two patches stitched on, every edge stitched;
+    a band of old leather across the top, riveted; an iron clasp at each corner and a chain slung between them."""
+    p = cape_piece()
+    wool, patch, hood = ash_cloth()
+    steel, mail, leather, _ = ash_mats()
+    fk = dict(folds=11, fold=0.011)
+    p.add(wool, *cape_sheet(hem_edge('ragged', 0.03, 1.7), 16, **fk), deco=0.012, skin=cape_skin(), solid=0.0028, roll=0.0011)
+    cape_report('cape_ashforged', **fk)
+    for x0, y0, y1, w in ((-0.1, 0.84, 0.94, 0.036), (0.13, 0.6, 0.68, 0.03)):
+        p.add(patch, *plate(lambda u, v: cape_at(u, v, 0.0028, **fk), lambda u, v, x0=x0, y0=y0, y1=y1, w=w: sd_box(u, v, x0, (y0 + y1) / 2, w, (y1 - y0) / 2, 0.002),
+                            x0 - w - 0.004, x0 + w + 0.004, y0 - 0.004, y1 + 0.004, h=0.003), deco=0.006, skin=cape_skin(), solid=0.0016)
+    p.add(leather, *cape_strip(1.446, 1.494, 0.004, **fk), deco=0.006, skin=cape_skin(), solid=0.003, roll=0.001, forge=creased(0.0005))
+    for k in range(-2, 3):
+        c, n = cape_pin(k * 0.045, 1.47, 0.0072, **fk)
+        p.add(steel, *rivet(c, n, 0.0034), skin=cape_skin())
+    chain = []
+    for s_ in (1, -1):
+        c, n = cape_pin(s_ * 0.122, 1.468, 0.0075, **fk)
+        p.add(steel, *rivet(c, n, 0.0095, washer=0.0145), skin=cape_skin())
+    pts = [cape_at(x, 1.452 - 0.06 * (1 - (x / 0.12) ** 2), 0.012, **fk) for x in (lerp(-0.12, 0.12, k / 30) for k in range(31))]
+    p.add(steel, *tube(pts, 0.0028, 6, twist=(2, 0.012, 0.35)), skin=cape_skin())
+    return p
+
+
+def dragon_cape():
+    """The dragon cape: blood-red silk to the knee, its hem drawn into four long points like a wing's, a band of dark
+    scales embroidered above it and down its edges; a yoke of red-lacquered scales across the top, its lower edge in
+    points; at each corner a red stone gripped in three steel talons."""
+    p = cape_piece()
+    silk, panel, stone = dragon_cloth()
+    steel, scale, rim = dragon_mats()
+    cloth = dict(solid=0.0025, roll=0.0012, roll_mat=rim)
+    p.add(silk, *cape_sheet(hem_edge('point', 0.11), 4), deco=ornate(0.012, cape_band()), skin=cape_skin(), **cloth)
+    cape_report('cape_dragon')
+    p.add(scale, *cape_strip(1.39, 1.497, 0.0045, hem_edge('point', 0.035), 7), deco=lambda q, d: smooth(0.005, 0.008, d), skin=cape_skin(), sharp=30,
+          solid=0.0026, roll=0.0012, roll_mat=rim)
+    for s_ in (1, -1):
+        c, n = cape_pin(s_ * 0.118, 1.462, 0.017)
+        t_, n_, b_ = frame(n)
+        p.add(steel, *oball(c - n * 0.006, (0.016, 0.005, 0.016), (t_, n_, b_), 12, 5), skin=cape_skin())
+        p.add(stone, *oball(c, (0.0105, 0.009, 0.0105), (t_, n_, b_), 12, 7), skin=cape_skin())
+        for k in range(3):
+            side = t_ * math.cos(math.pi / 2 + 2 * math.pi * k / 3) + b_ * math.sin(math.pi / 2 + 2 * math.pi * k / 3)
+            p.add(steel, *talon(c - n * 0.005 + side * 0.018, -side + n * 0.9, -side, 0.02, 0.0036), skin=cape_skin())
+    return p
+
+
+def glacial_cape():
+    """The glacial cape: ice-blue cloth embroidered with white frost above its hem and down its edges, the hem cut
+    jagged like rime; a collar of white fur across the top falling in locks; at each corner a cluster of ice crystals
+    set in silver."""
+    p = cape_piece()
+    white, blue = glacial_cloth()
+    steel, deep, rim, fur, ice, _ = glacial_mats()
+    cloth = dict(solid=0.0025, roll=0.0012, roll_mat=rim)
+    p.add(blue, *cape_sheet(hem_edge('point', 0.025), 14), deco=ornate(0.012, cape_band()), skin=cape_skin(), **cloth)
+    cape_report('cape_glacial')
+    fine = 0.004 if RES <= 1 else 0.0075
+
+    def collar(u, v):
+        hw = cape_half(v) + 0.012
+        return max(abs(u) - hw, v - 1.505, pelt_sd(u, v, -0.175, 0.175, 1.385, 1.505, 12, 0.035, 2.0, 'low'))
+    p.add(fur, *plate(lambda u, v: cape_at(u, v, 0.006 + 0.008 * math.sin(math.pi * clamp((v - 1.385) / 0.12)) ** 0.6), collar, -0.18, 0.18, 1.38, 1.508,
+                      h=fine), solid=0.007, bump=furry(0.003, 4.0), forge=False, sharp=80, skin=cape_skin(), whole=True)
+    for s_ in (1, -1):
+        c, n = cape_pin(s_ * 0.118, 1.45, 0.019)
+        t_, n_, b_ = frame(n)
+        p.add(rim, *oball(c - n * 0.003, (0.013, 0.0035, 0.013), (t_, n_, b_), 12, 5), skin=cape_skin())
+        p.add(ice, *merge(*[facet_crystal(c + t_ * dx + b_ * dz, n * 0.6 + t_ * dx * 30 + b_ * dz * 30 + UP * 0.3, L, r)
+                            for dx, dz, L, r in ((0.0, 0.0, 0.026, 0.0055), (0.008, 0.003, 0.017, 0.004), (-0.009, 0.002, 0.019, 0.0042))]),
+              skin=cape_skin())
+    return p
+
+
+def emerald_cape():
+    """The emerald cape: emerald silk embroidered with silver vines above its hem and down its edges, the hem cut into
+    leaves; a mantle of leaves across the top, each over the next, bordered in silver; a silver leaf with an emerald
+    pinning each corner."""
+    p = cape_piece()
+    silk, leaf = emerald_cloth()
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    cloth = dict(solid=0.0025, roll=0.0012, roll_mat=silver)
+    p.add(silk, *cape_sheet(hem_edge('leaf', 0.06), 7), deco=ornate(0.012, cape_band()), skin=cape_skin(), **cloth)
+    cape_report('cape_emerald')
+    for k in range(7):
+        x = lerp(-0.13, 0.13, k / 6)
+        off = 0.0045 + 0.0016 * (k % 2)
+        p.add(leaf, *plate(lambda u, v, off=off: cape_at(u, v, off), lambda u, v, x=x: leaf_sd(u, v, (x, 1.497), (x + 0.004 * (1 if x > 0 else -1), 1.385), 0.056),
+                           x - 0.032, x + 0.032, 1.38, 1.5, h=0.0026), deco=ornate(0.005), skin=cape_skin(), sharp=35, **cloth)
+    for s_ in (1, -1):
+        x = s_ * 0.118
+        for tip in ((x + s_ * 0.022, 1.478), (x - s_ * 0.004, 1.44)):
+            p.add(silver, *plate(lambda u, v: cape_at(u, v, 0.0082), lambda u, v, tip=tip, x=x: leaf_sd(u, v, (x, 1.462), tip, 0.014), x - 0.03, x + 0.03, 1.43,
+                                 1.49, h=0.0009), solid=0.0018, roll=0.0007, skin=cape_skin(), bump=lambda q: 0.0006)
+        c, n = cape_pin(x, 1.462, 0.0105)
+        p.add(glass, *gem(c, n, 0.0068), skin=cape_skin())
+    return p
+
+
+def hunter_cape():
+    """A hunter's cape of dark green wool to the knee, its hem roughly cut, stitched; a short shoulder cape over the top
+    of it, its edge in rounded lobes; a bronze brooch at each corner."""
+    p = cape_piece()
+    wool = mat('hunter_wool', 0x2f4a2a, 'cloth', engrave='stitch', rough=0.95)
+    hood = mat('hunter_wool_dark', 0x263d22, 'cloth', engrave='stitch', rough=0.95)
+    bronze = mat('hunter_bronze', 0x9a6a3a, 'bronze', rough=0.45, metal=0.85)
+    fk = dict(folds=10, fold=0.01)
+    p.add(wool, *cape_sheet(hem_edge('ragged', 0.016, 3.1), 14, **fk), deco=0.012, skin=cape_skin(), solid=0.0028, roll=0.0011)
+    cape_report('cape_hunter', **fk)
+    p.add(hood, *cape_strip(1.22, 1.497, 0.012, hem_edge('round', 0.035), 5, wider=0.018, **fk), deco=0.01, skin=cape_skin(), solid=0.0028,
+          roll=0.0011)
+    for s_ in (1, -1):
+        c, n = cape_pin(s_ * 0.12, 1.47, 0.0153, **fk)
+        p.add(bronze, *rivet(c, n, 0.011, washer=0.016), skin=cape_skin())
+    return p
+
+
+def knight_cape():
+    """A knight's cape of red velvet to the knee, bordered in gold braid, gold vines embroidered above its hem; a yoke
+    worked all over with gold vines; a gold star at each corner and a gold chain slung between them."""
+    p = cape_piece()
+    gold_c = 0xc9a245
+    velvet = mat('knight_velvet', 0x7a1515, 'cloth', engrave='vines', engrave_color=gold_c, emboss=True, rough=0.6, trim=gold_c, sheen=0x9a2424,
+                 gloss=0.3, panels=True)
+    gold = mat('knight_gold', gold_c, 'gold', rough=0.25, metal=0.95)
+    cloth = dict(solid=0.0025, roll=0.0013, roll_mat=gold)
+    p.add(velvet, *cape_sheet(), deco=ornate(0.014, lambda q: smooth(CAPE_HEM + 0.15, CAPE_HEM + 0.11, q.y)), skin=cape_skin(), **cloth)
+    cape_report('cape_knight')
+    p.add(velvet, *cape_strip(1.44, 1.496, 0.004), deco=ornate(0.007), skin=cape_skin(), **cloth)
+    for s_ in (1, -1):
+        x = s_ * 0.118
+        med = outline(star((x, 1.468), 0.02, 0.013, 8), 4)
+        p.add(gold, *plate(lambda u, v: cape_at(u, v, 0.0085), lambda u, v, med=med: sd_poly(u, v, med), x - 0.025, x + 0.025, 1.443, 1.493, h=0.0011),
+              solid=0.0024, roll=0.001, skin=cape_skin(), bump=lambda q, x=x: 0.0028 * gauss(math.hypot(q.x - x, q.y - 1.468), 0.011))
+    pts = [cape_at(x, 1.455 - 0.055 * (1 - (x / 0.118) ** 2), 0.011) for x in (lerp(-0.118, 0.118, k / 30) for k in range(31))]
+    p.add(gold, *tube(pts, 0.0024, 6, twist=(2, 0.01, 0.35)), skin=cape_skin())
+    return p
+
+
 # ---------------------------------------------------------------- finish: bake the dense model onto the light one
 
 TEX = 1024
@@ -5887,6 +6241,9 @@ SETS = {
     'shield_glacial': {'shield': glacial_shield}, 'shield_emerald': {'shield': emerald_shield}, 'shield_infernal': {'shield': infernal_shield},
     # each set's sword and staff, a file a set (client/src/render/quaternius.ts qWeapon)
     **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
+    # the capes, a file each (client/src/render/quaternius.ts CAPES)
+    'cape_infernal': {'cape': infernal_cape}, 'cape_wool': {'cape': wool_cape},
+    **{f'cape_{k}': {'cape': globals()[f'{k}_cape']} for k in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'hunter', 'knight')},
     # each set's mage gear, a file a set (client/src/render/quaternius.ts armorPiece, HEADGEAR)
     'mage_infernal': {'robe': infernal_robe, 'circlet': infernal_circlet, 'gloves': infernal_mage_gloves, 'feet': infernal_shoes},
     **{f'mage_{s}': {'robe': globals()[f'{s}_robe'], 'circlet': globals()[f'{s}_circlet'], 'gloves': globals()[f'{s}_mage_gloves'],
@@ -5921,6 +6278,8 @@ def run(set_id, pieces):
             ob = finish(his, los, name, piece.tex)
         if any(piece.rules[1:]):
             skin_weights(ob, piece.rules)
+        for k, v in piece.extras.items():
+            ob[k] = v
         objs.append(ob)
         print(f'[gear] {set_id}.{name}: {dense} tris dense, {tris(ob)} for the game')
     if PREVIEW:
