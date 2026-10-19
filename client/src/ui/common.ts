@@ -39,6 +39,7 @@ export function hex(c: number): string {
 const SHARED_ICON: Record<string, string> = {
   ring: 'ring', earring: 'earring', necklace: 'necklace', blade: 'samurai_longsword', staff: 'sages_staff', helm: 'full_plate_helmet', plate: 'full_plate_armor',
   robe: 'demons_tunic', greaves: 'brigandine_gaiters', gauntlets: 'reinforced_gloves', boots: 'reinforced_boots', shield: 'shield', buckler: 'shield',
+  circlet: 'demons_circlet', gloves: 'short_gloves', shoes: 'leather_sandals',
   pelt: 'wolf_pelt', healing: 'greater_healing_potion', mana: 'greater_mana_potion',
 };
 /** The icon file an item uses: its own, or the one for its kind (abyssal_ring and ring_of_vigor both draw `ring`). */

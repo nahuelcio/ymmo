@@ -55,7 +55,9 @@ const SHIELDS: Record<string, string> = {
   wooden_buckler: 'buckler', brigandine_shield: 'brigandine', full_plate_shield: 'plate', abyssal_shield: 'abyssal', ashforged_shield: 'ashforged',
   dragon_shield: 'dragon', glacial_shield: 'glacial', emerald_shield: 'emerald', infernal_shield: 'infernal',
 };
-type GearFile = GearSet | `shield_${string}` | `weapons_${string}`;
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | MageFile;
+/** A region set's mage gear, a file a set (q/gear/mage_<set>.glb): `robe`, `circlet`, `gloves` and `feet`. */
+type MageFile = `mage_${string}`;
 const gear: Partial<Record<GearFile, THREE.Object3D>> = {};
 /** The male bind pose's inverse bone matrices, in `joints` order: the body pieces were modelled in it, so a woman's
  * bones carry them over onto her (and every race's scaling onto it). */
@@ -69,10 +71,12 @@ const SET_PIECE: Record<string, [GearSet, string]> = {
 };
 /** A set's model for an armour item, when there is one: the node to wear and the colour to dye the cloth under it. */
 export function armorPiece(id: string): { node: THREE.Object3D; under: number } | undefined {
-  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|greaves|boots)$/.exec(id);
-  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', greaves: 'legs', boots: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
-  const node = set && wantGear(set)?.getObjectByName(name);
-  return node ? { node, under: UNDER[set] ?? 0x3a3530 } : undefined;
+  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|gloves|greaves|boots|shoes)$/.exec(id);
+  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', gloves: 'gloves', greaves: 'legs', boots: 'feet', shoes: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
+  // a mage's pieces (the robe, the cloth gloves, the shoes) come in a file of their own
+  const file: GearFile | undefined = m && /^(robe|gloves|shoes)$/.test(m[2]) ? `mage_${m[1]}` : set;
+  const node = file && wantGear(file)?.getObjectByName(name);
+  return node ? { node, under: UNDER[set!] ?? 0x3a3530 } : undefined;
 }
 /**
  * A chest piece as a woman wears it. The sets' plates are fitted to the man's chest, and her bust, taken into his rest
@@ -127,7 +131,7 @@ function toSkin(m: THREE.Mesh) {
   g.deleteAttribute('_weights');
   m.userData.skinned = true;
 }
-export type Helm = keyof typeof HELMS | GearSet;
+export type Helm = keyof typeof HELMS | GearSet | MageFile;
 /** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
@@ -136,6 +140,8 @@ export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: bo
   leather_cap: { model: 'apprentice', closed: true }, abyssal_helm: { model: 'abyssal', closed: true }, ashforged_helm: { model: 'ashforged', closed: true },
   dragon_helm: { model: 'dragon', closed: true }, glacial_helm: { model: 'glacial', closed: true }, emerald_helm: { model: 'emerald', closed: true },
   infernal_helm: { model: 'infernal', closed: true },
+  // the mages' crowns sit over the hair, and leave the ears and the face as they are
+  ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [`${s}_circlet`, { model: `mage_${s}` as Helm, hair: true }])),
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
@@ -494,7 +500,7 @@ export function qPlayer(o: QOpts): Rig {
     const sk = new THREE.Skeleton(bones, restInv);
     skeletons.set(-1, sk);
     for (const node of o.armor) {
-      const bust = o.g === 'f' && node.name === 'chest';
+      const bust = o.g === 'f' && (node.name === 'chest' || node.name === 'robe');
       node.traverse((x) => {
         if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
         const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
@@ -524,7 +530,7 @@ export function qPlayer(o: QOpts): Rig {
   }
   if (o.helm) {
     const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
-    const model = fixed ? props[o.helm] : wantGear(o.helm as GearSet)?.getObjectByName('helm');
+    const model = fixed ? props[o.helm] : wantGear(o.helm as GearFile)?.getObjectByName(o.helm.startsWith('mage_') ? 'circlet' : 'helm');
     const [y, z, s] = fixed ?? [0, 0, 1];
     if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
@@ -662,6 +668,12 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Escudos: ['broadsword', 'brigandine_tunic', null, null, null, null, null],
     // each region set with its sword and its staff, side by side
     Armas: [null, null, null, null, null, null, null],
+    // each region set's mage gear (tools/art/blender/gear.py mage_<set>), and all the crowns side by side
+    ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
+      `Místico ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
+      [`${s}_staff`, `${s}_robe`, `${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null],
+    ])),
+    Coronas: [null, null, null, null, null, null, null],
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
@@ -678,12 +690,24 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
       const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
       rigs = sets.flatMap((s, i) => (['blade', 'staff'] as const).map((k, j) => {
-        const rig = playerModel(race, k === 'staff' ? 'mystic' : 'fighter', `${s}_${k}`, `${s}_plate`, { g, hs: 1, hc: 0 },
-          [`${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, null]);
+        const mage = k === 'staff';
+        const rig = playerModel(race, mage ? 'mystic' : 'fighter', `${s}_${k}`, `${s}_${mage ? 'robe' : 'plate'}`, { g, hs: 1, hc: 0 },
+          mage ? [`${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null] : [`${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, null]);
         rig.root.position.set((i * 2 + j - 5.5) * 1.1, 0, 0);
         scene.add(rig.root);
         return rig;
       }));
+      return;
+    }
+    if (tier === 'Coronas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const crowns = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'].map((s) => `${s}_circlet`);
+      rigs = crowns.map((c, i) => {
+        const rig = playerModel(race, 'mystic', null, c.replace('_circlet', '_robe'), { g, hs: (i % 3) + 1, hc: 0 }, [c, null, null, null, null]);
+        rig.root.position.set((i - (crowns.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
       return;
     }
     if (tier === 'Escudos') {

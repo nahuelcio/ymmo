@@ -53,7 +53,8 @@ FAST = os.environ.get('GEAR_FAST', '') == '1'  # previews of the dense model, wi
 HEAD = os.environ.get('GEAR_HEAD', '')
 ONLY = os.environ.get('GEAR_ONLY', '')
 LIGHT = float(os.environ.get('GEAR_LIGHT', '2.2'))  # how much coarser the game's copy is than the dense model
-BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000, 'shield': 4000, 'blade': 3000, 'staff': 3500}  # the triangles each piece may have in the game
+BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000, 'shield': 4000, 'blade': 3000, 'staff': 3500, 'robe': 12000,
+          'circlet': 4000}  # the triangles each piece may have in the game
 PART = os.environ.get('GEAR_PART', '')  # only these pieces of each set (helm, chest, gloves, legs, feet, shield)
 ZOOM = os.environ.get('GEAR_ZOOM', '')  # body previews closer in: "height,width" in metres (0.85,0.6 frames the hips), or "x,height,width"
 
@@ -375,7 +376,7 @@ class Piece:
         self.tex = None  # its maps' size (else TEX, the cuirass twice that)
 
     def add(self, material, verts, faces, solid=0.0, roll=0.0, roll_min=0.0, roll_mat=None, rope=False, bump=None,
-            fine=None, forge=None, bead=None, deco=None, sharp=40, skin=None, whole=False):
+            fine=None, forge=None, bead=None, deco=None, sharp=40, skin=None, whole=False, wound=False):
         """solid: thickness (inwards); roll: how far a rolled edge stands out of the plate, along every edge loop longer
         than roll_min metres, in roll_mat (rope: twisted like a cable); bump(p) -> metres to push each point out, fine
         the same for detail only the dense model gets; forge: the surface work (default: hammered, for metal plates);
@@ -384,12 +385,14 @@ class Piece:
         along the outer edges) or (width, function); sharp: edges sharper than this many degrees stay sharp; skin: the
         bones a body piece follows - a tuple of names (weights taken from the body under it, kept to those bones) or a
         function p -> {bone: weight}; whole: the game's copy keeps it as built, unthinned (lumpy, strongly curved parts
-        the thinning would pull away from the dense model, so the bake would miss them)."""
+        the thinning would pull away from the dense model, so the bake would miss them); wound: its faces already face
+        out (taken from the body's own mesh, a glove) - turning them by the part's majority would turn some inwards,
+        and those the game does not draw."""
         if skin not in self.rules:
             self.rules.append(skin)
         self.parts.append(dict(material=material, verts=verts, faces=faces, solid=solid, roll=roll, roll_min=roll_min,
                                roll_mat=roll_mat, rope=rope, bump=bump, fine=fine, forge=forge, bead=bead, deco=deco,
-                               sharp=sharp, rule=self.rules.index(skin), whole=whole))
+                               sharp=sharp, rule=self.rules.index(skin), whole=whole, wound=wound))
         return self
 
     def build(self, join=True):
@@ -409,9 +412,10 @@ class Piece:
             bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)
             bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=1e-7)
             bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
-            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+            if not P['wound']:
+                bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
             is_open = any(e.is_boundary for e in bm.edges)
-            if is_open and bm.faces:  # an open sheet faces away from the head, or a body piece from the body under it
+            if is_open and bm.faces and not P['wound']:  # an open sheet faces away from the head, or a body piece from the body under it
                 if P['rule']:
                     kd = body()['kd']
                     out = sum((f.calc_center_median() - B(kd.find(G(f.calc_center_median()))[0])).dot(f.normal) * f.calc_area() for f in bm.faces)
@@ -3695,6 +3699,1430 @@ def infernal_staff():
     return p
 
 
+# ---------------------------------------------------------------- mage gear: robes, circlets, gloves and shoes
+
+LEGS = ('pelvis', 'spine_01', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r')
+HEM = 0.3  # a robe's hem: mid-shin
+SLIT = 0.76  # how far up its slits run, front and back: the upper thigh
+
+
+def gown_form():
+    """The form a robe's skirt hangs round: the hips and both legs together, from the waist down to the shin, as far as
+    the bare body reaches (its sections convex, bridging the legs), angle 0 in front and pi/2 at the left."""
+    return fitted(('gown', 0.0), lambda: Fit(LEGS, (0, 0, 0), UP, (0, 0, 1), 0.22, 1.1, gap=0.008, only=('Head_',), nt=44))
+
+
+def gown_at(f, a, t, off):
+    """A point `off` metres straight out from the gown's form, across its axis (the form's own normal tilts where the
+    hips narrow to the thighs, and a skirt stood far off along it would fold over itself)."""
+    return f.o + f.d * t + (f.up * math.cos(a) + f.side * math.sin(a)) * (f.radius(a, t) + off)
+
+
+def flare(a, t, hem=HEM, wide=0.095, back=0.035):
+    """How far a robe's skirt stands off the legs: close at the hips, widening evenly down to the hem (an A-line),
+    wider behind, where the calf swings back."""
+    return 0.006 + clamp((0.93 - t) / (0.93 - hem)) ** 1.1 * (wide + back * (1 - math.cos(a)) / 2)
+
+
+def gown_skin(slit=SLIT, knee=0.6, hem=HEM):
+    """The weights of a robe's skirt: held at the waist as a skirt's (skirt()), each half then following its own
+    thigh, blended across the middle - more widely towards the hem - so the halves stay together; and from the knee
+    down the calf more and more, most behind it, so a shin swinging back carries the cloth with it instead of coming
+    through. Halves wholly apart below the slits would gape standing at ease, the legs a little apart: blended, the
+    slits only open a few centimetres in a stride."""
+    def f(p):
+        held = smooth(0.93, 0.99, p.y)
+        wb = lerp(0.05, 0.09, clamp((slit - p.y) / (slit - hem)))
+        share = smooth(-wb, wb, p.x)
+        c = smooth(knee, hem, p.y) * lerp(0.45, 0.85, smooth(0.0, -0.1, p.z))
+        free = 1 - held
+        return {'pelvis': held, 'thigh_l': free * share * (1 - c), 'calf_l': free * share * c,
+                'thigh_r': free * (1 - share) * (1 - c), 'calf_r': free * (1 - share) * c}
+    return f
+
+
+def gown_skirt(f, RU=0.17, top=1.045, hem=HEM, slit=SLIT, folds=14, fold=0.006):
+    """A robe's skirt from the waist to the hem, slit front and back up to `slit` (the slits opening a little
+    towards the hem), hanging in soft folds that deepen towards the hem, flat in front."""
+    w = lambda v: 0.0015 + 0.005 * clamp((slit - v) / (slit - hem))
+
+    def sd(u, v):
+        a = u / RU
+        hem_a = hem - 0.015 * (1 - math.cos(a)) / 2  # a little longer behind
+        cut = min(abs(u), abs(wrap(a - math.pi)) * RU)
+        return max(hem_a - v, v - top, -max(cut - w(v), v - slit))
+
+    def surf(u, v):
+        a = u / RU
+        depth = fold * clamp((0.95 - v) / (0.95 - hem)) * math.sin(a * folds) * smooth(0.45, 0.75, abs(wrap(a)))  # flat under the stoles
+        return gown_at(f, a, v, flare(a, v, hem) + depth)
+    return plate(surf, sd, -math.pi * RU, math.pi * RU, hem - 0.02, top + 0.004, h=0.004, periodic=True)
+
+
+def bell(f, RU, t0, t1, off, wide, folds=8, fold=0.004):
+    """A sleeve round a form from t0 to t1, `off` from it, widening into a bell over its last part (`wide` out at
+    its end), in folds there."""
+    def surf(u, v):
+        a = u / RU
+        k = smooth(t0 + (t1 - t0) * 0.3, t1, v) ** 1.5
+        return f.point(a, v, off + wide * k + fold * k * math.sin(a * folds))
+    return plate(surf, lambda u, v: max(t0 - v, v - t1), -math.pi * RU, math.pi * RU, t0 - 0.004, t1 + 0.004, h=0.0035, periodic=True)
+
+
+def skin_patch(bones, keep=None, off=0.0015, mesh='Arms', clear='Head_', g='m'):
+    """The body's own surface where it follows `bones` (each vertex by the bone it follows most; `keep` chooses among
+    them), stood `off` out along its normals: a glove fitted as closely as the skin, finger by finger. It is taken
+    from `mesh`: the reference keeps no faces of the bare skin's hands, but the kit's arms end in the same hands, near
+    enough - where the bare hand (`clear`, drawn under a glove, dyed) swells out past them, up to a centimetre at the
+    wrist and the thumb, the glove is pushed out to cover it (by the points of the same bone only, so a finger never
+    swells into the next)."""
+    bd = body(g)
+    pick = {}
+    for i, (bn, mn) in enumerate(zip(bd['bone_of'], bd['mesh_of'])):
+        if bn in bones and mesh in mn and (not keep or keep(bd['V'][i])):
+            pick[i] = True
+    weld, verts, vbone = {}, [], []  # the dump splits vertices along its seams: weld them back so the normals are shared
+    idx = {}
+    for i in pick:
+        key = tuple(round(x, 5) for x in bd['V'][i])
+        if key not in weld:
+            weld[key] = len(verts)
+            verts.append(Vector(bd['V'][i]))
+            vbone.append(bd['bone_of'][i])
+        idx[i] = weld[key]
+    faces = [tuple(idx[k] for k in f_) for f_ in bd['f'] if all(k in pick for k in f_)]
+    faces = [f_ for f_ in faces if len(set(f_)) == 3]
+    normals = [Vector((0, 0, 0)) for _ in verts]
+    for a_, b_, c_ in faces:
+        n = (verts[b_] - verts[a_]).cross(verts[c_] - verts[a_])
+        for k in (a_, b_, c_):
+            normals[k] += n
+    normals = [n.normalized() if n.length > 1e-12 else Vector((0, 1, 0)) for n in normals]
+    push = [off] * len(verts)
+    if clear:
+        pts = [(bd['V'][i], bn) for i, (bn, mn) in enumerate(zip(bd['bone_of'], bd['mesh_of'])) if bn in bones and clear in mn and (not keep or keep(bd['V'][i]))]
+        kd = KDTree(len(pts))
+        for k, (co, _) in enumerate(pts):
+            kd.insert(co, k)
+        kd.balance()
+        for j, (v, n, b) in enumerate(zip(verts, normals, vbone)):
+            for co, k, _ in kd.find_range(v, 0.014):
+                if pts[k][1] != b:
+                    continue
+                dv = co - v
+                dd = dv.dot(n)
+                if (dv - n * dd).length < 0.005:
+                    push[j] = max(push[j], dd + off)
+        nbr = [set() for _ in verts]
+        for f_ in faces:
+            for a_ in f_:
+                nbr[a_].update(f_)
+        push = [max(push[k] for k in nbr[j] | {j}) for j in range(len(verts))]  # the largest round each, then smoothed
+        push = [(push[j] + sum(push[k] for k in nbr[j])) / (1 + len(nbr[j])) for j in range(len(verts))]
+    return [v + n * d for v, n, d in zip(verts, normals, push)], faces
+
+
+_hair = []
+
+
+def head_reach(y_of, slab=0.012, styles=None, bins=90):
+    """How far out from the head's axis (z = 0.008) the bare head and the hairstyles reach round a band at height
+    y_of(a), bin by bin round the head (body/hair.json.gz, dumped from the game): the largest of each bin and its
+    neighbours, then smoothed - never under it. styles(a) names those to count at angle a (else every one)."""
+    if not _hair:
+        import gzip
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'body', 'hair.json.gz')
+        with gzip.open(path, 'rt', encoding='utf-8') as fh:
+            _hair.extend(json.load(fh)['v'])
+    R = [0.0] * bins
+    for x, y, z, s in _hair:
+        a = math.atan2(x, z - 0.008)
+        if abs(y - y_of(a)) > slab or (styles and s not in styles(a)):
+            continue
+        k = int((a + math.pi) / (2 * math.pi) * bins) % bins
+        R[k] = max(R[k], math.hypot(x, z - 0.008))
+    for _ in range(3):
+        R = [max(R[(k - 1) % bins], R[k], R[(k + 1) % bins]) for k in range(bins)]
+    for _ in range(4):
+        R = [(R[(k - 1) % bins] + 2 * R[k] + R[(k + 1) % bins]) / 4 for k in range(bins)]
+
+    def at(a):
+        x = ((a + math.pi) / (2 * math.pi) * bins - 0.5) % bins
+        i = int(x)
+        return lerp(R[i], R[(i + 1) % bins], x - i)
+    return at
+
+
+class Band:
+    """A circlet's band round the head: at angle a (0 in front, +pi/2 at the left) its middle at height y_of(a) and
+    `reach(a)` + `gap` from the head's axis; h up from its middle it leans out by `lean` (a crown flares)."""
+
+    def __init__(self, y_of, reach, gap=0.004, lean=0.22, RU=0.11):
+        self.y_of, self.reach, self.gap, self.lean, self.RU = y_of, reach, gap, lean, RU
+
+    def at(self, a, h):
+        r = self.reach(a) + self.gap + self.lean * h
+        return Vector((r * math.sin(a), self.y_of(a) + h, 0.008 + r * math.cos(a)))
+
+    def normal(self, a, h):
+        e = 1e-4
+        n = (self.at(a + e, h) - self.at(a - e, h)).cross(self.at(a, h + e) - self.at(a, h - e))
+        radial = Vector((math.sin(a), 0.0, math.cos(a)))
+        n.normalize()
+        return n if n.dot(radial) >= 0 else -n
+
+    def point(self, a, h, off=0.0):
+        return self.at(a, h) + self.normal(a, h) * off
+
+    def around(self, a, h):
+        return self.reach(a) + self.gap + self.lean * h
+
+
+def curl(at, along, up, r0, r1, turns=1.25, r=0.0026, n=40):
+    """A scroll's curl: a cord winding in from `at` along `along`, round towards `up`, tightening from r0 to r1."""
+    a_, u_ = Vector(along).normalized(), Vector(up).normalized()
+    pts, radii = [], []
+    for k in range(n + 1):
+        t = k / n
+        th = 2 * math.pi * turns * t
+        rr = lerp(r0, r1, t)
+        c = Vector(at) + u_ * r0  # the curl's eye, above the start
+        pts.append(c + a_ * (rr * math.sin(th)) - u_ * (rr * math.cos(th)))
+        radii.append(r * lerp(1.0, 0.55, t))
+    return tube(pts, radii, 8)
+
+
+def infernal_silk(scale=0.16):
+    """The infernal mage's cloth: a black silk with a faint cold sheen, bordered in gold braid and embroidered in its
+    panels in raised gold scrollwork, as the harness's lacquer is."""
+    gold = 0xc9a245
+    return mat(f'infernal_silk_{scale}', 0x0e0f14, 'cloth', engrave='scroll', engrave_color=gold, emboss=True, rough=0.6, trim=gold,
+               sheen=0x1d2232, gloss=0.3, scale=scale, panels=True)
+
+
+def infernal_robe():
+    """The black knight's mage: a robe of black silk to mid-shin, slit front and back, its hem and slits
+    bordered in gold braid and embroidered above the hem in gold scrollwork as the harness is; a fitted bodice with a band
+    of scrollwork down the front set with gold studs, and a scrolled yoke; bell sleeves with embroidered cuffs; a high
+    collar, open in front, its corners set with gold rosettes; a mantle over each shoulder, its edge in three lobes, a
+    gold star at its crown; a black belt corded in gold with the harness's gold star and dark stone; and hanging from
+    it over the front slit two stoles embroidered finer, drawn to a point, a gold drop at each."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    silk = infernal_silk()
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    belt = mat('infernal_belt', 0x141215, 'leather', rough=0.5)
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    gw = gown_form()
+    cloth = dict(solid=0.0022, roll=0.0012, roll_mat=gold)
+    # the skirt, embroidered above the hem
+    p.add(silk, *gown_skirt(gw), deco=ornate(0.012, lambda q: smooth(HEM + 0.12, HEM + 0.09, q.y)), skin=gown_skin(), **cloth)
+    # the bodice: scrollwork down the front and over the yoke, gold studs down the front
+    front = lambda q: smooth(0.034, 0.026, abs(q.x)) if q.z > 0 else 0.0
+    p.add(silk, *ring_plate(torso, 0.17, 0.975, 1.505, 0.004), deco=ornate(0.01, lambda q: max(front(q), smooth(1.37, 1.4, q.y))), skin=TORSO,
+          **cloth)
+    for y in (1.1, 1.16, 1.22, 1.28, 1.34):
+        p.add(gold, *rivet(torso.point(0.0, y, 0.0058), torso.normal(0.0, y), 0.0042, washer=0.0065), skin=TORSO)
+    # the sleeves: close over the upper arm, a bell from the elbow, its cuff embroidered
+    both(p, silk, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=PLAIN, **cloth)
+    cuff = lambda q: smooth(0.17, 0.19, q.x - bone('lowerarm_l').x)
+    both(p, silk, bell(fore, 0.07, -0.05, 0.255, 0.009, 0.05), ('upperarm_l', 'lowerarm_l'), deco=ornate(0.01, cuff), **cloth)
+    # the mantles, a gold star at the crown of each
+    capoff = lambda u, v: 0.016 + 0.006 * smooth(-0.03, -0.085, v)
+    both(p, silk, teeth_plate(arm, 0.09, -2.45, 2.45, -0.085, 0.13, capoff, 3, 0.035, 'high', shape='round'), ('clavicle_l', 'upperarm_l'),
+         deco=ornate(0.011), sharp=35, **cloth)
+    shoulder = outline(star((0.0, 0.0), 0.017, 0.011, 8), 4)
+    both(p, gold, plate(lambda u, v: arm.point(u / 0.09, v, capoff(u, v) + 0.0012), lambda u, v: sd_poly(u, v, shoulder), -0.02, 0.02, -0.02, 0.02,
+                        h=0.0012), ('clavicle_l', 'upperarm_l'), solid=0.0018, roll=0.0008,
+         bump=lambda q: 0.003 * gauss((q - arm.at(0.0, 0.0)).length, 0.008))
+    # the high collar, open in front, higher behind; a gold rosette at each front corner
+    neck = Cone(-0.04, 1.47, 0.098, 0.09, 1.65, 0.118, 0.11)
+    top_c = lambda a: 1.575 + 0.05 * (1 - math.cos(a)) / 2
+    collar_sd = lambda u, v: max(1.472 - v, v - top_c(u / 0.1), 0.75 - abs(wrap(u / 0.1)))
+    p.add(silk, *plate(lambda u, v: neck.point(u / 0.1, v, 0.0), collar_sd, -math.pi * 0.1, math.pi * 0.1, 1.468, 1.63, h=0.003, periodic=True),
+          deco=ornate(0.009), skin=('neck_01', 'spine_03'), sharp=35, **cloth)
+    for s_ in (1, -1):
+        a = s_ * 0.86
+        at, n = neck.point(a, 1.545, 0.001), neck.normal(a, 1.545)
+        p.add(gold, *rivet(at, n, 0.0055, washer=0.0095), skin=('neck_01', 'spine_03'))
+        p.add(stone, *gem(at + n * 0.0035, n, 0.004), skin=('neck_01', 'spine_03'))
+    # the belt, corded in gold above and below, the star and the stone in front
+    hip = ('pelvis', 'spine_01')
+    p.add(belt, *strap(gw, [(2 * math.pi * k / 96, 1.0) for k in range(97)], 0.034, 0.0035, 0.0105), skin=hip, forge=creased(0.0004))
+    for y in (0.983, 1.017):
+        p.add(gold, *tube([gw.point(2 * math.pi * k / 96, y, 0.0125) for k in range(96)], 0.0017, 6, closed=True), skin=hip)
+    med = outline(star((0.0, 1.0), 0.034, 0.023, 8), 4)
+    p.add(gold, *plate(lambda u, v: gw.point(u / 0.16, v, 0.016), lambda u, v: sd_poly(u, v, med), -0.042, 0.042, 0.958, 1.042),
+          solid=0.003, roll=0.0012, skin=hip, bump=lambda q: 0.004 * gauss(math.hypot(q.x, q.y - 1.0), 0.02))
+    p.add(stone, *gem(gw.point(0.0, 1.0, 0.0215), gw.normal(0.0, 1.0), 0.0085), skin=hip)
+    # the stoles over the front slit, from under the belt to a point; a gold drop at each point
+    RU = 0.17
+    stole = outline([(0.006, 1.005), (0.07, 1.005), (0.07, 0.47), (0.038, 0.405), (0.006, 0.47)], 6)
+    soff = lambda u, v: flare(u / RU, v) + 0.006
+    both(p, infernal_silk(0.07), plate(lambda u, v: gown_at(gw, u / RU, v, soff(u, v)), lambda u, v: sd_poly(u, v, stole), 0.0, 0.076, 0.395, 1.01,
+                                       h=0.0032),
+         gown_skin(), deco=ornate(0.009), sharp=35, **cloth)
+    tip = gown_at(gw, 0.038 / RU, 0.405, soff(0.038, 0.405))
+    both(p, gold, merge(oball(tip + Vector((0, -0.006, 0.002)), (0.006, 0.009, 0.006)), tube([tip + Vector((0, 0.002, 0)), tip + Vector((0, -0.004, 0.002))],
+                                                                                              0.0022, 8)), gown_skin())
+    return p
+
+
+def infernal_circlet():
+    """A diadem of gold over the brow, open behind the ears so any hair passes it: a band of black lacquer worked in
+    raised gilt scrollwork between two roped gold edges, rising in front into an openwork crest of gold - a tall flame
+    between C-scrolls, small points along the band - with the harness's dark stone at its foot and two small stones in
+    the scrolls; two small gold horns at the temples, sweeping up and curling in as the helm's, set in star mounts;
+    each end of the band finished in a gold curl."""
+    p = Piece('circlet')
+    p.budget = 4000
+    gold_c = 0xc9a245
+    orn = mat('infernal_crown', 0x0b0c0f, 'enamel', engrave='scroll', engrave_color=gold_c, emboss=True, rough=0.14, metal=0.6, bump=1.2,
+              trim=gold_c, sheen=0x161a24, gloss=0.85, scale=0.05, panels=True)
+    _, blk, gold, mail, leather, stone = infernal_mats()
+    A, hw = 1.72, 0.0075  # how far round the band runs either side; half its height
+    y_of = lambda a: 0.15 + 0.016 * (1 - math.cos(a)) / 2
+    short = {'m0', 'f0', 'm1', 'f1', 'm4', 'f4', 'head'}
+    every = short | {'m2', 'f2'}
+    reach = head_reach(y_of, 0.016, lambda a: every if abs(a) < 1.6 else short)
+    band = Band(y_of, reach)
+    RU = band.RU
+    p.add(orn, *plate(lambda u, v: band.point(u / RU, v), lambda u, v: max(abs(u) - A * RU, abs(v) - hw), -A * RU - 0.004, A * RU + 0.004,
+                      -hw - 0.003, hw + 0.003, h=0.0016), solid=0.0025, roll=0.0011, roll_mat=gold, rope=True, deco=ornate(0.0028), sharp=30)
+    # the crest: a flame between C-scrolls, small points along the band
+    flame = outline(symmetric([(0.0, 0.064), (0.005, 0.054), (0.011, 0.04), (0.016, 0.026), (0.018, 0.014), (0.015, 0.004)]), 6)
+    rings = [(s_ * cu, cv, r) for s_ in (1, -1) for cu, cv, r in ((0.031, 0.021, 0.0125), (0.057, 0.013, 0.0085))]
+    points = [(s_ * u_, 0.0) for s_ in (1, -1) for u_ in (0.083, 0.101, 0.119, 0.137, 0.155)]
+
+    def crest_sd(u, v):
+        f = max(sd_poly(u, v, flame), -sd_ellipse(u, v, 0.0, 0.032, 0.0048, 0.011))
+        for cu, cv, r in rings:
+            f = min(f, abs(math.hypot(u - cu, v - cv) - r) - 0.0019)
+        for cu, _ in points:
+            f = min(f, max(sd_poly(u, v, [(cu - 0.006, hw - 0.002), (cu + 0.006, hw - 0.002), (cu, hw + 0.011)]), 0.0))
+        return max(f, -hw * 0.4 - v)
+    p.add(gold, *plate(lambda u, v: band.point(u / RU, v, 0.0016), crest_sd, -0.165, 0.165, -hw * 0.4 - 0.003, 0.068, h=0.0011),
+          solid=0.002, roll=0.0007, sharp=30)
+    # the dark stone at the flame's foot, in a beaded setting; two small stones in the scrolls
+    at, n = band.point(0.0, 0.006, 0.0042), band.normal(0.0, 0.006)
+    t_, n_, b_ = frame(n)
+    p.add(gold, *merge(oball(at - n * 0.001, (0.0098, 0.0022, 0.0098), (t_, n_, b_), 14, 5),
+                       *[oball(at + (t_ * math.cos(k * math.pi / 5) + b_ * math.sin(k * math.pi / 5)) * 0.0098, (0.0016, 0.0013, 0.0016), (t_, n_, b_), 6, 4)
+                         for k in range(10)]))
+    p.add(stone, *gem(at + n * 0.0018, n, 0.0072))
+    for s_ in (1, -1):
+        c = band.point(s_ * 0.031 / RU, 0.021, 0.0035)
+        p.add(stone, *gem(c, band.normal(s_ * 0.031 / RU, 0.021), 0.0042))
+    # the horns at the temples, in star mounts; the curls at the ends
+    for s_ in (1, -1):
+        a = s_ * 0.98
+        root, n = band.point(a, 0.002, 0.0), band.normal(a, 0.002)
+        radial = Vector((n.x, 0.0, n.z)).normalized()
+        p.add(gold, *horn(root, radial + Vector((0, 0.35, 0)), UP, -radial + Vector((0, 0, -0.15)), 0.058, 0.0078))
+        mount = outline(star((a * RU, 0.002), 0.0125, 0.0085, 6), 4)
+        p.add(gold, *plate(lambda u, v: band.point(u / RU, v, 0.0025), lambda u, v, mount=mount: sd_poly(u, v, mount), a * RU - 0.015,
+                           a * RU + 0.015, -0.014, 0.017, h=0.0009), solid=0.0018, roll=0.0007, sharp=30)
+        end = s_ * A
+        tang = (band.at(end + s_ * 1e-3, 0.0) - band.at(end, 0.0)).normalized()
+        p.add(gold, *curl(band.point(end, -hw * 0.6, 0.0006), tang, -UP, 0.0085, 0.0022, turns=1.2, r=0.0024))
+    # how much of any hair the band lets through (none, if it is fitted right)
+    out = 0
+    for x, y, z, s in _hair:
+        a = math.atan2(x, z - 0.008)
+        if abs(a) < A and abs(y - y_of(a)) < hw and s in (every if abs(a) < 1.6 else short):
+            out += math.hypot(x, z - 0.008) > reach(a) + band.gap - 0.0025
+    print(f'[gear] circlet: {out} hair or head points through the band')
+    return p
+
+
+def infernal_mage_gloves():
+    """Gloves of fine black kid fitted finger by finger, a dark stone set in gold on the back of each hand over a
+    panel of gold embroidery, and a flared cuff of black lacquer worked in scrollwork, bordered in gold."""
+    p = Piece('gloves')
+    p.budget = 5000
+    gold_c = 0xc9a245
+    kid = mat('infernal_kid', 0x121014, 'leather', engrave='scroll', engrave_color=gold_c, emboss=True, rough=0.45, trim=gold_c, gloss=0.4,
+              scale=0.06, panels=True)
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    hand = forms()['hand']
+    hx = bone('hand_l')
+    tips = tuple(f'{f}_04_leaf_l' for f in ('index', 'middle', 'ring', 'pinky', 'thumb'))
+    fingers = ('hand_l',) + FINGERS_L + THUMB_L + tips
+    back = lambda q: smooth(hx.y - 0.004, hx.y + 0.004, q.y) * smooth(hx.x - 0.005, hx.x + 0.01, q.x) * smooth(hx.x + 0.09, hx.x + 0.075, q.x)
+    both(p, kid, skin_patch(fingers + ('lowerarm_l',), keep=lambda v: v.x > hx.x - 0.04), fingers + ('lowerarm_l',), whole=True,
+         deco=ornate(0.004, back), wound=True)
+    both(p, orn, ring_plate(hand, 0.06, -0.078, 0.006, lambda u, v: 0.0035 + 0.017 * smooth(-0.005, -0.078, v)), ('hand_l', 'lowerarm_l'),
+         deco=ornate(0.006), solid=0.0022, roll=0.0011, roll_mat=gold)
+    at, n = hand.point(0.0, 0.045, 0.0004), hand.normal(0.0, 0.045)
+    both(p, gold, rivet(at, n, 0.0058, washer=0.0098), ('hand_l',))
+    both(p, stone, gem(at + n * 0.0035, n, 0.0048), ('hand_l',))
+    return p
+
+
+def infernal_shoes():
+    """Soft boots of black leather to mid-calf, under the robe's hem: a cuff turned down at the top worked in gold
+    scrollwork, a black strap corded in gold round the ankle with a small gold star, a gold toe cap, and a sole."""
+    p = Piece('feet')
+    p.budget = 5000
+    gold_c = 0xc9a245
+    boot = mat('infernal_boot', 0x131116, 'leather', engrave='scroll', engrave_color=gold_c, emboss=True, rough=0.5, trim=gold_c, gloss=0.35,
+               scale=0.09, panels=True)
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=gold)
+    both(p, boot, ring_plate(calf, 0.06, 0.2, 0.455, 0.0032), ('calf_l', 'foot_l'), deco=PLAIN, **edge)
+    both(p, boot, ring_plate(foot, 0.045, -0.085, 0.25, 0.0032), ('foot_l', 'ball_l'), deco=PLAIN, **edge)
+    both(p, boot, ring_plate(calf, 0.06, 0.19, 0.255, lambda u, v: 0.0068 + 0.004 * smooth(0.255, 0.19, v)), ('calf_l',), deco=ornate(0.008), **edge)
+    both(p, blk, ring_plate(calf, 0.06, 0.405, 0.428, 0.0058), ('calf_l', 'foot_l'), deco=PLAIN, **edge)
+    ankle = outline(star((0.0, 0.4165), 0.011, 0.0072, 6), 4)
+    both(p, gold, plate(lambda u, v: calf.point(u / 0.06, v, 0.0086), lambda u, v: sd_poly(u, v, ankle), -0.014, 0.014, 0.402, 0.431, h=0.0009),
+         ('calf_l', 'foot_l'), solid=0.0018, roll=0.0007)
+    both(p, gold, band_plate(foot, 0.045, -1.3, 1.3, 0.198, 0.25, 0.0058, 0.008), ('ball_l',), solid=0.0024, roll=0.001)
+    both(p, sole, band_plate(foot, 0.045, math.pi - 1.25, math.pi + 1.25, -0.085, 0.25, 0.0052, 0.01), ('foot_l', 'ball_l'), solid=0.0048)
+    return p
+
+
+# ---------------------------------------------------------------- what every set's mage gear is built from
+
+def hem_edge(shape, depth, seed=0.0):
+    """A free edge's profile: how far back from its furthest point the edge runs at x, counted in lobes (x = 2.5 is
+    halfway along the third): 'round' scallops, 'point' dags, 'leaf' leaves (pointed, round-sided), 'ragged' torn."""
+    def g(x):
+        f = abs(2 * (x - math.floor(x)) - 1)  # 0 at a lobe's middle, 1 between two
+        if shape == 'round':
+            return depth * (1 - math.sqrt(max(0.0, 1 - f * f)))
+        if shape == 'point':
+            return depth * f ** 0.85
+        if shape == 'leaf':
+            return depth * (0.35 * f + 0.65 * (1 - math.sqrt(max(0.0, 1 - f * f))))
+        if shape == 'ragged':
+            return depth * (0.5 + 0.5 * noise.noise(Vector((x * 0.9 + seed, seed * 1.3, 0.0)))) * (0.55 + 0.45 * abs(math.sin(x * 2.3 + seed)))
+        return 0.0
+    return g
+
+
+def skirt_at(f, a, v, hem=HEM, wide=0.095, back=0.035, off=0.0, folds=14, fold=0.006, flat=0.45, drape=None, **_):
+    """Where a robe's skirt (robe_skirt, the same arguments) is at angle a and height v, `off` out from it: for what
+    lies on it (bands, sashes, fur) to follow its folds."""
+    hm = hem(a) if callable(hem) else hem
+    k = clamp((0.95 - v) / (0.95 - hm))
+    depth = fold * k * math.sin(a * folds) * smooth(flat, flat + 0.3, abs(wrap(a)))
+    return gown_at(f, a, v, flare(a, v, hm, wide, back) + off + depth + (drape(a, v) if drape else 0.0))
+
+
+def robe_skirt(f, top=1.045, hem=HEM, RU=0.17, slits=(), edge=None, lobes=0, h=0.004, **kw):
+    """A robe's skirt round a form (the gown's, or a Dress), from `top` down to the hem - a height, or the height at
+    each angle - widening as an A-line (flare: wide, and back more behind), hanging in `folds` deepening towards the
+    hem (none within `flat` of the front), `off` further out (a layer over another), drape(a, t) metres more (a gown
+    falling from under the bust). slits: (angle, how far up, half-width at its top, at the hem) each, cut up from the
+    hem (or, reaching the top, a coat's opening); edge: the hem's profile (hem_edge), `lobes` of it round the hem."""
+    hem_of = hem if callable(hem) else (lambda a, h0=hem: h0)
+    low = min(hem_of(2 * math.pi * k / 24) for k in range(24))
+
+    def sd(u, v):
+        a = u / RU
+        hm = hem_of(a)
+        s = max(hm + (edge(lobes * (a + math.pi) / (2 * math.pi)) if edge else 0.0) - v, v - top)
+        for ac, st, w0, w1 in slits:
+            w = lerp(w1, w0, clamp((v - hm) / (st - hm)))
+            s = max(s, -max(abs(wrap(a - ac)) * RU - w, v - st))
+        return s
+    return plate(lambda u, v: skirt_at(f, u / RU, v, hem, **kw), sd, -math.pi * RU, math.pi * RU, low - 0.004, top + 0.004, h=h, periodic=True)
+
+
+def ring_teeth_sd(u, v, RU, t0, t1, points, depth, free='low', shape='point', phase=0.0):
+    """A band all round a form from t0 to t1, its free edge cut into `points` scales (teeth_sd, but closing on itself;
+    phase turns them by a fraction of one)."""
+    x = (u / (2 * math.pi * RU) + 0.5) * points + phase
+    f = abs(2 * (x - math.floor(x)) - 1)
+    notch = depth * (1 - math.sqrt(max(0.0, 1 - f * f)) if shape == 'round' else f ** 0.85)
+    return max(v - t1, t0 + notch - v) if free == 'low' else max(t0 - v, v - (t1 - notch))
+
+
+def sleeve(f, RU, t0, t1, off, wide=0.0, folds=8, fold=0.004, edge=None, lobes=0, end=None, opening=None, h=0.0035):
+    """A sleeve round an arm's form from t0 to t1, `off` from it, widening over its last part into a bell `wide` out
+    at its end, in folds there; its end cut in `lobes` of `edge` (hem_edge) round the arm, running on past t1 by end(a)
+    (a point over the back of the hand); opening = (angle, from t, half-width at the end): slit open along the arm from
+    there (an angel sleeve, open underneath)."""
+    def sd(u, v):
+        a = u / RU
+        stop = t1 + (end(a) if end else 0.0) - (edge(lobes * (a + math.pi) / (2 * math.pi)) if edge else 0.0)
+        s = max(t0 - v, v - stop)
+        if opening:
+            ac, ts, w1 = opening
+            w = w1 * clamp((v - ts) / (t1 - ts)) ** 0.8
+            s = max(s, -max(abs(wrap(a - ac)) * RU - w, ts - v))
+        return s
+
+    def surf(u, v):
+        a = u / RU
+        k = smooth(t0 + (t1 - t0) * 0.3, t1, v) ** 1.5
+        return f.point(a, v, off + wide * k + fold * k * math.sin(a * folds))
+    longest = t1 + (max(end(2 * math.pi * k / 36) for k in range(36)) if end else 0.0)
+    return plate(surf, sd, -math.pi * RU, math.pi * RU, t0 - 0.004, longest + 0.004, h=h, periodic=True)
+
+
+class Dress:
+    """One form from the chest down to the shins: the torso's above the waist, the gown's below it, blended between
+    (both share their axis, up the body from the ground, angle 0 in front) - a gown cut in one piece from under the
+    bust."""
+
+    def __init__(self):
+        self.torso, self.gown = forms()['torso'], gown_form()
+        g = self.gown
+        self.o, self.d, self.up, self.side = g.o, g.d, g.up, g.side
+
+    def radius(self, a, t):
+        k = smooth(1.0, 1.12, t)
+        return lerp(self.gown.radius(a, min(t, 1.1)), self.torso.radius(a, max(t, 0.9)), k)
+
+    def at(self, a, t):
+        return self.o + self.d * t + (self.up * math.cos(a) + self.side * math.sin(a)) * self.radius(a, t)
+
+    def normal(self, a, t):
+        e = 1e-3
+        n = (self.at(a + e, t) - self.at(a - e, t)).cross(self.at(a, t + e) - self.at(a, t - e))
+        radial = self.up * math.cos(a) + self.side * math.sin(a)
+        if n.length < 1e-12:
+            return radial
+        n.normalize()
+        return n if n.dot(radial) >= 0 else -n
+
+    def point(self, a, t, off=0.0):
+        return self.at(a, t) + self.normal(a, t) * off
+
+    def around(self, a, t):
+        return self.radius(a, t)
+
+
+def dress_skin(**kw):
+    """The weights of a gown cut from under the bust: the trunk's above the waist (as the body's under it), a robe's
+    skirt's below (gown_skin), blended over the waist."""
+    below = gown_skin(**kw)
+    bd = body()
+
+    def f(p):
+        k = smooth(1.0, 1.08, p.y)
+        if k <= 0.0:
+            return below(p)
+        up = transfer(p, TORSO, bd)
+        total = sum(up.values()) or 1.0
+        w = {b: k * x / total for b, x in up.items()}
+        if k < 1.0:
+            for b, x in below(p).items():
+                w[b] = w.get(b, 0.0) + (1 - k) * x
+        return w
+    return f
+
+
+def styles_at(a):
+    """The hairstyles a circlet must clear at angle a round the head: every one but towards the back, where the buns sit."""
+    short = {'m0', 'f0', 'm1', 'f1', 'm4', 'f4', 'head'}
+    return short | {'m2', 'f2'} if abs(a) < 1.6 else short
+
+
+def diadem(p, material, A=1.72, hw=0.0075, y_front=0.15, rise=0.016, lean=0.22, gap=0.004, rope=True, deco=None, roll_mat=None, h=0.0016):
+    """A circlet's band round the brow and temples, open behind the ears (so any hair passes it), fitted outside the
+    head and every hairstyle (head_reach): half its height hw, its middle y_front over the brow, rising by `rise` over
+    the temples, leaning out as it rises. Returns the band, its height at each angle and how far round it runs."""
+    y_of = lambda a: y_front + rise * (1 - math.cos(a)) / 2
+    reach = head_reach(y_of, max(0.016, hw * 2), styles_at)
+    band = Band(y_of, reach, gap=gap, lean=lean)
+    RU = band.RU
+    p.add(material, *plate(lambda u, v: band.point(u / RU, v), lambda u, v: max(abs(u) - A * RU, abs(v) - hw), -A * RU - 0.004, A * RU + 0.004,
+                           -hw - 0.003, hw + 0.003, h=h), solid=0.0025, roll=0.0011, roll_mat=roll_mat, rope=rope, deco=deco, sharp=30)
+    out = sum(1 for x, y, z, s in _hair if abs(math.atan2(x, z - 0.008)) < A and abs(y - y_of(math.atan2(x, z - 0.008))) < hw
+              and s in styles_at(math.atan2(x, z - 0.008)) and math.hypot(x, z - 0.008) > reach(math.atan2(x, z - 0.008)) + gap - 0.0025)
+    print(f'[gear] circlet: {out} hair or head points through the band')
+    return band, y_of, A
+
+
+def fine_gloves(p, material, deco=None, off=0.0015):
+    """Gloves fitted finger by finger (skin_patch), both hands; their cuffs and ornaments are each set's own."""
+    hx = bone('hand_l')
+    tips = tuple(f'{f}_04_leaf_l' for f in ('index', 'middle', 'ring', 'pinky', 'thumb'))
+    fingers = ('hand_l',) + FINGERS_L + THUMB_L + tips
+    both(p, material, skin_patch(fingers + ('lowerarm_l',), keep=lambda v: v.x > hx.x - 0.04, off=off), fingers + ('lowerarm_l',), whole=True, deco=deco,
+         wound=True)
+
+
+def back_of_hand(x0=0.005, x1=0.08):
+    """Where the back of the left hand is (a deco mask), between x0 and x1 past the wrist."""
+    hx = bone('hand_l')
+    return lambda q: smooth(hx.y - 0.004, hx.y + 0.004, q.y) * smooth(hx.x + x0 - 0.01, hx.x + x0, q.x) * smooth(hx.x + x1 + 0.01, hx.x + x1, q.x)
+
+
+def soft_boots(p, material, sole, top=0.2, off=0.0032, deco=None, edge=None):
+    """Soft boots to `top` down the calf (0.2: mid-calf), their shaft and foot, and a sole under them; each set adds
+    its cuff, straps and toe."""
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = edge or dict(solid=0.0024, roll=0.0011)
+    both(p, material, ring_plate(calf, 0.06, top, 0.455, off), ('calf_l', 'foot_l'), deco=deco or PLAIN, **edge)
+    both(p, material, ring_plate(foot, 0.045, -0.085, 0.25, off), ('foot_l', 'ball_l'), deco=deco or PLAIN, **edge)
+    both(p, sole, band_plate(foot, 0.045, math.pi - 1.25, math.pi + 1.25, -0.085, 0.25, off + 0.002, 0.01), ('foot_l', 'ball_l'), solid=0.0048)
+    return calf, foot
+
+
+# ---------------------------------------------------------------- the abyssal mage: a wrap robe of the deep sea
+
+def abyssal_cloth():
+    """The abyssal mage's cloth: a deep sea-blue silk with a cold sheen, bordered in pale steel and embroidered in its
+    panels with pale waves; a sea-green silk for the sash; pearls; a pale, nacreous blue lacquer for the shells."""
+    rim = 0x8fa9bf
+    return (mat('abyssal_silk', 0x0f2a4a, 'cloth', engrave='waves', engrave_color=0x9fc3dc, emboss=True, rough=0.55, trim=rim, sheen=0x1d4a6e,
+                gloss=0.35, panels=True),
+            mat('abyssal_sash', 0x1a5566, 'cloth', engrave='waves', engrave_color=0x9fd0d6, emboss=True, rough=0.55, trim=rim, sheen=0x2a7a80,
+                gloss=0.35, panels=True),
+            mat('pearl', 0xe9e4da, 'enamel', rough=0.1, metal=0.2, sheen=0xd7cbe6, gloss=0.95),
+            mat('abyssal_shell', 0x4f86b2, 'enamel', rough=0.22, metal=0.4, sheen=0x9cc4dc, gloss=0.75))
+
+
+def fan(c, r, lobes=9, notch=0.12, base=0.35, n=72):
+    """A scallop shell's outline round (u, v) c, opening upwards: a half disc `r` across, its rim cut into `lobes`
+    rounded lobes, drawn in to a hinge at the bottom."""
+    pts = []
+    for k in range(n + 1):
+        th = math.pi * k / n
+        rr = r * (1 - notch * abs(math.sin(th * lobes / 2)) ** 0.7)
+        pts.append((c[0] + rr * math.cos(th), c[1] + rr * math.sin(th)))
+    pts += [(c[0] - r * base, c[1] - r * 0.18), (c[0] + r * base, c[1] - r * 0.18)]
+    return pts
+
+
+def abyssal_robe():
+    """The abyssal mage: a wrap robe of deep sea-blue silk to mid-shin, the left side crossed over the right - a broad
+    band embroidered with pale waves runs from the right of the neck across the chest to the left hip and down to the
+    hem - its hem cut in scallops like a shell's edge, embroidered with waves above them, a slit behind; sleeves
+    widening into bells, their ends scalloped; a ribbed scallop shell of pale, nacreous lacquer over each shoulder, edged in pale
+    steel; a band round the neck; a sea-green sash knotted at the left hip, its two ends hanging to the knee, a pearl
+    in the knot; a shell brooch with a pearl where the band crosses the chest."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    silk, sash, pearl, shell_ = abyssal_cloth()
+    steel, lacquer, rim = abyssal_mats()
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    gw = gown_form()
+    cloth = dict(solid=0.0022, roll=0.0012, roll_mat=rim)
+    RU, hem = 0.17, 0.3
+    sk = dict(hem=hem, flat=0.0, folds=13)
+    skin = gown_skin(hem=hem)
+    # the skirt, scalloped, embroidered above the scallops, slit behind
+    p.add(silk, *robe_skirt(gw, slits=((math.pi, 0.62, 0.0015, 0.005),), edge=hem_edge('round', 0.026), lobes=22, **sk),
+          deco=ornate(0.011, lambda q: smooth(hem + 0.15, hem + 0.12, q.y)), skin=skin, **cloth)
+    # the bodice, and the band of the wrap from the right of the neck across the chest to the left hip, then down
+    p.add(silk, *ring_plate(torso, RU, 0.975, 1.505, 0.004), deco=PLAIN, skin=TORSO, **cloth)
+    wrap_line = [(-0.058, 1.53), (0.064, 0.99)]
+    p.add(silk, *plate(lambda u, v: torso.point(u / RU, v, 0.0068), lambda u, v: max(ribbon_sd(u, v, wrap_line, [0.022, 0.022]), 0.985 - v, v - 1.508),
+                       -0.1, 0.11, 0.98, 1.512), deco=ornate(0.008), skin=TORSO, sharp=35, **cloth)
+    p.add(silk, *plate(lambda u, v: skirt_at(gw, u / RU, v, off=0.0046, **sk), lambda u, v: max(abs(u - 0.064) - 0.022, hem + 0.004 - v, v - 1.04),
+                       0.038, 0.09, hem, 1.044), deco=ornate(0.008), skin=skin, sharp=35, **cloth)
+    # the brooch where the band crosses the chest: a shell of pale steel, a pearl in it
+    at, n = torso.point(0.0, 1.27, 0.009), torso.normal(0.0, 1.27)
+    shell = outline(fan((0.0, 1.262), 0.02), 3)
+    p.add(rim, *plate(lambda u, v: torso.point(u / RU, v, 0.0088 + 0.0012 * (0.5 + 0.5 * math.cos(9 * math.atan2(v - 1.262, u)))),
+                      lambda u, v: sd_poly(u, v, shell), -0.025, 0.025, 1.255, 1.287, h=0.0009), solid=0.0018, roll=0.0007, skin=TORSO)
+    p.add(pearl, *oball(at + n * 0.004 + Vector((0, -0.004, 0)), 0.0062), skin=TORSO)
+    # the band round the neck
+    neck = Cone(-0.04, 1.47, 0.1, 0.092, 1.56, 0.085, 0.082)
+    p.add(silk, *ring_plate(neck, 0.1, 1.476, 1.535, 0.0), deco=ornate(0.007), skin=('neck_01', 'spine_03'), **cloth)
+    # the sleeves: close over the upper arm, a bell from the elbow, its end scalloped and embroidered
+    both(p, silk, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=PLAIN, **cloth)
+    cuff = lambda q: smooth(0.16, 0.18, q.x - bone('lowerarm_l').x)
+    both(p, silk, sleeve(fore, 0.07, -0.05, 0.258, 0.009, 0.045, edge=hem_edge('round', 0.02), lobes=8), ('upperarm_l', 'lowerarm_l'),
+         deco=ornate(0.01, cuff), **cloth)
+    # a scallop shell over each shoulder
+    both(p, shell_, shell_plate(arm, 0.09, -2.0, 2.0, -0.075, 0.125, lambda u, v: 0.017 + 0.005 * smooth(-0.02, -0.075, v), ribs=9, depth=0.024),
+         ('clavicle_l', 'upperarm_l'), deco=lambda q: 0.0, solid=0.0028, roll=0.0013, roll_mat=rim, sharp=35)
+    both(p, rim, rivet(arm.point(0.0, -0.068, 0.024), arm.normal(0.0, -0.068), 0.0075, washer=0.012), ('clavicle_l', 'upperarm_l'))
+    # the sash, knotted at the left hip, its ends hanging to the knee, a pearl in the knot
+    hip = ('pelvis', 'spine_01')
+    p.add(sash, *plate(lambda u, v: gw.point(u / 0.16, v, 0.013), lambda u, v: max(0.957 - v, v - 1.046), -math.pi * 0.16, math.pi * 0.16, 0.953, 1.05,
+                       periodic=True), deco=ornate(0.007), skin=hip, **cloth)
+    ka = 1.1
+    kc, kn = gw.point(ka, 1.0, 0.03), gw.normal(ka, 1.0)
+    t_, n_, b_ = frame(kn)
+    p.add(sash, *oball(kc, (0.024, 0.016, 0.02), (t_, n_, b_), 14, 8), skin=hip)
+    for k, (ac, y_end) in enumerate(((ka - 0.1, 0.56), (ka + 0.1, 0.5))):
+        u0 = ac * RU
+        tail = outline([(u0 - 0.023, 1.0), (u0 + 0.023, 1.0), (u0 + 0.023, y_end + 0.035), (u0, y_end), (u0 - 0.023, y_end + 0.035)], 4)
+        p.add(sash, *plate(lambda u, v, k=k: skirt_at(gw, u / RU, v, off=0.0105 + 0.0045 * k, **sk), lambda u, v, tail=tail: sd_poly(u, v, tail),
+                           u0 - 0.03, u0 + 0.03, y_end - 0.004, 1.004), deco=ornate(0.006, lambda q: smooth(y_end + 0.13, y_end + 0.1, q.y)), skin=skin,
+              sharp=35, **cloth)
+    p.add(pearl, *oball(kc + kn * 0.015, 0.0075), skin=hip)
+    return p
+
+
+def abyssal_circlet():
+    """A diadem of blued steel etched with waves over the brow and the temples, edged in a twisted cord of pale steel:
+    in front a scallop shell of pale, nacreous lacquer with a pearl hanging under it on the brow, a wave of pale steel breaking
+    outwards either side of it and a smaller one beyond; small shells at the temples; each end curling into a wave."""
+    p = Piece('circlet')
+    p.budget = 4000
+    steel, lacquer, rim = abyssal_mats()
+    pearl, shell_ = abyssal_cloth()[2:]
+    hw = 0.0065
+    band, y_of, A = diadem(p, steel, hw=hw, deco=lambda q, d: smooth(0.002, 0.0035, d), roll_mat=rim)
+    RU = band.RU
+    waves = [(s_ * cu, cv, r, s_) for s_ in (1, -1) for cu, cv, r in ((0.037, 0.02, 0.0125), (0.07, 0.014, 0.0085))]
+
+    def wave_sd(u, v):
+        f = 1.0
+        for cu, cv, r, s_ in waves:
+            crescent = max(math.hypot(u - cu, v - cv) - r, -(math.hypot(u - (cu + s_ * 0.38 * r), v - (cv - 0.2 * r)) - 0.7 * r))
+            foot = sd_poly(u, v, [(cu - s_ * r * 1.25, hw - 0.002), (cu + s_ * 0.3 * r, hw - 0.002), (cu - s_ * 0.2 * r, cv)] if s_ > 0 else
+                           [(cu + s_ * 0.3 * r, hw - 0.002), (cu - s_ * r * 1.25, hw - 0.002), (cu - s_ * 0.2 * r, cv)])
+            f = min(f, crescent, foot)
+        return max(f, -hw * 0.4 - v)
+    p.add(rim, *plate(lambda u, v: band.point(u / RU, v, 0.0014), wave_sd, -0.085, 0.085, -hw * 0.4 - 0.003, 0.036, h=0.001), solid=0.0018,
+          roll=0.0007, sharp=30)
+    # the shells, ribbed: a big one in front, small ones at the temples
+    for c, r, deep in (((0.0, hw * 0.3), 0.02, 0.0012), ((0.98 * RU, hw * 0.2), 0.011, 0.0008), ((-0.98 * RU, hw * 0.2), 0.011, 0.0008)):
+        shell = outline(fan(c, r), 3)
+        p.add(shell_, *plate(lambda u, v, c=c, deep=deep: band.point(u / RU, v, 0.0026 + deep * (0.5 + 0.5 * math.cos(9 * math.atan2(v - c[1], u - c[0])))),
+                              lambda u, v, shell=shell: sd_poly(u, v, shell), c[0] - r - 0.003, c[0] + r + 0.003, c[1] - r * 0.3, c[1] + r + 0.003, h=0.0008),
+              solid=0.0018, roll=0.0007, roll_mat=rim, deco=lambda q: 1.0, sharp=35)
+    # the pearl hanging under the big shell, on a short chain
+    top_, n = band.point(0.0, -hw - 0.001, 0.0035), band.normal(0.0, -hw)
+    drop = top_ + Vector((0, -0.011, 0)) + n * 0.002
+    p.add(rim, *tube([top_, top_.lerp(drop, 0.5) + n * 0.0008, drop + Vector((0, 0.004, 0))], 0.0008, 6, fixed=True))
+    p.add(pearl, *oball(drop, (0.0052, 0.0062, 0.0052)))
+    for s_ in (1, -1):
+        end = s_ * A
+        tang = (band.at(end + s_ * 1e-3, 0.0) - band.at(end, 0.0)).normalized()
+        p.add(rim, *curl(band.point(end, hw * 0.4, 0.0006), tang, UP, 0.0085, 0.002, turns=1.3, r=0.0022))
+    return p
+
+
+def abyssal_mage_gloves():
+    """Gloves of sea-blue leather fitted finger by finger, a panel of waves on the back of each hand under a small
+    shell of pale, nacreous lacquer with a pearl, and a cuff of blue lacquer flaring towards the elbow, its edge scalloped, edged in pale steel."""
+    p = Piece('gloves')
+    p.budget = 5000
+    steel, lacquer, rim = abyssal_mats()
+    pearl = abyssal_cloth()[2]
+    kid = mat('abyssal_kid', 0x13304f, 'leather', engrave='waves', engrave_color=0x9fc3dc, emboss=True, rough=0.45, trim=0x8fa9bf, gloss=0.4,
+              panels=True)
+    hand = forms()['hand']
+    fine_gloves(p, kid, deco=ornate(0.004, back_of_hand()))
+    RU = 0.06
+    both(p, lacquer, plate(lambda u, v: hand.point(u / RU, v, 0.0035 + 0.017 * smooth(-0.005, -0.078, v)),
+                           lambda u, v: ring_teeth_sd(u, v, RU, -0.078, 0.006, 7, 0.012, 'low', 'round'), -math.pi * RU, math.pi * RU, -0.082, 0.01,
+                           h=0.0025, periodic=True), ('hand_l', 'lowerarm_l'), deco=lambda q, d: smooth(0.004, 0.007, d), solid=0.0022, roll=0.0011,
+         roll_mat=rim)
+    both(p, abyssal_cloth()[3], shell_plate(hand, RU, -0.5, 0.5, 0.018, 0.068, 0.0045, ribs=7, depth=0.008), ('hand_l',), deco=lambda q: 0.0, solid=0.002,
+         roll=0.0009, roll_mat=rim)
+    at, n = hand.point(0.0, 0.03, 0.006), hand.normal(0.0, 0.03)
+    both(p, pearl, oball(at + n * 0.003, 0.0045), ('hand_l',))
+    return p
+
+
+def abyssal_shoes():
+    """Soft boots of sea-blue leather to mid-calf: a cuff turned down at the top, its edge scalloped and embroidered
+    with waves; a small blue shell with a pearl at the outer ankle; a cap of pale steel on the toe; a sole."""
+    p = Piece('feet')
+    p.budget = 5000
+    steel, lacquer, rim = abyssal_mats()
+    pearl = abyssal_cloth()[2]
+    boot = mat('abyssal_boot', 0x10263f, 'leather', engrave='waves', engrave_color=0x9fc3dc, emboss=True, rough=0.5, trim=0x8fa9bf, gloss=0.35,
+               panels=True)
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=rim)
+    calf, foot = soft_boots(p, boot, sole, edge=edge)
+    RU = 0.06
+    both(p, boot, plate(lambda u, v: calf.point(u / RU, v, 0.0068 + 0.004 * smooth(0.27, 0.19, v)),
+                        lambda u, v: ring_teeth_sd(u, v, RU, 0.19, 0.27, 9, 0.016, 'high', 'round'), -math.pi * RU, math.pi * RU, 0.186, 0.274,
+                        h=0.0028, periodic=True), ('calf_l',), deco=ornate(0.006), **edge)
+    a = -math.pi / 2  # the outer ankle
+    both(p, abyssal_cloth()[3], shell_plate(calf, RU, a - 0.45, a + 0.45, 0.375, 0.43, 0.0055, ribs=6, depth=0.008), ('calf_l', 'foot_l'), deco=lambda q: 0.0,
+         solid=0.002, roll=0.0009, roll_mat=rim)
+    both(p, pearl, oball(calf.point(a, 0.392, 0.0105), 0.0042), ('calf_l', 'foot_l'))
+    both(p, rim, band_plate(foot, 0.045, -1.3, 1.3, 0.2, 0.25, 0.0058, 0.008), ('ball_l',), solid=0.0024, roll=0.001)
+    return p
+
+
+# ---------------------------------------------------------------- the ashforged mage: a smith-priest's habit
+
+def ash_cloth():
+    """The ashforged mage's cloth: a charcoal wool, its hems and seams stitched; a lighter wool for its patches; a
+    darker one for the hood."""
+    return (mat('ash_habit', 0x3a3531, 'cloth', engrave='stitch', rough=0.95),
+            mat('ash_patch', 0x413a34, 'cloth', engrave='stitch', rough=0.95),
+            mat('ash_hood', 0x24211f, 'cloth', engrave='stitch', rough=0.95))
+
+
+def ashforged_robe():
+    """The ashforged mage, a smith-priest: a habit of charcoal wool to the knee, slit at the sides, its hem worn ragged
+    and patched, every hem stitched; sleeves rolled up to mid-forearm; a capelet of dark mail over the shoulders and
+    the upper chest, bound in leather; the hood down, lying in folds on the back; a leather belt with an iron buckle
+    and two pouches; a leather baldric across the chest, studded with iron, a ring at the breast."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    wool, patch, hood = ash_cloth()
+    steel, mail, leather, _ = ash_mats()
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    gw = gown_form()
+    cloth = dict(solid=0.0024, roll=0.0011)
+    RU, hem = 0.17, 0.5
+    sk = dict(hem=hem, wide=0.075, back=0.025, folds=10, fold=0.008, flat=0.0)
+    skin = gown_skin(hem=0.3)
+    # the habit: the skirt slit at the sides, worn ragged, patched; the body
+    p.add(wool, *robe_skirt(gw, slits=((math.pi / 2, 0.8, 0.003, 0.024), (-math.pi / 2, 0.8, 0.003, 0.024)), edge=hem_edge('ragged', 0.03, 1.3),
+                            lobes=34, **sk), deco=0.01, skin=skin, **cloth)
+    for ac, y0, y1, w in ((0.55, 0.6, 0.68, 0.032), (2.55, 0.72, 0.8, 0.028), (-2.2, 0.56, 0.62, 0.024)):
+        u0 = ac * RU
+        p.add(patch, *plate(lambda u, v: skirt_at(gw, u / RU, v, off=0.0028, **sk), lambda u, v, u0=u0, y0=y0, y1=y1, w=w: sd_box(u, v, u0, (y0 + y1) / 2, w, (y1 - y0) / 2, 0.002),
+                            u0 - w - 0.004, u0 + w + 0.004, y0 - 0.004, y1 + 0.004, h=0.003), deco=0.006, skin=skin, solid=0.0016)
+    p.add(wool, *ring_plate(torso, RU, 0.975, 1.505, 0.004), deco=0.008, skin=TORSO, **cloth)
+    # the sleeves, rolled up to mid-forearm
+    both(p, wool, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=0.008, **cloth)
+    both(p, wool, ring_plate(fore, 0.07, -0.05, 0.12, 0.008), ('upperarm_l', 'lowerarm_l'), deco=0.008, **cloth)
+    both(p, wool, ring_plate(fore, 0.07, 0.092, 0.138, lambda u, v: 0.013 + 0.005 * math.sin(math.pi * clamp((v - 0.092) / 0.046))), ('lowerarm_l',),
+         deco=0.006, solid=0.005, roll=0.0016, bump=lambda q: 0.0012 * math.sin(q.y * 400 + q.z * 300))
+    # the capelet of mail, bound in leather
+    bind = dict(solid=0.002, roll=0.0018, roll_mat=leather)
+    p.add(mail, *ring_plate(torso, RU, 1.33, 1.508, lambda u, v: 0.0085 + 0.004 * smooth(1.42, 1.33, v)), skin=TORSO, **bind)
+    both(p, mail, band_plate(arm, 0.09, -2.45, 2.45, -0.085, 0.105, lambda u, v: 0.013 + 0.004 * smooth(-0.02, -0.08, v), 0.02),
+         ('clavicle_l', 'upperarm_l'), **bind)
+    # the hood, down: rolled round the back of the neck, its fabric lying in folds down the back
+    cowl = Cone(-0.06, 1.44, 0.14, 0.135, 1.6, 0.112, 0.118)
+    roll_h = lambda a: 1.565 + 0.035 * clamp((abs(wrap(a)) - 1.15) / (math.pi - 1.15))
+    p.add(hood, *plate(lambda u, v: cowl.point(u / 0.1, v, 0.004 + 0.012 * math.sin(math.pi * clamp((v - 1.445) / (roll_h(u / 0.1) - 1.445))) ** 0.7),
+                       lambda u, v: max(1.448 - v, v - roll_h(u / 0.1), 1.15 - abs(wrap(u / 0.1))), -math.pi * 0.1, math.pi * 0.1, 1.444, 1.604,
+                       h=0.003, periodic=True), deco=0.007, skin=('neck_01', 'spine_03'), solid=0.004, roll=0.0016, sharp=60)
+    bag = outline([(-0.125, 1.475), (0.125, 1.475), (0.115, 1.39), (0.075, 1.315), (0.0, 1.27), (-0.075, 1.315), (-0.115, 1.39)], 6)
+    fold = lambda u, v: 0.004 * math.sin(u * 70) * smooth(1.46, 1.33, v)
+    p.add(hood, *plate(lambda u, v: torso.point(math.pi + u / RU, v, 0.015 + 0.02 * math.sin(math.pi * clamp((1.48 - v) / 0.21)) * math.cos(u / 0.13 * math.pi / 2) + fold(u, v)),
+                       lambda u, v: sd_poly(u, v, bag), -0.13, 0.13, 1.265, 1.48, h=0.003), deco=0.008, skin=TORSO, solid=0.003, roll=0.0016, sharp=60)
+    # the belt, its buckle and two pouches
+    hip = ('pelvis', 'spine_01')
+    p.add(leather, *strap(gw, [(2 * math.pi * k / 96, 1.0) for k in range(97)], 0.04, 0.0035, 0.0105), skin=hip, forge=creased(0.0005))
+    at, n = gw.point(0.0, 1.0, 0.014), gw.normal(0.0, 1.0)
+    p.add(steel, *buckle(at, n, (1, 0, 0), 0.034, 0.032, 0.0022), skin=hip)
+    for s_ in (1, -1):
+        ac = s_ * 1.4
+        c, n = skirt_at(gw, ac, 0.915, off=0.022, **sk), gw.normal(ac, 0.915)
+        t_, n_, b_ = frame(n)
+        p.add(leather, *merge(oball(c, (0.032, 0.02, 0.036), (t_, n_, b_), 14, 8),
+                              oball(c + n * 0.006 + UP * 0.022, (0.034, 0.012, 0.016), (t_, n_, b_), 12, 6)), skin=skin, forge=creased(0.0006))
+        p.add(steel, *rivet(c + n * 0.019 + UP * 0.016, n, 0.004), skin=skin)
+    # the baldric over the left shoulder, front and back, studded; a ring at the breast
+    path_f = line(0.62, 1.495, -0.95, 1.02, 48)
+    path_b = line(math.pi - 0.62, 1.495, math.pi + 0.95, 1.02, 48)
+    boff = lambda a, t: 0.0075 + 0.0095 * smooth(1.3, 1.36, t)  # on the wool, then over the mail
+    for path in (path_f, path_b):
+        p.add(leather, *form_strap(torso, path, 0.038, boff), skin=TORSO, forge=creased(0.0005))
+    for k in range(5, 44, 6):
+        a, t = path_f[k]
+        p.add(steel, *rivet(torso.point(a, t, boff(a, t) + 0.0032), torso.normal(a, t), 0.0042), skin=TORSO)
+    a, t = path_f[16]
+    c, n = torso.point(a, t, boff(a, t) + 0.0045), torso.normal(a, t)
+    t_, n_, b_ = frame(n)
+    p.add(steel, *tube([c + (t_ * math.cos(2 * math.pi * k / 24) + b_ * math.sin(2 * math.pi * k / 24)) * 0.016 for k in range(24)], 0.0028, 8, closed=True),
+          skin=TORSO)
+    return p
+
+
+def ashforged_circlet():
+    """A band of fire-blackened iron round the brow and the temples, riveted all along, forged nails rising from its
+    front like a crown - the tallest in the middle - a riveted plate at the brow under them, each end turned out into a
+    riveted tab."""
+    p = Piece('circlet')
+    p.budget = 4000
+    steel, mail, leather, _ = ash_mats()
+    hw = 0.009
+    band, y_of, A = diadem(p, steel, hw=hw, rope=False, deco=None, lean=0.15)
+    RU = band.RU
+    for k in range(-6, 7):
+        a = k * 0.26
+        p.add(steel, *rivet(band.point(a, 0.0, 0.0012), band.normal(a, 0.0), 0.0032))
+    brow = outline([(-0.022, -hw + 0.001), (0.022, -hw + 0.001), (0.024, hw + 0.008), (0.012, hw + 0.016), (-0.012, hw + 0.016), (-0.024, hw + 0.008)], 4)
+    p.add(steel, *plate(lambda u, v: band.point(u / RU, v, 0.0026), lambda u, v: sd_poly(u, v, brow), -0.03, 0.03, -hw - 0.002, hw + 0.02, h=0.0012),
+          solid=0.0028, roll=0.0009, sharp=30, bump=lambda q: 0.0015 * gauss(q.x, 0.012))
+    for x in (-0.016, 0.016):
+        for y in (-hw + 0.005, hw + 0.006):
+            p.add(steel, *rivet(band.point(x / RU, y, 0.0055), band.normal(x / RU, y), 0.0028))
+    for k in range(-4, 5):
+        a = k * 0.2
+        base, n = band.point(a, hw * 0.6, 0.0015), band.normal(a, hw * 0.6)
+        up = (UP * 0.85 + n * 0.25).normalized()
+        length = 0.034 - 0.0045 * abs(k) - (0.004 if k % 2 else 0.0)
+        p.add(steel, *tube([base - up * 0.006, base + up * length * 0.85, base + up * length], [0.0034, 0.0022, 0.0004], 6, fixed=True))
+        p.add(steel, *oball(base + up * 0.002, (0.0042, 0.0028, 0.0042), frame(up), 8, 5))
+    for s_ in (1, -1):
+        end = s_ * A
+        tab_c = (end * RU + s_ * 0.004, 0.0)
+        p.add(steel, *plate(lambda u, v: band.point(u / RU, v, 0.0012), lambda u, v, c=tab_c: sd_ellipse(u, v, c[0], c[1], 0.011, hw + 0.002),
+                            tab_c[0] - 0.014, tab_c[0] + 0.014, -hw - 0.005, hw + 0.005, h=0.0012), solid=0.0024, roll=0.0008)
+        p.add(steel, *rivet(band.point(tab_c[0] / RU, 0.0, 0.0038), band.normal(tab_c[0] / RU, 0.0), 0.003))
+    return p
+
+
+def ashforged_mage_gloves():
+    """Fingerless gloves of old leather, the fingers bare from the middle joint, iron studs over the knuckles; leather
+    bracers laced over the forearms to the wrist, three straps with iron buckles round each."""
+    p = Piece('gloves')
+    p.budget = 5000
+    steel, mail, leather, _ = ash_mats()
+    glove = mat('ash_glove', 0x3b2a20, 'leather', engrave='stitch', rough=0.8)
+    hand, fore = forms()['hand'], forms()['forearm']
+    hx = bone('hand_l')
+    tips = tuple(f'{f}_04_leaf_l' for f in ('index', 'middle', 'ring', 'pinky', 'thumb'))
+    ends = tuple(f'{f}_03_l' for f in ('index', 'middle', 'ring', 'pinky', 'thumb')) + tips
+    worn = tuple(b for b in ('hand_l',) + FINGERS_L + THUMB_L if b not in ends)
+    both(p, glove, skin_patch(worn + ('lowerarm_l',), keep=lambda v: v.x > hx.x - 0.04), worn + ('lowerarm_l',) + ends, whole=True, deco=0.004,
+         wound=True)
+    for k in range(4):
+        z = hx.z + lerp(-0.028, 0.03, k / 3)
+        top = max((v for v, b in zip(body()['V'], body()['bone_of']) if b == 'hand_l' and abs(v.x - hx.x - 0.088) < 0.012 and abs(v.z - z) < 0.008),
+                  key=lambda v: v.y, default=None)
+        if top is not None:
+            both(p, steel, rivet(top + UP * 0.0028, UP, 0.0038), ('hand_l',))
+    RU = 0.07
+    both(p, leather, ring_plate(fore, RU, 0.085, 0.238, lambda u, v: 0.0045 + 0.004 * smooth(0.2, 0.238, v)), ('lowerarm_l', 'hand_l'), deco=0.006,
+         solid=0.003, roll=0.0012, forge=creased(0.0005))
+    for t in (0.115, 0.165, 0.212):
+        both(p, glove, ring_plate(fore, RU, t - 0.008, t + 0.008, 0.009), ('lowerarm_l',), solid=0.0018, roll=0.0008)
+        a = -math.pi / 2 - 0.4  # the buckles on the outside of the arm
+        both(p, steel, buckle(fore.point(a, t, 0.0115), fore.normal(a, t), (0, 0, 1), 0.014, 0.016, 0.0013), ('lowerarm_l',))
+    return p
+
+
+def ashforged_shoes():
+    """Worn boots of dark leather to the knee, under the habit's hem, the top turned down; two straps round the shaft
+    with iron buckles; an iron cap on the toe, riveted; a thick sole."""
+    p = Piece('feet')
+    p.budget = 5000
+    steel, mail, leather, _ = ash_mats()
+    boot = mat('ash_boot', 0x2e1f17, 'leather', engrave='stitch', rough=0.8)
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    edge = dict(solid=0.0026, roll=0.0012)
+    calf, foot = soft_boots(p, boot, sole, top=0.06, deco=0.006, edge=edge)
+    both(p, boot, ring_plate(calf, 0.06, 0.05, 0.115, lambda u, v: 0.007 + 0.004 * smooth(0.115, 0.05, v)), ('thigh_l', 'calf_l'), deco=0.006,
+         solid=0.003, roll=0.0014, forge=creased(0.0008))
+    for t in (0.25, 0.37):
+        both(p, leather, ring_plate(calf, 0.06, t - 0.009, t + 0.009, 0.0062), ('calf_l', 'foot_l'), solid=0.002, roll=0.0009)
+        a = -math.pi / 2
+        both(p, steel, buckle(calf.point(a, t, 0.0085), calf.normal(a, t), (0, 0, 1), 0.016, 0.018, 0.0014), ('calf_l', 'foot_l'))
+    both(p, steel, band_plate(foot, 0.045, -1.5, 1.5, 0.17, 0.25, 0.0062, 0.01), ('ball_l',), solid=0.0026, roll=0.001)
+    for a in (-0.9, 0.0, 0.9):
+        both(p, steel, rivet(foot.point(a, 0.185, 0.0092), foot.normal(a, 0.185), 0.0028), ('ball_l',))
+    return p
+
+
+# ---------------------------------------------------------------- the dragon mage: a coat of red silk and scales
+
+def dragon_cloth():
+    """The dragon mage's cloth: a blood-red silk embroidered in its panels with dark scales, bordered near black; for
+    the panels a silk worked all over with near-black scales, red showing between them (a scale is bright over all its
+    crown, so the dark goes on the crowns), bordered in steel; a red stone."""
+    return (mat('dragon_silk', 0x6a1014, 'cloth', engrave='scales', engrave_color=0x2a0709, emboss=True, rough=0.55, trim=0x1c1416, sheen=0x8e1f1c,
+                gloss=0.35, scale=0.06, panels=True),
+            mat('dragon_panel', 0x8a2420, 'cloth', engrave='scales', engrave_color=0x1a0a0c, emboss=True, rough=0.5, trim=0x80868f, sheen=0x9c2a22,
+                gloss=0.4, scale=0.075, panels=True),
+            mat('dragon_stone', 0x8c0f12, 'enamel', rough=0.05, metal=0.3, sheen=0xd23a2a, gloss=0.95))
+
+
+def dragon_robe():
+    """The dragon mage: a long coat of blood-red silk, open in front from the belt down over an apron of near-black
+    silk worked with scales in red gold, drawn to a point; behind, the coat falls lower, to the ankle, split into two
+    tails; its hem cut into points all round, a band of dark scales embroidered above it; a plastron of the scaled
+    black silk over the chest; a mantle of red-lacquered scales over the shoulders in two rows, two more rows over
+    each shoulder; close sleeves ending in a point over the back of the hand, their cuffs embroidered with scales; a
+    belt of red scales, its buckle a red stone gripped in three steel talons."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    silk, panel, stone = dragon_cloth()
+    steel, scale, rim = dragon_mats()
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    gw = gown_form()
+    cloth = dict(solid=0.0022, roll=0.0012, roll_mat=rim)
+    lames = dict(solid=0.0026, roll=0.0012, roll_mat=rim)
+    RU = 0.17
+    hem = lambda a: 0.37 - 0.15 * ((1 - math.cos(a)) / 2) ** 1.4  # short in front, to the ankle behind
+    sk = dict(hem=hem, wide=0.09, back=0.05, folds=12, fold=0.006, flat=0.35)
+    skin = gown_skin(hem=0.3)
+    band = lambda q: (lambda h: smooth(h + 0.12, h + 0.09, q.y))(hem(math.atan2(q.x, q.z)))
+    # the coat: open in front from the belt, split behind into two tails, its hem in points
+    p.add(silk, *robe_skirt(gw, slits=((0.0, 1.0, 0.03, 0.125), (math.pi, 0.6, 0.002, 0.008)), edge=hem_edge('point', 0.034), lobes=26, **sk),
+          deco=ornate(0.011, band), skin=skin, **cloth)
+    # the apron under its opening, worked with scales, to a point
+    apron = outline([(-0.078, 1.02), (0.078, 1.02), (0.078, 0.5), (0.0, 0.415), (-0.078, 0.5)], 4)
+    p.add(panel, *plate(lambda u, v: skirt_at(gw, u / RU, v, off=-0.0045, **sk), lambda u, v: sd_poly(u, v, apron), -0.085, 0.085, 0.41, 1.025,
+                        h=0.0032), deco=ornate(0.009), skin=skin, sharp=35, **cloth)
+    # the body, and the plastron of scaled silk over the chest
+    p.add(silk, *ring_plate(torso, RU, 0.975, 1.505, 0.004), deco=PLAIN, skin=TORSO, **cloth)
+    plast = outline(symmetric([(0.0, 1.47), (0.06, 1.47), (0.115, 1.43), (0.135, 1.33), (0.115, 1.2), (0.06, 1.1), (0.0, 1.06)]), 6)
+    p.add(panel, *plate(lambda u, v: torso.point(u / RU, v, 0.0088), lambda u, v: sd_poly(u, v, plast), -0.14, 0.14, 1.05, 1.475), deco=ornate(0.009),
+          skin=TORSO, sharp=30, **cloth)
+    # the mantle of scales round the shoulders, two rows all round; two more rows over each shoulder
+    for t0, off, pts, ph in ((1.37, 0.0105, 18, 0.0), (1.425, 0.0145, 16, 0.5)):
+        p.add(scale, *plate(lambda u, v, t0=t0, off=off: torso.point(u / RU, v, off + 0.003 * smooth(t0 + 0.04, t0, v)),
+                            lambda u, v, t0=t0, pts=pts, ph=ph: ring_teeth_sd(u, v, RU, t0, 1.508, pts, 0.032, 'low', 'point', ph),
+                            -math.pi * RU, math.pi * RU, t0 - 0.004, 1.512, periodic=True), deco=lambda q, d: smooth(0.005, 0.008, d), skin=TORSO,
+              sharp=30, **lames)
+    for k, (t0, t1) in enumerate(((-0.085, 0.1), (0.035, 0.165))):
+        both(p, scale, teeth_plate(arm, 0.09, -2.25, 2.25, t0, t1, lambda u, v, k=k, t0=t0, t1=t1: 0.019 - 0.003 * k + 0.006 * smooth(t0, t1, v), 4,
+                                   0.034, 'high'), ('clavicle_l', 'upperarm_l') if k == 0 else ('upperarm_l',), deco=lambda q, d: smooth(0.005, 0.008, d),
+             sharp=30, **lames)
+    # the sleeves: close, ending in a point over the back of the hand, their cuffs embroidered with scales
+    both(p, silk, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=PLAIN, **cloth)
+    cuff = lambda q: smooth(0.15, 0.17, q.x - bone('lowerarm_l').x)
+    both(p, silk, sleeve(fore, 0.07, -0.05, 0.236, 0.008, 0.01, folds=6, fold=0.002, end=lambda a: 0.075 * max(0.0, math.cos(a)) ** 5),
+         ('upperarm_l', 'lowerarm_l', 'hand_l'), deco=ornate(0.009, cuff), **cloth)
+    # the belt of red scales; its buckle, a red stone gripped in three talons
+    hip = ('pelvis', 'spine_01')
+    p.add(scale, *plate(lambda u, v: gw.point(u / 0.16, v, 0.0125), lambda u, v: max(0.97 - v, v - 1.034), -math.pi * 0.16, math.pi * 0.16, 0.966,
+                        1.038, periodic=True), deco=lambda q, d: smooth(0.004, 0.007, d), skin=hip, **lames)
+    c, n = gw.point(0.0, 1.002, 0.03), gw.normal(0.0, 1.002)
+    t_, n_, b_ = frame(n)
+    p.add(steel, *oball(c - n * 0.008, (0.019, 0.006, 0.019), (t_, n_, b_), 14, 6), skin=hip)
+    p.add(stone, *oball(c, (0.0125, 0.0105, 0.0125), (t_, n_, b_), 14, 8), skin=hip)
+    for k in range(3):
+        ang = math.pi / 2 + 2 * math.pi * k / 3
+        side = t_ * math.cos(ang) + b_ * math.sin(ang)
+        p.add(steel, *talon(c - n * 0.006 + side * 0.022, -side + n * 0.9, -side, 0.024, 0.0042), skin=hip)
+    return p
+
+
+def dragon_circlet():
+    """A diadem of dark steel worked with scales, edged in polished steel: a spike rising over the brow, under it a
+    red stone like a dragon's eye; two horns at each temple sweeping back over the head, the front pair longer; each
+    end drawn back to a point."""
+    p = Piece('circlet')
+    p.budget = 4000
+    steel, scale, rim = dragon_mats()
+    stone = dragon_cloth()[2]
+    hw = 0.0075
+    band, y_of, A = diadem(p, steel, hw=hw, rope=False, roll_mat=rim, deco=lambda q, d: smooth(0.0025, 0.004, d))
+    RU = band.RU
+    spike_o = outline([(-0.017, hw - 0.002), (0.017, hw - 0.002), (0.009, hw + 0.014), (0.0025, hw + 0.036), (0.0, hw + 0.042), (-0.0025, hw + 0.036),
+                       (-0.009, hw + 0.014)], 4)
+    p.add(steel, *plate(lambda u, v: band.point(u / RU, v, 0.0016 + 0.002 * gauss(u, 0.006)), lambda u, v: sd_poly(u, v, spike_o), -0.02, 0.02, hw - 0.004,
+                        hw + 0.046, h=0.0009), solid=0.0022, roll=0.0008, roll_mat=rim, sharp=25, deco=lambda q, d: smooth(0.002, 0.003, d))
+    at, n = band.point(0.0, 0.0, 0.0035), band.normal(0.0, 0.0)
+    t_, n_, b_ = frame(n)
+    p.add(rim, *oball(at - n * 0.001, (0.0115, 0.0018, 0.0078), (t_, n_, b_), 14, 5))
+    p.add(stone, *oball(at + n * 0.0012, (0.0092, 0.0042, 0.006), (t_, n_, b_), 14, 7))
+    for s_ in (1, -1):
+        for a, length, r, lift in ((0.82, 0.075, 0.0062, 0.55), (1.28, 0.058, 0.0052, 0.38)):
+            a *= s_
+            root, n = band.point(a, hw * 0.5, 0.0), band.normal(a, hw * 0.5)
+            radial = Vector((n.x, 0.0, n.z)).normalized()
+            back = Vector((0, 0, -1))
+            p.add(steel, *spike(root, radial * 0.35 + UP * lift + back * 0.75, length, r, back * 0.8 + UP * 0.2))
+            p.add(rim, *oball(root + radial * 0.002, (0.0075, 0.004, 0.0075), frame(radial), 10, 5))
+        end = s_ * A
+        tang = (band.at(end + s_ * 1e-3, 0.0) - band.at(end, 0.0)).normalized()
+        p.add(steel, *spike(band.point(end, 0.0, 0.0), tang, 0.022, hw * 0.9, -UP * 0.1))
+    return p
+
+
+def dragon_mage_gloves():
+    """Gloves of dark red leather fitted finger by finger, the back of each hand worked with scales, a steel talon over
+    each finger's tip, and a cuff of red-lacquered scales pointing back up the forearm."""
+    p = Piece('gloves')
+    p.budget = 5000
+    steel, scale, rim = dragon_mats()
+    hide = mat('dragon_hide', 0x3a0d10, 'leather', engrave='scales', engrave_color=0x9c2a22, emboss=True, rough=0.45, trim=0x80868f, gloss=0.4,
+               scale=0.03, panels=True)
+    hand = forms()['hand']
+    fine_gloves(p, hide, deco=ornate(0.004, back_of_hand()))
+    for f in ('index', 'middle', 'ring', 'pinky', 'thumb'):
+        b3, b4 = bone(f'{f}_03_l'), bone(f'{f}_04_leaf_l')
+        d = (b4 - b3).normalized()
+        up = (UP - d * UP.dot(d)).normalized() if f != 'thumb' else (Vector((0, 0.3, 1)) - d * Vector((0, 0.3, 1)).dot(d)).normalized()
+        root = b3.lerp(b4, 0.35) + up * 0.0075
+        both(p, steel, talon(root, d + up * 0.15, -up, 0.022 if f != 'pinky' else 0.017, 0.0034), (f'{f}_03_l',))
+    RU = 0.06
+    both(p, scale, plate(lambda u, v: hand.point(u / RU, v, 0.0035 + 0.018 * smooth(-0.005, -0.08, v)),
+                         lambda u, v: ring_teeth_sd(u, v, RU, -0.082, 0.006, 6, 0.022, 'low', 'point'), -math.pi * RU, math.pi * RU, -0.086, 0.01,
+                         h=0.0025, periodic=True), ('hand_l', 'lowerarm_l'), deco=lambda q, d: smooth(0.004, 0.006, d), solid=0.0024, roll=0.0011,
+         roll_mat=rim)
+    return p
+
+
+def dragon_shoes():
+    """Boots of dark red leather to mid-calf: a cuff of red-lacquered scales pointing down at the top, scales over the
+    instep, a steel talon curling down over the toe, a short steel spur at the heel; a sole."""
+    p = Piece('feet')
+    p.budget = 5000
+    steel, scale, rim = dragon_mats()
+    hide = mat('dragon_boot', 0x2a0c0e, 'leather', engrave='scales', engrave_color=0x8a2420, emboss=True, rough=0.5, trim=0x80868f, gloss=0.35,
+               scale=0.04, panels=True)
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=rim)
+    calf, foot = soft_boots(p, hide, sole, edge=edge)
+    RU = 0.06
+    both(p, scale, plate(lambda u, v: calf.point(u / RU, v, 0.0068 + 0.004 * smooth(0.27, 0.19, v)),
+                         lambda u, v: ring_teeth_sd(u, v, RU, 0.19, 0.27, 8, 0.03, 'high', 'point'), -math.pi * RU, math.pi * RU, 0.186, 0.274,
+                         h=0.0028, periodic=True), ('calf_l',), deco=lambda q, d: smooth(0.004, 0.006, d), **edge)
+    for k, (t0, t1) in enumerate(((0.02, 0.09), (0.07, 0.14), (0.12, 0.2))):
+        both(p, scale, teeth_plate(foot, 0.045, -1.35, 1.35, t0, t1, 0.0075 + 0.0012 * k, 3, 0.02, 'high'), ('foot_l',) if k < 2 else ('foot_l', 'ball_l'),
+             deco=lambda q, d: smooth(0.004, 0.006, d), sharp=30, **edge)
+    tip, n = foot.point(0.0, 0.215, 0.006), foot.normal(0.0, 0.215)
+    fwd = (foot.at(0.0, 0.24) - foot.at(0.0, 0.2)).normalized()
+    both(p, steel, talon(tip, fwd + n * 0.4, -n, 0.035, 0.007), ('ball_l',))
+    heel, hn = foot.point(math.pi * 0.6, -0.07, 0.004), foot.normal(math.pi * 0.6, -0.07)
+    both(p, steel, spike(heel, -fwd * 0.8 + hn * 0.4, 0.022, 0.0045, Vector((0, 0.3, 0))), ('foot_l',))
+    return p
+
+
+# ---------------------------------------------------------------- the glacial mage: a long white robe under a fur-trimmed tunic
+
+def glacial_cloth():
+    """The glacial mage's cloth: a white wool-silk embroidered with pale blue frost, bordered in silver; an ice-blue
+    one embroidered with white frost, rimed a little, for the tunic."""
+    rim = 0xc6d6e3
+    return (mat('glacial_white', 0xe2e9ee, 'cloth', engrave='frost', engrave_color=0x6f98c0, emboss=True, rough=0.7, trim=rim, sheen=0xcfe0ee,
+                gloss=0.25, panels=True),
+            mat('glacial_blue', 0x5f87aa, 'cloth', engrave='frost', engrave_color=0xe6eef5, emboss=True, rough=0.7, trim=rim, sheen=0x7fa6c8,
+                gloss=0.25, panels=True, frost=0.15))
+
+
+def glacial_robe():
+    """The glacial mage, in two layers: a long robe of white to the lower shin, embroidered with frost above its hem,
+    slit a little behind; over it a tunic of ice blue to mid-thigh, slit at the sides, its hem trimmed with
+    white fur falling in locks; white fur gathered round the neck, thick on the left, and a pelt thrown over the left
+    shoulder as on the armour; wide sleeves embroidered with frost at the cuff, trimmed with fur; a white sash, its
+    clasp a cluster of ice crystals set in silver, two icicles hanging from it."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 13000, 2048, 0.03
+    white, blue = glacial_cloth()
+    steel, deep, rim, fur, ice, _ = glacial_mats()
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    gw = gown_form()
+    cloth = dict(solid=0.0022, roll=0.0012, roll_mat=rim)
+    RU = 0.17
+    skin = gown_skin(hem=0.22)
+    fine = 0.004 if RES <= 1 else 0.0075  # the fur's grid: kept whole, so coarse in the game's copy
+    # the long white robe, seen below the tunic and through its slits
+    under = dict(hem=0.21, wide=0.085, back=0.035, folds=16, fold=0.005, flat=0.0)
+    p.add(white, *robe_skirt(gw, top=0.97, slits=((math.pi, 0.48, 0.0015, 0.006),), **under),
+          deco=ornate(0.011, lambda q: smooth(0.21 + 0.14, 0.21 + 0.11, q.y)), skin=skin, **cloth)
+    # the tunic: its body, embroidered down the front; its skirt to mid-thigh, slit at the sides
+    tunic = dict(hem=0.62, wide=0.068, back=0.022, off=0.012, folds=12, fold=0.004, flat=0.0)
+    p.add(blue, *ring_plate(torso, RU, 0.975, 1.505, 0.0042), deco=ornate(0.01, lambda q: smooth(0.034, 0.026, abs(q.x)) if q.z > 0 else 0.0),
+          skin=TORSO, **cloth)
+    slits = ((math.pi / 2, 0.86, 0.003, 0.022), (-math.pi / 2, 0.86, 0.003, 0.022))
+    p.add(blue, *robe_skirt(gw, slits=slits, **tunic), deco=ornate(0.011, lambda q: smooth(0.62 + 0.12, 0.62 + 0.09, q.y)), skin=skin, **cloth)
+    # the fur along the tunic's hem, falling in locks, parted at the slits
+    def fur_hem(u, v):
+        a = u / RU
+        s = pelt_sd(u, v, -math.pi * RU, math.pi * RU, 0.6, 0.668, 44, 0.026, 4.0, 'low')
+        for ac, _, w0, w1 in slits:
+            s = max(s, w1 - abs(wrap(a - ac)) * RU)
+        return s
+    p.add(fur, *plate(lambda u, v: skirt_at(gw, u / RU, v, **dict(tunic, off=0.012 + 0.0075)), fur_hem, -math.pi * RU, math.pi * RU, 0.594, 0.672,
+                      h=fine, periodic=True), solid=0.006, bump=furry(0.0028, 5.0), forge=False, sharp=80, skin=skin, whole=True)
+    # the fur round the neck, thick on the left, and the pelt over the left shoulder (as on the armour)
+    collar = Cone(-0.035, 1.45, 0.128, 0.118, 1.57, 0.08, 0.08)
+
+    def collar_pt(a, t, off):
+        q = collar.at(a, t)
+        need = torso.radius(math.atan2(q.x, q.z), min(t, 1.56)) + 0.012 * smooth(1.575, 1.53, t)
+        r = math.hypot(q.x, q.z)
+        if r < need:
+            q = Vector((q.x * need / r, q.y, q.z * need / r))
+        return q + collar.normal(a, t) * off
+    left = lambda a: (0.5 + 0.5 * math.sin(a)) ** 1.5
+    thick = lambda u, v: 0.006 + (0.004 + 0.018 * left(u / 0.1)) * math.sin(math.pi * clamp((v - 1.40) / 0.155)) ** 0.6
+    fur_skin = ('neck_01', 'spine_03', 'clavicle_l', 'clavicle_r')
+    p.add(fur, *plate(lambda u, v: collar_pt(u / 0.1, v, thick(u, v)),
+                      lambda u, v: max(v - 1.555, pelt_sd(u, v, -math.pi * 0.1, math.pi * 0.1, 1.4 + 0.08 * (1 - left(u / 0.1)), 1.6, 18, 0.03, 0.7, 'low')),
+                      -math.pi * 0.1, math.pi * 0.1, 1.38, 1.56, h=fine, periodic=True), solid=0.006, bump=furry(0.003, 1.0), forge=False, sharp=80,
+          skin=fur_skin, whole=True)
+    pelt = lambda u, v: pelt_sd(u, v, -2.35 * 0.09, 2.35 * 0.09, -0.085, 0.13, 9, 0.045, 2.0, 'high')
+    poff = lambda u, v: 0.02 + 0.01 * smooth(0.06, -0.07, v)
+    p.add(fur, *plate(lambda u, v: arm.point(u / 0.09, v, poff(u, v)), pelt, -2.4 * 0.09, 2.4 * 0.09, -0.09, 0.135, h=fine),
+          solid=0.008, bump=furry(0.0035, 3.0), forge=False, sharp=80, skin=('clavicle_l', 'upperarm_l', 'spine_03'), whole=True)
+    locks = []
+    for k in range(11):
+        a = lerp(-2.1, 2.1, (k + 0.5) / 11) + 0.12 * noise.noise(Vector((k * 1.3, 0.4, 0.0)))
+        t = 0.09 + 0.02 * noise.noise(Vector((k * 2.1, 1.3, 0.0)))
+        locks.append(lock(arm.point(a, t, poff(a * 0.09, t) - 0.004), (1.0, -0.15, 0.0), arm.normal(a, t), 0.045 + 0.02 * noise.noise(Vector((k, 3.0, 0.0))),
+                          0.009, k * 1.7))
+    p.add(fur, *merge(*locks), skin=('upperarm_l', 'clavicle_l'))
+    # the sleeves: close over the upper arm, wide from the elbow, frost at the cuff, fur at the end
+    both(p, blue, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=PLAIN, **cloth)
+    cuff = lambda q: smooth(0.14, 0.16, q.x - bone('lowerarm_l').x)
+    both(p, blue, sleeve(fore, 0.07, -0.05, 0.235, 0.009, 0.042), ('upperarm_l', 'lowerarm_l'), deco=ornate(0.01, cuff), **cloth)
+    soff = lambda v: 0.009 + 0.042 * smooth(-0.05 + 0.285 * 0.3, 0.235, v) ** 1.5 + 0.008
+    both(p, fur, plate(lambda u, v: fore.point(u / 0.07, v, soff(min(v, 0.235))), lambda u, v: pelt_sd(u, v, -math.pi * 0.07, math.pi * 0.07, 0.205, 0.262, 16, 0.018,
+                                                                                                       6.0, 'high'),
+                       -math.pi * 0.07, math.pi * 0.07, 0.2, 0.266, h=fine, periodic=True), ('lowerarm_l',), solid=0.006, bump=furry(0.0025, 7.0), forge=False,
+         sharp=80, whole=True)
+    # the sash and its clasp of ice, two icicles under it
+    hip = ('pelvis', 'spine_01')
+    p.add(white, *plate(lambda u, v: gw.point(u / 0.16, v, 0.0215), lambda u, v: max(0.962 - v, v - 1.042), -math.pi * 0.16, math.pi * 0.16, 0.958, 1.046,
+                        periodic=True), deco=ornate(0.007), skin=hip, **cloth)
+    c, n = gw.point(0.0, 1.002, 0.028), gw.normal(0.0, 1.002)
+    t_, n_, b_ = frame(n)
+    p.add(rim, *oball(c - n * 0.002, (0.022, 0.005, 0.017), (t_, n_, b_), 14, 6), skin=hip)
+    crystals = [facet_crystal(c + t_ * dx + b_ * dz, (n * 0.6 + t_ * dx * 30 + b_ * dz * 30 + UP * 0.2), L, r)
+                for dx, dz, L, r in ((0.0, 0.0, 0.03, 0.0062), (0.01, 0.004, 0.02, 0.0045), (-0.011, 0.003, 0.022, 0.0048), (0.004, -0.009, 0.016, 0.004))]
+    p.add(ice, *merge(*crystals), skin=hip)
+    p.add(ice, *merge(icicle(c + t_ * 0.007 - UP * 0.01, -UP, 0.05, 0.004, 1.0), icicle(c - t_ * 0.008 - UP * 0.009, -UP, 0.036, 0.0034, 2.0)), skin=skin)
+    return p
+
+
+def glacial_circlet():
+    """A diadem of frosted steel etched with frost over the brow and the temples, edged in silver: a crown of ice
+    crystals rising from it in front, the tallest over the brow, falling away towards the temples, a blue stone of ice
+    at its foot; each end finished in a small crystal."""
+    p = Piece('circlet')
+    p.budget = 4000
+    steel, deep, rim, fur, ice, _ = glacial_mats()
+    hw = 0.0065
+    band, y_of, A = diadem(p, steel, hw=hw, roll_mat=rim, deco=lambda q, d: smooth(0.002, 0.0035, d))
+    RU = band.RU
+    crystals = []
+    for k in range(-7, 8):
+        a = k * 0.12
+        base, n = band.point(a, hw * 0.4, 0.0005), band.normal(a, hw * 0.4)
+        length = (0.052 * math.exp(-(k / 2.6) ** 2) + 0.012) * (0.75 if k % 2 else 1.0)
+        lean = Vector((math.sin(a), 0.0, math.cos(a))) * 0.18 + Vector((math.sin(a), 0, 0)) * 0.15
+        crystals.append(facet_crystal(base, UP + lean, length, 0.0042 if k % 2 else 0.0052))
+    p.add(ice, *merge(*crystals))
+    p.add(rim, *plate(lambda u, v: band.point(u / RU, v, 0.0012), lambda u, v: max(abs(u) - 0.9, abs(v - hw * 0.55) - 0.0028), -0.1, 0.1, hw * 0.55 - 0.004,
+                      hw * 0.55 + 0.004, h=0.0012), solid=0.002, roll=0.0006)
+    at, n = band.point(0.0, -0.0005, 0.003), band.normal(0.0, 0.0)
+    t_, n_, b_ = frame(n)
+    p.add(rim, *oball(at - n * 0.0012, (0.0095, 0.0018, 0.0095), (t_, n_, b_), 14, 5))
+    p.add(ice, *gem(at + n * 0.0008, n, 0.0072))
+    for s_ in (1, -1):
+        end = s_ * A
+        tang = (band.at(end + s_ * 1e-3, 0.0) - band.at(end, 0.0)).normalized()
+        p.add(ice, *facet_crystal(band.point(end, 0.0, 0.0), tang + UP * 0.3, 0.018, 0.0045))
+    return p
+
+
+def glacial_mage_gloves():
+    """Gloves of white leather fitted finger by finger, embroidered with frost on the back of the hand under a small
+    ice crystal set in silver; a cuff of white fur at the wrist."""
+    p = Piece('gloves')
+    p.budget = 5500
+    steel, deep, rim, fur, ice, _ = glacial_mats()
+    kid = mat('glacial_kid', 0xdfe7ec, 'leather', engrave='frost', engrave_color=0x6f98c0, emboss=True, rough=0.5, trim=0xc6d6e3, gloss=0.35,
+              panels=True, frost=0.2)
+    hand = forms()['hand']
+    fine_gloves(p, kid, deco=ornate(0.004, back_of_hand()))
+    RU = 0.06
+    fine = 0.0035 if RES <= 1 else 0.0065
+    both(p, fur, plate(lambda u, v: hand.point(u / RU, v, 0.006 + 0.012 * smooth(-0.01, -0.07, v)),
+                       lambda u, v: pelt_sd(u, v, -math.pi * RU, math.pi * RU, -0.078, 0.004, 14, 0.016, 3.0, 'low'), -math.pi * RU, math.pi * RU,
+                       -0.082, 0.008, h=fine, periodic=True), ('hand_l', 'lowerarm_l'), solid=0.005, bump=furry(0.0022, 2.0), forge=False, sharp=80,
+         whole=True)
+    at, n = hand.point(0.0, 0.042, 0.0008), hand.normal(0.0, 0.042)
+    both(p, rim, rivet(at, n, 0.0055, washer=0.0085), ('hand_l',))
+    both(p, ice, facet_crystal(at + n * 0.002, n + Vector((0.4, 0, 0)), 0.016, 0.0042), ('hand_l',))
+    return p
+
+
+def glacial_shoes():
+    """Boots of white leather, rimed, to mid-calf, a cuff of white fur at the top, a silver cap on the toe, a small ice
+    crystal set at the outer ankle; a sole."""
+    p = Piece('feet')
+    p.budget = 5500
+    steel, deep, rim, fur, ice, _ = glacial_mats()
+    boot = mat('glacial_boot', 0xc9d6e0, 'leather', engrave='frost', engrave_color=0x6f98c0, emboss=True, rough=0.55, trim=0xc6d6e3, gloss=0.3,
+               panels=True, frost=0.3)
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=rim)
+    calf, foot = soft_boots(p, boot, sole, edge=edge)
+    RU = 0.06
+    fine = 0.0035 if RES <= 1 else 0.0065
+    both(p, fur, plate(lambda u, v: calf.point(u / RU, v, 0.008 + 0.006 * math.sin(math.pi * clamp((v - 0.185) / 0.075))),
+                       lambda u, v: pelt_sd(u, v, -math.pi * RU, math.pi * RU, 0.185, 0.262, 14, 0.02, 5.0, 'high'), -math.pi * RU, math.pi * RU,
+                       0.18, 0.266, h=fine, periodic=True), ('calf_l',), solid=0.006, bump=furry(0.0025, 4.0), forge=False, sharp=80, whole=True)
+    both(p, rim, band_plate(foot, 0.045, -1.3, 1.3, 0.2, 0.25, 0.0058, 0.008), ('ball_l',), solid=0.0024, roll=0.001)
+    a = -math.pi / 2
+    at, n = calf.point(a, 0.4, 0.0055), calf.normal(a, 0.4)
+    both(p, rim, rivet(at, n, 0.006, washer=0.009), ('calf_l', 'foot_l'))
+    both(p, ice, facet_crystal(at + n * 0.002, n + UP * 0.3, 0.014, 0.004), ('calf_l', 'foot_l'))
+    return p
+
+
+# ---------------------------------------------------------------- the emerald mage: an elven gown of leaves
+
+def emerald_cloth():
+    """The emerald mage's cloth: an emerald silk with a teal sheen, bordered in silver and embroidered in its panels
+    with silver vines; a lighter, brighter green for the leaves."""
+    trim = 0xb7bcc2
+    return (mat('emerald_silk', 0x0b4f30, 'cloth', engrave='vines', engrave_color=0xc0c6cc, emboss=True, rough=0.5, trim=trim, sheen=0x0e5e3c,
+                gloss=0.4, panels=True),
+            mat('emerald_leaf', 0x17703f, 'cloth', engrave='vines', engrave_color=0xc8ced2, emboss=True, rough=0.5, trim=trim, sheen=0x1d8050,
+                gloss=0.4, panels=True))
+
+
+def leaf_sd(u, v, root, tip, width):
+    """A leaf's outline from its root to its tip (u, v points), `width` across at its widest, as a signed distance."""
+    mid = ((root[0] + tip[0]) / 2, (root[1] + tip[1]) / 2)
+    q = (root[0] * 0.75 + tip[0] * 0.25, root[1] * 0.75 + tip[1] * 0.25)
+    return ribbon_sd(u, v, [root, q, mid, tip], [width * 0.18, width * 0.45, width * 0.5, 0.0])
+
+
+def emerald_robe():
+    """The emerald mage, an elven gown: cut in one piece from under the bust and falling from there to the shin, slit
+    high at the sides, its hem cut into leaves and embroidered with silver vines above them; a fitted bodice with a
+    deep V at the neck, bordered in silver; a band of etched silver under the bust, a silver leaf brooch with an
+    emerald at its middle; a cape of leaves over each shoulder, in two rows; angel sleeves, close to the elbow, then
+    falling wide and open underneath, their ends cut into leaves; a girdle of silver leaves slung low over the hips,
+    higher on the left, an emerald hanging from it."""
+    p = Piece('robe')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    silk, leaf = emerald_cloth()
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    F = forms()
+    torso, arm, fore = F['torso'], F['arm'], F['forearm']
+    dress = Dress()
+    cloth = dict(solid=0.0022, roll=0.0012, roll_mat=silver)
+    RU, hem, waist = 0.17, 0.26, 1.285
+    bust = {}
+
+    def drape(a, t):  # falling straight from under the bust over the belly, not drawn in to it
+        k = round(a, 3)
+        if k not in bust:
+            bust[k] = [dress.radius(a, waist - 0.03 * i) for i in range(16)]
+        if t >= waist:
+            return 0.0
+        i = min(15, int((waist - t) / 0.03))
+        return max(0.0, max(bust[k][:i + 1]) - dress.radius(a, t)) * smooth(0.6, 0.95, t) + 0.006 * smooth(1.0, waist, t)
+    sk = dict(hem=hem, wide=0.09, back=0.04, folds=16, fold=0.006, flat=0.0, drape=drape)
+    skin = dress_skin(hem=hem)
+    # the gown, slit high at the sides, its hem in leaves, vines above them
+    p.add(silk, *robe_skirt(dress, top=waist, slits=((math.pi / 2, 0.74, 0.003, 0.032), (-math.pi / 2, 0.74, 0.003, 0.032)),
+                            edge=hem_edge('leaf', 0.05), lobes=26, **sk), deco=ornate(0.011, lambda q: smooth(hem + 0.16, hem + 0.12, q.y)), skin=skin, **cloth)
+    # the bodice, a deep V at the neck
+    vtop = lambda u: 1.508 - 0.115 * max(0.0, 1 - abs(u) / 0.078)
+    p.add(silk, *plate(lambda u, v: torso.point(u / RU, v, 0.004), lambda u, v: max(1.25 - v, v - vtop(u)), -math.pi * RU, math.pi * RU, 1.246, 1.512,
+                       periodic=True), deco=ornate(0.009, lambda q: 0.0), skin=TORSO, **cloth)
+    # the band under the bust and its brooch: an emerald among silver leaves
+    p.add(silver, *plate(lambda u, v: torso.point(u / RU, v, 0.0125), lambda u, v: max(1.258 - v, v - 1.298), -math.pi * RU, math.pi * RU, 1.254, 1.302,
+                         periodic=True), solid=0.0025, roll=0.0011, skin=TORSO)
+    for k in range(4):
+        ang = math.pi / 4 + math.pi / 2 * k
+        tip = (0.026 * math.cos(ang), 1.278 + 0.022 * math.sin(ang))
+        p.add(silver, *plate(lambda u, v: torso.point(u / RU, v, 0.0145), lambda u, v, tip=tip: leaf_sd(u, v, (0.0, 1.278), tip, 0.013),
+                             -0.03, 0.03, 1.25, 1.306, h=0.0009), solid=0.0018, roll=0.0007, skin=TORSO, bump=lambda q: 0.0008)
+    at, n = torso.point(0.0, 1.278, 0.0165), torso.normal(0.0, 1.278)
+    p.add(silver, *rivet(at - n * 0.001, n, 0.009, washer=0.0), skin=TORSO)
+    p.add(glass, *gem(at + n * 0.0025, n, 0.0075), skin=TORSO)
+    # the cape of leaves over each shoulder, two rows, each leaf over the one before
+    leaves = [(a, -0.075, 0.115, 0.054, 0.017 + 0.0016 * k) for k, a in enumerate((-1.9, -1.0, -0.1, 0.8, 1.7))]
+    leaves += [(a, 0.0, 0.175, 0.048, 0.0145 + 0.0016 * k) for k, a in enumerate((-1.45, -0.55, 0.35, 1.25))]
+    for a, t0, t1, w, off in leaves:
+        u0 = a * 0.09
+        both(p, leaf, plate(lambda u, v, off=off, t0=t0, t1=t1: arm.point(u / 0.09, v, off + 0.004 * smooth(t0, t1, v)),
+                            lambda u, v, u0=u0, t0=t0, t1=t1, w=w: leaf_sd(u, v, (u0, t0), (u0, t1), w), u0 - w, u0 + w, t0 - 0.004, t1 + 0.004, h=0.003),
+             ('clavicle_l', 'upperarm_l') if t0 < 0 else ('upperarm_l',), deco=ornate(0.005), sharp=35, **cloth)
+    # the angel sleeves: close to the elbow, then wide, open underneath, their ends in leaves
+    both(p, silk, ring_plate(arm, 0.08, -0.07, 0.262, 0.005), ('clavicle_l', 'upperarm_l', 'lowerarm_l'), deco=PLAIN, **cloth)
+    cuff = lambda q: smooth(0.15, 0.17, q.x - bone('lowerarm_l').x)
+    both(p, silk, sleeve(fore, 0.07, -0.05, 0.262, 0.009, 0.085, folds=6, fold=0.006, edge=hem_edge('leaf', 0.03), lobes=7, opening=(math.pi, 0.02, 0.075)),
+         ('upperarm_l', 'lowerarm_l'), deco=ornate(0.01, cuff), **cloth)
+    # the girdle of silver leaves slung over the hips, higher on the left, an emerald hanging in front
+    gy = lambda a: 0.935 + 0.04 * math.sin(a)
+    ring = [skirt_at(dress, 2 * math.pi * k / 120, gy(2 * math.pi * k / 120), off=0.0045, **sk) for k in range(120)]
+    p.add(silver, *tube(ring, 0.0022, 6, closed=True), skin=skin)
+    for k in range(18):
+        a = 2 * math.pi * k / 18
+        u0, y0 = a * RU, gy(a)
+        p.add(silver, *plate(lambda u, v: skirt_at(dress, u / RU, v, off=0.006, **sk), lambda u, v, u0=u0, y0=y0: leaf_sd(u, v, (u0, y0), (u0 + 0.004, y0 - 0.026), 0.013),
+                             u0 - 0.012, u0 + 0.014, y0 - 0.03, y0 + 0.004, h=0.0012), solid=0.0018, roll=0.0007, skin=skin)
+    a0 = 0.25
+    top_ = skirt_at(dress, a0, gy(a0) - 0.004, off=0.007, **sk)
+    drop = skirt_at(dress, a0, gy(a0) - 0.07, off=0.009, **sk)
+    p.add(silver, *tube([top_, top_.lerp(drop, 0.5), drop + Vector((0, 0.008, 0))], 0.0012, 6, fixed=True), skin=skin)
+    p.add(glass, *oball(drop, (0.0065, 0.0095, 0.0055)), skin=skin)
+    return p
+
+
+def emerald_circlet():
+    """An elven circlet: a twisted band of etched silver over the brow and the temples, covered in silver leaves swept
+    back from the middle, each over the next; at the brow an emerald in a setting of two leaves; at each temple two long
+    leaves rising back like wings."""
+    p = Piece('circlet')
+    p.budget = 4000
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    hw = 0.0045
+    band, y_of, A = diadem(p, silver, hw=hw, roll_mat=silver)
+    RU = band.RU
+    for s_ in (1, -1):
+        for k in range(8):
+            u0 = s_ * (0.012 + 0.021 * k)
+            root, tip = (u0, -0.001), (u0 + s_ * 0.03, 0.006 + 0.0015 * k)
+            p.add(silver, *plate(lambda u, v, k=k: band.point(u / RU, v, 0.0016 + 0.0004 * k + 0.0008 * gauss(v - 0.003, 0.004)),
+                                 lambda u, v, root=root, tip=tip: leaf_sd(u, v, root, tip, 0.013), min(root[0], tip[0]) - 0.008, max(root[0], tip[0]) + 0.008,
+                                 -0.009, 0.016, h=0.0009), solid=0.0016, roll=0.0006, sharp=30)
+        for root, tip, w in (((s_ * 0.104, 0.002), (s_ * 0.15, 0.04), 0.017), ((s_ * 0.116, -0.002), (s_ * 0.17, 0.022), 0.014)):
+            p.add(silver, *plate(lambda u, v: band.point(u / RU, v, 0.0022), lambda u, v, root=root, tip=tip, w=w: leaf_sd(u, v, root, tip, w),
+                                 min(root[0], tip[0]) - 0.012, max(root[0], tip[0]) + 0.012, -0.01, 0.046, h=0.0009), solid=0.0018, roll=0.0006, sharp=30,
+                  bump=lambda q: 0.0006)
+    for s_ in (1, -1):
+        p.add(silver, *plate(lambda u, v: band.point(u / RU, v, 0.0034), lambda u, v, s_=s_: leaf_sd(u, v, (0.0, -0.004), (s_ * 0.02, -0.011), 0.011),
+                             -0.024, 0.024, -0.016, 0.002, h=0.0008), solid=0.0016, roll=0.0006)
+    at, n = band.point(0.0, 0.002, 0.0045), band.normal(0.0, 0.002)
+    p.add(silver, *rivet(at - n * 0.001, n, 0.0082, washer=0.0))
+    p.add(glass, *oball(at + n * 0.002, (0.0072, 0.0045, 0.0095), frame(n), 14, 8))
+    return p
+
+
+def emerald_mage_gloves():
+    """Gloves of emerald silk fitted finger by finger, silver vines embroidered on the back of the hand under a silver
+    leaf set with an emerald; a cuff drawn out into a leaf's point up the back of the forearm, bordered in silver."""
+    p = Piece('gloves')
+    p.budget = 5000
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    silk = mat('emerald_glove', 0x0d4a2e, 'cloth', engrave='vines', engrave_color=0xc0c6cc, emboss=True, rough=0.45, trim=0xb7bcc2, sheen=0x12806b,
+               gloss=0.45, panels=True)
+    hand = forms()['hand']
+    fine_gloves(p, silk, deco=ornate(0.004, back_of_hand()))
+    RU = 0.06
+    both(p, silk, plate(lambda u, v: hand.point(u / RU, v, 0.0035 + 0.012 * smooth(-0.005, -0.08, v)),
+                        lambda u, v: max(v - 0.006, (-0.07 - 0.06 * max(0.0, math.cos(u / RU)) ** 6) - v), -math.pi * RU, math.pi * RU, -0.134, 0.01,
+                        h=0.0025, periodic=True), ('hand_l', 'lowerarm_l'), deco=ornate(0.005), solid=0.0022, roll=0.0011, roll_mat=silver)
+    both(p, silver, plate(lambda u, v: hand.point(u / RU, v, 0.0042), lambda u, v: leaf_sd(u, v, (0.0, 0.015), (0.0, 0.07), 0.026), -0.016, 0.016, 0.012,
+                          0.074, h=0.0012), ('hand_l',), solid=0.0018, roll=0.0007, bump=lambda q: 0.0006)
+    at, n = hand.point(0.0, 0.035, 0.0062), hand.normal(0.0, 0.035)
+    both(p, glass, gem(at, n, 0.0055), ('hand_l',))
+    return p
+
+
+def emerald_shoes():
+    """Soft elven boots of green leather to mid-calf: a cuff turned down at the top cut into leaves, a silver leaf with
+    an emerald at the outer ankle, the toe drawn out into a point curling up, tipped in silver; a sole."""
+    p = Piece('feet')
+    p.budget = 5000
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    boot = mat('emerald_boot', 0x10422a, 'leather', engrave='vines', engrave_color=0xb0b8be, emboss=True, rough=0.5, trim=0xb7bcc2, gloss=0.35,
+               panels=True)
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=silver)
+    calf, foot = soft_boots(p, boot, sole, edge=edge)
+    RU = 0.06
+    both(p, boot, plate(lambda u, v: calf.point(u / RU, v, 0.0068 + 0.004 * smooth(0.28, 0.19, v)),
+                        lambda u, v: max(0.19 - v, v - 0.28 + hem_edge('leaf', 0.03)(7 * (u / RU + math.pi) / (2 * math.pi))), -math.pi * RU, math.pi * RU,
+                        0.186, 0.284, h=0.0028, periodic=True), ('calf_l',), deco=ornate(0.006), **edge)
+    a = -math.pi / 2
+    both(p, silver, plate(lambda u, v: calf.point(u / RU, v, 0.0058), lambda u, v: leaf_sd(u, v, (a * RU, 0.43), (a * RU, 0.37), 0.022), a * RU - 0.014,
+                          a * RU + 0.014, 0.365, 0.435, h=0.0012), ('calf_l', 'foot_l'), solid=0.0018, roll=0.0007)
+    both(p, glass, gem(calf.point(a, 0.415, 0.008), calf.normal(a, 0.415), 0.0045), ('calf_l', 'foot_l'))
+    tip, n = foot.point(0.0, 0.205, 0.0), foot.normal(0.0, 0.205)
+    fwd = (foot.at(0.0, 0.24) - foot.at(0.0, 0.2)).normalized()
+    pts = [tip + fwd * (0.04 * t) + UP * (0.03 * t ** 2.2) - n * 0.004 for t in (k / 10 for k in range(11))]
+    both(p, boot, tube(pts, [0.016 * (1 - t) ** 0.8 + 0.002 for t in (k / 10 for k in range(11))], 12), ('ball_l',), deco=PLAIN)
+    both(p, silver, oball(pts[-1] + fwd * 0.001, 0.0035), ('ball_l',))
+    return p
+
+
 # ---------------------------------------------------------------- finish: bake the dense model onto the light one
 
 TEX = 1024
@@ -4219,6 +5647,11 @@ def finish(his, los, name, tex=None):
     flats = []  # the flat-coloured materials, in the order of their patches
     for o in los:
         select(o)
+        # each face's corners on their own side of every sharp edge: the bake casts its rays along the vertex normals,
+        # and a vertex shared with the thin rim of a thinned plate points along the plate, its rays missing it
+        es = o.modifiers.new('es', 'EDGE_SPLIT')
+        es.split_angle, es.use_edge_sharp = math.radians(50), True
+        bpy.ops.object.modifier_apply(modifier='es')
         wn = o.modifiers.new('wn', 'WEIGHTED_NORMAL')
         wn.keep_sharp = True
         bpy.ops.object.modifier_apply(modifier='wn')
@@ -4245,6 +5678,10 @@ def finish(his, los, name, tex=None):
     col_img = bpy.data.images.new(f'{name}_color', size, size, alpha=True)
     nor_img = bpy.data.images.new(f'{name}_normal', size, size, alpha=False, is_data=True)
     shine_img = bpy.data.images.new(f'{name}_shine', size, size, alpha=False, is_data=True)
+    import numpy as np
+    UNBAKED = (1.0, 0.0, 1.0)  # what a texel no ray reached keeps: a black one may be a black silk's, deep in shadow
+    for img in (col_img, nor_img, shine_img):
+        img.pixels.foreach_set(np.tile(np.array(UNBAKED + (1.0,), dtype=np.float32), size * size))
     sc.render.engine = 'CYCLES'
     sc.cycles.device = 'CPU'
     sc.cycles.samples = 24
@@ -4294,16 +5731,15 @@ def finish(his, los, name, tex=None):
             select(*[h for h in his if h['part'] == o['part']], o, active=o)
             bpy.ops.object.bake(**kind, **bake)
     # the patches of flat colour (sRGB, as the colour map stores it), flat relief, and the shine in the colour's alpha
-    import numpy as np
     px = {}
     for key, img in (('col', col_img), ('nor', nor_img), ('shine', shine_img)):
         a = np.empty(size * size * 4, dtype=np.float32)
         img.pixels.foreach_get(a)
         px[key] = a.reshape(size, size, 4)
     top = int(0.97 * size)
-    for key in ('col', 'nor', 'shine'):  # texels no part reached are black (round the islands, or a ray that found nothing): fill them from their neighbours
+    for key in ('col', 'nor', 'shine'):  # texels no part reached (round the islands, or a ray that found nothing): fill them from their neighbours
         a = px[key]
-        miss = a[:, :, :3].max(axis=2) < 0.004
+        miss = np.abs(a[:, :, :3] - np.array(UNBAKED, dtype=np.float32)).max(axis=2) < 1e-4
         for _ in range(24):
             if not miss.any():
                 break
@@ -4315,6 +5751,7 @@ def finish(his, los, name, tex=None):
             fill = cnt > 0
             a[fill, :3] = acc[fill] / cnt[fill][:, None]
             miss &= ~fill
+        a[miss, :3] = (0.5, 0.5, 1.0) if key == 'nor' else (0.0, 0.0, 0.0)  # far from any island: flat and dark
     for k, m in enumerate(flats):
         x0, x1 = int(k / 32 * size), int((k + 1) / 32 * size)
         px['col'][top:, x0:x1, :3] = [((m['rgb'] >> s_) & 255) / 255 for s_ in (16, 8, 0)]
@@ -4450,6 +5887,10 @@ SETS = {
     'shield_glacial': {'shield': glacial_shield}, 'shield_emerald': {'shield': emerald_shield}, 'shield_infernal': {'shield': infernal_shield},
     # each set's sword and staff, a file a set (client/src/render/quaternius.ts qWeapon)
     **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
+    # each set's mage gear, a file a set (client/src/render/quaternius.ts armorPiece, HEADGEAR)
+    'mage_infernal': {'robe': infernal_robe, 'circlet': infernal_circlet, 'gloves': infernal_mage_gloves, 'feet': infernal_shoes},
+    **{f'mage_{s}': {'robe': globals()[f'{s}_robe'], 'circlet': globals()[f'{s}_circlet'], 'gloves': globals()[f'{s}_mage_gloves'],
+                     'feet': globals()[f'{s}_shoes']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald')},
 }
 
 
@@ -4484,7 +5925,7 @@ def run(set_id, pieces):
         print(f'[gear] {set_id}.{name}: {dense} tris dense, {tris(ob)} for the game')
     if PREVIEW:
         os.makedirs(PREVIEW, exist_ok=True)
-        heads = [o for o in objs if o.name.startswith('helm')]
+        heads = [o for o in objs if o.name.startswith(('helm', 'circlet'))]
         held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff')]
         if heads:
             preview(heads[0], set_id)

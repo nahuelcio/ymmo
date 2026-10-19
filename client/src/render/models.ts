@@ -680,7 +680,10 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const hideHair = !!gear && !gear.hair;
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && lookGrade(d) !== 'NG', dye: d?.color, glow: topTier(lookGrade(d)) });
     // a set's own model for the piece, where it has one, goes over the peasant kit dyed in the set's cloth
-    const [wChest, wGloves, wLegs, wFeet] = [chestDef, gloves, legs, feet].map((d) => (d ? armorPiece(d.id) : undefined));
+    const [wChest, wGloves, wFeet] = [chestDef, gloves, feet].map((d) => (d ? armorPiece(d.id) : undefined));
+    // a set's robe covers the legs to mid-shin: whatever is worn on them stays under it (cuisses would come through the skirt)
+    const robe = !!wChest && wChest.node.name === 'robe';
+    const wLegs = legs && !robe ? armorPiece(legs.id) : undefined;
     const under = (d: ItemDef | null, w?: { under: number }): QZone => (w ? { ranger: false, dye: w.under } : zone(d));
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
@@ -688,7 +691,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       pauldron: !wChest && !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
       armor: [...[wChest, wGloves, wLegs, wFeet].filter((w) => !!w).map((w) => w!.node), ...(shield ? [shieldPiece(shield.id)] : [])].filter((n): n is THREE.Object3D => !!n),
       bareFeet: !!wFeet,
-      noTop: !!wChest, noLegs: !!wLegs, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
+      noTop: !!wChest, noLegs: !!wLegs || robe, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant),
