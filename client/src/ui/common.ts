@@ -1,10 +1,10 @@
-import { enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
 import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
-export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), chest: tx('Torso', 'Chest'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet'), amulet: tx('Collar', 'Necklace'), earring: tx('Pendiente', 'Earring'), ring: tx('Anillo', 'Ring') };
+export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), shield: tx('Escudo', 'Shield'), chest: tx('Torso', 'Chest'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet'), amulet: tx('Collar', 'Necklace'), earring: tx('Pendiente', 'Earring'), ring: tx('Anillo', 'Ring') };
 export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt'), axe: tx('Hacha', 'Axe'), spear: tx('Lanza', 'Spear'), dagger: tx('Daga', 'Dagger') };
 
 const ICONS = import.meta.glob('../icons/**/*.svg', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
@@ -38,7 +38,7 @@ export function hex(c: number): string {
 /** Pieces of a set share the drawing of their kind: the icon's colour and border tell the sets apart. */
 const SHARED_ICON: Record<string, string> = {
   ring: 'ring', earring: 'earring', necklace: 'necklace', blade: 'samurai_longsword', staff: 'sages_staff', helm: 'full_plate_helmet', plate: 'full_plate_armor',
-  robe: 'demons_tunic', greaves: 'brigandine_gaiters', gauntlets: 'reinforced_gloves', boots: 'reinforced_boots',
+  robe: 'demons_tunic', greaves: 'brigandine_gaiters', gauntlets: 'reinforced_gloves', boots: 'reinforced_boots', shield: 'shield', buckler: 'shield',
   pelt: 'wolf_pelt', healing: 'greater_healing_potion', mana: 'greater_mana_potion',
 };
 /** The icon file an item uses: its own, or the one for its kind (abyssal_ring and ring_of_vigor both draw `ring`). */
@@ -92,6 +92,9 @@ function masterworkLines(isWeapon: boolean): string[] {
   return out;
 }
 
+/** A shield's block chance at +e, in % (each +1 adds as much as it adds to a piece's defence; server-rs compute_stats) */
+export const blockPct = (d: { block?: number }, e = 0) => Math.round((d.block ?? 0) * (1 + ENCHANT.armor * e) * 1000) / 10;
+
 export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw = false): string {
   const d = ITEMS[itemId];
   if (!d) return '';
@@ -100,8 +103,9 @@ export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw 
   const name = `${ench ? `+${ench} ` : ''}${esc(itemName(itemId, lang))}`;
   lines.push(`<div class="tt-title">${mw ? `<span class="tt-mw">${name}</span>` : name}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
   const st = (k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef') => enchanted(d, k, ench);
-  if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}</span>`);
-  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}${d.twoHanded ? tx(' · a dos manos, sin escudo', ' · two-handed, no shield') : ''}</span>`);
+  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`, d.block && `${tx('Bloqueo', 'Block')} ${blockPct(d, ench)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  if (d.block) lines.push(`<span class="tt-dim">${tx('Un golpe físico bloqueado hace la mitad de daño.', 'A blocked physical hit does half its damage.')}</span>`);
   if (d.slot && mw) lines.push(...masterworkLines(d.type === 'weapon'));
   const need = wearLevel(d);
   if (d.slot && legacy) lines.push(`<span class="tt-up">${tx('Equipo heredado: sin requisito de nivel', 'Legacy gear: no level requirement')}</span>`);

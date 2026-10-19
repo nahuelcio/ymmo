@@ -50,7 +50,13 @@ const HELMS = { HelmC: [0, 0, 1], HelmD: [0, 0, 1], karmian_hat: [0, 0, 1], demo
  */
 const GEAR_SETS = ['apprentice', 'abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const;
 export type GearSet = (typeof GEAR_SETS)[number];
-const gear: Partial<Record<GearSet, THREE.Object3D>> = {};
+/** Each shield is a file of its own (q/gear/shield_<key>.glb, tools/art/blender/gear.py): its one node, 'shield', worn on the left forearm. */
+const SHIELDS: Record<string, string> = {
+  wooden_buckler: 'buckler', brigandine_shield: 'brigandine', full_plate_shield: 'plate', abyssal_shield: 'abyssal', ashforged_shield: 'ashforged',
+  dragon_shield: 'dragon', glacial_shield: 'glacial', emerald_shield: 'emerald', infernal_shield: 'infernal',
+};
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}`;
+const gear: Partial<Record<GearFile, THREE.Object3D>> = {};
 /** The male bind pose's inverse bone matrices, in `joints` order: the body pieces were modelled in it, so a woman's
  * bones carry them over onto her (and every race's scaling onto it). */
 let restInv: THREE.Matrix4[] = [];
@@ -95,6 +101,11 @@ function bustGeo(src: THREE.BufferGeometry): THREE.BufferGeometry {
   }
   bustCopies.set(src, g);
   return g;
+}
+/** A shield's model, when it has one (a body piece like the rest of the armour, skinned to the left forearm). */
+export function shieldPiece(id: string): THREE.Object3D | undefined {
+  const key = SHIELDS[id];
+  return (key && wantGear(`shield_${key}`)?.getObjectByName('shield')) || undefined;
 }
 /** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
  * a skin in our joint order. */
@@ -141,8 +152,28 @@ let ready = false;
 let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
-/** The item's own weapon model, if it has one (geometry and materials are shared between instances). */
-export const qWeapon = (item: string | null): THREE.Object3D | null => (item && WEAPONS.includes(item) ? props[item].clone() : null);
+/** The region sets' swords and staffs, a file a set (q/gear/weapons_<set>.glb, tools/art/blender/gear.py): nodes 'blade' and 'staff'. */
+const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff)$/;
+/**
+ * The item's own weapon model, if it has one (geometry and materials are shared between instances). A set's sword or
+ * staff comes in with its file: until then there is none (the caller draws the plain one), and 'gear-loaded' redraws.
+ */
+export function qWeapon(item: string | null): THREE.Object3D | null {
+  if (!item) return null;
+  if (WEAPONS.includes(item)) return props[item].clone();
+  const m = SET_WEAPON.exec(item);
+  const node = m && wantGear(`weapons_${m[1]}`)?.getObjectByName(m[2]);
+  if (!node) return null;
+  const w = node.clone(), held = new THREE.Group();
+  w.position.set(0, 0, 0);
+  held.add(w);
+  // built as the Fiend props are (upright, the grip at the origin), and held as they are
+  if (m[2] === 'staff') {
+    held.rotation.z = -Math.PI / 2;
+    held.position.z = 0.05;
+  } else held.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'ZYX'));
+  return held;
+}
 
 /**
  * Typical colour of a texture, to recolour it relative to its own tone. Only the brighter
@@ -190,13 +221,13 @@ const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
 };
 
 let gearLoader: GLTFLoader | null = null;
-const gearLoading = new Set<GearSet>();
+const gearLoading = new Set<GearFile>();
 /**
  * An armour set's file, fetched the first time a character wears something of it (a whole set's maps are tens of
  * megabytes on the GPU: only the sets on screen get loaded). Until it is in, the piece is left off; then a
  * 'gear-loaded' event (detail: the set) tells whoever drew a character without it to build it again.
  */
-function wantGear(s: GearSet): THREE.Object3D | undefined {
+function wantGear(s: GearFile): THREE.Object3D | undefined {
   if (gear[s] || !gearLoader || gearLoading.has(s)) return gear[s];
   gearLoading.add(s);
   gearLoader.loadAsync(`q/gear/${s}.glb`).then((g) => {
@@ -610,8 +641,8 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   // [weapon, chest, head, gloves, legs, feet]
   const TIERS: Record<string, (string | null)[]> = {
     'Sin equipo': [null, null, null, null, null, null],
-    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
-    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals', 'wooden_buckler'],
+    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', 'brigandine_shield'],
     C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     'Místico NG': ['apprentice_wand', 'apprentice_tunic', null, null, 'apprentice_stockings', null],
     'Místico D': ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
@@ -623,10 +654,14 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     // the region sets (tools/art/blender/gear.py)
     ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
       { abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s],
-      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`],
+      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, `${s}_shield`],
     ])),
     // every helmet side by side, on one race (?race=, default human; ?g=f for women)
     Cascos: [null, 'brigandine_tunic', null, null, null, null],
+    // every shield side by side, the same way
+    Escudos: ['broadsword', 'brigandine_tunic', null, null, null, null, null],
+    // each region set with its sword and its staff, side by side
+    Armas: [null, null, null, null, null, null, null],
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
@@ -639,6 +674,29 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       r.dispose?.();
     }
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
+    if (tier === 'Armas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
+      rigs = sets.flatMap((s, i) => (['blade', 'staff'] as const).map((k, j) => {
+        const rig = playerModel(race, k === 'staff' ? 'mystic' : 'fighter', `${s}_${k}`, `${s}_plate`, { g, hs: 1, hc: 0 },
+          [`${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, null]);
+        rig.root.position.set((i * 2 + j - 5.5) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      }));
+      return;
+    }
+    if (tier === 'Escudos') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const list = Object.keys(SHIELDS);
+      rigs = list.map((sh, i) => {
+        const rig = playerModel(race, 'fighter', w, chest, { g, hs: 1, hc: 0 }, [null, null, null, null, sh]);
+        rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
     if (tier === 'Cascos') {
       const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
       rigs = HELMETS.map((h, i) => {

@@ -53,9 +53,9 @@ FAST = os.environ.get('GEAR_FAST', '') == '1'  # previews of the dense model, wi
 HEAD = os.environ.get('GEAR_HEAD', '')
 ONLY = os.environ.get('GEAR_ONLY', '')
 LIGHT = float(os.environ.get('GEAR_LIGHT', '2.2'))  # how much coarser the game's copy is than the dense model
-BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000}  # the triangles each piece may have in the game
-PART = os.environ.get('GEAR_PART', '')  # only these pieces of each set (helm, chest, gloves, legs, feet)
-ZOOM = os.environ.get('GEAR_ZOOM', '')  # body previews closer in: "height,width" in metres (0.85,0.6 frames the hips)
+BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000, 'shield': 4000, 'blade': 3000, 'staff': 3500}  # the triangles each piece may have in the game
+PART = os.environ.get('GEAR_PART', '')  # only these pieces of each set (helm, chest, gloves, legs, feet, shield)
+ZOOM = os.environ.get('GEAR_ZOOM', '')  # body previews closer in: "height,width" in metres (0.85,0.6 frames the hips), or "x,height,width"
 
 RES = 1.0  # the resolution being built: 1 for the dense model, LIGHT for the game's copy
 UP = Vector((0, 1, 0))
@@ -370,6 +370,7 @@ class Piece:
         self.parts = []
         self.rules = [None]  # skin rules, by index: none (a rigid piece, the helmet), bones, or a function
         self.min_ratio = 0.05  # how far the game's copy may thin its plates
+        self.centre = HEAD_C  # what a rigid piece's open sheets face away from (a helmet's: the head's middle)
         self.budget = BUDGET.get(name, 8000)
         self.tex = None  # its maps' size (else TEX, the cuirass twice that)
 
@@ -415,7 +416,7 @@ class Piece:
                     kd = body()['kd']
                     out = sum((f.calc_center_median() - B(kd.find(G(f.calc_center_median()))[0])).dot(f.normal) * f.calc_area() for f in bm.faces)
                 else:
-                    ref = B(HEAD_C)
+                    ref = B(self.centre)
                     out = sum((f.calc_center_median() - ref).dot(f.normal) * f.calc_area() for f in bm.faces)
                 if out < 0:
                     for f in bm.faces:
@@ -1313,14 +1314,16 @@ def preview_body(objs, set_id):
     sc.render.resolution_x, sc.render.resolution_y = 520, 760
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
     cam.data.type = 'ORTHO'
-    zy, zw = (float(x) for x in ZOOM.split(',')) if ZOOM else (0.92, 2.05)
+    zv = [float(x) for x in ZOOM.split(',')] if ZOOM else [0.92, 2.05]
+    zx, zy, zw = zv if len(zv) == 3 else [0.0] + zv
     cam.data.ortho_scale = zw
     sc.collection.objects.link(cam)
     sc.camera = cam
-    target = B((0.0, zy, 0.0))
+    target = B((zx, zy, 0.0))
     for name, deg, el in (('a', 0, 4), ('b', 40, 8), ('c', 90, 2), ('d', 155, 8)):
+        el = float(os.environ.get('GEAR_ELEV', el))  # from above: a shield faces up in the rest pose
         az, e = math.radians(deg), math.radians(el)
-        cam.location = B((4 * math.sin(az) * math.cos(e), zy + 4 * math.sin(e), 4 * math.cos(az) * math.cos(e)))
+        cam.location = B((zx + 4 * math.sin(az) * math.cos(e), zy + 4 * math.sin(e), 4 * math.cos(az) * math.cos(e)))
         cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
         sc.render.filepath = os.path.join(PREVIEW, f'{set_id}_body_{name}.png')
         bpy.ops.render.render(write_still=True)
@@ -2942,11 +2945,761 @@ def infernal_feet():
     return p
 
 
+FORE = ('lowerarm_l',)  # a shield goes wherever the forearm goes
+
+
+class Shield:
+    """A shield's face, strapped on the outside of the left forearm (the top of the arm in the rest pose, its outside
+    hanging): across it (s, forward) and up it (h, towards the elbow) from its middle, domed out by `dome` metres at the
+    middle - 'round' a dish, 'curve' bent across and only a little up and down. hw, hh: its half width and height."""
+
+    def __init__(self, hw, hh, dome=0.03, kind='curve', t=0.15, lift=0.08):
+        self.fore = forms()['forearm']
+        axis = self.fore.o + self.fore.d * t
+        self.c = Vector((axis.x, self.fore.at(0.0, t).y + lift, axis.z))
+        self.hw, self.hh, self.dome, self.kind, self.t = hw, hh, dome, kind, t
+        self.n, self.up, self.side = Vector((0, 1, 0)), Vector((-1, 0, 0)), Vector((0, 0, 1))
+
+    def bulge(self, s, h):
+        a, b = s / self.hw, h / self.hh
+        return self.dome * (1 - (a * a + b * b if self.kind == 'round' else a * a + 0.25 * b * b))
+
+    def flat(self, s, h, off=0.0):
+        return self.c + self.side * s + self.up * h + self.n * (self.bulge(s, h) + off)
+
+    def normal(self, s, h):
+        e = 1e-3
+        n = (self.flat(s + e, h) - self.flat(s - e, h)).cross(self.flat(s, h + e) - self.flat(s, h - e)).normalized()
+        return n if n.dot(self.n) > 0 else -n
+
+    def at(self, s, h, off=0.0):
+        """A point on the face, `off` out along its normal."""
+        return self.flat(s, h) + self.normal(s, h) * off
+
+    def local(self, q):
+        """(s, h) of a point near the face."""
+        d = Vector(q) - self.c
+        return d.dot(self.side), d.dot(self.up)
+
+    def plate(self, sd, off=0.0, pad=0.012, h=0.003, box=None):
+        u0, u1, v0, v1 = box or (-self.hw - pad, self.hw + pad, -self.hh - pad, self.hh + pad)
+        return plate(lambda u, v: self.at(u, v, off), sd, u0, u1, v0, v1, h=h)
+
+    def rim(self, pts, r, off=0.0):
+        """A rolled rim round an outline of (s, h) points."""
+        q = [self.at(s, h, off) for s, h in pts]
+        return tube(q + q[:1], r, 10, closed=True)
+
+    def dome_bump(self, c, r, height):
+        """A boss's swell over the face: round, `height` at its middle."""
+        return lambda q: height * math.sqrt(max(0.0, 1 - (math.hypot(*(a - b for a, b in zip(self.local(q), c))) / r) ** 2))
+
+
+def strapped(p, sh, leather, core):
+    """The straps a shield is worn by: two round the forearm, each nailed to the back of the shield's core by a short
+    tongue, and a grip under the hand."""
+    fore = sh.fore
+    for t in (sh.t - 0.085, sh.t + 0.06):
+        p.add(leather, *ring_plate(fore, 0.07, t - 0.012, t + 0.012, 0.014), solid=0.003, skin=FORE)
+        s0, h0 = sh.local(fore.point(0.0, t, 0.016))
+        p.add(leather, *tube([fore.point(0.0, t, 0.012), sh.at(s0, h0, -core - 0.002)], 0.009, 8), skin=FORE)
+    gs, gh = sh.local(fore.o + fore.d * (sh.t + 0.12))
+    p.add(leather, *tube([sh.at(gs - 0.045, gh, -core - 0.002), sh.at(gs - 0.02, gh, -core - 0.03), sh.at(gs + 0.02, gh, -core - 0.03),
+                          sh.at(gs + 0.045, gh, -core - 0.002)], 0.008, 8), skin=FORE)
+
+
+def heater(hw, hh, top_round=0.0):
+    """A heater shield's outline: a straight (or gently arched) top, sides falling straight then curving in to a point."""
+    return outline(symmetric([(0.0, hh + top_round), (0.5 * hw, hh + 0.6 * top_round), (hw, hh), (hw, hh * 0.25), (0.86 * hw, -hh * 0.35),
+                              (0.55 * hw, -hh * 0.78), (0.0, -hh)]), 8)
+
+
+def kite(hw, hh):
+    """A kite shield's outline: a rounded top, widest high up, drawn out to a long point."""
+    return outline(symmetric([(0.0, hh), (0.6 * hw, hh * 0.92), (hw, hh * 0.62), (0.92 * hw, hh * 0.15), (0.6 * hw, -hh * 0.45),
+                              (0.25 * hw, -hh * 0.85), (0.0, -hh)]), 8)
+
+
+def inset(poly, d):
+    """An outline shrunk `d` towards its middle (good enough for a shield's convex outline)."""
+    cx, cy = sum(p[0] for p in poly) / len(poly), sum(p[1] for p in poly) / len(poly)
+    return [(cx + (x - cx) * (1 - d / max(1e-6, math.hypot(x - cx, y - cy))), cy + (y - cy) * (1 - d / max(1e-6, math.hypot(x - cx, y - cy))))
+            for x, y in poly]
+
+
+def buckler_shield():
+    """A wooden buckler: five oak planks, an iron band round the edge, a domed iron boss riveted at its middle."""
+    p = Piece('shield')
+    wood = mat('oak', 0x7a5232, 'wood', rough=0.8)
+    iron = mat('shield_iron', 0x4a4d52, 'iron', rough=0.5, metal=0.85)
+    leather = mat('strap_leather', 0x3a2416, 'leather', rough=0.8)
+    R = 0.18
+    sh = Shield(R, R, 0.024, 'round')
+    for k in range(5):
+        s0 = -R + k * (2 * R / 5)
+        p.add(wood, *sh.plate(lambda u, v, s0=s0: max(math.hypot(u, v) - R, s0 + 0.0015 - u, u - (s0 + 2 * R / 5 - 0.0015))),
+              solid=0.014, skin=FORE)
+    ring = [(R * math.cos(2 * math.pi * k / 96), R * math.sin(2 * math.pi * k / 96)) for k in range(96)]
+    p.add(iron, *sh.rim(ring, 0.0075, -0.006), skin=FORE)
+    p.add(iron, *sh.plate(lambda u, v: math.hypot(u, v) - 0.058, off=0.0008), solid=0.003, roll=0.0012, bump=sh.dome_bump((0, 0), 0.058, 0.03), skin=FORE)
+    for k in range(6):
+        a = 2 * math.pi * k / 6
+        s, h = 0.072 * math.cos(a), 0.072 * math.sin(a)
+        p.add(iron, *rivet(sh.at(s, h, 0.001), sh.normal(s, h), 0.006), skin=FORE)
+    strapped(p, sh, leather, 0.014)
+    return p
+
+
+def brigandine_shield():
+    """A heater shield of the brigandine kit: boiled leather over a wooden core, an iron band round its edge and two
+    crossing over it, studded with rows of iron rivets, an iron boss where the bands meet."""
+    p = Piece('shield')
+    leather = mat('brig_leather', 0x4a3222, 'leather', rough=0.75)
+    iron = mat('shield_iron', 0x5c636c, 'iron', rough=0.45, metal=0.85)
+    core = mat('shield_core', 0x5a3e28, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x3a2416, 'leather', rough=0.8)
+    hw, hh = 0.23, 0.28
+    sh = Shield(hw, hh, 0.035)
+    out = heater(hw, hh)
+    face = lambda u, v: sd_poly(u, v, out)
+    p.add(leather, *sh.plate(face), solid=0.004, forge=creased(0.0006), skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: sd_poly(u, v, out) + 0.004, off=-0.0045), solid=0.012, skin=FORE)
+    p.add(iron, *sh.rim(out, 0.007, -0.002), skin=FORE)
+    for band in (lambda u, v: max(abs(u) - 0.018, face(u, v) + 0.006), lambda u, v: max(abs(v - 0.06) - 0.018, face(u, v) + 0.006)):
+        p.add(iron, *sh.plate(band, off=0.001), solid=0.0025, roll=0.001, skin=FORE)
+    p.add(iron, *sh.plate(lambda u, v: math.hypot(u, v - 0.06) - 0.05, off=0.0035), solid=0.003, roll=0.0012,
+          bump=sh.dome_bump((0, 0.06), 0.05, 0.026), skin=FORE)
+    studs = [(s * x, y) for s in (1, -1) for x in (0.07, 0.13, 0.18) for y in (0.2, 0.13, -0.02, -0.09)
+             if face(s * x, y) < -0.025] + [(0.0, y) for y in (0.22, -0.08, -0.16)] + [(s * x, 0.06) for s in (1, -1) for x in (0.11, 0.19)]
+    for s, h in studs:
+        p.add(iron, *rivet(sh.at(s, h, 0.0012), sh.normal(s, h), 0.0045), skin=FORE)
+    strapped(p, sh, strap, 0.016)
+    return p
+
+
+def plate_shield():
+    """A knight's heater shield of polished steel: a blue enamelled field inside a raised steel border, a cross pattée
+    raised on it, rivets round the border."""
+    p = Piece('shield')
+    steel = mat('plate_steel', 0xc0c8d0, 'steel', rough=0.22, metal=0.95)
+    field = mat('plate_azure', 0x1f3f8a, 'enamel', rough=0.3, metal=0.4)
+    core = mat('shield_core', 0x5a3e28, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x3a2416, 'leather', rough=0.8)
+    hw, hh = 0.24, 0.3
+    sh = Shield(hw, hh, 0.04)
+    out = heater(hw, hh, 0.015)
+    p.add(steel, *sh.plate(lambda u, v: sd_poly(u, v, out)), solid=0.003, roll=0.0022, sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: sd_poly(u, v, out) + 0.004, off=-0.0035), solid=0.012, skin=FORE)
+    p.add(field, *sh.plate(lambda u, v: sd_poly(u, v, out) + 0.028, off=0.0012), solid=0.0015, roll=0.0012, sharp=30, skin=FORE)
+
+    def cross(u, v):  # a cross pattée: arms flaring out from the middle
+        v0 = v - 0.04
+        arm = lambda a, b: max(abs(b) - (0.016 + 0.32 * abs(a)), abs(a) - 0.15)
+        return max(min(arm(u, v0), arm(v0, u)), sd_poly(u, v, out) + 0.034)
+    p.add(steel, *sh.plate(cross, off=0.0028), solid=0.002, roll=0.0011, sharp=30, skin=FORE)
+    ring = inset(out, 0.015)
+    for s, h in ring[::max(1, len(ring) // 18)]:  # round the border
+        p.add(steel, *rivet(sh.at(s, h, 0.0006), sh.normal(s, h), 0.0042), skin=FORE)
+    strapped(p, sh, strap, 0.0155)
+    return p
+
+
+def abyssal_shield():
+    """A conquistador's rodela of the abyssal harness: round and deeply domed, blued steel etched with waves in a band
+    round its edge, two lacquered rings, and a fluted shell for a boss."""
+    p = Piece('shield')
+    steel, accent, gilt = abyssal_mats()
+    core = mat('shield_core', 0x3a2a1c, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x2a1c14, 'leather', rough=0.8)
+    R = 0.26
+    sh = Shield(R, R, 0.06, 'round')
+    disc = lambda u, v: math.hypot(u, v) - R
+    p.add(steel, *sh.plate(disc), solid=0.003, roll=0.0022, roll_mat=gilt, deco=0.035, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: disc(u, v) + 0.004, off=-0.0035), solid=0.012, skin=FORE)
+    for r0, r1 in ((0.168, 0.185), (0.112, 0.124)):
+        p.add(accent, *sh.plate(lambda u, v, r0=r0, r1=r1: max(r0 - math.hypot(u, v), math.hypot(u, v) - r1), off=0.0012), solid=0.0015,
+              roll=0.0009, roll_mat=gilt, deco=lambda q: 0.0, skin=FORE)
+
+    def shell(u, v):  # flutes running out from the middle, each ending in a lobe
+        a, r = math.atan2(v, u), math.hypot(u, v)
+        lobe = 0.008 * (1 - abs(math.cos(9 * a)) ** 0.5)
+        return r - (0.085 - lobe)
+    flutes = lambda q: (lambda s, h: 0.004 * (0.5 + 0.5 * math.cos(18 * math.atan2(h, s))) * smooth(0.0, 0.06, math.hypot(s, h)))(*sh.local(q))
+    p.add(accent, *sh.plate(shell, off=0.002), solid=0.003, roll=0.0012, roll_mat=gilt, bump=lambda q: sh.dome_bump((0, 0), 0.085, 0.035)(q) + flutes(q),
+          deco=lambda q: 0.0, skin=FORE)
+    for k in range(12):
+        a = 2 * math.pi * (k + 0.5) / 12
+        s, h = 0.205 * math.cos(a), 0.205 * math.sin(a)
+        p.add(gilt, *rivet(sh.at(s, h, 0.0006), sh.normal(s, h), 0.0045), skin=FORE)
+    strapped(p, sh, strap, 0.0155)
+    return p
+
+
+def ashforged_shield():
+    """The ashforged knight's heater, carried through a war: blackened steel over its core, two iron bands riveted
+    across it, a thick rolled rim, dented and scored."""
+    p = Piece('shield')
+    steel, mail, leather, wool = ash_mats()
+    core = mat('shield_core', 0x3a2a1c, 'wood', rough=0.85)
+    hw, hh = 0.25, 0.31
+    sh = Shield(hw, hh, 0.038)
+    out = heater(hw, hh)
+    worn = dents(*[(sh.at(s, h), r, d) for s, h, r, d in ((0.09, 0.12, 0.03, 0.004), (-0.12, -0.05, 0.025, 0.003), (0.03, -0.16, 0.02, 0.003),
+                                                           (-0.06, 0.2, 0.018, 0.0025))])
+    p.add(steel, *sh.plate(lambda u, v: sd_poly(u, v, out)), solid=0.003, roll=0.0028, bump=worn, sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: sd_poly(u, v, out) + 0.004, off=-0.0035), solid=0.012, skin=FORE)
+    for v0 in (0.15, -0.06):
+        band = lambda u, v, v0=v0: max(abs(v - v0) - 0.02, sd_poly(u, v, out) + 0.004)
+        p.add(steel, *sh.plate(band, off=0.0015), solid=0.0025, roll=0.0012, bump=worn, skin=FORE)
+        for s in (-0.2, -0.12, -0.04, 0.04, 0.12, 0.2):
+            if sd_poly(s, v0, out) < -0.02:
+                p.add(steel, *rivet(sh.at(s, v0, 0.0025), sh.normal(s, v0), 0.0055), skin=FORE)
+    strapped(p, sh, leather, 0.0155)
+    return p
+
+
+def dragon_shield():
+    """A kite shield of the dragon harness: dark steel worked in scales, its top drawn out into two points like a
+    dragon's wings, three bands of red-lacquered scales down it cut in points, a boss with a horn."""
+    p = Piece('shield')
+    dark, red, rim = dragon_mats()
+    core = mat('shield_core', 0x2a1e18, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x2a1a12, 'leather', rough=0.8)
+    hw, hh = 0.23, 0.37
+    sh = Shield(hw, hh, 0.04)
+    out = outline(symmetric([(0.0, hh * 0.86), (0.35 * hw, hh * 0.9), (0.75 * hw, hh), (1.08 * hw, hh * 1.04), (0.95 * hw, hh * 0.62),
+                             (0.92 * hw, hh * 0.15), (0.6 * hw, -hh * 0.45), (0.25 * hw, -hh * 0.85), (0.0, -hh)]), 8)
+    face = lambda u, v: sd_poly(u, v, out)
+    p.add(dark, *sh.plate(face, pad=0.03), solid=0.003, roll=0.002, roll_mat=rim, deco=scaled, sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: face(u, v) + 0.004, off=-0.0035, pad=0.03), solid=0.012, skin=FORE)
+    for k, v0 in enumerate((0.16, 0.0, -0.16)):  # V-shaped bands of red scales, pointing down
+        band = lambda u, v, v0=v0: max(abs((v - v0) + 0.35 * abs(u)) - 0.045, face(u, v) + 0.014)
+        tip = lambda u, v, v0=v0: band(u, v)
+        p.add(red, *sh.plate(tip, off=0.0015 + 0.0012 * k), solid=0.002, roll=0.001, roll_mat=rim, deco=scaled, sharp=30, skin=FORE)
+    p.add(rim, *sh.plate(lambda u, v: math.hypot(u, v - 0.06) - 0.05, off=0.006), solid=0.003, roll=0.0012, bump=sh.dome_bump((0, 0.06), 0.05, 0.022),
+          skin=FORE)
+    p.add(rim, *spike(sh.at(0.0, 0.06, 0.03), sh.normal(0.0, 0.06) + sh.up * 0.3, 0.06, 0.012, tuple(-sh.up * 0.5)), skin=FORE)
+    strapped(p, sh, strap, 0.0155)
+    return p
+
+
+def glacial_shield():
+    """A heater shield frosted over: pale steel etched with frost round its edge, a lozenge of colder blue at its
+    middle with a boss, and icicles hanging from its lower edges."""
+    p = Piece('shield')
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    core = mat('shield_core', 0x3a3430, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x2a2420, 'leather', rough=0.8)
+    hw, hh = 0.25, 0.32
+    sh = Shield(hw, hh, 0.038)
+    out = heater(hw, hh, 0.02)
+    face = lambda u, v: sd_poly(u, v, out)
+    p.add(steel, *sh.plate(face), solid=0.003, roll=0.002, roll_mat=rim, deco=0.03, sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: face(u, v) + 0.004, off=-0.0035), solid=0.012, skin=FORE)
+    lozenge = outline([(0.0, 0.2), (0.13, 0.04), (0.0, -0.14), (-0.13, 0.04)], 4)
+    p.add(deep, *sh.plate(lambda u, v: sd_poly(u, v, lozenge), off=0.0012), solid=0.002, roll=0.0012, roll_mat=rim, deco=lambda q: 1.0, sharp=30,
+          skin=FORE)
+    p.add(rim, *sh.plate(lambda u, v: math.hypot(u, v - 0.04) - 0.045, off=0.0035), solid=0.003, roll=0.0012, bump=sh.dome_bump((0, 0.04), 0.045, 0.022),
+          skin=FORE)
+    drops = []
+    lower = [q for q in out if q[1] < -0.06]
+    for k, q in enumerate(lower[::max(1, len(lower) // 9)]):  # along the two lower edges, hanging towards the point (down, worn)
+        s, h = q[0] * 0.985, q[1] * 0.985
+        grow = 0.5 + 0.5 * noise.noise(Vector((k * 2.3, 4.1, 1.0)))
+        drops.append(icicle(sh.at(s, h, -0.002), -sh.up + sh.n * 0.25, 0.025 + 0.035 * grow, 0.004 + 0.002 * grow, k))
+    if drops:
+        p.add(ice, *merge(*drops), skin=FORE)
+    strapped(p, sh, strap, 0.0155)
+    return p
+
+
+def emerald_shield():
+    """A shield shaped as a leaf, of emerald lacquer worked in scales, bordered in silver: a silver rib down its middle
+    and veins branching from it, a silver boss with an emerald."""
+    p = Piece('shield')
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    core = mat('shield_core', 0x2a2a1c, 'wood', rough=0.85)
+    strap = mat('strap_leather', 0x22201a, 'leather', rough=0.8)
+    hw, hh = 0.2, 0.34
+    sh = Shield(hw, hh, 0.035)
+    leaf = outline(symmetric([(0.0, hh), (0.45 * hw, hh * 0.8), (0.9 * hw, hh * 0.38), (hw, 0.0), (0.82 * hw, -hh * 0.42),
+                              (0.45 * hw, -hh * 0.8), (0.0, -hh)]), 8)
+    face = lambda u, v: sd_poly(u, v, leaf)
+    p.add(scale, *sh.plate(face), solid=0.003, roll=0.0018, roll_mat=silver, deco=trimmed(0.012), sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: face(u, v) + 0.004, off=-0.0035), solid=0.012, skin=FORE)
+    p.add(smooth_, *sh.plate(lambda u, v: max(abs(u) - 0.012, face(u, v) + 0.02), off=0.0015), solid=0.002, roll=0.0011, roll_mat=silver,
+          deco=lambda q, d: 0.0, skin=FORE)
+    for k, v0 in enumerate((0.16, 0.04, -0.08, -0.2)):
+        for sgn in (1, -1):
+            vein = lambda u, v, v0=v0, sgn=sgn: max(seg_dist(u, v, (0.0, v0), (sgn * (0.13 - 0.02 * abs(k - 1.5)), v0 + 0.09)) - 0.006, face(u, v) + 0.022)
+            p.add(smooth_, *sh.plate(vein, off=0.0014), solid=0.0015, roll=0.0008, roll_mat=silver, deco=lambda q, d: 0.0, skin=FORE)
+    p.add(silver, *sh.plate(lambda u, v: math.hypot(u, v - 0.02) - 0.042, off=0.003), solid=0.003, roll=0.001, bump=sh.dome_bump((0, 0.02), 0.042, 0.016),
+          skin=FORE)
+    p.add(glass, *gem(sh.at(0.0, 0.02, 0.019), sh.normal(0.0, 0.02), 0.016), skin=FORE)
+    strapped(p, sh, strap, 0.0155)
+    return p
+
+
+def infernal_shield():
+    """The black knight's great shield, after the user's reference: a heater drawn out at its corners into curling
+    points, black lacquer worked all over in raised gilt scrollwork inside a gold border, a gold boss with a stone set
+    in it like an eye, gold studs round it."""
+    p = Piece('shield')
+    p.budget, p.tex = 5500, 2048
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    core = mat('shield_core', 0x1a1410, 'wood', rough=0.85)
+    hw, hh = 0.27, 0.36
+    sh = Shield(hw, hh, 0.045)
+    # sharp points, as the reference's: a notch in the middle of the top, the corners flaring out and up, a spike out
+    # of each side, a smaller one lower down, and the long point below; the edges between them gently curved
+    half = [(0.0, hh * 0.84), (0.3 * hw, hh * 0.9), (0.62 * hw, hh * 0.98), (0.86 * hw, hh * 1.0), (1.14 * hw, hh * 1.1),
+            (1.0 * hw, hh * 0.86), (0.95 * hw, hh * 0.62), (0.97 * hw, hh * 0.46), (1.16 * hw, hh * 0.36), (0.96 * hw, hh * 0.22),
+            (0.9 * hw, hh * 0.02), (0.88 * hw, -hh * 0.16), (1.0 * hw, -hh * 0.3), (0.8 * hw, -hh * 0.36), (0.66 * hw, -hh * 0.52),
+            (0.44 * hw, -hh * 0.72), (0.22 * hw, -hh * 0.88), (0.0, -hh)]
+    out = symmetric(half)
+    face = lambda u, v: sd_poly(u, v, out)
+    p.add(orn, *sh.plate(face, pad=0.04), solid=0.003, roll=0.0022, roll_mat=gold, deco=ornate(0.016), sharp=30, skin=FORE)
+    p.add(core, *sh.plate(lambda u, v: face(u, v) + 0.005, off=-0.0035, pad=0.04), solid=0.012, skin=FORE)
+    p.add(gold, *sh.plate(lambda u, v: math.hypot(u, v - 0.03) - 0.06, off=0.0035), solid=0.003, roll=0.0014,
+          bump=sh.dome_bump((0, 0.03), 0.06, 0.02), skin=FORE)
+    eye = sh.at(0.0, 0.03, 0.022)
+    t_, n_, b_ = frame(sh.normal(0.0, 0.03))
+    p.add(gold, *merge(*[oball(eye + (t_ * math.cos(k * math.pi / 6) + b_ * math.sin(k * math.pi / 6)) * 0.03, (0.006, 0.004, 0.006), (t_, n_, b_), 8, 5)
+                         for k in range(12)]), skin=FORE)
+    p.add(stone, *gem(eye, sh.normal(0.0, 0.03), 0.02), skin=FORE)
+    for s, h in [(x * sg, y) for sg in (1, -1) for x, y in ((0.16, 0.24), (0.2, -0.04), (0.11, -0.2))] + [(0.0, 0.24), (0.0, -0.24)]:
+        p.add(gold, *rivet(sh.at(s, h, 0.0012), sh.normal(s, h), 0.0075, washer=0.012), skin=FORE)
+    strapped(p, sh, leather, 0.0155)
+    return p
+
+
+GUARD = 0.1  # where a blade leaves its guard (the grip's middle is the origin, the blade up +Y, as the Fiend props)
+
+
+def loft(rings, cap=True):
+    """A closed solid through rings of points, each with as many as the first, capped at both ends."""
+    n = len(rings[0])
+    verts = [Vector(p) for r in rings for p in r]
+    faces = [(k * n + i, k * n + (i + 1) % n, (k + 1) * n + (i + 1) % n, (k + 1) * n + i) for k in range(len(rings) - 1) for i in range(n)]
+    if cap:
+        faces += [tuple(range(n))[::-1], tuple(range((len(rings) - 1) * n, len(rings) * n))]
+    return verts, faces
+
+
+def placed(mesh, origin=(0, 0, 0), up=(0, 1, 0), side=(1, 0, 0)):
+    """A part built standing up +Y (its width along +X) moved to stand at `origin` along `up`, its width along `side`."""
+    u = Vector(up).normalized()
+    s = (Vector(side) - u * Vector(side).dot(u)).normalized()
+    f = s.cross(u)
+    o = Vector(origin)
+    v, faces = mesh
+    return [o + s * p[0] + u * p[1] + f * p[2] for p in v], faces
+
+
+def blade(length, width, thick=0.0065, base=GUARD, shape=None, fuller=(0.0, 0.0), n=56):
+    """A blade standing up from y = `base`: its half-width along it `width` * shape(t) (t 0 at the guard, 1 at the
+    point; else straight, drawn to a point over the last fifth), lens-shaped across (flat along X, thickest down the
+    middle) with a fuller (depth, how far up as a fraction) and thinning towards the point."""
+    xs = [-1.0, -0.8, -0.55, -0.3, -0.12, 0.0, 0.12, 0.3, 0.55, 0.8, 1.0] if RES <= 1 else [-1.0, -0.6, -0.25, 0.0, 0.25, 0.6, 1.0]
+    shape = shape or (lambda t: 1.0 if t < 0.8 else max(0.0, (1 - t) / 0.2) ** 0.85)
+    n = max(6, int(round(n / RES)))  # coarser in the game's copy, like everything else built at RES
+    rings = []
+    for k in range(n + 1):
+        t = k / n
+        w = max(0.0012, width * shape(t))
+        th = thick * (0.45 + 0.55 * min(1.0, w / width))
+        depth, reach = fuller
+        top = []
+        for x in xs:
+            z = th * (1 - abs(x) ** 1.7)
+            if depth and t < reach:
+                z -= depth * th * math.exp(-(x / 0.22) ** 2) * smooth(reach, reach - 0.08, t) * smooth(0.0, 0.04, t)
+            top.append((x * w, base + length * t, max(z, th * 0.25 * (1 - abs(x)))))
+        bottom = [(x, y, -z) for x, y, z in reversed(top[1:-1])]
+        rings.append(top + bottom)
+    return loft(rings)
+
+
+def blade_at(width, length, base=GUARD, shape=None):
+    """A blade's half-width at height y (for deco masks): its shape, from `blade`."""
+    shape = shape or (lambda t: 1.0 if t < 0.8 else max(0.0, (1 - t) / 0.2) ** 0.85)
+    return lambda y: max(0.0012, width * shape(clamp((y - base) / length)))
+
+
+def grip(y0, y1, r, wire=None):
+    """A grip from y0 up to y1, swelling a little in the middle; `wire`: a material for a cord wound round it (returns the
+    wire's mesh too)."""
+    pts = [Vector((0, lerp(y0, y1, k / 8), 0)) for k in range(9)]
+    core = tube(pts, [r * (1 + 0.12 * math.sin(math.pi * k / 8)) for k in range(9)], 14)
+    if not wire:
+        return core, None
+    turns, steps = 9, int(180 / RES)
+    hel = [Vector((math.cos(2 * math.pi * turns * k / steps) * r * 1.08, lerp(y0, y1, k / steps), math.sin(2 * math.pi * turns * k / steps) * r * 1.08))
+           for k in range(steps + 1)]
+    return core, tube(hel, r * 0.16, 6)
+
+
+def along(pts, *rs):
+    """Radii for each of a path's points, running through `rs` evenly from its first point to its last."""
+    n = len(pts) - 1
+    out = []
+    for k in range(n + 1):
+        f = k / max(1, n) * (len(rs) - 1)
+        i = min(int(f), len(rs) - 2)
+        out.append(lerp(rs[i], rs[i + 1], f - i))
+    return out
+
+
+def facet_crystal(base, direction, length, r, sides=6):
+    """An ice crystal: a six-sided prism from inside `base` along `direction`, drawn to a point."""
+    d = Vector(direction).normalized()
+    pts = [Vector(base) - d * (r * 0.5), Vector(base) + d * (length * 0.72), Vector(base) + d * length]
+    return tube(pts, [r, r * 0.92, 0.0004], sides, fixed=True)
+
+
+def talon(root, direction, curl, length, r):
+    """A dragon's talon: from its root along `direction`, hooking round towards `curl`, tapering to a point."""
+    d, c = Vector(direction).normalized(), Vector(curl).normalized()
+    pts, radii = [], []
+    for k in range(9):
+        t = k / 8
+        pts.append(Vector(root) + d * (length * (t - 0.35 * t * t)) + c * (length * 0.55 * t * t))
+        radii.append(max(0.0006, r * (1 - t) ** 0.8))
+    return tube(pts, radii, 9)
+
+
+def spiral_shell(centre, r0, turns, grow=0.2, tube_r=0.32):
+    """A nautilus: its tube coiling out from the middle in the plane of X and Y, widening as it goes; returns the mesh
+    and where its mouth opens."""
+    pts, radii = [], []
+    n = int(36 * turns)
+    for k in range(n + 1):
+        th = 2 * math.pi * turns * k / n
+        r = r0 * math.exp(grow * th)
+        pts.append(Vector(centre) + Vector((r * math.cos(th), r * math.sin(th), 0.0)))
+        radii.append(r * tube_r)
+    return tube(pts, radii, 14), pts[-1], radii[-1]
+
+
+def preview_props(objs, set_id):
+    """The weapons alone, side by side: front and three-quarter."""
+    sc = bpy.context.scene
+    for k, ob in enumerate(objs):
+        ob.location.x += 0.55 * k
+    for m in bpy.data.materials:
+        if m.get('rgb') is not None:
+            m.diffuse_color = _rgb(m['rgb'])
+    world = bpy.data.worlds.new('w')
+    world.color = (0.05, 0.06, 0.08)
+    sc.world = world
+    sc.render.engine = 'BLENDER_WORKBENCH'
+    sh = sc.display.shading
+    sh.light, sh.color_type = 'STUDIO', 'MATERIAL' if FAST else 'TEXTURE'
+    sh.show_cavity, sh.cavity_type, sh.show_specular_highlight = True, 'BOTH', True
+    k = float(os.environ.get('GEAR_RES', '1'))  # bigger renders, to look at the details
+    sc.render.resolution_x, sc.render.resolution_y = int(520 * k), int(760 * k)
+    cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
+    cam.data.type, cam.data.ortho_scale = 'ORTHO', 2.3
+    sc.collection.objects.link(cam)
+    sc.camera = cam
+    target = B((0.28 * (len(objs) - 1), 0.45, 0.0))
+    for name, deg in (('a', 0), ('b', 35)):
+        az = math.radians(deg)
+        cam.location = target + B((4 * math.sin(az), 0.3, 4 * math.cos(az)))
+        cam.rotation_euler = (target - cam.location).to_track_quat('-Z', 'Y').to_euler()
+        sc.render.filepath = os.path.join(PREVIEW, f'{set_id}_{name}.png')
+        bpy.ops.render.render(write_still=True)
+
+
+def abyssal_blade():
+    """A conquistador's cup-hilted rapier, of the abyssal harness: a long slender blade of bright steel, its ricasso
+    blued and etched with waves; a cup over the hand fluted like a scallop shell and lacquered sea blue, long straight
+    quillons and a knuckle bow of polished steel, a grip wound with wire, and a pearl for a pommel."""
+    p = Piece('blade')
+    p.centre = Vector((0, 0.03, 0))
+    steel, accent, gilt = abyssal_mats()
+    bright = mat('abyssal_bright', 0xb4c0cc, 'steel', rough=0.16, metal=0.95)
+    pearl = mat('pearl', 0xe6eef2, 'enamel', rough=0.1, metal=0.2, sheen=0xc8d8f0, gloss=0.9)
+    wire_m = mat('abyssal_wire', 0x8aa0b8, 'steel', rough=0.25, metal=0.95)
+    shape = lambda t: (1.0 - 0.45 * t) if t < 0.9 else (0.55 * max(0.0, (1 - t) / 0.1)) ** 0.9
+    p.add(bright, *blade(1.02, 0.016, 0.0055, GUARD + 0.012, shape, (0.35, 0.3)), sharp=30)
+    p.add(steel, *blade(0.07, 0.0168, 0.0068, GUARD, lambda t: 1.0), deco=lambda q: 1.0)  # the blued ricasso
+    # the cup: a fluted bowl over the hand, open below
+    rings = []
+    nr, na = max(5, int(12 / RES)), int(72 / RES) // 18 * 18
+    for k in range(nr + 1):
+        a = math.pi / 2 * (0.15 + 0.85 * k / nr)
+        y, r = GUARD + 0.004 - 0.05 * math.cos(a), 0.058 * math.sin(a)
+        rings.append([(r * math.cos(2 * math.pi * i / na) * (1 + 0.06 * math.cos(18 * 2 * math.pi * i / na) * k / nr), y,
+                       r * math.sin(2 * math.pi * i / na) * (1 + 0.06 * math.cos(18 * 2 * math.pi * i / na) * k / nr)) for i in range(na)])
+    v, f = loft(rings, cap=False)
+    p.add(accent, v, f, solid=0.0025, roll=0.0016, roll_mat=gilt, deco=lambda q: 1.0, sharp=50)
+    p.add(gilt, *tube([Vector((-0.17, GUARD + 0.006, 0)), Vector((0, GUARD + 0.009, 0)), Vector((0.17, GUARD + 0.006, 0))], [0.0048, 0.006, 0.0048], 10))
+    for x in (-0.17, 0.17):
+        p.add(gilt, *oball(Vector((x, GUARD + 0.006, 0)), (0.009, 0.009, 0.009)))
+    bow = [Vector((0.0, GUARD - 0.04, 0.058)), Vector((0.0, GUARD - 0.1, 0.07)), Vector((0.0, -0.13, 0.05)), Vector((0.0, -0.165, 0.012))]
+    p.add(gilt, *tube(spline(bow, 6), 0.0042, 9))
+    core, wire = grip(-0.15, GUARD - 0.046, 0.0125, True)
+    p.add(mat('abyssal_grip', 0x1a2a3a, 'leather', rough=0.7), *core)
+    p.add(wire_m, *wire)
+    p.add(pearl, *oball(Vector((0, -0.175, 0)), (0.024, 0.026, 0.024)))
+    return p
+
+
+def abyssal_staff():
+    """A staff of the abyssal harness: a shaft of blued steel bound with lacquered collars, topped by a nautilus shell
+    coiling out in sea-blue lacquer with a pearl at its mouth."""
+    p = Piece('staff')
+    steel, accent, gilt = abyssal_mats()
+    pearl = mat('pearl', 0xe6eef2, 'enamel', rough=0.1, metal=0.2, sheen=0xc8d8f0, gloss=0.9)
+    p.add(steel, *tube([Vector((0, y, 0)) for y in (-0.6, 0.0, 0.6, 1.18)], [0.017, 0.019, 0.019, 0.021], 14), deco=lambda q: 1.0)
+    for y in (-0.6, -0.12, 0.12, 1.1, 1.18):
+        p.add(accent, *tube([Vector((0, y - 0.018, 0)), Vector((0, y + 0.018, 0))], 0.025, 14), deco=lambda q: 1.0)
+    p.add(gilt, *oball(Vector((0, -0.62, 0)), (0.024, 0.03, 0.024)))
+    shell, mouth, mr = spiral_shell((0.0, 1.32, 0.0), 0.006, 2.1, 0.19, 0.42)
+    p.add(accent, *shell, deco=lambda q: 1.0)
+    p.add(gilt, *tube([Vector((0, 1.16, 0)), Vector((0.01, 1.22, 0)), Vector(mouth) + Vector((0, -0.01, 0))], [0.02, 0.016, 0.012], 10))
+    p.add(pearl, *oball(Vector(mouth) + Vector((0.0, 0.0, mr * 0.2)), (mr * 0.55, mr * 0.55, mr * 0.55)))
+    return p
+
+
+def ashforged_blade():
+    """The ashforged knight's sword, carried through a war: a straight arming sword of blackened steel with a fuller,
+    its edges worn bright and nicked, a plain cross of iron bent a little down, a grip of old leather and a wheel
+    pommel."""
+    p = Piece('blade')
+    steel, mail, leather, wool = ash_mats()
+    iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+    nicks = dents(*[(Vector((s * 0.026, GUARD + y, 0.0)), 0.008, 0.002) for s, y in ((1, 0.32), (-1, 0.55), (1, 0.71), (-1, 0.2))])
+    p.add(steel, *blade(0.86, 0.026, 0.0068, GUARD, None, (0.45, 0.62)), bump=nicks, sharp=30)
+    guard = [Vector((-0.12, GUARD - 0.012, 0)), Vector((-0.06, GUARD + 0.002, 0)), Vector((0.06, GUARD + 0.002, 0)), Vector((0.12, GUARD - 0.012, 0))]
+    guard = spline(guard, 6)
+    p.add(iron, *tube(guard, along(guard, 0.0075, 0.009, 0.009, 0.0075), 10))
+    core, _ = grip(-0.11, GUARD - 0.008, 0.014)
+    p.add(leather, *core, forge=creased(0.0006))
+    p.add(iron, *placed(tube([Vector((0, -0.012, 0)), Vector((0, 0.012, 0))], [0.026, 0.026], 18), (0, -0.14, 0), (0, 0, 1)))
+    p.add(iron, *oball(Vector((0, -0.14, 0)), (0.012, 0.012, 0.016)))
+    return p
+
+
+def ashforged_staff():
+    """A war-worn quarterstaff: dark oak bound with iron bands and shod with iron, topped by an iron cage of four bent
+    bars holding a lump of black volcanic glass."""
+    p = Piece('staff')
+    steel, mail, leather, wool = ash_mats()
+    iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+    oak = mat('ash_oak', 0x3e2c20, 'wood', rough=0.85)
+    glass = mat('obsidian', 0x15100e, 'enamel', rough=0.08, metal=0.3, sheen=0x4a1a10, gloss=0.9)
+    p.add(oak, *tube([Vector((0, y, 0)) for y in (-0.6, 0.0, 0.6, 1.2)], [0.02, 0.022, 0.021, 0.02], 12))
+    for y in (-0.58, -0.2, 0.25, 0.9, 1.16):
+        p.add(iron, *tube([Vector((0, y - 0.014, 0)), Vector((0, y + 0.014, 0))], 0.0245, 12))
+    p.add(iron, *tube([Vector((0, -0.6, 0)), Vector((0, -0.65, 0))], [0.022, 0.012], 10))
+    for k in range(4):
+        a = math.pi / 2 * k + math.pi / 4
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        bar = [Vector((0, 1.17, 0)) + d * 0.018, Vector((0, 1.24, 0)) + d * 0.05, Vector((0, 1.32, 0)) + d * 0.05, Vector((0, 1.38, 0)) + d * 0.012]
+        p.add(iron, *tube(spline(bar, 6), 0.0055, 8))
+    p.add(iron, *oball(Vector((0, 1.385, 0)), (0.012, 0.012, 0.012)))
+    p.add(glass, *oball(Vector((0, 1.28, 0)), (0.034, 0.045, 0.032), seg=10, rings=7), bump=hammered(0.004, 60.0))
+    return p
+
+
+def dragon_blade():
+    """A sword of the dragon harness: a broad blade of polished dark steel, a ricasso of red-lacquered scales, a guard
+    of two dragon's wings swept up from the hilt, a grip of red leather wound with steel, and a claw for a pommel
+    gripping a red stone."""
+    p = Piece('blade')
+    dark, red, rim = dragon_mats()
+    blade_m = mat('dragon_blade', 0x4a4e56, 'steel', rough=0.2, metal=0.95)
+    gem_m = mat('dragon_gem', 0x8a0a10, 'enamel', rough=0.06, metal=0.3, sheen=0xd02020, gloss=0.95)
+    shape = lambda t: (1.0 + 0.12 * math.sin(math.pi * min(1.0, t / 0.75))) if t < 0.78 else max(0.0, (1 - t) / 0.22) ** 0.8 * 1.04
+    p.add(blade_m, *blade(0.9, 0.03, 0.0072, GUARD + 0.06, shape, (0.4, 0.55)), sharp=30)
+    p.add(red, *blade(0.09, 0.031, 0.008, GUARD, lambda t: 1.0 - 0.05 * t), deco=scaled)
+    for s in (1, -1):
+        wing_parts = wing(Vector((s * 0.02, GUARD, 0)), Vector((s * 0.09, GUARD + 0.05, 0)),
+                          [Vector((s * 0.15, GUARD + 0.08, 0)), Vector((s * 0.15, GUARD + 0.035, 0)), Vector((s * 0.12, GUARD - 0.005, 0))],
+                          Vector((s * 0.04, GUARD - 0.012, 0)))
+        p.add(dark, *wing_parts['membrane'], solid=0.003, roll=0.001, roll_mat=rim, deco=scaled, sharp=30)
+        p.add(rim, *wing_parts['bones'])
+    p.add(rim, *tube([Vector((-0.04, GUARD - 0.005, 0)), Vector((0.04, GUARD - 0.005, 0))], 0.012, 12))
+    core, wire = grip(-0.12, GUARD - 0.015, 0.0135, True)
+    p.add(mat('dragon_grip', 0x5a1210, 'leather', rough=0.7), *core)
+    p.add(rim, *wire)
+    p.add(gem_m, *oball(Vector((0, -0.155, 0)), (0.017, 0.019, 0.017)))
+    for k in range(3):
+        a = 2 * math.pi * k / 3
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        p.add(rim, *talon(Vector((0, -0.13, 0)) + d * 0.008, -UP * 0.4 + d, -UP * 0.6 - d * 0.6, 0.042, 0.0055))
+    return p
+
+
+def dragon_staff():
+    """A staff of the dragon harness: a shaft of dark steel bound in bands of red scales, topped by a dragon's claw of
+    four talons closing round a red orb."""
+    p = Piece('staff')
+    dark, red, rim = dragon_mats()
+    gem_m = mat('dragon_gem', 0x8a0a10, 'enamel', rough=0.06, metal=0.3, sheen=0xd02020, gloss=0.95)
+    p.add(dark, *tube([Vector((0, y, 0)) for y in (-0.6, 0.0, 0.6, 1.2)], [0.018, 0.02, 0.02, 0.022], 14), deco=lambda q: 1.0)
+    for y0, y1 in ((-0.12, 0.12), (0.7, 0.86), (1.08, 1.2)):
+        p.add(red, *tube([Vector((0, y0, 0)), Vector((0, y1, 0))], 0.0245, 14), deco=lambda q: 1.0)
+    p.add(rim, *tube([Vector((0, -0.6, 0)), Vector((0, -0.66, 0))], [0.02, 0.006], 10))
+    p.add(rim, *oball(Vector((0, 1.22, 0)), (0.03, 0.022, 0.03)))
+    p.add(gem_m, *oball(Vector((0, 1.3, 0)), (0.05, 0.05, 0.05), seg=16, rings=10))
+    for k in range(4):
+        a = 2 * math.pi * k / 4 + math.pi / 4
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        p.add(rim, *talon(Vector((0, 1.215, 0)) + d * 0.022, d + UP * 0.35, UP * 0.45 - d * 1.2, 0.16, 0.014))
+    return p
+
+
+def glacial_blade():
+    """A longsword frosted over: a long blade of pale steel etched with frost down its middle, quillons drawn down
+    into icicles, a grip of white leather and a crystal of ice for a pommel."""
+    p = Piece('blade')
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    width, length = 0.026, 0.98
+    w_at = blade_at(width, length, GUARD)
+    p.add(steel, *blade(length, width, 0.0068, GUARD, None, (0.4, 0.5)), deco=lambda q: smooth(0.75, 0.55, abs(q.x) / w_at(q.y)), sharp=30)
+    p.add(deep, *tube([Vector((-0.03, GUARD - 0.004, 0)), Vector((0.03, GUARD - 0.004, 0))], 0.014, 12), deco=lambda q: 1.0)
+    for s in (1, -1):
+        icicle_q = spline([Vector((s * 0.025, GUARD - 0.004, 0)), Vector((s * 0.09, GUARD + 0.004, 0)), Vector((s * 0.14, GUARD - 0.03, 0)),
+                           Vector((s * 0.15, GUARD - 0.07, 0))], 6)
+        p.add(ice, *tube(icicle_q, along(icicle_q, 0.011, 0.008, 0.004, 0.0006), 6, fixed=True))
+        p.add(ice, *facet_crystal(Vector((s * 0.07, GUARD + 0.002, 0)), (s * 0.3, -1, 0), 0.035, 0.005))
+    core, wire = grip(-0.12, GUARD - 0.016, 0.0135, True)
+    p.add(mat('glacial_grip', 0xd8dee4, 'leather', rough=0.75), *core)
+    p.add(rim, *wire)
+    p.add(deep, *oball(Vector((0, -0.125, 0)), (0.016, 0.01, 0.016)), deco=lambda q: 1.0)
+    p.add(ice, *facet_crystal(Vector((0, -0.13, 0)), (0, -1, 0), 0.07, 0.016))
+    return p
+
+
+def glacial_staff():
+    """A staff frosted over: a shaft of pale steel bound with bands of colder blue, holding up a cluster of ice crystals
+    in a ring of points."""
+    p = Piece('staff')
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    p.add(steel, *tube([Vector((0, y, 0)) for y in (-0.6, 0.0, 0.6, 1.2)], [0.017, 0.019, 0.019, 0.02], 14), deco=lambda q: 0.0)
+    for y in (-0.58, -0.1, 0.1, 0.8, 1.17):
+        p.add(deep, *tube([Vector((0, y - 0.015, 0)), Vector((0, y + 0.015, 0))], 0.0235, 14), deco=lambda q: 1.0)
+    p.add(rim, *tube([Vector((0, -0.6, 0)), Vector((0, -0.66, 0))], [0.019, 0.005], 10))
+    for k in range(6):  # the ring of points holding the cluster
+        a = 2 * math.pi * k / 6
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        claw = spline([Vector((0, 1.18, 0)) + d * 0.018, Vector((0, 1.24, 0)) + d * 0.045, Vector((0, 1.29, 0)) + d * 0.05], 4)
+        p.add(rim, *tube(claw, along(claw, 0.005, 0.004, 0.0012), 8))
+    p.add(ice, *facet_crystal(Vector((0, 1.22, 0)), (0, 1, 0), 0.26, 0.03))
+    for k, (a, tilt, length, r) in enumerate(((0.3, 0.45, 0.17, 0.018), (2.4, 0.5, 0.15, 0.016), (4.3, 0.42, 0.18, 0.017), (1.4, 0.7, 0.11, 0.012),
+                                              (3.4, 0.75, 0.1, 0.011), (5.3, 0.68, 0.12, 0.012))):
+        d = Vector((math.cos(a) * tilt, 1.0, math.sin(a) * tilt))
+        p.add(ice, *facet_crystal(Vector((0, 1.24, 0)) + Vector((math.cos(a), 0, math.sin(a))) * 0.012, d, length, r))
+    return p
+
+
+def emerald_blade():
+    """An elven sword of the emerald harness: a leaf-shaped blade of silvered steel etched with vines down its middle,
+    quillons swept up like leaves, a grip of emerald lacquer wound with silver, an emerald in a silver pommel."""
+    p = Piece('blade')
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    blade_m = mat('emerald_steel', 0xc4ccd2, 'steel', engrave='vines', rough=0.16, metal=0.95)
+    width, length = 0.024, 0.92
+    shape = lambda t: (0.85 + 0.45 * math.sin(math.pi * min(1.0, t / 0.82)) ** 1.5) if t < 0.82 else max(0.0, (1 - t) / 0.18) ** 0.75 * 0.85
+    w_at = blade_at(width, length, GUARD, shape)
+    p.add(blade_m, *blade(length, width, 0.0062, GUARD, shape, (0.3, 0.7)), deco=lambda q: smooth(0.5, 0.3, abs(q.x) / w_at(q.y)), sharp=30)
+    for s in (1, -1):
+        leaf = blade(0.07, 0.016, 0.005, 0.0, lambda t: math.sin(math.pi * min(1.0, t)) ** 0.7 if t < 1 else 0.0, n=12)
+        p.add(silver, *placed(leaf, (s * 0.012, GUARD - 0.002, 0), (s * 1.0, 0.55, 0), (0, 1, 0)))
+    p.add(silver, *tube([Vector((-0.02, GUARD - 0.004, 0)), Vector((0.02, GUARD - 0.004, 0))], 0.011, 12))
+    core, wire = grip(-0.12, GUARD - 0.014, 0.0125, True)
+    p.add(smooth_, *core, deco=lambda q: 1.0)
+    p.add(silver, *wire)
+    p.add(silver, *oball(Vector((0, -0.135, 0)), (0.019, 0.02, 0.019)))
+    p.add(glass, *oball(Vector((0, -0.135, 0.014)), (0.011, 0.011, 0.007)))
+    p.add(glass, *oball(Vector((0, -0.135, -0.014)), (0.011, 0.011, 0.007)))
+    return p
+
+
+def emerald_staff():
+    """A staff of the emerald harness: two stems of living wood twisting round each other up to a crown of silver
+    leaves opening round an emerald."""
+    p = Piece('staff')
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    wood = mat('living_wood', 0x4a3a22, 'wood', rough=0.85)
+    for ph in (0.0, math.pi):
+        pts = [Vector((0.011 * math.cos(ph + y * 9.0), y, 0.011 * math.sin(ph + y * 9.0))) for y in [lerp(-0.6, 1.2, k / 60) for k in range(61)]]
+        p.add(wood, *tube(pts, 0.014, 10))
+    for y in (-0.15, 0.15):
+        p.add(silver, *tube([Vector((0, y - 0.012, 0)), Vector((0, y + 0.012, 0))], 0.029, 14))
+    p.add(silver, *tube([Vector((0, -0.6, 0)), Vector((0, -0.65, 0))], [0.024, 0.008], 10))
+    p.add(silver, *tube([Vector((0, 1.18, 0)), Vector((0, 1.24, 0))], [0.026, 0.02], 12))
+    p.add(glass, *oball(Vector((0, 1.31, 0)), (0.03, 0.042, 0.03), seg=12, rings=8))
+    for k in range(7):
+        a = 2 * math.pi * k / 7
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        leaf = blade(0.15, 0.024, 0.005, 0.0, lambda t: math.sin(math.pi * t) ** 0.8, n=16)
+        p.add(smooth_ if k % 2 else silver, *placed(leaf, Vector((0, 1.23, 0)) + d * 0.018, d * 0.55 + UP, (math.cos(a + math.pi / 2), 0, math.sin(a + math.pi / 2))),
+              deco=lambda q: 0.0)
+    return p
+
+
+def infernal_blade():
+    """The black knight's sword: a long blade of black lacquered steel, gold along its edges and its flats worked in raised
+    gilt scrollwork, a baroque guard of gold quillons curling into spirals, a grip of black leather wound with gold and
+    a gold pommel set with the dark stone."""
+    p = Piece('blade')
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    orn_b = mat('infernal_blade', 0x0b0c0f, 'enamel', engrave='scroll', engrave_color=0xc9a245, emboss=True, rough=0.14, metal=0.6, bump=1.2,
+                trim=0xc9a245, sheen=0x161a24, gloss=0.85, scale=0.075, panels=True)
+    width, length = 0.03, 1.0
+    shape = lambda t: (1.0 - 0.2 * t) if t < 0.82 else max(0.0, (1 - t) / 0.18) ** 0.8 * 0.84
+    w_at = blade_at(width, length, GUARD, shape)
+
+    def deco(q):  # gold along the edges, scrollwork down the flats
+        f = abs(q.x) / w_at(q.y)
+        return smooth(0.92, 0.82, f) * (0.5 + 0.5 * smooth(0.62, 0.5, f))
+    p.add(orn_b, *blade(length, width, 0.0075, GUARD, shape, (0.0, 0.0)), deco=deco, sharp=30)
+    for s in (1, -1):  # quillons curling down into spirals
+        pts = [Vector((s * 0.02, GUARD - 0.004, 0)), Vector((s * 0.08, GUARD + 0.008, 0)), Vector((s * 0.13, GUARD - 0.006, 0))]
+        c = Vector((s * 0.13, GUARD - 0.03, 0))
+        for k in range(1, 25):
+            r = 0.024 * (1 - 0.6 * k / 24)
+            pts.append(c + Vector((r * math.cos(math.pi / 2 - (k / 24) * 1.8 * math.pi) * s, r * math.sin(math.pi / 2 - (k / 24) * 1.8 * math.pi), 0)))
+        p.add(gold, *tube(pts, [0.008 - 0.0055 * k / (len(pts) - 1) for k in range(len(pts))], 10))
+    p.add(gold, *oball(Vector((0, GUARD - 0.006, 0)), (0.03, 0.016, 0.02)))
+    p.add(stone, *oball(Vector((0, GUARD - 0.006, 0.016)), (0.009, 0.009, 0.006)))
+    p.add(stone, *oball(Vector((0, GUARD - 0.006, -0.016)), (0.009, 0.009, 0.006)))
+    core, wire = grip(-0.13, GUARD - 0.022, 0.0135, True)
+    p.add(leather, *core)
+    p.add(gold, *wire)
+    p.add(gold, *oball(Vector((0, -0.15, 0)), (0.022, 0.026, 0.022)))
+    p.add(stone, *oball(Vector((0, -0.15, 0.018)), (0.011, 0.011, 0.007)))
+    p.add(stone, *oball(Vector((0, -0.15, -0.018)), (0.011, 0.011, 0.007)))
+    return p
+
+
+def infernal_staff():
+    """The black knight's staff: a shaft of black lacquer bound in gold, topped by a pair of gold horns rising and curling
+    in round the dark stone, as on the knight's helm."""
+    p = Piece('staff')
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    p.add(blk, *tube([Vector((0, y, 0)) for y in (-0.6, 0.0, 0.6, 1.2)], [0.018, 0.02, 0.02, 0.021], 14), deco=lambda q: 0.5)
+    for y in (-0.58, -0.14, 0.14, 0.75, 1.18):
+        p.add(gold, *tube([Vector((0, y - 0.013, 0)), Vector((0, y + 0.013, 0))], 0.0245, 14))
+    p.add(gold, *tube([Vector((0, -0.6, 0)), Vector((0, -0.67, 0))], [0.021, 0.005], 10))
+    p.add(gold, *oball(Vector((0, 1.22, 0)), (0.032, 0.026, 0.032)))
+    for s in (1, -1):
+        p.add(gold, *horn(Vector((s * 0.022, 1.22, 0)), (s * 1.0, 0.3, 0), UP, (-s * 1.0, 0, 0), 0.16, 0.016))
+    p.add(stone, *oball(Vector((0, 1.31, 0)), (0.036, 0.046, 0.036), seg=14, rings=9))
+    p.add(gold, *tube([Vector((0, 1.31, 0)) + Vector((0.04 * math.cos(2 * math.pi * k / 32), 0, 0.04 * math.sin(2 * math.pi * k / 32))) for k in range(32)],
+                      0.005, 8, closed=True))
+    return p
+
+
 # ---------------------------------------------------------------- finish: bake the dense model onto the light one
 
 TEX = 1024
 BUMP = {'steel': 0.25, 'blued': 0.25, 'black': 0.12, 'iron': 0.15, 'enamel': 0.2, 'brass': 0.2, 'gold': 0.2, 'bronze': 0.3,
-        'leather': 0.45, 'mail': 1.0, 'hair': 0.8, 'cloth': 0.5, 'fur': 1.2, 'ice': 0.15}
+        'leather': 0.45, 'mail': 1.0, 'hair': 0.8, 'cloth': 0.5, 'fur': 1.2, 'ice': 0.15, 'wood': 0.5}
 
 
 def _rgb(hexc):
@@ -3301,6 +4054,8 @@ def height(g, m):
         h = g.strands()
     elif kind == 'fur':
         h = g.fur()
+    elif kind == 'wood':  # the grain, along a shield's planks (the forearm's length in the rest pose)
+        h = g.math('ADD', g.rng(g.wave(30, 8, 3, 'X', 'SIN'), 0.0, 1.0, 0.0, 0.4), g.math('MULTIPLY', g.noise((2, 40, 40), 4, 0.6), 0.6))
     elif kind == 'ice':  # meltwater ripples down its length
         h = g.math('MULTIPLY', g.noise((8, 8, 30), 3, 0.5), 0.3)
     e = engraving(g, m['engrave'], m) if m['engrave'] else None
@@ -3359,6 +4114,9 @@ def look(g, m):
         sky = _rgb(m['sheen']) if m.get('sheen', -1) >= 0 else light
         c = g.mix(c, [min(1.0, x * 2.4) for x in sky[:3]] + [1.0], g.math('MULTIPLY', g.math('POWER', g.rng(zs.outputs['Z'], 0.03, 0.17, 0.0, 1.0), 1.6), 0.65))
         c = g.mix(c, [0.7, 0.9, 0.84, 1.0], g.rng(g.math('ABSOLUTE', g.math('SUBTRACT', zs.outputs['Z'], 0.112)), 0.0, 0.011, 0.6, 0.0))
+    elif kind == 'wood':  # oak: its grain in darker streaks, lighter where it is worn
+        c = g.mix(c, dark, g.rng(g.wave(30, 8, 3, 'X', 'SIN'), 0.0, 0.5, 0.45, 0.0))
+        c = g.mix(c, light, g.rng(g.noise((2, 40, 40), 4, 0.6), 0.55, 0.75, 0.0, 0.25))
     elif kind == 'fur':  # white locks, grey-blue in the shadow between them
         c = g.mix([x * 0.55 for x in base[:3]] + [1.0], c, g.fur())
     elif kind == 'ice':  # clear ice: a darker core here and there, streaks down its length
@@ -3686,6 +4444,12 @@ SETS = {
     'glacial': {'helm': glacial_helm, 'chest': glacial_chest, 'gloves': glacial_gloves, 'legs': glacial_legs, 'feet': glacial_feet},
     'emerald': {'helm': emerald_helm, 'chest': emerald_chest, 'gloves': emerald_gloves, 'legs': emerald_legs, 'feet': emerald_feet},
     'infernal': {'helm': infernal_helm, 'chest': infernal_chest, 'gloves': infernal_gloves, 'legs': infernal_legs, 'feet': infernal_feet},
+    # the shields, a file each (client/src/render/quaternius.ts SHIELDS)
+    'shield_buckler': {'shield': buckler_shield}, 'shield_brigandine': {'shield': brigandine_shield}, 'shield_plate': {'shield': plate_shield},
+    'shield_abyssal': {'shield': abyssal_shield}, 'shield_ashforged': {'shield': ashforged_shield}, 'shield_dragon': {'shield': dragon_shield},
+    'shield_glacial': {'shield': glacial_shield}, 'shield_emerald': {'shield': emerald_shield}, 'shield_infernal': {'shield': infernal_shield},
+    # each set's sword and staff, a file a set (client/src/render/quaternius.ts qWeapon)
+    **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
 }
 
 
@@ -3721,10 +4485,13 @@ def run(set_id, pieces):
     if PREVIEW:
         os.makedirs(PREVIEW, exist_ok=True)
         heads = [o for o in objs if o.name.startswith('helm')]
+        held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff')]
         if heads:
             preview(heads[0], set_id)
-        if len(heads) < len(objs):
-            preview_body([o for o in objs if o not in heads], set_id)
+        if held:
+            preview_props(held, set_id)
+        if len(heads) + len(held) < len(objs):
+            preview_body([o for o in objs if o not in heads and o not in held], set_id)
         return
     select(*objs)
     os.makedirs(OUT, exist_ok=True)

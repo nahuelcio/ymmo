@@ -1,9 +1,11 @@
 import { RACES, type ClassType, type Race } from './classes';
 
-export type Slot = 'weapon' | 'head' | 'chest' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
+export type Slot = 'weapon' | 'shield' | 'head' | 'chest' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
 // ponytail: one ring, so an item's slot is always where it is worn; a second ring needs ring1/ring2 and a "first free" rule in equip
-export const SLOTS: Slot[] = ['head', 'weapon', 'chest', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
+export const SLOTS: Slot[] = ['head', 'weapon', 'shield', 'chest', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
 export type Grade = 'NG' | 'D' | 'C' | 'B' | 'A' | 'S';
+/** A shield's chance to block, by its grade: 15% at NG, 3% more each grade, 30% at S. */
+export const SHIELD_BLOCK: Record<Grade, number> = { NG: 0.15, D: 0.18, C: 0.21, B: 0.24, A: 0.27, S: 0.3 };
 
 export interface ItemDef {
   id: string;
@@ -18,6 +20,10 @@ export interface ItemDef {
   pAtk?: number; mAtk?: number; pDef?: number; mDef?: number; hp?: number; mp?: number;
   /** cooldown reduction for skills, as a fraction: 0.1 = 10% shorter (capped at 50% in total) */
   cdr?: number;
+  /** a shield's chance to catch a physical hit, which then does half its damage (0.15 = 15%) */
+  block?: number;
+  /** a weapon held in both hands: no shield with it */
+  twoHanded?: boolean;
   price: number;
   stack?: boolean;
   use?: { hp?: number; mp?: number; escape?: boolean; cd: number };
@@ -41,10 +47,11 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
   const armor = (id: string, name: string, slot: Slot, icon: string, k: number, s: Partial<ItemDef>): ItemDef => ({ id: `${p}_${id}`, name, type: 'armor', slot, grade, ...(look && { look }), price: r(price * k), icon, color, ...s, ...craft(k) });
   return [
     { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color, ...craft(6) },
-    { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'staff', pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
+    { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'staff', twoHanded: true, pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
     armor('helm', `Yelmo ${sg}`, 'head', '⛑️', 2, { pDef: r(a * 0.4), mDef: r(a * 0.12) }),
     armor('plate', `Coraza ${sg}`, 'chest', '🛡️', 4, { pDef: a, mDef: r(a * 0.15) }),
     armor('robe', `Túnica ${sg}`, 'chest', '👘', 4, { pDef: r(a * 0.67), mDef: r(a * 0.6), mp: j * 2 }),
+    armor('shield', `Escudo ${sg}`, 'shield', '🛡️', 2, { block: SHIELD_BLOCK[grade] }),
     armor('greaves', `Grebas ${pl}`, 'legs', '👖', 3, { pDef: r(a * 0.53), mDef: r(a * 0.1) }),
     armor('gauntlets', `Guanteletes ${pl}`, 'gloves', '🧤', 1.5, { pDef: r(a * 0.23), mDef: r(a * 0.05) }),
     armor('boots', `Botas ${pl}`, 'feet', '👢', 1.5, { pDef: r(a * 0.23), mDef: r(a * 0.05) }),
@@ -60,30 +67,33 @@ const list: ItemDef[] = [
   { id: 'short_sword', name: 'Espada Corta', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 8, mAtk: 6, price: 80, icon: '🗡️', color: 0xb8c4cc },
   { id: 'apprentice_wand', name: 'Varita de Aprendiz', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 5, mAtk: 8, price: 80, icon: '🪄', color: 0x9b7b4a },
   { id: 'broadsword', name: 'Espada Ancha', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 11, mAtk: 7, price: 600, icon: '⚔️', color: 0xc8d0d8 },
-  { id: 'willow_staff', name: 'Báculo de Sauce', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 7, mAtk: 12, price: 600, icon: '🪄', color: 0x7a9b4a, craft: { mats: [['wood_log', 10]], adena: 150 } },
+  { id: 'willow_staff', name: 'Báculo de Sauce', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', twoHanded: true, pAtk: 7, mAtk: 12, price: 600, icon: '🪄', color: 0x7a9b4a, craft: { mats: [['wood_log', 10]], adena: 150 } },
   { id: 'iron_hammer', name: 'Martillo de Hierro', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'blunt', pAtk: 12, mAtk: 6, price: 750, icon: '🔨', color: 0x8a8f95, craft: { mats: [['iron_ore', 8], ['wood_log', 3]], adena: 180 } },
   { id: 'dagger', name: 'Daga', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'dagger', pAtk: 9, mAtk: 6, price: 250, icon: '🗡️', color: 0xb8c4cc },
   { id: 'hand_axe', name: 'Hacha de Mano', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 11, mAtk: 6, price: 650, icon: '🪓', color: 0x9aa2aa, craft: { mats: [['iron_ore', 6], ['wood_log', 4]], adena: 150 } },
   // gathering tools: an axe fells trees, a pickaxe (or any hammer) mines rocks (shared/src/nodes.ts)
   { id: 'woodcutter_axe', name: 'Hacha de Leñador', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 6, mAtk: 3, price: 120, icon: '🪓', color: 0x8a6a4a, desc: 'Sirve para talar árboles.' },
   { id: 'miner_pickaxe', name: 'Pico de Minero', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'pickaxe', pAtk: 6, mAtk: 3, price: 120, icon: '⛏️', color: 0x8a8f95, desc: 'Sirve para picar rocas.' },
-  { id: 'spear', name: 'Lanza', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'spear', pAtk: 11, mAtk: 7, price: 650, icon: '🔱', color: 0xb8c4cc },
+  { id: 'spear', name: 'Lanza', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'spear', twoHanded: true, pAtk: 11, mAtk: 7, price: 650, icon: '🔱', color: 0xb8c4cc },
   { id: 'assassin_dagger', name: 'Daga del Asesino', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'dagger', pAtk: 19, mAtk: 12, price: 5800, icon: '🗡️', color: 0x7adf6a },
-  { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'axe', pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060, craft: { mats: [['iron_ore', 40], ['wood_log', 20]], adena: 2000 } },
-  { id: 'partisan', name: 'Partesana', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'spear', pAtk: 21, mAtk: 11, price: 6200, icon: '🔱', color: 0xa8d8e8 },
+  { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'axe', twoHanded: true, pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060, craft: { mats: [['iron_ore', 40], ['wood_log', 20]], adena: 2000 } },
+  { id: 'partisan', name: 'Partesana', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'spear', twoHanded: true, pAtk: 21, mAtk: 11, price: 6200, icon: '🔱', color: 0xa8d8e8 },
   { id: 'sword_of_revolution', name: 'Espada de la Revolución', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'sword', pAtk: 20, mAtk: 12, price: 6000, icon: '⚔️', color: 0x9ad0ff },
-  { id: 'war_hammer', name: 'Martillo de Guerra Enano', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'blunt', pAtk: 22, mAtk: 10, price: 6500, icon: '🔨', color: 0xc08a50, craft: { mats: [['iron_ore', 45], ['wood_log', 15]], adena: 2000 } },
-  { id: 'staff_of_life', name: 'Báculo de la Vida', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'staff', pAtk: 12, mAtk: 22, price: 6000, icon: '🪄', color: 0x6fe08a },
-  { id: 'samurai_longsword', name: 'Espada Larga Samurái', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'sword', pAtk: 33, mAtk: 18, price: 30000, icon: '⚔️', color: 0xff6a6a },
-  { id: 'sages_staff', name: 'Báculo del Sabio', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'staff', pAtk: 18, mAtk: 35, price: 30000, icon: '🪄', color: 0xb070ff },
+  { id: 'war_hammer', name: 'Martillo de Guerra Enano', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'blunt', twoHanded: true, pAtk: 22, mAtk: 10, price: 6500, icon: '🔨', color: 0xc08a50, craft: { mats: [['iron_ore', 45], ['wood_log', 15]], adena: 2000 } },
+  { id: 'staff_of_life', name: 'Báculo de la Vida', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'staff', twoHanded: true, pAtk: 12, mAtk: 22, price: 6000, icon: '🪄', color: 0x6fe08a },
+  { id: 'samurai_longsword', name: 'Espada Larga Samurái', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'sword', twoHanded: true, pAtk: 33, mAtk: 18, price: 30000, icon: '⚔️', color: 0xff6a6a },
+  { id: 'sages_staff', name: 'Báculo del Sabio', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'staff', twoHanded: true, pAtk: 18, mAtk: 35, price: 30000, icon: '🪄', color: 0xb070ff },
   // Armor NG
   { id: 'leather_cap', name: 'Gorro de Cuero', type: 'armor', slot: 'head', grade: 'NG', pDef: 3, mDef: 1, price: 60, icon: '⛑️', color: 0x8b5a2b },
+  // a buckler is small: it catches fewer blows than an NG shield proper
+  { id: 'wooden_buckler', name: 'Rodela de Madera', type: 'armor', slot: 'shield', grade: 'NG', block: 0.12, price: 90, icon: '🛡️', color: 0x9a7048 },
   { id: 'apprentice_tunic', name: 'Túnica de Aprendiz', type: 'armor', slot: 'chest', grade: 'NG', pDef: 7, mDef: 2, price: 50, icon: '👕', color: 0x8c7a5b },
   { id: 'apprentice_stockings', name: 'Calzas de Aprendiz', type: 'armor', slot: 'legs', grade: 'NG', pDef: 5, mDef: 1, price: 40, icon: '👖', color: 0x6b5a3b },
   { id: 'short_gloves', name: 'Guantes Cortos', type: 'armor', slot: 'gloves', grade: 'NG', pDef: 2, price: 40, icon: '🧤', color: 0x8b5a2b },
   { id: 'leather_sandals', name: 'Sandalias de Cuero', type: 'armor', slot: 'feet', grade: 'NG', pDef: 2, price: 40, icon: '👢', color: 0x8b5a2b },
   // Armor NG, once D
   { id: 'brigandine_helm', name: 'Yelmo de Brigantina', type: 'armor', slot: 'head', grade: 'NG', look: 'D', pDef: 6, mDef: 2, price: 1800, icon: '⛑️', color: 0x7c8a99 },
+  { id: 'brigandine_shield', name: 'Escudo de Brigantina', type: 'armor', slot: 'shield', grade: 'NG', look: 'D', block: 0.15, price: 2200, icon: '🛡️', color: 0x7c8a99 },
   { id: 'karmian_hat', name: 'Sombrero Karmiano', type: 'armor', slot: 'head', grade: 'NG', look: 'D', pDef: 4, mDef: 4, mp: 15, price: 1800, icon: '🎩', color: 0x3c5aa8 },
   { id: 'brigandine_tunic', name: 'Túnica de Brigantina', type: 'armor', slot: 'chest', grade: 'NG', look: 'D', pDef: 15, mDef: 3, price: 4200, icon: '🛡️', color: 0x7c8a99 },
   { id: 'brigandine_gaiters', name: 'Grebas de Brigantina', type: 'armor', slot: 'legs', grade: 'NG', look: 'D', pDef: 10, mDef: 2, price: 3000, icon: '👖', color: 0x5f6b78 },
@@ -93,6 +103,7 @@ const list: ItemDef[] = [
   { id: 'karmian_stockings', name: 'Calzas Karmianas', type: 'armor', slot: 'legs', grade: 'NG', look: 'D', pDef: 7, mDef: 5, mp: 20, price: 3000, icon: '👖', color: 0x2c4a88 },
   // Armor D, once C (drop only)
   { id: 'full_plate_helmet', name: 'Yelmo de Placas', type: 'armor', slot: 'head', grade: 'D', look: 'C', pDef: 9, mDef: 3, price: 9000, icon: '⛑️', color: 0xc0c8d0 },
+  { id: 'full_plate_shield', name: 'Escudo de Placas', type: 'armor', slot: 'shield', grade: 'D', look: 'C', block: 0.18, price: 10000, icon: '🛡️', color: 0xc0c8d0 },
   { id: 'demons_circlet', name: 'Diadema del Demonio', type: 'armor', slot: 'head', grade: 'D', look: 'C', pDef: 6, mDef: 7, mp: 30, price: 9000, icon: '👑', color: 0x8a1f3a },
   { id: 'full_plate_armor', name: 'Armadura de Placas', type: 'armor', slot: 'chest', grade: 'D', look: 'C', pDef: 24, mDef: 4, price: 22000, icon: '🛡️', color: 0xc0c8d0 },
   { id: 'demons_tunic', name: 'Túnica del Demonio', type: 'armor', slot: 'chest', grade: 'D', look: 'C', pDef: 16, mDef: 14, mp: 80, price: 22000, icon: '👘', color: 0x8a1f3a },

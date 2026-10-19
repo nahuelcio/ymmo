@@ -25,3 +25,6 @@ skill: aegis_charge <- delapouite/charging-bull, iron_bulwark <- delapouite/bric
   phoenix_strike <- lorc/fire-dash, rebirth <- lorc/fire-silhouette, riposte <- lorc/sword-clash, thousand_cuts <- lorc/lightning-slashes,
   final_verdict <- delapouite/executioner-hood, arcane_mastery <- lorc/crystal-ball, star_fall <- delapouite/falling-star,
   oblivion <- lorc/portal, divine_grace <- lorc/angel-outfit, sacred_judgment <- lorc/justice-star, grand_miracle <- lorc/rainbow-star
+
+Added for the shields (same source and licence), file <- original:
+item: shield <- lorc/bordered-shield (the holy_shield skill's drawing)

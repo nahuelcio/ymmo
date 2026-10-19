@@ -9,7 +9,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
-import { animateQ, armorPiece, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
+import { animateQ, armorPiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -671,7 +671,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const hair = HAIR_COLORS[look.hc] >= 0 ? HAIR_COLORS[look.hc] : r.hair;
   const it = (id: string | null | undefined) => (id ? ITEMS[id] ?? null : null);
   const chestDef = it(chest);
-  const [head, gloves, legs, feet] = eq.map(it);
+  const [head, gloves, legs, feet, shield] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
   const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, buzz = race === 'orc' && !female && look.hs === 0, bald = buzz || HAIR_STYLES[look.hs] === 'Pelado';
   if (qReady()) {
@@ -686,7 +686,8 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: under(chestDef, wChest), legs: under(legs, wLegs), feet: under(feet, wFeet), gloves: wGloves ? undefined : gloves?.color,
       pauldron: !wChest && !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
-      armor: [wChest, wGloves, wLegs, wFeet].filter((w) => !!w).map((w) => w!.node), bareFeet: !!wFeet,
+      armor: [...[wChest, wGloves, wLegs, wFeet].filter((w) => !!w).map((w) => w!.node), ...(shield ? [shieldPiece(shield.id)] : [])].filter((n): n is THREE.Object3D => !!n),
+      bareFeet: !!wFeet,
       noTop: !!wChest, noLegs: !!wLegs, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),

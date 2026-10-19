@@ -10,7 +10,7 @@ export interface CharSummary { id: number; name: string; race: Race; cls: ClassT
 export interface EntPlayer {
   id: number; k: 'p'; x: number; z: number; ry: number; n: string; l: number; hp: number;
   race: Race; cls: ClassType; spec?: Spec | null; lk: Look; w: string | null; a: string | null; nc: NameColor; f: number;
-  /** other visible gear: [head, gloves, legs, feet] item ids */
+  /** other visible gear: [head, gloves, legs, feet, shield] item ids */
   eq: (string | null)[];
   /** the held weapon's enchantment (its glow, render/enchant-fx.ts) */
   we?: number;
@@ -67,8 +67,8 @@ export interface SelfState {
   lvl: number; xp: number; xpNeed: number;
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
-  /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time) */
-  atkSpd: number; castSpd: number; speed: number; cdr: number;
+  /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time); blk: block chance in % */
+  atkSpd: number; castSpd: number; speed: number; cdr: number; blk?: number;
   adena: number; karma: number; pk: number; pvp: number; flagged: boolean; pvpOn: boolean;
   skills: string[];
   buffs: { id: string; rem: number }[];
@@ -185,7 +185,7 @@ export type S2C =
   | { t: 'inv'; items: InvItem[]; adena: number }
   | { t: 'target'; id: number | null }
   /** res: a stun or slow that did not land (it was resisted) */
-  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean; res?: boolean }
+  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean; res?: boolean; /** caught on the target's shield (already halved) */ blk?: boolean }
   | { t: 'atk'; s: number; tg: number }
   | { t: 'cast'; s: number; tg: number; skill: string; dur: number }
   /** s's cast (or a mob's special attack) stopped before it went off: cancelled, stunned, dead... */

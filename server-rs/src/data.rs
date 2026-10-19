@@ -57,6 +57,10 @@ pub struct ItemDef {
     pub hp: Option<f64>,
     pub mp: Option<f64>,
     pub cdr: Option<f64>,
+    /** a shield's chance to catch a physical hit (which then does half its damage) */
+    pub block: Option<f64>,
+    /** a weapon held in both hands: no shield with it */
+    pub two_handed: Option<bool>,
     pub price: i64,
     pub stack: Option<bool>,
     #[serde(rename = "use")]
@@ -234,7 +238,13 @@ pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub bas
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct SpecDef { pub id: String, pub base: String, pub name: String, pub name_en: String, /** an evolution (the third specialization) of this spec */ pub parent: Option<String> }
+pub struct SpecDef {
+    pub id: String, pub base: String, pub name: String, pub name_en: String,
+    /** an evolution (the third specialization) of this spec */
+    pub parent: Option<String>,
+    /** how much more often it blocks with a shield (1.5: half again) */
+    pub block: Option<f64>,
+}
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct StatusDef { pub id: String, pub flag: u16 }

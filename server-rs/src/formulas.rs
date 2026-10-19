@@ -12,6 +12,8 @@ pub struct Stats {
     pub hp_regen: f64, pub mp_regen: f64, pub cp_regen: f64,
     /** skill cooldown reduction, a fraction (0.1 = 10% shorter) */
     pub cdr: f64,
+    /** the chance a physical hit is caught on the shield and does half its damage */
+    pub block: f64,
 }
 
 pub const BASE_SPEED: f64 = 6.0;
@@ -76,6 +78,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let ench = &d().enchant;
     let lm = level_mod(level);
     let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let mut block = 0.0;
     let (mut mw_atk, mut mw_cast) = (0.0, 0.0);
     for &(it, e, mw) in equipped {
         let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
@@ -87,6 +90,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
             let k = 1.0 + ench.armor * e as f64;
             arm_p += ib("pDef", it.p_def) * k;
             arm_m += ib("mDef", it.m_def) * k;
+            block += ib("block", it.block) * k; // enchanting a shield makes it block a little more often
         }
         hp_bonus += ib("hp", it.hp);
         mp_bonus += ib("mp", it.mp);
@@ -128,6 +132,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
         cp_regen: max_cp * 0.03,
         cdr: cdr_sum.min(0.5), // ponytail: flat cap, half of every skill's recharge at most
+        block,
     }
 }
 
@@ -156,6 +161,11 @@ pub fn hit_chance(accuracy: f64, evasion: f64) -> f64 { (0.9 + (accuracy - evasi
 
 pub fn phys_damage(p_atk: f64, p_def: f64, mult: f64, crit: bool) -> f64 {
     jround(((70.0 * p_atk) / p_def.max(1.0)) * mult * rand_range(0.9, 1.1) * if crit { 2.0 } else { 1.0 }).max(1.0)
+}
+
+/** A physical hit against a shield: caught on it when `roll` (0..1) falls under its block chance, and then it does half. */
+pub fn block_hit(dmg: f64, block: f64, roll: f64) -> (f64, bool) {
+    if block > 0.0 && roll < block { (jround(dmg * 0.5).max(1.0), true) } else { (dmg, false) }
 }
 
 pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64 {
@@ -191,6 +201,42 @@ mod tests {
         assert!(near(land_chance(0.6, 1, 40, false), 0.1)); // never hopeless
         assert!(near(land_chance(0.6, 40, 40, true), 0.3)); // bosses resist twice as well
         assert!(near(land_chance(0.6, 1, 40, true), 0.05));
+    }
+
+    #[test]
+    fn shields_block_by_grade() {
+        let data = d();
+        let it = |id: &str| data.item(id).unwrap();
+        let block = |id: &str, e: i64| compute_stats("human", "fighter", 20, &[(it(id), e, false)], &[], "m").block;
+        let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+        assert_eq!(compute_stats("human", "fighter", 20, &[], &[], "m").block, 0.0);
+        assert!(near(block("wooden_buckler", 0), 0.12)); // a buckler is small
+        assert!(near(block("brigandine_shield", 0), 0.15));
+        assert!(near(block("full_plate_shield", 0), 0.18));
+        for (p, b) in [("abyssal", 0.18), ("ashforged", 0.18), ("dragon", 0.21), ("glacial", 0.24), ("emerald", 0.27), ("infernal", 0.3)] {
+            assert!(near(block(&format!("{p}_shield"), 0), b), "{p}");
+        }
+        assert!(near(block("infernal_shield", 4), 0.3 * 1.2)); // enchanting: 5% more of it a level
+        // the knights block half again as often (Player::recalc), nobody else does
+        assert_eq!(data.spec("knight").unwrap().block, Some(1.5));
+        assert_eq!(data.spec("phoenix_knight").unwrap().block, Some(1.5));
+        assert_eq!(data.spec("gladiator").unwrap().block, None);
+        // what is held in both hands, and so takes no shield
+        for w in ["willow_staff", "staff_of_life", "sages_staff", "infernal_staff", "spear", "partisan", "battle_axe", "war_hammer", "samurai_longsword"] {
+            assert_eq!(it(w).two_handed, Some(true), "{w}");
+        }
+        for w in ["apprentice_wand", "short_sword", "infernal_blade", "dagger", "iron_hammer", "hand_axe"] { assert!(it(w).two_handed.is_none(), "{w}"); }
+    }
+
+    #[test]
+    fn a_block_halves_the_hit() {
+        assert_eq!(block_hit(100.0, 0.3, 0.1), (50.0, true));
+        assert_eq!(block_hit(100.0, 0.3, 0.5), (100.0, false));
+        assert_eq!(block_hit(101.0, 0.3, 0.29), (51.0, true)); // rounded as the game rounds
+        assert_eq!(block_hit(1.0, 0.3, 0.0), (1.0, true)); // never below 1
+        assert_eq!(block_hit(100.0, 0.0, 0.0), (100.0, false)); // no shield, no block
+        let blocked = (0..10000).filter(|_| block_hit(100.0, 0.3, rnd()).1).count();
+        assert!((2700..3300).contains(&blocked), "{blocked}");
     }
 
     #[test]

@@ -1229,8 +1229,10 @@ export class Game {
     // what hits us, in the System tab (Options: off). Bleed and poison ticks returned above: they would flood it
     if (mine && settings.s.dmgLog) {
       const by = this.ents.get(m.s), who = by ? this.nameOf(by) : tx('Algo', 'Something'), crit = m.crit ? tx(' (crítico)', ' (critical)') : '';
-      this.ui.chat.add('log', '', tx(`${who} te pegó por ${m.v}${crit}`, `${who} hit you for ${m.v}${crit}`));
+      const blk = m.blk ? tx(' (bloqueado)', ' (blocked)') : '';
+      this.ui.chat.add('log', '', tx(`${who} te pegó por ${m.v}${crit}${blk}`, `${who} hit you for ${m.v}${crit}${blk}`));
     }
+    if (m.blk) this.floatText(t, tx('¡Bloqueó!', 'Blocked!'), 'f-block'); // caught on the shield: half the damage
     let sfx: Sfx = mine ? 'hurt' : m.crit ? 'crit' : 'hit';
     if (!mine && this.ents.get(m.s)?.rec.k === 'p' && (this.ents.get(m.s)!.rec as { cls?: string }).cls === 'mystic') sfx = 'magic';
     play(sfx, vol);

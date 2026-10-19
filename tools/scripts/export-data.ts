@@ -57,7 +57,7 @@ const out = {
   races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods, mw: r.mw })),
   genders: Object.entries(GENDERS).map(([id, g]) => ({ id, mods: g.mods })),
   classes: Object.entries(CLASSES).map(([id, c]) => ({ id, ...c, startItems: c.startItems.map(([item, count, equip]) => ({ item, count, equip })) })),
-  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null })),
+  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null, block: SPECS[id].block ?? null })),
   statuses: Object.entries(STATUSES).map(([id, s]) => ({ id, flag: s.flag })),
   raids: Object.values(RAIDS),
   // world nodes: [id, x, z, r, ry, seatY, zone]; gather rules per kind

@@ -486,7 +486,7 @@ impl World {
                 let eqi = |s: &str| p.equipped_in(s).map(|i| Value::String(i.i.clone())).unwrap_or(Value::Null);
                 json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "p", "n": p.name, "l": p.level, "race": p.race, "cls": p.cls, "spec": p.spec,
                     "lk": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc }, "w": eqi("weapon"), "we": p.equipped_in("weapon").map_or(0, |i| i.e), "a": eqi("chest"), "nc": p.name_color(now),
-                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet")],
+                    "eq": [eqi("head"), eqi("gloves"), eqi("legs"), eqi("feet"), eqi("shield")],
                     // clan, its name and crest version, and the character's title (absent without a clan)
                     "cl": p.clan_look.as_ref().map(|c| c.id), "cn": p.clan_look.as_ref().map(|c| c.name.clone()),
                     "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()),
@@ -561,7 +561,7 @@ impl World {
             "id": pid, "name": p.name, "race": p.race, "cls": p.cls, "spec": p.spec, "look": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc },
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
-            "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit,
+            "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit, "blk": (s.block * 100.0).round(),
             "atkSpd": jround(60000.0 / s.atk_interval), "castSpd": jround(100.0 / s.cast_mul), "speed": jround(s.speed * 20.0), "cdr": (s.cdr * 100.0).round(),
             "adena": p.adena, "karma": p.karma, "pk": p.pk, "pvp": p.pvp, "flagged": p.pvp_until > self.now, "pvpOn": p.pvp_on,
             "skills": skills, "buffs": buffs,

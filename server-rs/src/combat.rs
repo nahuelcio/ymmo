@@ -75,7 +75,13 @@ impl World {
         let (acc, crit_c, p_atk) = (p.stats.accuracy, p.stats.crit, p.stats.p_atk);
         if rnd() > hit_chance(acc, eva) { return self.send_miss(pid, tid); }
         let crit = rnd() * 100.0 < crit_c;
-        self.apply_damage(pid, tid, phys_damage(p_atk, p_def, 1.0, crit), now, crit, false);
+        let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, p_def, 1.0, crit));
+        self.apply_damage(pid, tid, dmg, now, crit, false, blk);
+    }
+
+    /** A physical hit on a player carrying a shield: one in `block` of them is caught on it and does half its damage. */
+    pub fn blocked(&self, tid: u32, dmg: f64) -> (f64, bool) {
+        self.pl(tid).map_or((dmg, false), |p| block_hit(dmg, p.stats.block, rnd()))
     }
 
     pub fn mob_attack(&mut self, mid: u32, tid: u32, now: f64) {
@@ -86,9 +92,9 @@ impl World {
         let t = self.pl(tid).unwrap();
         if t.dodge_until > now || rnd() > hit_chance(acc, t.stats.evasion) { return self.send_miss(mid, tid); }
         let crit = rnd() * 100.0 < crit_c;
-        let dmg = phys_damage(p_atk, t.stats.p_def, 1.0, crit);
-        self.apply_damage(mid, tid, dmg, now, crit, false);
-        if let Some(oh) = on_hit {
+        let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, t.stats.p_def, 1.0, crit));
+        self.apply_damage(mid, tid, dmg, now, crit, false, blk);
+        if let Some(oh) = on_hit.filter(|_| !blk) { // a blow caught on the shield leaves no poison or bleed
             if rnd() < oh.chance.unwrap_or(1.0) { self.apply_status(mid, tid, &oh, dmg, now); }
         }
     }
@@ -176,7 +182,7 @@ impl World {
                 st.next_tick += 1000.0;
                 let (src, dps) = (st.src, st.dps);
                 let src = if is_fighter(self, src) { src } else { id };
-                self.apply_damage(src, id, dps, now, false, true);
+                self.apply_damage(src, id, dps, now, false, true, false);
             }
         }
     }
@@ -185,11 +191,13 @@ impl World {
         if let Some(m) = self.ents.get_mut(&mid).and_then(|e| e.mob_mut()) { map_add(&mut m.threat, pid, v); }
     }
 
-    pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool) {
+    /** dot: a bleed or poison tick; blk: a physical hit the target caught on its shield (blocked, already halved) */
+    pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool, blk: bool) {
         if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
         if self.pl(tid).is_some_and(|p| p.god) { return; }
         let mut msg = json!({ "t": "dmg", "s": src, "tg": tid, "v": dmg, "crit": crit });
         if dot { msg["dot"] = json!(true); }
+        if blk { msg["blk"] = json!(true); }
         let src_player = self.pl(src).map(|p| p.cls == "fighter");
         if let Some(_) = src_player {
             let p = self.pl_mut(src).unwrap();
@@ -538,13 +546,13 @@ impl World {
                     if def.kind == "phys" {
                         if rnd() > hit_chance(st.accuracy + 10.0, eva) { self.send_miss(pid, tg); continue; }
                         let crit = rnd() * 100.0 < st.crit;
-                        let dmg = phys_damage(st.p_atk, p_def, def.power, crit);
-                        self.apply_damage(pid, tg, dmg, now, crit, false);
+                        let (dmg, blk) = self.blocked(tg, phys_damage(st.p_atk, p_def, def.power, crit));
+                        self.apply_damage(pid, tg, dmg, now, crit, false, blk);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                     } else {
                         let crit = rnd() < 0.05;
                         let dmg = magic_damage(st.m_atk, m_def, def.power, crit);
-                        self.apply_damage(pid, tg, dmg, now, crit, false);
+                        self.apply_damage(pid, tg, dmg, now, crit, false, false);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                         if def.kind == "drain" && !self.ents[&pid].c.dead {
                             let heal = jround(dmg * 0.5);

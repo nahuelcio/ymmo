@@ -10,14 +10,19 @@ const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
+import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME } from './common';
 import { isTouchDevice } from './touch';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
 const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
 /** the item whose icon outlines each empty equipment slot */
-const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
+/** Where each slot sits on the doll: [column, row] - what is worn down the left, what is held and the jewels down the right */
+const DOLL_AT: Record<Slot, [number, number]> = {
+  head: [1, 1], chest: [1, 2], legs: [1, 3], feet: [1, 4], amulet: [1, 5],
+  weapon: [3, 1], shield: [3, 2], gloves: [3, 3], earring: [3, 4], ring: [3, 5],
+};
+const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', shield: 'brigandine_shield', chest: 'full_plate_armor', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
 
 export class InventoryPanel {
   win: Win;
@@ -72,12 +77,13 @@ export class InventoryPanel {
     const m = this.g.me;
     const row = (k: string, v: number) => `<span class="stat-k">${k}</span><span class="stat-v">${v}</span>`;
     this.stats.innerHTML = `<div class="ds-name">${esc(m.name)}</div><div class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${className(m.cls, lang, m.spec)}</div>
-      <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}${m.cdr ? row(tx('Recarga %', 'CDR %'), -m.cdr) : ''}</div>`;
+      <div class="ds-grid">${row(tx('Atq.F', 'P.Atk'), m.pAtk)}${row(tx('Def.F', 'P.Def'), m.pDef)}${row(tx('Atq.M', 'M.Atk'), m.mAtk)}${row(tx('Def.M', 'M.Def'), m.mDef)}${m.cdr ? row(tx('Recarga %', 'CDR %'), -m.cdr) : ''}${m.blk ? row(tx('Bloqueo %', 'Block %'), m.blk) : ''}</div>`;
   }
 
   /** The stat a character cares about for this piece, to tell upgrades apart. */
   private score(it: InvItem) {
     const d = ITEMS[it.i];
+    if (d.block) return blockPct(d, it.e);
     return d.type === 'weapon' ? enchanted(d, this.g.me.cls === 'mystic' ? 'mAtk' : 'pAtk', it.e) : enchanted(d, 'pDef', it.e) + enchanted(d, 'mDef', it.e);
   }
 
@@ -147,6 +153,8 @@ export class InventoryPanel {
       const dv = val(d, k, it.e) - val(c, k, worn?.e);
       return dv ? `<span class="${dv > 0 ? 'tt-up' : 'tt-down'}">${label} ${dv > 0 ? '+' : ''}${dv}</span>` : '';
     }).filter(Boolean);
+    const db = Math.round((blockPct(d, it.e) - (c ? blockPct(c, worn?.e) : 0)) * 10) / 10;
+    if (db) rows.push(`<span class="${db > 0 ? 'tt-up' : 'tt-down'}">${tx('Bloqueo', 'Block')} ${db > 0 ? '+' : ''}${db}%</span>`);
     const head = c ? `${tx('Contra lo equipado', 'Against equipped')}: ${esc(itemName(c.id, lang))}` : tx('No tenés nada equipado en ese lugar', 'Nothing equipped in that slot');
     return `<div class="tt-cmp"><span class="tt-dim">${head}</span><br>${rows.join(' &nbsp; ') || tx('Mismas estadísticas', 'Same stats')}</div>`;
   }
@@ -158,11 +166,11 @@ export class InventoryPanel {
     // slots down both sides (head/chest/legs, weapon/gloves/feet) around a card with the stats gear changes
     this.stats = el('div', 'doll-stats', this.doll);
     this.refreshStats();
-    SLOTS.forEach((s, k) => {
+    SLOTS.forEach((s) => {
       const cell = (this.dollCells[s] = el('div', 'doll-slot', this.doll));
-      // the ninth slot (ring) sits under the stat card
-      cell.style.gridColumn = k === 8 ? '2' : k % 2 ? '3' : '1';
-      cell.style.gridRow = String(k === 8 ? 4 : (k >> 1) + 1);
+      const [col, row] = DOLL_AT[s];
+      cell.style.gridColumn = String(col);
+      cell.style.gridRow = String(row);
       const it = g.inv.find((i) => i.s === s);
       if (it) {
         itemIcon(it.i, cell, undefined, it.e);
