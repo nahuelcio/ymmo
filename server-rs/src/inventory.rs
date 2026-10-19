@@ -159,8 +159,9 @@ impl World {
         self.sys(pid, &format!("Destruiste {}.", def.name), &format!("{} has been destroyed.", def.name_en));
     }
 
-    /// Spend a matching scroll from the bag on a piece of gear: +1, or the piece is lost (see ENCHANT in the data).
-    pub fn enchant(&mut self, pid: u32, uid: u32) {
+    /// Spend a matching scroll from the bag on a piece of gear: +1, or the piece is lost (see ENCHANT in the data). A
+    /// sacred scroll works on any piece and never fails.
+    pub fn enchant(&mut self, pid: u32, uid: u32, sacred: bool) {
         if self.ents[&pid].c.dead { return; }
         let data = d();
         let cfg = &data.enchant;
@@ -170,11 +171,13 @@ impl World {
         if def.slot.is_none() { return; }
         let kind = if def.kind == "weapon" { "weapon" } else { "armor" };
         if e >= cfg.max { return self.sys(pid, "Ese objeto ya no se puede encantar más.", "That item cannot be enchanted any further."); }
-        let Some(scroll) = data.items.values().find(|s| s.enchant.as_deref() == Some(kind) && count_item(p, &s.id) > 0) else {
+        let wanted = if sacred { "sacred" } else { kind };
+        let Some(scroll) = data.items.values().find(|s| s.enchant.as_deref() == Some(wanted) && count_item(p, &s.id) > 0) else {
+            if sacred { return self.sys(pid, "No tenés un pergamino sagrado.", "You have no sacred scroll."); }
             return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that.");
         };
         take_items(p, &scroll.id, 1);
-        let ok = rnd() < crate::formulas::enchant_chance(e);
+        let ok = crate::formulas::enchant_roll(e, sacred, rnd());
         // the scroll's row may be gone: look the piece up again
         let idx = p.inv.iter().position(|i| i.u == uid).unwrap();
         let worn = p.inv[idx].s.is_some();
@@ -185,7 +188,9 @@ impl World {
         // a worn piece crumbling, or the held weapon's glow growing (enchant-fx.ts): everyone redraws the character
         if (worn && !ok && cfg.fail_destroys) || (weapon && ok) { self.ents.get_mut(&pid).unwrap().c.av += 1; }
         let n = e + 1;
-        if ok {
+        if ok && sacred {
+            self.sys(pid, &format!("¡Éxito sagrado! {} ahora es +{n}.", def.name), &format!("Sacred success! {} is now +{n}.", def.name_en));
+        } else if ok {
             self.sys(pid, &format!("¡Éxito! {} ahora es +{n}.", def.name), &format!("Success! {} is now +{n}.", def.name_en));
         } else if cfg.fail_destroys {
             self.sys(pid, &format!("El encantamiento falló: {} +{e} se hizo polvo.", def.name), &format!("The enchantment failed: {} +{e} crumbled to dust.", def.name_en));

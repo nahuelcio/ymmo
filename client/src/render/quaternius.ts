@@ -265,6 +265,7 @@ function wantGear(s: GearFile): THREE.Object3D | undefined {
         : new THREE.Color(kind === 'enamel' ? 0x383838 : 0x121212);
       const { color, map, normalMap, normalScale } = src;
       const mat = new THREE.MeshPhongMaterial({ color, map, normalMap, normalScale, specular, shininess: 6 + (1 - rough) ** 2 * 90 });
+      mat.userData.gear = true; // tintGear finds the set's pieces by it
       if (src.userData.shine && map) {
         // one material for the whole piece: how much each part of it shines is in the colour map's alpha
         mat.specularMap = map;
@@ -282,6 +283,46 @@ function wantGear(s: GearFile): THREE.Object3D | undefined {
     dispatchEvent(new CustomEvent('gear-loaded', { detail: s }));
   }).catch((err) => console.warn('gear', s, err)); // a set that fails to load leaves its pieces off
   return undefined;
+}
+
+/** Gear materials repainted (tintGear), by the set's own material and the colour. */
+const tinted = new WeakMap<THREE.Material, Map<number, THREE.Material>>();
+/**
+ * Repaint every set piece worn under `root` (armour, helm, cape) in `hex`: its dark lacquer, paint and cloth (the
+ * greys and blacks of the baked map) take the colour, its gold, brass and gems stay as they are; `glow` makes the
+ * repainted parts glow with it, as metal heated red. For a mob dressed in a set (render/mobs.ts MOB_KNIGHT): the world
+ * raid's Infernal plate in red, smouldering.
+ */
+export function tintGear(root: THREE.Object3D, hex: number, glow = 0) {
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || !(o.material as THREE.Material).userData?.gear) return;
+    const src = o.material as THREE.MeshPhongMaterial;
+    let byHex = tinted.get(src);
+    if (!byHex) tinted.set(src, (byHex = new Map()));
+    const id = hex + glow * 0x1000000;
+    let mat = byHex.get(id);
+    if (!mat) {
+      const m = src.clone();
+      const prev = src.onBeforeCompile.bind(src), key = src.customProgramCacheKey();
+      m.onBeforeCompile = (sh, r) => {
+        prev(sh, r);
+        sh.uniforms.gearTint = { value: new THREE.Color(hex) };
+        sh.uniforms.gearGlow = { value: glow };
+        sh.fragmentShader = `uniform vec3 gearTint;\nuniform float gearGlow;\n${sh.fragmentShader}`.replace('#include <map_fragment>', `#include <map_fragment>
+          {
+            vec3 c = diffuseColor.rgb;
+            float lum = dot(c, vec3(0.299, 0.587, 0.114));
+            float sat = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b);
+            float k = (1.0 - smoothstep(0.06, 0.22, sat)) * (1.0 - smoothstep(0.3, 0.6, lum));
+            diffuseColor.rgb = mix(c, gearTint * (0.25 + lum * 2.2), k);
+            totalEmissiveRadiance += gearTint * k * gearGlow;
+          }`);
+      };
+      m.customProgramCacheKey = () => `${key}|tint${hex}|${glow}`;
+      byHex.set(id, (mat = m));
+    }
+    o.material = mat;
+  });
 }
 
 export function loadQ(): Promise<void> {

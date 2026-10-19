@@ -240,7 +240,8 @@ export class Game {
   queuedSkill: string | null = null;
   /** each caster's cast sparkles, and each mob's special-attack warning with its slam timer, to stop if cut short */
   private castFx = new Map<number, ReturnType<FxManager['sparkles']>>();
-  private teles = new Map<number, { fx: ReturnType<FxManager['telegraph']>; timer: number }>();
+  /** wind-ups on the ground, by caster (a world raid's barrage and pulse add a key: several at once) */
+  private teles = new Map<number | string, { fx: ReturnType<FxManager['telegraph']>; timer: number }>();
   ctrl = false;
   private raycaster = new THREE.Raycaster();
   private targetRing: THREE.Mesh;
@@ -545,18 +546,18 @@ export class Game {
       this.rtt = m.rtt;
     });
     n.on('tele', (m) => {
-      const c = this.ents.get(m.id);
+      const c = this.ents.get(m.id), key: number | string = m.k ? `${m.id}:${m.k}` : m.id;
       const fx = this.fx.telegraph(m.x, m.z, m.r, m.ms);
       play('warn', c ? this.near(c) : 0.6);
       // a stun before it lands calls it off (castx): no slam
       const timer = window.setTimeout(() => {
-        this.teles.delete(m.id);
+        this.teles.delete(key);
         play('slam', c ? this.near(c) : 0.6);
         this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), 0xff6a3a, m.r, 450);
         const self = this.self;
         if (self && settings.s.screenShake && Math.hypot(self.pos.x - m.x, self.pos.z - m.z) < m.r + 8) this.cam.shake(0.25);
       }, m.ms);
-      this.teles.set(m.id, { fx, timer });
+      this.teles.set(key, { fx, timer });
     });
     n.on('say', (m) => {
       this.ui.chat.add('npc', m.name, m.text);

@@ -51,7 +51,7 @@ const out = {
   })),
   // open-country herds spawn like a small zone each (server-rs world.rs spawn_mobs)
   herds: layoutHerds().map((h) => ({ name: '', nameEn: '', x: h.x, z: h.z, r: 10, spawns: [{ mob: h.mob, count: h.count }] })),
-  zones: ZONES.map((z) => ({ id: z.id, name: z.name, nameEn: zoneName(z.name, 'en'), x: z.x, z: z.z, r: z.r, spawns: z.spawns })),
+  zones: ZONES.map((z) => ({ id: z.id, name: z.name, nameEn: zoneName(z.name, 'en'), x: z.x, z: z.z, r: z.r, spawns: z.spawns, pvp: z.pvp })),
   teleports: TELEPORTS.map((t) => ({ ...t, nameEn: teleportName(t.id, 'en') })),
   camps: CAMPS.map((c) => ({ ...c, nameEn: campName(c.id, 'en') })),
   races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods, mw: r.mw })),

@@ -49,6 +49,9 @@ pub fn land_chance(base: f64, att_level: i64, def_level: i64, boss: bool) -> f64
 }
 
 /** Chance that enchanting a piece currently at +e succeeds. */
+/** Whether an enchant from +e succeeds, for a roll in [0, 1): a sacred scroll always does. */
+pub fn enchant_roll(e: i64, sacred: bool, roll: f64) -> bool { sacred || roll < enchant_chance(e) }
+
 pub fn enchant_chance(e: i64) -> f64 {
     let c = &d().enchant;
     if e < c.safe { 1.0 } else { c.chance }
@@ -265,6 +268,28 @@ mod tests {
         assert_eq!(grace.dur, 300_000.0);
         let cast = |buffs: &[&BuffMods]| compute_stats("human", "mystic", 76, &[], buffs, "m").cast_mul;
         assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
+    }
+
+    #[test]
+    fn sacred_enchants_never_fail() {
+        for e in 0..16 { assert!(enchant_roll(e, true, 0.999), "+{e}"); }
+        assert!(!enchant_roll(5, false, 0.999));
+        assert!(enchant_roll(2, false, 0.999)); // still safe below +3
+        let sacred = d().items.values().filter(|i| i.enchant.as_deref() == Some("sacred")).count();
+        assert_eq!(sacred, 1);
+    }
+
+    #[test]
+    fn the_crossroads_is_full_pvp() {
+        use crate::terrain::in_pvp_zone;
+        assert!(in_pvp_zone(40.0, -800.0)); // the north crossroads
+        assert!(in_pvp_zone(100.0, -750.0)); // where its world raid stands
+        for t in &d().towns { assert!(!in_pvp_zone(t.x, t.z), "{}", t.name); }
+        let tp = d().teleports.iter().find(|t| t.id == "warfront").unwrap();
+        assert!(!in_pvp_zone(tp.x, tp.z), "the gatekeeper must not drop anyone flagged");
+        let boss = &d().mobs["war_avatar"];
+        assert!(boss.barrage.is_some() && boss.pulse.is_some() && boss.enrage.is_some());
+        assert!(d().mobs.values().all(|m| m.id == "war_avatar" || m.level < boss.level), "the strongest boss in the game");
     }
 
     #[test]

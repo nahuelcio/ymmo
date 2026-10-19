@@ -33,8 +33,8 @@ export interface ItemDef {
   use?: { hp?: number; mp?: number; escape?: boolean; cd: number };
   /** recipe: a merchant who lists this item in `craft` makes it for these materials and this much adena */
   craft?: { mats: [string, number][]; adena: number };
-  /** enchant scroll: the kind of gear it works on */
-  enchant?: 'weapon' | 'armor';
+  /** enchant scroll: the kind of gear it works on (sacred: any piece, and it never fails) */
+  enchant?: 'weapon' | 'armor' | 'sacred';
   icon: string;
   color: number;
   desc?: string;
@@ -154,6 +154,8 @@ const list: ItemDef[] = [
   { id: 'supreme_mana_potion', name: 'Poción de Maná Suprema', type: 'consumable', stack: true, price: 750, use: { mp: 350, cd: 8000 }, icon: '🧪', color: 0x3a8aff, desc: 'Recupera 350 de MP.' },
   { id: 'scroll_of_escape', name: 'Pergamino de Escape', type: 'consumable', stack: true, price: 200, use: { escape: true, cd: 3000 }, icon: '📜', color: 0xe8d8a0, desc: 'Te lleva de vuelta a la Aldea del Alba.' },
   { id: 'scroll_enchant_weapon', name: 'Pergamino: Encantar Arma', type: 'consumable', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma. Click derecho sobre el arma para usarlo.' },
+  // dropped by the Avatar de la Guerra (Encrucijada Sangrienta): never fails
+  { id: 'scroll_enchant_sacred', name: 'Pergamino Sagrado de Encantamiento', type: 'consumable', stack: true, price: 150000, enchant: 'sacred', icon: '📜', color: 0xffe9a0, desc: 'Sube +1 seguro cualquier arma, armadura o joya: no puede fallar ni romperla.' },
   { id: 'scroll_enchant_armor', name: 'Pergamino: Encantar Armadura', type: 'consumable', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya. Click derecho sobre la pieza para usarlo.' },
   // Materials (vendor trash)
   { id: 'animal_skin', name: 'Cuero de Animal', type: 'material', stack: true, price: 12, icon: '🟫', color: 0x8b6b4b },

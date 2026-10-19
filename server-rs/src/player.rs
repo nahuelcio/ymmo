@@ -9,6 +9,7 @@ impl World {
         let e = self.ents.get_mut(&pid).unwrap();
         if e.c.dead { return; }
         let stunned = e.c.has("stun", now);
+        let (px, pz) = (e.c.x, e.c.z);
         let p = e.player_mut().unwrap();
         let s = p.stats.clone();
         // sitting down out of combat recovers much faster (as in L2)
@@ -28,6 +29,27 @@ impl World {
             let pt = self.town_point(Some(pid));
             self.teleport(pid, pt.x, pt.z);
             return;
+        }
+
+        // a full-PvP zone: flagged, and in PvP mode, all the while inside; leaving, the flag runs out as usual
+        let crossed = {
+            let p = self.pl_mut(pid).unwrap();
+            let inside = crate::terrain::in_pvp_zone(px, pz);
+            let was = std::mem::replace(&mut p.in_pvp, inside);
+            if inside {
+                p.pvp_until = now + crate::formulas::PVP_FLAG_MS;
+                p.pvp_on = true;
+            }
+            (inside != was).then_some(inside)
+        };
+        match crossed {
+            Some(true) => {
+                let zone = crate::terrain::zone_at(px, pz);
+                let en = crate::i18n::zone_name(&zone, crate::i18n::Lang::En);
+                self.sys(pid, &format!("Entraste a {zone}: zona PvP. Estás flageado y cualquiera puede atacarte."), &format!("You entered {en}: a PvP zone. You are flagged and anyone can attack you."));
+            }
+            Some(false) => self.sys(pid, "Saliste de la zona PvP: tu flag se va en 30 segundos.", "You left the PvP zone: your flag wears off in 30 seconds."),
+            None => {}
         }
 
         if stunned {

@@ -122,6 +122,7 @@ input { font: inherit; user-select: text; }
 .buff-time { position: absolute; bottom: -12px; left: 0; right: 0; text-align: center; font-size: 9px; color: #ddd; }
 .buff.flag { width: auto; padding: 0 6px; line-height: 24px; border: 1px solid #a070ff; color: #d0a0ff; border-radius: 3px; background: #1a1028; font-weight: bold; }
 .buff.flag.karma { border-color: #ff4040; color: #ff6060; background: #280a0a; }
+.buff.flag.pvp-zone { border-color: #e0482a; color: #ff7a5a; background: #2a0c08; }
 
 .party { position: absolute; left: 10px; top: 118px; width: 200px; padding: 6px 8px; }
 .quest-tracker { position: absolute; right: 10px; top: 240px; width: 180px; padding: 6px 8px; }

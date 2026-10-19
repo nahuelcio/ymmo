@@ -102,7 +102,7 @@ export type C2S =
   | { t: 'use'; u: number }
   | { t: 'destroy'; u: number }
   /** spend a matching enchant scroll from the bag on this piece */
-  | { t: 'enchant'; u: number }
+  | { t: 'enchant'; u: number; /** with a sacred scroll: any piece, never fails */ sacred?: boolean }
   | { t: 'buy'; npc: number; item: string; qty: number }
   | { t: 'sell'; npc: number; u: number; qty: number }
   /** have a merchant make an item from its recipe (ItemDef.craft) */
@@ -217,7 +217,7 @@ export type S2C =
   /** an NPC says something out loud (speech bubble + local chat) */
   | { t: 'say'; id: number; name: string; text: string }
   /** telegraphed area attack: a red circle filling up for ms before it hits */
-  | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number }
+  | { t: 'tele'; id: number; x: number; z: number; r: number; ms: number; /** one of several at once (a world raid's barrage and pulse) */ k?: number }
   /** latency probe: echo s back as a pong; rtt is the server's current estimate */
   | { t: 'ping'; s: number; rtt: number }
   /** spent nodes on entering a world: [id, ms until it is back] */

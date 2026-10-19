@@ -3,8 +3,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MOBS } from '../../../shared/src/data/mobs';
-import { animate, heldWeapon, mobModel, type AnimState, type Rig, type WeaponKind } from './models';
-import { loadQ, qPlayer, qReady, qWeapon, type Helm } from './quaternius';
+import type { Race } from '../../../shared/src/data/classes';
+import { animate, heldWeapon, mobModel, playerModel, type AnimState, type Rig, type WeaponKind } from './models';
+import { loadQ, qPlayer, qReady, qWeapon, tintGear, type Helm } from './quaternius';
+import { addFlames } from './flame-fx';
 import { kitTexture, loadV } from './village';
 import { contactPhases, crossed } from './footfalls';
 
@@ -91,13 +93,44 @@ export const MOB_LOOK: Record<string, MobLook> = {
   hrimgar: { skin: 0x7a9ac0, hair: 0xe8f0f8, hs: 1, beard: true, ranger: true, top: 0x7aa0c8, bottom: 0x4a5a78, helm: 'HelmC', pauldron: true, weapon: 'samurai_longsword', brawn: 1.3, bulk: 1.3 },
 };
 
+/**
+ * Mobs clad in a region set's armour, as a player wearing it (models.ts playerModel), the mob's scale times the race's
+ * size: the Encrucijada Sangrienta's world raid, a giant in the Infernal plate (in red) with its cape, and its heralds.
+ */
+interface KnightLook {
+  race: Race; set: string; weapon: string; shield?: boolean; cape?: boolean;
+  /** the set repainted in this colour (tintGear) */
+  tint?: number;
+  /** on fire (flame-fx.ts): flames on its shoulders, fists and helm, a ring of fire at its feet, its blade glowing red
+   * (as a +16) and its armour smouldering */
+  fire?: boolean;
+}
+export const MOB_KNIGHT: Record<string, KnightLook> = {
+  war_avatar: { race: 'orc', set: 'infernal', weapon: 'infernal_blade', cape: true, tint: 0xb01810, fire: true },
+  war_herald: { race: 'orc', set: 'ashforged', weapon: 'ashforged_blade', shield: true },
+};
+
+function knightMob(tplId: string): Rig | null {
+  const k = MOB_KNIGHT[tplId], t = MOBS[tplId];
+  if (!k || !t || !qReady()) return null;
+  const s = k.set;
+  const rig = playerModel(k.race, 'fighter', k.weapon, `${s}_plate`, { g: 'm', hs: 0, hc: 0 },
+    [`${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, k.shield ? `${s}_shield` : null, k.cape ? `${s}_cape` : null], k.fire ? 16 : 0);
+  if (k.tint !== undefined) tintGear(rig.root, k.tint, k.fire ? 0.35 : 0);
+  if (k.fire) addFlames(rig);
+  rig.root.scale.multiplyScalar(t.scale);
+  rig.height *= t.scale;
+  rig.radius *= t.scale;
+  return rig;
+}
+
 /** ?proc: every mob as its old procedural rig (to compare looks and cost) */
 const PROC_ONLY = typeof location !== 'undefined' && new URLSearchParams(location.search).has('proc');
 
 /** This mob's model, or null when it has none or its files haven't loaded (the procedural rig then). */
 export function realMob(tplId: string): Rig | null {
   if (PROC_ONLY) return null;
-  return glbMob(tplId) ?? qMob(tplId);
+  return glbMob(tplId) ?? knightMob(tplId) ?? qMob(tplId);
 }
 
 function qMob(tplId: string): Rig | null {
@@ -213,6 +246,10 @@ export const MOB_GLB: Record<string, GlbLook> = {
   yeti_cub: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfaf6f0 },
   yeti_matriarch: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfff4e8 },
   primal_yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.4, dye: 0xe0f0ff, glow: 0x081828 },
+  // the Encrucijada Sangrienta's passive creatures: battle raptors, the fallen legion's bloodied bones, bronze relic golems
+  battlefield_carrion: { model: 'raptor', height: 1.25, dye: 0xc8957a, clips: { run: 'Run' } },
+  fallen_legionnaire: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', tint: { skeleton: 0xd8a89c }, glow: 0x2a0600 },
+  relic_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xe0c08a, glow: 0x2a1600, kind: 'humanoid' },
   white_drake: { model: 'drake', height: 1.5, pale: 2, dye: 0xe8f4ff },
   frost_wyvern: { model: 'wyvern', height: 1.8, tint: { Main: 0x9ac0e0, Belly: 0xf0f4f8, Wings: 0x6a90b8 }, clips: { idle: 'Fly', run: 'Fly' } },
   frost_knight: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', pale: 1.7, tint: { skeleton: 0xa8d4ff, Glow: 0x60c0ff } },
@@ -490,20 +527,32 @@ export async function mountMobPreview(host: HTMLElement): Promise<() => void> {
   const p = new URLSearchParams(location.search);
   const only = p.get('only')?.split(',');
   const ids = Object.values(MOBS)
-    .filter((t) => !only || only.includes(t.id) || only.includes(t.shape) || (only.includes('real') && (MOB_LOOK[t.id] || MOB_GLB[t.id])))
+    .filter((t) => !only || only.includes(t.id) || only.includes(t.shape) || (only.includes('real') && (MOB_LOOK[t.id] || MOB_GLB[t.id] || MOB_KNIGHT[t.id])))
     .sort((a, b) => a.shape.localeCompare(b.shape) || a.level - b.level)
     .map((t) => t.id);
   const cols = Math.ceil(Math.sqrt(ids.length * 1.8)), rows = Math.ceil(ids.length / cols), gap = 3.2;
-  const rigs = ids.map((id, i) => {
+  const place = (id: string, i: number) => {
     const rig = mobModel(id);
     rig.root.position.set((i % cols - (cols - 1) / 2) * gap, 0, (Math.floor(i / cols) - (rows - 1) / 2) * gap);
     scene.add(rig.root);
+    return rig;
+  };
+  const rigs = ids.map((id, i) => {
+    const rig = place(id, i);
     const tag = document.createElement('div');
-    tag.textContent = `${MOBS[id].name}${MOB_LOOK[id] || MOB_GLB[id] ? '' : ' ·'}`;
+    tag.textContent = `${MOBS[id].name}${MOB_LOOK[id] || MOB_GLB[id] || MOB_KNIGHT[id] ? '' : ' ·'}`;
     tag.style.cssText = 'position:absolute;transform:translate(-50%,-100%);white-space:nowrap;text-shadow:0 1px 2px #000';
     labels.append(tag);
     return { rig, tag };
   });
+  // the armour of the mobs clad in a set comes in with its file: dress them again then
+  const regear = () => rigs.forEach((r, i) => {
+    if (!MOB_KNIGHT[ids[i]]) return;
+    scene.remove(r.rig.root);
+    r.rig.dispose?.();
+    r.rig = place(ids[i], i);
+  });
+  addEventListener('gear-loaded', regear);
 
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 400);
   const zoom = Number(p.get('zoom')) || 1;
@@ -553,6 +602,7 @@ export async function mountMobPreview(host: HTMLElement): Promise<() => void> {
   renderer.setAnimationLoop((now) => frame(now));
   return () => {
     removeEventListener('resize', resize);
+    removeEventListener('gear-loaded', regear);
     renderer.setAnimationLoop(null);
     renderer.dispose();
     host.innerHTML = '';

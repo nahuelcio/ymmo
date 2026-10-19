@@ -82,7 +82,7 @@ impl World {
             "equip" => if let Some(u) = id(m, "u") { self.equip(pid, u) },
             "unequip" => self.unequip(pid, &s(m, "slot")),
             "use" => if let Some(u) = id(m, "u") { self.use_item(pid, u, now) },
-            "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u) },
+            "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u, m.get("sacred").and_then(|v| v.as_bool()).unwrap_or(false)) },
             "destroy" => if let Some(u) = id(m, "u") { self.destroy_item(pid, u) },
             "buy" => if let Some(n) = id(m, "npc") { self.buy(pid, n, &s(m, "item"), num(m, "qty")) },
             "craft" => if let Some(n) = id(m, "npc") { self.craft(pid, n, &s(m, "item")) },
