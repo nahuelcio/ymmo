@@ -493,8 +493,10 @@ interface QCape {
   pos: THREE.Vector3[]; prev: THREE.Vector3[];
   /** the points in the body's own space, worked out each frame for their bones */
   local: THREE.Vector3[];
-  /** pairs of points and how far apart they are in the bind pose (model metres) */
-  links: [number, number, number][];
+  /** pairs of points, how far apart they are in the bind pose (model metres) and how stiff (1; the diagonals of the
+   * cells by a pair of wings' claws give: the claws turn with the shoulders, and the cloth there shears rather than
+   * swinging round whole) */
+  links: [number, number, number, number][];
   /** what the cloth may not pass through: capsules between two bones (one for a sphere), their radius in model metres */
   hit: [THREE.Object3D, THREE.Object3D, number][];
   /** for each point, the vertices of the armour or robe worn under it that stand out furthest behind round it: the
@@ -504,10 +506,22 @@ interface QCape {
   /** spine_03's turn in the male bind pose, taken off its turn now: how the back has turned since (its outward way) */
   spineRest: THREE.Quaternion;
   last: THREE.Vector3 | null; started: boolean;
+  /** hung from a pair of wings (their claws hold its top row) */
+  hooked: boolean;
+  /** the shoulders' twist and sideways lean against the body (rad), as the top row follows them: smoothed */
+  twist: { yaw: number; roll: number } | null;
+  /** how high spine_03 was over the body's root last frame */
+  lift: number | null;
+  /** the pinned row where it was last frame and where it is now: within a frame it goes from one to the other */
+  pinned: THREE.Vector3[]; pinTo: THREE.Vector3[];
 }
 const _m = new THREE.Matrix4(), _b = new THREE.Matrix4(), _v = new THREE.Vector3(), _w = new THREE.Vector3(), _a = new THREE.Vector3(),
   _c = new THREE.Vector3(), _d = new THREE.Vector3(), _y = new THREE.Vector3(), _p = new THREE.Vector3(), _air = new THREE.Vector3(), _air2 = new THREE.Vector3(),
-  _up = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+  _up = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qt = new THREE.Quaternion(), _rv = new THREE.Vector3(),
+  _piv = new THREE.Vector3(), _e = new THREE.Euler(), _sp = new THREE.Vector3(), _mv = new THREE.Vector3(), _cy = new THREE.Vector3();
+const wrapAngle = (a: number) => THREE.MathUtils.euclideanModulo(a + Math.PI, 2 * Math.PI) - Math.PI;
+/** a kit piece's vertices at rest in the male bind pose (qPlayer's cape anchors): the same on every rig of its sex */
+const kitRest = new WeakMap<THREE.BufferGeometry, Float32Array>();
 /** the cloth's turn at a point of the grid, from its neighbours: across the cape, and up it */
 function clothFrame(L: THREE.Vector3[], rows: number, cols: number, i: number, out: THREE.Matrix4) {
   const r = Math.floor(i / cols), c = i % cols;
@@ -532,14 +546,16 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
   const n = c.pos.length, cols = c.cols;
   const rootPos = c.root.getWorldPosition(_w);
   // first frame, or a jump (a teleport, a world change): every point straight to where it hangs
-  if (!c.started || (c.last && c.last.distanceTo(rootPos) > 3)) {
+  const jump = !c.started || (c.last !== null && c.last.distanceTo(rootPos) > 3);
+  if (jump) {
     for (let i = 0; i < n; i++) {
       c.pos[i].copy(c.home[i]).applyMatrix4(spineW);
       c.prev[i].copy(c.pos[i]);
     }
     c.started = true;
+    c.last = c.lift = null;
   }
-  const speed = c.last ? c.last.distanceTo(rootPos) / dt : 0;
+  const moved = _mv.subVectors(rootPos, c.last ?? rootPos), vel = _rv.copy(moved).divideScalar(dt), speed = vel.length();
   c.last = (c.last ?? new THREE.Vector3()).copy(rootPos);
   // the air: still, but for a breeze standing; running in place (the gallery) it blows back as running would
   c.root.getWorldQuaternion(_q);
@@ -549,6 +565,7 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
   if (s.moving && speed < 1.5 && s.deadAge < 0) air.addScaledVector(fwd, -3.6 * scale);
   if (s.moving || speed > 1.5) air.addScaledVector(side, 0.9 * scale * Math.sin(s.t * 7.1)).y += 0.7 * scale * Math.sin(s.t * 5.3); // flutter
   air.addScaledVector(fwd, -0.5 * scale).addScaledVector(side, 0.45 * scale * Math.sin(s.t * 0.9) + 0.25 * scale * Math.sin(s.t * 2.3));
+  air.sub(vel); // as the cloth feels it, carried along with the body (below)
   const ground = rootPos.y + 0.02 * scale;
   // the back's outward way now, and where the armour under each point is
   const out = _air2.set(0, 0, -1).applyQuaternion(c.spine.getWorldQuaternion(_q2).multiply(c.spineRest)).normalize();
@@ -556,13 +573,47 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
   const clear = 0.018 * scale; // the points lie on the cloth's middle: its folds dip a centimetre nearer, and it has a thickness
   // the back's upward way: however the body whips round (a sword swing), the cloth never rises over the shoulders
   const up = _up.set(0, 1, 0).applyQuaternion(_q2).normalize();
+  // The top row leans forward with the back at once, but follows its twist and sideways lean smoothed: the jog swings
+  // the shoulders some 40 and 25 degrees each stride, and cloth hung on a line turning that much swings round with it,
+  // hem and all, from side to side. Standing, it settles back flat on the shoulder blades. Not on wings: it hangs on them
+  let turn: THREE.Quaternion | null = null;
+  const pivot = c.spine.getWorldPosition(_piv);
+  if (!c.hooked) {
+    _e.setFromQuaternion(_qt.copy(_q).invert().multiply(_q2), 'YXZ'); // the back's turn against the body's
+    const k = c.twist ? 1 - Math.exp(-dt / 0.6) : 1, t = (c.twist ??= { yaw: _e.y, roll: _e.z });
+    t.yaw += wrapAngle(_e.y - t.yaw) * k;
+    t.roll += wrapAngle(_e.z - t.roll) * k;
+    turn = _qt.setFromEuler(_e.set(_e.x, t.yaw, t.roll, 'YXZ')).premultiply(_q).multiply(_q2.invert()); // from where it is to there
+    _q2.invert();
+  }
+  // The cloth goes along with the body - the run, a slope and most of the jog's bobbing (a quarter of a metre each step)
+  // - feeling only the air that makes, and the body's turns and swings: left behind each frame, it caught up in jerks
+  // (a flicker running), and each step flung it up off the back and dropped it back on
+  const lift = c.spine.getWorldPosition(_sp).y - rootPos.y;
+  const carry = _cy.copy(moved);
+  if (c.lift !== null) carry.y += (lift - c.lift) * 0.8;
+  c.lift = lift;
+  for (let i = cols; i < n; i++) {
+    c.pos[i].add(carry);
+    c.prev[i].add(carry);
+  }
+  // where the pinned row is now, from the bones it follows, and from where it goes there over the frame's steps
+  for (let i = 0; i < cols; i++) {
+    const to = c.pinTo[i].set(0, 0, 0);
+    for (const [b, at, w] of c.pins[i]) to.addScaledVector(_v.copy(at).applyMatrix4(b.matrixWorld), w);
+    if (turn) to.sub(pivot).applyQuaternion(turn).add(pivot);
+    if (jump) c.pinned[i].copy(to);
+    else c.pinned[i].add(moved);
+  }
   const vmax = 9 * scale; // nor moves faster than this (m/s): a pose snapping (a swing begun again) must not fling it
   const steps = Math.min(6, Math.max(1, Math.ceil(dt * 90))), h = dt / steps;
   const g = 9.8 * scale, drag = 2.4;
+  // how much of its sway sideways against the body the cloth loses each step: it trails behind (hung on wings, which
+  // turn with the shoulders, more so)
+  const sway = 1 - Math.exp(-(c.hooked ? 8 : 4) * h);
   for (let k = 0; k < steps; k++) {
-    for (let i = 0; i < cols; i++) { // the pinned row, where the bones it follows put it
-      c.pos[i].set(0, 0, 0);
-      for (const [b, at, w] of c.pins[i]) c.pos[i].addScaledVector(_v.copy(at).applyMatrix4(b.matrixWorld), w);
+    for (let i = 0; i < cols; i++) { // the pinned row, on its way to where the bones it follows put it
+      c.pos[i].lerpVectors(c.pinned[i], c.pinTo[i], (k + 1) / steps);
       c.prev[i].copy(c.pos[i]);
     }
     for (let i = cols; i < n; i++) {
@@ -570,19 +621,22 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
       let vx = (p.x - q.x) / h, vy = (p.y - q.y) / h, vz = (p.z - q.z) / h;
       const sp = Math.hypot(vx, vy, vz);
       if (sp > vmax) [vx, vy, vz] = [(vx * vmax) / sp, (vy * vmax) / sp, (vz * vmax) / sp];
+      const lat = (vx * side.x + vz * side.z) * sway;
+      vx -= side.x * lat;
+      vz -= side.z * lat;
       const ax = drag * (air.x - vx), ay = drag * (air.y - vy) - g, az = drag * (air.z - vz);
       q.copy(p);
       p.set(p.x + vx * h * 0.995 + ax * h * h, p.y + vy * h * 0.995 + ay * h * h, p.z + vz * h * 0.995 + az * h * h);
     }
     for (let it = 0; it < 5; it++) {
-      for (const [i, j, rest] of c.links) {
+      for (const [i, j, rest, stiff] of c.links) {
         const pi = c.pos[i], pj = c.pos[j];
         _a.subVectors(pj, pi);
         const d = _a.length();
         if (d < 1e-9) continue;
         const wi = i < cols ? 0 : 1, wj = j < cols ? 0 : 1;
         if (!wi && !wj) continue;
-        const f = (d - rest * scale) / d / (wi + wj);
+        const f = ((d - rest * scale) / d / (wi + wj)) * stiff;
         if (wi) pi.addScaledVector(_a, f * wi);
         if (wj) pj.addScaledVector(_a, -f * wj);
       }
@@ -616,6 +670,7 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
       }
     }
   }
+  for (let i = 0; i < cols; i++) c.pinned[i].copy(c.pinTo[i]);
   // each point's bone: its place in the body's own space, and the cloth's turn there against the bind pose
   _m.copy(bodyW).invert();
   const L = c.local;
@@ -759,9 +814,11 @@ export function qPlayer(o: QOpts): Rig {
     });
     // what holds the cloth together: each point to the next across and down, the diagonals (no shearing), and two down
     // (no folding back on itself)
-    const links: [number, number, number][] = [];
+    const links: [number, number, number, number][] = [];
     const link = (r0: number, c0: number, r1: number, c1: number) => {
-      if (r1 < rows && c1 >= 0 && c1 < cols) links.push([r0 * cols + c0, r1 * cols + c1, hang[r0 * cols + c0].distanceTo(hang[r1 * cols + c1])]);
+      if (r1 < rows && c1 >= 0 && c1 < cols) {
+        links.push([r0 * cols + c0, r1 * cols + c1, hang[r0 * cols + c0].distanceTo(hang[r1 * cols + c1]), hooks && r0 < 2 && r1 !== r0 && c1 !== c0 ? 0.02 : 1]);
+      }
     };
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
       link(r, c, r, c + 1);
@@ -805,15 +862,31 @@ export function qPlayer(o: QOpts): Rig {
     // cloth over the head. None for a row hooked on wings: it stays on their claws; under them, only what is about as high
     // as each point (the wings rise from under the cloth to the claws: what is higher is behind the row above)
     const dy = (hang[0].y - hang[(rows - 1) * cols].y) / (rows - 1) / (hooks ? 2 : 1);
+    // where each vertex of what is worn is at rest, in the male bind pose the cape was fitted in: the armour was modelled
+    // there; the kit's vertices are stored packed (another space altogether), so they are skinned to this rig's rest pose
+    // and carried over by spine_03, as the cape is
+    body.updateMatrixWorld(true); // the rig at rest, at the origin
+    const onMale = armature.m!.getObjectByName('spine_03')!.matrixWorld.clone().multiply(byName.spine_03.matrixWorld.clone().invert());
+    const rest = new Map(worn.map((m) => {
+      const raw = m.bindMatrix.equals(_m.identity());
+      let at = raw ? undefined : kitRest.get(m.geometry);
+      if (!at) {
+        const p = m.geometry.getAttribute('position');
+        at = new Float32Array(p.count * 3);
+        for (let k = 0; k < p.count; k++) (raw ? _v.fromBufferAttribute(p, k) : m.getVertexPosition(k, _v).applyMatrix4(onMale)).toArray(at, k * 3);
+        if (!raw) kitRest.set(m.geometry, at);
+      }
+      return [m, at] as const;
+    }));
     const anchors = hang.map((b, i) => {
       const r = Math.floor(i / cols), dx = Math.abs(hang[r * cols + 1].x - hang[r * cols].x), wide = Math.abs(hang[r * cols].x) + 0.02;
       const best: [THREE.SkinnedMesh, number, number][] = [];
       if (hooks && r === 0) return [];
       for (const m of worn) {
-        const p = m.geometry.getAttribute('position'), si = m.geometry.getAttribute('skinIndex'), sw = m.geometry.getAttribute('skinWeight');
+        const at = rest.get(m)!, si = m.geometry.getAttribute('skinIndex'), sw = m.geometry.getAttribute('skinWeight');
         const names = m.skeleton.bones.map((bn) => bn.name);
-        for (let k = 0; k < p.count; k++) {
-          const v = _v.fromBufferAttribute(p, k); // the bind pose, where the cape was fitted (the kit's bindMatrix is its root bone's, not this)
+        for (let k = 0; k < at.length / 3; k++) {
+          const v = _v.fromArray(at, k * 3);
           if (v.z > -0.08 || Math.abs(v.x) > wide || Math.abs(v.x - b.x) > dx || Math.abs(v.y - b.y) > dy) continue;
           let arm = 0;
           for (let j = 0; j < 4; j++) if (/arm|hand|thumb|index|middle|ring|pinky|Head/.test(names[si.getComponent(k, j)] ?? '')) arm += sw.getComponent(k, j);
@@ -828,7 +901,8 @@ export function qPlayer(o: QOpts): Rig {
     const frame0 = bind.map((_, i) => clothFrame(bind, rows, cols, i, new THREE.Matrix4()).transpose());
     cape = { root, body, spine: byName.spine_03, rows, cols, bones: pts, bind, frame0, home, pins, pos: bind.map(() => new THREE.Vector3()),
       prev: bind.map(() => new THREE.Vector3()), local: bind.map(() => new THREE.Vector3()), links, hit, anchors,
-      spineRest: armature.m!.getObjectByName('spine_03')!.getWorldQuaternion(new THREE.Quaternion()).invert(), last: null, started: false };
+      spineRest: armature.m!.getObjectByName('spine_03')!.getWorldQuaternion(new THREE.Quaternion()).invert(), last: null, started: false,
+      hooked: !!hooks, twist: null, lift: null, pinned: pins.map(() => new THREE.Vector3()), pinTo: pins.map(() => new THREE.Vector3()) };
   }
 
   if (o.tusks) {
@@ -1083,12 +1157,28 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   };
   for (const name in TIERS) btn(name, () => { tier = name; build(); });
   addEventListener('gear-loaded', build);
-  for (const name in STATES) btn(name, () => { state = name; since = performance.now(); });
+  // ?slow=0.25: time at a quarter of its pace, to see a cape's motion frame by frame
+  const slow = Number(p.get('slow')) || 1, clock = () => performance.now() * slow;
+  for (const name in STATES) btn(name, () => { state = name; since = clock(); });
   build();
 
+  // ?walk=6: running, the rigs go forward at that speed (m/s) for real, the camera with them, as in the game (a cape
+  // trails in still air, not in the wind it gets running in place)
+  const walk = Number(p.get('walk')) || 0, walked = new THREE.Vector3();
+  since = clock();
+  let last = clock();
   renderer.setAnimationLoop(() => {
-    const now = performance.now(), age = now - since;
+    const now = clock(), age = now - since, dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (walk && state === 'Correr' && !spin) {
+      const d = new THREE.Vector3(Math.sin(ry), 0, Math.cos(ry)).multiplyScalar(walk * dt);
+      walked.add(d);
+      cam.position.add(d);
+    }
     rigs.forEach((rig, i) => {
+      const at = (rig.root.userData.walked ??= new THREE.Vector3()) as THREE.Vector3; // a rig built since starts where the rest are
+      rig.root.position.add(new THREE.Vector3().subVectors(walked, at));
+      at.copy(walked);
       rig.root.rotation.y = spin ? now / 2500 : ry;
       animate(rig, {
         moving: false, casting: false, t: now / 1000 + i,
