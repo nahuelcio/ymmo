@@ -103,7 +103,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
             cdr_sum += cd;
         }
     }
-    let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba, mut bc) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     for b in buffs {
         bp *= b.p_atk.unwrap_or(1.0);
         bpd *= b.p_def.unwrap_or(1.0);
@@ -111,6 +111,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         bmd *= b.m_def.unwrap_or(1.0);
         bs *= b.speed.unwrap_or(1.0);
         ba *= b.atk_spd.unwrap_or(1.0);
+        bc *= b.cast_spd.unwrap_or(1.0);
     }
     let lvl = (level - 1) as f64;
     let max_hp = jround((cb("baseHp", c.base_hp) + cb("hpLvl", c.hp_lvl) * lvl) * r.hp + hp_bonus);
@@ -127,7 +128,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         evasion: 30.0 + level as f64 + r.evasion,
         crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit,
         atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk))),
-        cast_mul: 1.0 / (r.cast_spd * (1.0 + mw_cast)),
+        cast_mul: 1.0 / (r.cast_spd * bc * (1.0 + mw_cast)),
         speed: BASE_SPEED * r.speed * bs * (1.0 + run.min(0.1)),
         hp_regen: max_hp * 0.008 + 0.5,
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
@@ -251,6 +252,19 @@ mod tests {
         for (id, sp) in [("wool_cape", 0.015), ("hunter_cape", 0.02), ("knight_cape", 0.025)] {
             assert!(near(stats(&[(it(id), 0, false)]).speed, bare.speed * (1.0 + sp)), "{id}");
         }
+    }
+
+    #[test]
+    fn cleric_buffs_last_and_divine_grace_quickens_casting() {
+        let data = d();
+        let buff = |id: &str| data.skill(id).and_then(|s| s.buff.clone()).unwrap();
+        for id in ["holy_shield", "might", "haste", "sanctuary", "blessing_of_ages"] {
+            assert_eq!(buff(id).dur, 1_200_000.0, "{id}");
+        }
+        let grace = buff("divine_grace");
+        assert_eq!(grace.dur, 300_000.0);
+        let cast = |buffs: &[&BuffMods]| compute_stats("human", "mystic", 76, &[], buffs, "m").cast_mul;
+        assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
     }
 
     #[test]
