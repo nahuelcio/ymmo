@@ -8,6 +8,8 @@ export interface ZoneDef {
   levels: string;
   tint: [number, number, number];
   spawns: { mob: string; count: number }[];
+  /** full PvP: everyone inside is flagged (and their PvP mode turned on); leaving, the flag runs out as usual */
+  pvp?: boolean;
 }
 
 export const ZONES: ZoneDef[] = [
@@ -47,7 +49,14 @@ export const ZONES: ZoneDef[] = [
     spawns: [{ mob: 'lava_salamander', count: 14 }, { mob: 'hellhound', count: 10 }, { mob: 'lava_golem', count: 7 }, { mob: 'pyromancer', count: 8 }, { mob: 'magma_drake', count: 5 }, { mob: 'flame_lord', count: 1 }] },
   { id: 'abyss', name: 'Abismo', x: 480, z: -1460, r: 160, levels: '74-78', tint: [0.15, 0.11, 0.19],
     spawns: [{ mob: 'abyss_knight', count: 12 }, { mob: 'lich', count: 10 }, { mob: 'abyss_weaver', count: 8 }, { mob: 'abyss_drake', count: 6 }, { mob: 'abyss_demon', count: 6 }] },
+  // full PvP, on the north crossroads: passive creatures that drop every set's materials and enchants, and the world
+  // raid in the middle
+  { id: 'warfront', name: 'Encrucijada Sangrienta', x: 100, z: -750, r: 140, levels: '76+', tint: [0.42, 0.2, 0.18], pvp: true,
+    spawns: [{ mob: 'battlefield_carrion', count: 12 }, { mob: 'fallen_legionnaire', count: 12 }, { mob: 'relic_golem', count: 10 }, { mob: 'war_avatar', count: 1 }] },
 ];
+
+/** Inside a full-PvP zone. */
+export const inPvpZone = (x: number, z: number) => ZONES.some((zn) => zn.pvp && Math.hypot(x - zn.x, z - zn.z) < zn.r);
 
 export function zoneAt(x: number, z: number): string {
   for (const t of TOWNS) if (Math.hypot(x - t.x, z - t.z) < t.r + 10) return t.name;
@@ -132,6 +141,8 @@ export const TELEPORTS = [
   { id: 'ember', name: 'Brasaoscura', x: EMBER.x - 6, z: EMBER.z, cost: 80000 },
   { id: 'volcanic', name: 'Tierras Volcánicas (Nv 70-74)', ...drop('volcanic'), cost: 85000 },
   { id: 'abyss', name: 'Abismo (Nv 74-78)', ...drop('abyss'), cost: 90000 },
+  // just outside its south edge, on the road: nobody lands flagged
+  { id: 'warfront', name: 'Encrucijada Sangrienta (PvP, Nv 76+)', x: 30, z: -575, cost: 90000 },
 ];
 
 /** Alba's residents stand at spots authored around the village centre. */

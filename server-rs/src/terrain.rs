@@ -15,6 +15,11 @@ pub fn zone_at(x: f64, z: f64) -> String {
     data.wild.name.clone()
 }
 
+/** Inside a full-PvP zone (shared/src/data/world.ts inPvpZone). */
+pub fn in_pvp_zone(x: f64, z: f64) -> bool {
+    d().zones.iter().any(|zn| zn.pvp == Some(true) && (x - zn.x).hypot(z - zn.z) < zn.r)
+}
+
 /** Small deterministic PRNG (same as shared/src/terrain.ts mulberry32). */
 pub struct Mulberry32(u32);
 impl Mulberry32 {

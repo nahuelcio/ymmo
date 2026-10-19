@@ -1,7 +1,7 @@
-//! Mob AI: aggro, leash, chase, specials, threat, raid boss phases (port of server/src/systems/ai.ts).
-use crate::data::d;
+//! Mob AI: aggro, leash, chase, specials, threat, raid boss phases, world raid mechanics (port of server/src/systems/ai.ts).
+use crate::data::{d, Barrage, Pulse};
 use crate::ent::*;
-use crate::formulas::{phys_damage, rnd};
+use crate::formulas::{jround, phys_damage, rnd};
 use crate::terrain::in_town;
 use crate::world::World;
 use serde_json::json;
@@ -52,12 +52,8 @@ impl World {
                 if next.is_none() {
                     m.hate.clear();
                     m.threat.clear();
-                    m.phase = 0;
-                    m.haste = 1.0;
-                    m.special = m.tpl.special.clone();
+                    m.reset_fight();
                     m.returning = true;
-                    m.special_at = 0.0;
-                    m.winding = None;
                 }
             }
         }
@@ -75,6 +71,7 @@ impl World {
         if self.ents[&mid].mob().unwrap().target.is_some() {
             self.retarget(mid, now);
             if self.ents[&mid].mob().unwrap().tpl.phases.is_some() { self.check_phases(mid, now); }
+            self.world_raid(mid, now);
             let t = self.ents[&mid].mob().unwrap().target.unwrap();
             let (tx, tz, tr) = { let c = &self.ents[&t].c; (c.x, c.z, c.radius) };
             let e = self.ents.get_mut(&mid).unwrap();
@@ -96,7 +93,11 @@ impl World {
                     return;
                 }
             }
-            let (range, speed, next_attack, interval) = { let m = self.ents[&mid].mob().unwrap(); (m.tpl.range + tr, m.tpl.speed * 1.25, m.next_attack, m.tpl.atk_interval / m.haste) };
+            let (range, speed, next_attack, interval) = {
+                let m = self.ents[&mid].mob().unwrap();
+                let rage = if m.enraged { m.tpl.enrage.as_ref().map_or(1.0, |e| e.haste) } else { 1.0 };
+                (m.tpl.range + tr, m.tpl.speed * 1.25, m.next_attack, m.tpl.atk_interval / (m.haste * rage))
+            };
             if (mx - tx).hypot(mz - tz) > range {
                 self.step_toward(mid, tx, tz, speed, dt, range - 0.3);
             } else {
@@ -190,15 +191,14 @@ impl World {
             m.returning = false;
             m.hate.clear();
             m.threat.clear();
-            m.phase = 0;
-            m.haste = 1.0;
-            m.special = m.tpl.special.clone();
+            m.reset_fight();
             m.dest = None;
             (m.home_x, m.home_z, m.tpl.boss.unwrap_or(false), m.tpl.name.clone(), m.tpl.name_en.clone())
         };
         self.set_pos(mid, hx, hz);
         if boss && self.raid.is_none() {
-            self.announce(|l| if l.en() { format!("The raid boss {name_en} has awakened in the Cursed Wastes!") } else { format!("¡El jefe {name} despertó en los Páramos Malditos!") });
+            let zone = crate::terrain::zone_at(hx, hz);
+            self.announce(|l| if l.en() { format!("The raid boss {name_en} has awakened in {}!", crate::i18n::zone_name(&zone, l)) } else { format!("¡El jefe {name} despertó en {zone}!") });
         }
     }
 
@@ -241,6 +241,14 @@ impl World {
                     m.special = Some(sp.clone());
                     m.special_at = now + 2500.0;
                 }
+                if let Some(b) = &ph.barrage {
+                    m.barrage = Some(b.clone());
+                    m.barrage_at = now + 3000.0;
+                }
+                if let Some(p) = &ph.pulse {
+                    m.pulse = Some(p.clone());
+                    m.pulse_at = m.pulse_at.min(now + p.every);
+                }
             }
             for pid in self.near_players(mx, mz, 80.0) {
                 let en = self.pl(pid).unwrap().lang.en();
@@ -269,6 +277,89 @@ impl World {
                 }
             }
             let _ = d();
+        }
+    }
+
+    /** World raid mechanics, while it fights: the barrage, the pulse and, the fight dragging on, the enrage. */
+    fn world_raid(&mut self, mid: u32, now: f64) {
+        let e = self.ents.get_mut(&mid).unwrap();
+        let (mx, mz) = (e.c.x, e.c.z);
+        let m = e.mob_mut().unwrap();
+        if m.tpl.barrage.is_none() && m.tpl.pulse.is_none() && m.tpl.enrage.is_none() { return; }
+        if m.engaged_at == 0.0 {
+            m.engaged_at = now;
+            m.barrage_at = now + m.barrage.as_ref().map_or(0.0, |b| b.every * 0.5);
+            m.pulse_at = now + m.pulse.as_ref().map_or(0.0, |p| p.every * 0.6);
+        }
+        let (name, name_en) = (m.tpl.name.clone(), m.tpl.name_en.clone());
+        let mut enraged = false;
+        if let Some(en) = &m.tpl.enrage {
+            if !m.enraged && now - m.engaged_at >= en.after {
+                m.enraged = true;
+                m.stats.p_atk = jround(m.stats.p_atk * en.atk);
+                enraged = true;
+            }
+        }
+        let barrage = m.barrage.clone().filter(|_| now >= m.barrage_at);
+        if let Some(b) = &barrage { m.barrage_at = now + b.every; }
+        let pulse = m.pulse.clone().filter(|_| now >= m.pulse_at);
+        if let Some(p) = &pulse { m.pulse_at = now + p.every; }
+        if enraged {
+            self.yell_near(mx, mz, &format!("{name} entra en furia: ¡golpea más rápido y más fuerte!"), &format!("{name_en} is enraged: it strikes faster and harder!"));
+        }
+        if let Some(b) = barrage { self.barrage(mid, &b, now); }
+        if let Some(p) = pulse { self.pulse(mid, &p, now, &name, &name_en); }
+    }
+
+    /** A boss's line to everyone fighting round it, in their language. */
+    fn yell_near(&self, x: f64, z: f64, es: &str, en: &str) {
+        for pid in self.near_players(x, z, 80.0) {
+            let text = if self.pl(pid).unwrap().lang.en() { en } else { es };
+            self.send(pid, json!({ "t": "chat", "ch": "announce", "from": "", "text": text }));
+        }
+    }
+
+    /** Circles under up to `count` players round the boss at once: whoever is in one when it lands is hit (dodgeable). */
+    fn barrage(&mut self, mid: u32, b: &Barrage, now: f64) {
+        let (mx, mz, p_atk) = { let e = &self.ents[&mid]; (e.c.x, e.c.z, e.mob().unwrap().stats.p_atk) };
+        let mut picks: Vec<(f64, u32)> = self.near_players(mx, mz, b.range).into_iter()
+            .filter(|id| { let c = &self.ents[id].c; !c.dead && !in_town(c.x, c.z) })
+            .map(|id| (rnd(), id)).collect();
+        picks.sort_by(|a, c| a.0.partial_cmp(&c.0).unwrap_or(std::cmp::Ordering::Equal));
+        for (k, (_, pid)) in picks.into_iter().take(b.count as usize).enumerate() {
+            let (cx, cz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+            self.send_near(mx, mz, json!({ "t": "tele", "id": mid, "k": k + 1, "x": cx, "z": cz, "r": b.r, "ms": b.windup }));
+            for vid in self.near_players(cx, cz, b.r + 12.0) {
+                let at = now + b.windup + self.pl(vid).unwrap().one_way() + 40.0;
+                let (r, mult) = (b.r, b.mult);
+                self.later(at, move |w, t| {
+                    if w.ents.get(&mid).map_or(true, |e| e.c.dead) { return; }
+                    let Some(pe) = w.ents.get(&vid) else { return };
+                    let Some(p) = pe.player() else { return };
+                    if pe.c.dead || p.dodge_until > t || (pe.c.x - cx).hypot(pe.c.z - cz) > r + 0.5 { return; }
+                    let (dmg, blk) = w.blocked(vid, phys_damage(p_atk, p.stats.p_def, mult, false));
+                    w.apply_damage(mid, vid, dmg, t, false, false, blk);
+                });
+            }
+        }
+    }
+
+    /** A wide circle round the boss: when it lands, everyone still in it loses `pct` of their max HP. */
+    fn pulse(&mut self, mid: u32, p: &Pulse, now: f64, name: &str, name_en: &str) {
+        let (mx, mz) = { let c = &self.ents[&mid].c; (c.x, c.z) };
+        self.send_near(mx, mz, json!({ "t": "tele", "id": mid, "k": 100, "x": mx, "z": mz, "r": p.r, "ms": p.windup }));
+        self.yell_near(mx, mz, &format!("¡{name} va a desatar su furia! Alejate o aguantá."), &format!("{name_en} is about to unleash its fury! Get away or endure it."));
+        for vid in self.near_players(mx, mz, p.r + 12.0) {
+            let at = now + p.windup + self.pl(vid).unwrap().one_way() + 40.0;
+            let (r, pct) = (p.r, p.pct);
+            self.later(at, move |w, t| {
+                if w.ents.get(&mid).map_or(true, |e| e.c.dead) { return; }
+                let Some(pe) = w.ents.get(&vid) else { return };
+                let Some(pl) = pe.player() else { return };
+                if pe.c.dead || (pe.c.x - mx).hypot(pe.c.z - mz) > r + 0.5 { return; }
+                let dmg = jround(pl.stats.max_hp * pct).max(1.0);
+                w.apply_damage(mid, vid, dmg, t, false, false, false);
+            });
         }
     }
 }

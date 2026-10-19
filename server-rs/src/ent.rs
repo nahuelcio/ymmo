@@ -1,6 +1,6 @@
 //! Entities (port of server/src/world/entities.ts).
 use crate::collision::P;
-use crate::data::{d, BuffMods, MobDef, Special};
+use crate::data::{d, Barrage, BuffMods, MobDef, Pulse, Special};
 use crate::formulas::{compute_stats, jround, mob_stats, Stats};
 use crate::i18n::Lang;
 use serde_json::Value;
@@ -143,6 +143,8 @@ pub struct Player {
     pub cooldowns: HashMap<String, f64>,
     pub pvp_until: f64,
     pub pvp_on: bool,
+    /** inside a full-PvP zone (last tick): flagged all the while; leaving, the flag runs out */
+    pub in_pvp: bool,
     pub auto_loot: bool,
     pub dodge_until: f64,
     pub rtt: f64,
@@ -254,6 +256,14 @@ pub struct Mob {
     pub winding: Option<(f64, f64, f64)>,
     pub home_x: f64,
     pub home_z: f64,
+    /** world raid mechanics (MobDef barrage, pulse, enrage), as its phases have swapped them, and when each comes next */
+    pub barrage: Option<Barrage>,
+    pub pulse: Option<Pulse>,
+    pub barrage_at: f64,
+    pub pulse_at: f64,
+    /** when this fight began (0: not fighting), and whether it has enraged */
+    pub engaged_at: f64,
+    pub enraged: bool,
 }
 
 /** ordered map helpers for hate/threat (insertion order, like a JS Map) */
@@ -273,7 +283,23 @@ impl Mob {
             tpl, hp: stats.max_hp, stats, target: None, hate: vec![], threat: vec![], taunt_until: 0.0, next_target_check: 0.0,
             phase: 0, haste: 1.0, special: tpl.special.clone(), summoned: false, next_attack: 0.0, respawn_at: 0.0, hide_at: 0.0,
             wander_at: 0.0, dest: None, returning: false, special_at: 0.0, camp_id: None, winding: None, home_x: x, home_z: z,
+            barrage: tpl.barrage.clone(), pulse: tpl.pulse.clone(), barrage_at: 0.0, pulse_at: 0.0, engaged_at: 0.0, enraged: false,
         }
+    }
+    /** Back to how it started: its own special and world raid mechanics, its own attack, no haste, no fight going on. */
+    pub fn reset_fight(&mut self) {
+        self.phase = 0;
+        self.haste = 1.0;
+        self.special = self.tpl.special.clone();
+        self.special_at = 0.0;
+        self.winding = None;
+        self.barrage = self.tpl.barrage.clone();
+        self.pulse = self.tpl.pulse.clone();
+        self.barrage_at = 0.0;
+        self.pulse_at = 0.0;
+        self.engaged_at = 0.0;
+        self.enraged = false;
+        self.stats.p_atk = mob_stats(self.tpl).p_atk;
     }
     pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
 }

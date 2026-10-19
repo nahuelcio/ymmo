@@ -3,7 +3,7 @@ use crate::data::{d, StatusApply};
 use crate::ent::*;
 use crate::formulas::*;
 use crate::i18n::tr;
-use crate::terrain::in_town;
+use crate::terrain::{in_pvp_zone, in_town};
 use crate::world::{dist, World};
 use serde_json::json;
 use std::collections::HashSet;
@@ -46,6 +46,8 @@ impl World {
             crate::clans::Rel::War => return None,
             crate::clans::Rel::None => {}
         }
+        // both in a full-PvP zone: everyone there is fair game, no PvP mode or Ctrl needed (and no karma: they are flagged)
+        if in_pvp_zone(pc.x, pc.z) && in_pvp_zone(te.c.x, te.c.z) { return None; }
         if !p.pvp_on { return Some(tr(l, "Tenés el PvP desactivado. Activalo (botón PvP o /pvp) para pelear con jugadores.", "Your PvP mode is off. Turn it on (PvP button or /pvp) to fight players.").into()); }
         if !t.pvp_on && t.karma == 0 { return Some(if l.en() { format!("{} has PvP mode off.", t.name) } else { format!("{} tiene el PvP desactivado.", t.name) }); }
         if t.karma > 0 || t.pvp_until > now || force { return None; }

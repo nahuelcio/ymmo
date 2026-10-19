@@ -117,6 +117,9 @@ export class InventoryPanel {
     if (it.s) act(tx('Sacártelo', 'Take it off'), () => g.net.send({ t: 'unequip', slot: it.s! }));
     else if (def.slot || def.use) act(def.slot ? tx('Equipar', 'Equip') : tx('Usar', 'Use'), () => g.net.send({ t: 'use', u: it.u }));
     if (def.slot && this.canEnchant(it)) act(tx(`Encantar a +${(it.e ?? 0) + 1}`, `Enchant to +${(it.e ?? 0) + 1}`), () => this.askEnchant(it));
+    if (def.slot && (it.e ?? 0) < ENCHANT.max && this.g.inv.some((i) => !i.s && ITEMS[i.i].enchant === 'sacred')) {
+      act(tx(`Encantar a +${(it.e ?? 0) + 1} (sagrado, seguro)`, `Enchant to +${(it.e ?? 0) + 1} (sacred, safe)`), () => g.net.send({ t: 'enchant', u: it.u, sacred: true }));
+    }
     if (!it.s) {
       act(tx('Destruir', 'Destroy'), () => g.ui.dialogs.confirm(
         tx(`¿Destruir ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`, `Destroy ${itemName(it.i, lang)}${it.c > 1 ? ` (${it.c})` : ''}?`),

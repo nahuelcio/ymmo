@@ -4,7 +4,7 @@ import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
-import { NPCS } from '../../../shared/src/data/world';
+import { inPvpZone, NPCS } from '../../../shared/src/data/world';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, hideTip, setTip } from './dom';
@@ -490,6 +490,10 @@ export class Hud {
     if (m.flagged || m.karma > 0) {
       const w = el('div', `buff flag ${m.karma > 0 ? 'karma' : ''}`, this.buffs, m.karma > 0 ? 'PK' : 'PvP');
       w.title = m.karma > 0 ? `Karma: ${m.karma}` : tx('Con flag de PvP', 'PvP flagged');
+    }
+    const self = this.g.self;
+    if (self && inPvpZone(self.pos.x, self.pos.z)) {
+      el('div', 'buff flag pvp-zone', this.buffs, tx('⚔ Zona PvP', '⚔ PvP zone')).title = tx('Zona PvP: todos están flageados y cualquiera puede atacarte.', 'PvP zone: everyone is flagged and anyone can attack you.');
     }
     this.refreshSlots();
   }

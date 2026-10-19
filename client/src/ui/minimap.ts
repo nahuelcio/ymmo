@@ -550,12 +550,22 @@ export class Minimap {
       const [x, y] = this.toBig(z.x, z.z);
       ctx.beginPath();
       ctx.arc(x, y, z.r * pxPer, 0, Math.PI * 2);
-      ctx.stroke();
+      if (z.pvp) {
+        // full PvP: solid red, faintly filled
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(200, 40, 20, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.fillStyle = 'rgba(200, 40, 20, 0.12)';
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      } else ctx.stroke();
     }
     ctx.restore();
     if (mid) for (const z of ZONES) {
       const [x, y] = this.toBig(z.x, z.z);
-      if (inView(x, y)) tag(`${zoneName(z.name, lang)} (${z.levels})`, x, y, 12, 'italic bold');
+      if (inView(x, y)) tag(`${z.pvp ? '⚔ ' : ''}${zoneName(z.name, lang)} (${z.pvp ? 'PvP, ' : ''}${z.levels})`, x, y, 12, 'italic bold');
     }
     for (const [x, y] of towns) this.townIcon(ctx, x, y);
     // hostile camps and raid lairs: the icon always, the name only close in and where it fits

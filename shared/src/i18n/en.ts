@@ -106,6 +106,7 @@ export const EN = {
    "name": "Demon's Tunic"
   },
   "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
+  "scroll_enchant_sacred": { "name": "Sacred Enchanting Scroll", "desc": "A guaranteed +1 for any weapon, armor or jewelry: it cannot fail or break it." },
   "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
   "wooden_buckler": { "name": "Wooden Buckler" }, "brigandine_shield": { "name": "Brigandine Shield" }, "full_plate_shield": { "name": "Full Plate Shield" },
@@ -248,7 +249,8 @@ export const EN = {
   "lava_salamander": "Lava Salamander", "hellhound": "Hellhound", "lava_golem": "Lava Golem", "pyromancer": "Pyromancer", "magma_drake": "Magma Drake",
   "abyss_knight": "Abyss Knight", "lich": "Lich", "abyss_weaver": "Abyss Weaver", "abyss_drake": "Abyssal Drake", "abyss_demon": "Abyss Demon",
   "high_pyromancer": "High Pyromancer", "abyss_commander": "Abyssal Commander", "flame_lord": "Lord of Flames", "fire_elemental": "Fire Elemental",
-  "azgaroth": "Azgaroth, the Devourer", "abyss_spawn": "Abyss Spawn"
+  "azgaroth": "Azgaroth, the Devourer", "abyss_spawn": "Abyss Spawn",
+  "battlefield_carrion": "Battlefield Scavenger", "fallen_legionnaire": "Fallen Legionnaire", "relic_golem": "Relic Golem", "war_avatar": "Avatar of War", "war_herald": "Herald of War"
  },
  "skills": {
   "provoke": {
@@ -711,7 +713,8 @@ export const EN = {
   "jungle": "Ancient Jungle",
   "ember": "Emberdark",
   "volcanic": "Volcanic Lands",
-  "abyss": "The Abyss"
+  "abyss": "The Abyss",
+  "warfront": "Bloody Crossroads"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -734,7 +737,8 @@ export const EN = {
   "jungle": "Ancient Jungle (Lv 65-70)",
   "ember": "Emberdark",
   "volcanic": "Volcanic Lands (Lv 70-74)",
-  "abyss": "The Abyss (Lv 74-78)"
+  "abyss": "The Abyss (Lv 74-78)",
+  "warfront": "Bloody Crossroads (PvP, Lv 76+)"
  },
  "races": {
   "human": {

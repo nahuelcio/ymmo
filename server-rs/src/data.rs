@@ -93,12 +93,27 @@ pub struct StatusApply { pub id: String, pub ms: f64, pub chance: Option<f64>, p
 #[serde(rename_all = "camelCase")]
 pub struct Special { pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub at: String, pub stun: Option<f64> }
 
+/** World raid: telegraphed circles under up to `count` players within `range` of the boss at once */
+#[derive(Deserialize, Clone, Debug)]
+pub struct Barrage { pub count: u32, pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub range: f64 }
+
+/** World raid: a circle of `r` round the boss that takes `pct` of the max HP of everyone still in it */
+#[derive(Deserialize, Clone, Debug)]
+pub struct Pulse { pub r: f64, pub windup: f64, pub pct: f64, pub every: f64 }
+
+/** World raid: past `after` ms of one fight it attacks `haste` times faster and hits `atk` times harder */
+#[derive(Deserialize, Clone, Debug)]
+pub struct Enrage { pub after: f64, pub haste: f64, pub atk: f64 }
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct MobCount { pub mob: String, pub count: u32 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct MobPhase { pub at: f64, pub adds: Option<MobCount>, pub haste: Option<f64>, pub special: Option<Special>, pub say: (String, String) }
+pub struct MobPhase {
+    pub at: f64, pub adds: Option<MobCount>, pub haste: Option<f64>, pub special: Option<Special>, pub barrage: Option<Barrage>, pub pulse: Option<Pulse>,
+    pub say: (String, String),
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -124,6 +139,9 @@ pub struct MobDef {
     pub on_hit: Option<StatusApply>,
     pub special: Option<Special>,
     pub phases: Option<Vec<MobPhase>>,
+    pub barrage: Option<Barrage>,
+    pub pulse: Option<Pulse>,
+    pub enrage: Option<Enrage>,
     pub adena: (f64, f64),
     pub drops: Vec<Drop>,
 }
@@ -205,7 +223,7 @@ pub struct NpcDef {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct ZoneDef { pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub spawns: Vec<MobCount> }
+pub struct ZoneDef { pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub spawns: Vec<MobCount>, pub pvp: Option<bool> }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
