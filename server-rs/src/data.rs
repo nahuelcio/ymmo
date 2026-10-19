@@ -137,6 +137,7 @@ pub struct BuffMods {
     pub m_def: Option<f64>,
     pub speed: Option<f64>,
     pub atk_spd: Option<f64>,
+    pub cast_spd: Option<f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
