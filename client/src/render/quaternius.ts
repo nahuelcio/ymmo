@@ -43,11 +43,105 @@ let jogSteps: number[] = [0, 0.5];
  * for nudging): the head spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
  */
 const HELMS = { HelmC: [0, 0, 1], HelmD: [0, 0, 1], karmian_hat: [0, 0, 1], demons_circlet: [0, 0, 1] } as const;
-export type Helm = keyof typeof HELMS;
+/**
+ * Armour sets modelled from code (tools/art/blender/gear.py), one file each with a node per piece: `helm`, modelled
+ * round the head bone's pivot like the helmets above, and the body pieces (`chest`, `gloves`, `legs`, `feet`), modelled
+ * on the male body in its bind pose with the joints and weights of the body under them, worn as skins.
+ */
+const GEAR_SETS = ['apprentice', 'abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const;
+export type GearSet = (typeof GEAR_SETS)[number];
+/** Each shield is a file of its own (q/gear/shield_<key>.glb, tools/art/blender/gear.py): its one node, 'shield', worn on the left forearm. */
+const SHIELDS: Record<string, string> = {
+  wooden_buckler: 'buckler', brigandine_shield: 'brigandine', full_plate_shield: 'plate', abyssal_shield: 'abyssal', ashforged_shield: 'ashforged',
+  dragon_shield: 'dragon', glacial_shield: 'glacial', emerald_shield: 'emerald', infernal_shield: 'infernal',
+};
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | MageFile;
+/** A region set's mage gear, a file a set (q/gear/mage_<set>.glb): `robe`, `circlet`, `gloves` and `feet`. */
+type MageFile = `mage_${string}`;
+const gear: Partial<Record<GearFile, THREE.Object3D>> = {};
+/** The male bind pose's inverse bone matrices, in `joints` order: the body pieces were modelled in it, so a woman's
+ * bones carry them over onto her (and every race's scaling onto it). */
+let restInv: THREE.Matrix4[] = [];
+/** The cloth under a set's armour: the peasant kit dyed in it (the bulkier ranger kit would poke through). */
+const UNDER: Partial<Record<GearSet, number>> = { dragon: 0x1e1517, abyssal: 0x0a0f18, ashforged: 0x1c1a19, glacial: 0x161d26, emerald: 0x121a16, infernal: 0x0d0d10 };
+/** The items whose set has a model of their own for them (not every set has its body pieces yet). */
+const SET_PIECE: Record<string, [GearSet, string]> = {
+  apprentice_tunic: ['apprentice', 'chest'], apprentice_stockings: ['apprentice', 'legs'], short_gloves: ['apprentice', 'gloves'],
+  leather_sandals: ['apprentice', 'feet'],
+};
+/** A set's model for an armour item, when there is one: the node to wear and the colour to dye the cloth under it. */
+export function armorPiece(id: string): { node: THREE.Object3D; under: number } | undefined {
+  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|gloves|greaves|boots|shoes)$/.exec(id);
+  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', gloves: 'gloves', greaves: 'legs', boots: 'feet', shoes: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
+  // a mage's pieces (the robe, the cloth gloves, the shoes) come in a file of their own
+  const file: GearFile | undefined = m && /^(robe|gloves|shoes)$/.test(m[2]) ? `mage_${m[1]}` : set;
+  const node = file && wantGear(file)?.getObjectByName(name);
+  return node ? { node, under: UNDER[set!] ?? 0x3a3530 } : undefined;
+}
+/**
+ * A chest piece as a woman wears it. The sets' plates are fitted to the man's chest, and her bust, taken into his rest
+ * pose, stands up to 3.5 cm further out, some 7 cm either side of the middle at the height of his chest: it would come
+ * through. Her copy swells forward there (bridging the middle, as a cuirass would), the hollows of the plates and
+ * everything on them moved alike, its normals turned to match. One copy per piece.
+ */
+const bustCopies = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+function bustGeo(src: THREE.BufferGeometry): THREE.BufferGeometry {
+  let g = bustCopies.get(src);
+  if (g) return g;
+  g = src.clone();
+  const swell = (x: number, y: number, z: number) => {
+    const ax = Math.abs(x), across = ax < 0.068 ? 0.88 + 0.12 * (ax / 0.068) ** 2 : Math.exp(-(((ax - 0.068) / 0.035) ** 2));
+    return 0.04 * across * Math.exp(-(((y - 1.34) / (y < 1.34 ? 0.085 : 0.04)) ** 2)) * THREE.MathUtils.smoothstep(z, -0.02, 0.04);
+  };
+  const pos = g.getAttribute('position'), nor = g.getAttribute('normal'), n = new THREE.Vector3(), e = 0.002;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), h = swell(x, y, z);
+    if (h < 1e-5) continue;
+    pos.setZ(i, z + h);
+    if (!nor) continue;
+    const hx = (swell(x + e, y, z) - swell(x - e, y, z)) / (2 * e), hy = (swell(x, y + e, z) - swell(x, y - e, z)) / (2 * e);
+    n.set(nor.getX(i) - hx * nor.getZ(i), nor.getY(i) - hy * nor.getZ(i), nor.getZ(i)).normalize();
+    nor.setXYZ(i, n.x, n.y, n.z);
+  }
+  bustCopies.set(src, g);
+  return g;
+}
+/** A shield's model, when it has one (a body piece like the rest of the armour, skinned to the left forearm). */
+export function shieldPiece(id: string): THREE.Object3D | undefined {
+  const key = SHIELDS[id];
+  return (key && wantGear(`shield_${key}`)?.getObjectByName('shield')) || undefined;
+}
+/** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
+ * a skin in our joint order. */
+function toSkin(m: THREE.Mesh) {
+  const g = m.geometry, j = g.getAttribute('_joints'), w = g.getAttribute('_weights');
+  const names = (m.userData.joints ?? m.parent?.userData.joints) as string[] | undefined;
+  if (!j || !w || !names) return;
+  const map = names.map((n) => Math.max(0, joints.indexOf(n)));
+  const idx = new Uint16Array(j.count * 4), wt = new Float32Array(j.count * 4);
+  for (let i = 0; i < j.count; i++) {
+    for (let k = 0; k < 4; k++) {
+      idx[i * 4 + k] = map[Math.round(j.getComponent(i, k))] ?? 0;
+      wt[i * 4 + k] = w.getComponent(i, k);
+    }
+  }
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(wt, 4));
+  g.deleteAttribute('_joints');
+  g.deleteAttribute('_weights');
+  m.userData.skinned = true;
+}
+export type Helm = keyof typeof HELMS | GearSet | MageFile;
 /** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
   karmian_hat: { model: 'karmian_hat' }, demons_circlet: { model: 'demons_circlet', hair: true },
+  // closed: covers the ears (an elf's or an orc's would poke through), the face too for some
+  leather_cap: { model: 'apprentice', closed: true }, abyssal_helm: { model: 'abyssal', closed: true }, ashforged_helm: { model: 'ashforged', closed: true },
+  dragon_helm: { model: 'dragon', closed: true }, glacial_helm: { model: 'glacial', closed: true }, emerald_helm: { model: 'emerald', closed: true },
+  infernal_helm: { model: 'infernal', closed: true },
+  // the mages' crowns sit over the hair, and leave the ears and the face as they are
+  ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [`${s}_circlet`, { model: `mage_${s}` as Helm, hair: true }])),
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
@@ -64,8 +158,28 @@ let ready = false;
 let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
-/** The item's own weapon model, if it has one (geometry and materials are shared between instances). */
-export const qWeapon = (item: string | null): THREE.Object3D | null => (item && WEAPONS.includes(item) ? props[item].clone() : null);
+/** The region sets' swords and staffs, a file a set (q/gear/weapons_<set>.glb, tools/art/blender/gear.py): nodes 'blade' and 'staff'. */
+const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff)$/;
+/**
+ * The item's own weapon model, if it has one (geometry and materials are shared between instances). A set's sword or
+ * staff comes in with its file: until then there is none (the caller draws the plain one), and 'gear-loaded' redraws.
+ */
+export function qWeapon(item: string | null): THREE.Object3D | null {
+  if (!item) return null;
+  if (WEAPONS.includes(item)) return props[item].clone();
+  const m = SET_WEAPON.exec(item);
+  const node = m && wantGear(`weapons_${m[1]}`)?.getObjectByName(m[2]);
+  if (!node) return null;
+  const w = node.clone(), held = new THREE.Group();
+  w.position.set(0, 0, 0);
+  held.add(w);
+  // built as the Fiend props are (upright, the grip at the origin), and held as they are
+  if (m[2] === 'staff') {
+    held.rotation.z = -Math.PI / 2;
+    held.position.z = 0.05;
+  } else held.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'ZYX'));
+  return held;
+}
 
 /**
  * Typical colour of a texture, to recolour it relative to its own tone. Only the brighter
@@ -86,24 +200,76 @@ function avgColor(tex: THREE.Texture): THREE.Color {
 }
 
 /** The outfits cover the body: keep only the triangles of the base mesh that follow the head and neck. */
-function headOnly(geo: THREE.BufferGeometry) {
+/** Keep only the triangles touching a vertex whose strongest joint `keep` accepts (or, with `all`, only those whose
+ * every vertex it accepts). */
+function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean, all = false) {
   const si = geo.getAttribute('skinIndex'), sw = geo.getAttribute('skinWeight'), idx = geo.index!;
-  const keep = (v: number) => {
+  const ok = (v: number) => {
     let best = 0, bw = -1;
     for (let k = 0; k < 4; k++) if (sw.getComponent(v, k) > bw) { bw = sw.getComponent(v, k); best = si.getComponent(v, k); }
-    return joints[best] === 'Head' || joints[best] === 'neck_01';
+    return keep(joints[best]);
   };
   const out: number[] = [];
   for (let i = 0; i < idx.count; i += 3) {
     const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
-    if (keep(a) || keep(b) || keep(c)) out.push(a, b, c);
+    if (all ? ok(a) && ok(b) && ok(c) : ok(a) || ok(b) || ok(c)) out.push(a, b, c);
   }
   geo.setIndex(out);
+}
+const isHead = (j: string) => j === 'Head' || j === 'neck_01';
+const headOnly = (geo: THREE.BufferGeometry) => trim(geo, isHead);
+/** The bare body under a set's armour, in three parts (whichever the armour covers stands in for the cloth there):
+ * the trunk and arms, the hips and legs, the feet; the head and neck are the head's. */
+const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
+  top: (j) => !isHead(j) && j !== 'pelvis' && !/^(thigh|calf|foot|ball)/.test(j),
+  legs: (j) => /^(pelvis|thigh|calf)/.test(j),
+  feet: (j) => /^(foot|ball)/.test(j),
+};
+
+let gearLoader: GLTFLoader | null = null;
+const gearLoading = new Set<GearFile>();
+/**
+ * An armour set's file, fetched the first time a character wears something of it (a whole set's maps are tens of
+ * megabytes on the GPU: only the sets on screen get loaded). Until it is in, the piece is left off; then a
+ * 'gear-loaded' event (detail: the set) tells whoever drew a character without it to build it again.
+ */
+function wantGear(s: GearFile): THREE.Object3D | undefined {
+  if (gear[s] || !gearLoader || gearLoading.has(s)) return gear[s];
+  gearLoading.add(s);
+  gearLoader.loadAsync(`q/gear/${s}.glb`).then((g) => {
+    g.scene.traverse((m) => {
+      if (!(m instanceof THREE.Mesh)) return;
+      // the baked look (colour and relief maps per piece); metal takes a highlight tinted by itself, tighter the more
+      // polished, while paint, leather and the insides barely shine (what each is made of comes in the glTF extras)
+      const src = m.material as THREE.MeshStandardMaterial;
+      const { kind = '', rgb = 0xffffff, rough = 0.6 } = src.userData as { kind?: string; rgb?: number; rough?: number };
+      const metal = ['steel', 'blued', 'black', 'iron', 'brass', 'gold', 'bronze', 'mail'].includes(kind);
+      const specular = metal ? new THREE.Color(rgb).lerp(new THREE.Color(0xffffff), 0.35).multiplyScalar(0.6)
+        : new THREE.Color(kind === 'enamel' ? 0x383838 : 0x121212);
+      const { color, map, normalMap, normalScale } = src;
+      const mat = new THREE.MeshPhongMaterial({ color, map, normalMap, normalScale, specular, shininess: 6 + (1 - rough) ** 2 * 90 });
+      if (src.userData.shine && map) {
+        // one material for the whole piece: how much each part of it shines is in the colour map's alpha
+        mat.specularMap = map;
+        mat.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <specularmap_fragment>', 'float specularStrength = texture2D(specularMap, vSpecularMapUv).a;');
+        };
+        mat.customProgramCacheKey = () => 'gear-shine';
+      }
+      m.material = mat;
+      m.castShadow = true;
+      toSkin(m);
+    });
+    gear[s] = g.scene;
+    dispatchEvent(new CustomEvent('gear-loaded', { detail: s }));
+  }).catch((err) => console.warn('gear', s, err)); // a set that fails to load leaves its pieces off
+  return undefined;
 }
 
 export function loadQ(): Promise<void> {
   return (loading ??= (async () => {
     const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(basis());
+    gearLoader = loader;
     const [[anims, ...gltfs], heads, rigid] = await Promise.all([
       Promise.all(['anims', ...FILES].map((f) => loader.loadAsync(`q/${f}.gltf`))),
       loader.loadAsync('q/heads.glb'),
@@ -163,9 +329,17 @@ export function loadQ(): Promise<void> {
         armature[file.startsWith('Female') ? 'f' : 'm'] = gltfs[i].scene; // what is left is the bone hierarchy
       }
     });
+    armature.m!.updateMatrixWorld(true);
+    restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
+      for (const part of ['top', 'legs', 'feet'] as const) {
+        const b = get('body'), m = new THREE.SkinnedMesh(b.geometry.clone(), b.material);
+        m.bind(b.skeleton, b.bindMatrix);
+        trim(m.geometry, SUIT[part], true);
+        collect(`Suit_${part}_${g}`, [m]);
+      }
       collect(`Head_${g}`, [get('body'), get('eyes'), get('brows')], true);
       const t = (tusks[g] = get('tusks'));
       t.material = new THREE.MeshLambertMaterial({ color: 0xf0ecd8 });
@@ -250,6 +424,12 @@ export interface QOpts {
   /** head scale, ear shape key and tusks of the race */
   head?: number; ears?: 'elf_ears' | 'orc_ears'; tusks?: boolean;
   helm?: Helm;
+  /** body pieces of the armour sets (armorPiece), worn over the cloth */
+  armor?: THREE.Object3D[];
+  /** no boots: a set's own feet piece (greaves and sabatons) takes their place */
+  bareFeet?: boolean;
+  /** no cloth on the trunk and arms, or on the legs: a set's armour covers them, over the bare body dyed `suit` */
+  noTop?: boolean; noLegs?: boolean; suit?: number;
   /** weapon built along +Z with the grip at the origin */
   inHand?: THREE.Object3D | null;
 }
@@ -286,6 +466,7 @@ export function qPlayer(o: QOpts): Rig {
       let sk = skeletons.get(p.fam);
       if (!sk) skeletons.set(p.fam, (sk = new THREE.Skeleton(bones, families[p.fam])));
       const m = new THREE.SkinnedMesh(p.geo, material(p, ...tint(p)));
+      m.userData.file = file;
       m.bind(sk, p.bind);
       if (o.ears && p.morphs?.[o.ears] !== undefined) m.morphTargetInfluences![p.morphs[o.ears]] = 1;
       m.castShadow = true;
@@ -298,15 +479,38 @@ export function qPlayer(o: QOpts): Rig {
     p.kind === 'skin' ? (hands !== undefined ? [new THREE.Color(hands).multiplyScalar(0.55).getHex(), 0, false] : [o.skin, 0, false]) : [z.dye, 0.85, !!z.glow];
   const kit = (z: QZone) => (z.ranger ? 'Ranger' : 'Peasant');
   add(`Head_${o.g}`, (p) => (p.kind === 'skin' ? [o.skin, 0, false] : p.kind === 'hair' ? [o.hair, 0.9, false] : [undefined, 0, false]));
-  add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
-  add(`${S}_${kit(o.chest)}_Arms`, zone(o.chest, o.gloves));
-  add(`${S}_${kit(o.legs)}_Legs`, zone(o.legs));
-  add(o.feet.ranger ? (o.g === 'm' ? 'Male_Ranger_Feet_Boots' : 'Female_Ranger_Feet') : `${S}_Peasant_Feet`, zone(o.feet));
+  if (o.suit !== undefined) {
+    const suit = (): [number, number, boolean] => [o.suit!, 0.9, false];
+    if (o.noTop) add(`Suit_top_${o.g}`, suit);
+    if (o.noLegs) add(`Suit_legs_${o.g}`, suit);
+    if (o.bareFeet) add(`Suit_feet_${o.g}`, suit);
+  }
+  if (!o.noTop) {
+    add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
+    add(`${S}_${kit(o.chest)}_Arms`, zone(o.chest, o.gloves));
+  }
+  if (!o.noLegs) add(`${S}_${kit(o.legs)}_Legs`, zone(o.legs));
+  if (!o.bareFeet) add(o.feet.ranger ? (o.g === 'm' ? 'Male_Ranger_Feet_Boots' : 'Female_Ranger_Feet') : `${S}_Peasant_Feet`, zone(o.feet));
   if (o.pauldron) add(o.g === 'm' ? 'Male_Ranger_Acc_Pauldron' : 'Female_Ranger_Acc_Pauldrons', zone(o.chest));
   const hair = (p: Prim): [number, number, boolean] => [o.hair, 0.9, false];
   if (o.hood !== undefined) add(`${S}_Ranger_Head_Hood`, zone({ ranger: true, dye: o.hood }));
   else if (!o.hideHair && (o.bald || HAIR[o.hairStyle])) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle]!, hair);
   if (o.beard) add('Hair_Beard', hair);
+  if (o.armor?.length) {
+    const sk = new THREE.Skeleton(bones, restInv);
+    skeletons.set(-1, sk);
+    for (const node of o.armor) {
+      const bust = o.g === 'f' && (node.name === 'chest' || node.name === 'robe');
+      node.traverse((x) => {
+        if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
+        const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
+        m.bind(sk, new THREE.Matrix4());
+        m.castShadow = true;
+        m.frustumCulled = false;
+        body.add(m);
+      });
+    }
+  }
 
   if (o.tusks) {
     const t = tusks[o.g]!.clone(); // keeps its offset from the head bone
@@ -325,8 +529,10 @@ export function qPlayer(o: QOpts): Rig {
     attach(byName.Head, crest, 0, 0, 0, 1);
   }
   if (o.helm) {
-    const [y, z, s] = HELMS[o.helm];
-    attach(byName.Head, props[o.helm].clone(), 0, y, z, s); // geometry and materials are shared
+    const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
+    const model = fixed ? props[o.helm] : wantGear(o.helm as GearFile)?.getObjectByName(o.helm.startsWith('mage_') ? 'circlet' : 'helm');
+    const [y, z, s] = fixed ?? [0, 0, 1];
+    if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
   if (o.inHand) attach(byName.hand_r, o.inHand, -0.09, -0.02, 0.03, 0.85);
 
@@ -441,8 +647,8 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   // [weapon, chest, head, gloves, legs, feet]
   const TIERS: Record<string, (string | null)[]> = {
     'Sin equipo': [null, null, null, null, null, null],
-    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
-    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
+    NG: ['short_sword', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals', 'wooden_buckler'],
+    D: ['sword_of_revolution', 'brigandine_tunic', 'brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', 'brigandine_shield'],
     C: ['samurai_longsword', 'full_plate_armor', 'full_plate_helmet', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     'Místico NG': ['apprentice_wand', 'apprentice_tunic', null, null, 'apprentice_stockings', null],
     'Místico D': ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
@@ -451,7 +657,25 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Daga: ['assassin_dagger', 'apprentice_tunic', 'leather_cap', 'short_gloves', 'apprentice_stockings', 'leather_sandals'],
     Martillo: ['war_hammer', 'brigandine_tunic', null, 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots'],
     'Místico C': ['sages_staff', 'demons_tunic', 'demons_circlet', null, 'karmian_stockings', 'reinforced_boots'],
+    // the region sets (tools/art/blender/gear.py)
+    ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
+      { abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s],
+      [`${s}_blade`, `${s}_plate`, `${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, `${s}_shield`],
+    ])),
+    // every helmet side by side, on one race (?race=, default human; ?g=f for women)
+    Cascos: [null, 'brigandine_tunic', null, null, null, null],
+    // every shield side by side, the same way
+    Escudos: ['broadsword', 'brigandine_tunic', null, null, null, null, null],
+    // each region set with its sword and its staff, side by side
+    Armas: [null, null, null, null, null, null, null],
+    // each region set's mage gear (tools/art/blender/gear.py mage_<set>), and all the crowns side by side
+    ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
+      `Místico ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
+      [`${s}_staff`, `${s}_robe`, `${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null],
+    ])),
+    Coronas: [null, null, null, null, null, null, null],
   };
+  const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
@@ -462,6 +686,51 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       r.dispose?.();
     }
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
+    if (tier === 'Armas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
+      rigs = sets.flatMap((s, i) => (['blade', 'staff'] as const).map((k, j) => {
+        const mage = k === 'staff';
+        const rig = playerModel(race, mage ? 'mystic' : 'fighter', `${s}_${k}`, `${s}_${mage ? 'robe' : 'plate'}`, { g, hs: 1, hc: 0 },
+          mage ? [`${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, null] : [`${s}_helm`, `${s}_gauntlets`, `${s}_greaves`, `${s}_boots`, null]);
+        rig.root.position.set((i * 2 + j - 5.5) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      }));
+      return;
+    }
+    if (tier === 'Coronas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const crowns = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'].map((s) => `${s}_circlet`);
+      rigs = crowns.map((c, i) => {
+        const rig = playerModel(race, 'mystic', null, c.replace('_circlet', '_robe'), { g, hs: (i % 3) + 1, hc: 0 }, [c, null, null, null, null]);
+        rig.root.position.set((i - (crowns.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
+    if (tier === 'Escudos') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const list = Object.keys(SHIELDS);
+      rigs = list.map((sh, i) => {
+        const rig = playerModel(race, 'fighter', w, chest, { g, hs: 1, hc: 0 }, [null, null, null, null, sh]);
+        rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
+    if (tier === 'Cascos') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      rigs = HELMETS.map((h, i) => {
+        const rig = playerModel(race, 'fighter', w, chest, { g, hs: 1, hc: 0 }, [h, ...eq.slice(1)]);
+        rig.root.position.set((i - (HELMETS.length - 1) / 2) * 1.1, 0, 0);
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
     rigs = (Object.keys(RACES) as Race[]).flatMap((race, i) => (['m', 'f'] as const).map((g, j) => {
       const rig = playerModel(race, tier.startsWith('Místico') ? 'mystic' : 'fighter', w, chest, { g, hs: (i + j) % HAIR_STYLES.length, hc: 0 }, eq);
       rig.root.position.set((i * 2 + j - 4.5) * 1.25, 0, 0);
@@ -477,6 +746,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     bar.appendChild(b);
   };
   for (const name in TIERS) btn(name, () => { tier = name; build(); });
+  addEventListener('gear-loaded', build);
   for (const name in STATES) btn(name, () => { state = name; since = performance.now(); });
   build();
 
@@ -494,6 +764,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
 
   return () => {
     removeEventListener('resize', resize);
+    removeEventListener('gear-loaded', build);
     renderer.setAnimationLoop(null);
     renderer.dispose();
     renderer.domElement.remove();

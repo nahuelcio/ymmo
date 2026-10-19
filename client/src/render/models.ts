@@ -9,7 +9,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
-import { animateQ, HEADGEAR, qPlayer, qReady, qWeapon, type Helm, type QAnim, type QZone } from './quaternius';
+import { animateQ, armorPiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -671,19 +671,27 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
   const hair = HAIR_COLORS[look.hc] >= 0 ? HAIR_COLORS[look.hc] : r.hair;
   const it = (id: string | null | undefined) => (id ? ITEMS[id] ?? null : null);
   const chestDef = it(chest);
-  const [head, gloves, legs, feet] = eq.map(it);
+  const [head, gloves, legs, feet, shield] = eq.map(it);
   const top = chestDef?.color ?? 0xb0a080;
   const elf = race === 'elf' || race === 'darkelf', tusks = race === 'orc' && !female, beard = race === 'dwarf' && !female, buzz = race === 'orc' && !female && look.hs === 0, bald = buzz || HAIR_STYLES[look.hs] === 'Pelado';
   if (qReady()) {
     const skin = race === 'orc' ? 0x5a7340 : r.skin; // the flat-shaded green reads as neon on a textured face
-    const cap = head?.id === 'leather_cap'; // worn as a hood
-    const gear = head && !cap ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
+    const gear = head ? HEADGEAR[head.id] ?? HEADGEAR.brigandine_helm : undefined;
     const hideHair = !!gear && !gear.hair;
     const zone = (d: ItemDef | null): QZone => ({ ranger: !!d && lookGrade(d) !== 'NG', dye: d?.color, glow: topTier(lookGrade(d)) });
+    // a set's own model for the piece, where it has one, goes over the peasant kit dyed in the set's cloth
+    const [wChest, wGloves, wFeet] = [chestDef, gloves, feet].map((d) => (d ? armorPiece(d.id) : undefined));
+    // a set's robe covers the legs to mid-shin: whatever is worn on them stays under it (cuisses would come through the skirt)
+    const robe = !!wChest && wChest.node.name === 'robe';
+    const wLegs = legs && !robe ? armorPiece(legs.id) : undefined;
+    const under = (d: ItemDef | null, w?: { under: number }): QZone => (w ? { ranger: false, dye: w.under } : zone(d));
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
-      chest: zone(chestDef), legs: zone(legs), feet: zone(feet), gloves: gloves?.color, hood: cap ? head!.color : undefined,
-      pauldron: !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
+      chest: under(chestDef, wChest), legs: under(legs, wLegs), feet: under(feet, wFeet), gloves: wGloves ? undefined : gloves?.color,
+      pauldron: !wChest && !!chestDef && lookGrade(chestDef) !== 'NG' && !chestDef.mp,
+      armor: [...[wChest, wGloves, wLegs, wFeet].filter((w) => !!w).map((w) => w!.node), ...(shield ? [shieldPiece(shield.id)] : [])].filter((n): n is THREE.Object3D => !!n),
+      bareFeet: !!wFeet,
+      noTop: !!wChest, noLegs: !!wLegs || robe, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant),

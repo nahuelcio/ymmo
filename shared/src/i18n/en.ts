@@ -108,8 +108,9 @@ export const EN = {
   "scroll_enchant_weapon": { "name": "Scroll: Enchant Weapon", "desc": "Raises a weapon by +1. Right-click the weapon to use it." },
   "scroll_enchant_armor": { "name": "Scroll: Enchant Armor", "desc": "Raises a piece of armor or jewelry by +1. Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
+  "wooden_buckler": { "name": "Wooden Buckler" }, "brigandine_shield": { "name": "Brigandine Shield" }, "full_plate_shield": { "name": "Full Plate Shield" },
   ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"], ["emerald", "Emerald"], ["infernal", "Infernal"]].flatMap(([p, n]) =>
-   ["Blade", "Staff", "Helm", "Plate", "Robe", "Greaves", "Gauntlets", "Boots", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
+   ["Blade", "Staff", "Helm", "Circlet", "Shield", "Plate", "Robe", "Greaves", "Gauntlets", "Gloves", "Boots", "Shoes", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
   "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
   "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },

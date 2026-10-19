@@ -80,11 +80,25 @@ impl World {
             let g = def.grade.clone().unwrap_or_default();
             return self.sys(pid, &format!("Necesitás nivel {need} para usar equipo de grado {g}."), &format!("You need level {need} to wear {g} grade gear."));
         }
-        for i in p.inv.iter_mut() { if i.s.as_deref() == Some(&slot) { i.s = None; } }
+        // a shield and a weapon held in both hands do not go together: the one put on takes the other off
+        let two_handed = |id: &str| d().item(id).and_then(|w| w.two_handed).unwrap_or(false);
+        let (other, clash) = match slot.as_str() {
+            "shield" => ("weapon", p.equipped_in("weapon").is_some_and(|w| two_handed(&w.i))),
+            "weapon" => ("shield", def.two_handed.unwrap_or(false) && p.equipped_in("shield").is_some()),
+            _ => ("", false),
+        };
+        let off = if clash { p.equipped_in(other).and_then(|i| d().item(&i.i)) } else { None };
+        for i in p.inv.iter_mut() {
+            if i.s.as_deref() == Some(&slot) || (clash && i.s.as_deref() == Some(other)) { i.s = None; }
+        }
         if let Some(i) = p.inv.iter_mut().find(|i| i.u == uid) { i.s = Some(slot); }
         p.recalc();
         p.inv_dirty = true;
         self.ents.get_mut(&pid).unwrap().c.av += 1;
+        if let Some(o) = off {
+            self.sys(pid, &format!("Te sacaste {}: un escudo no va con un arma a dos manos.", o.name),
+                     &format!("You took off {}: a shield does not go with a two-handed weapon.", o.name_en));
+        }
         self.sys(pid, &format!("Te equipaste {}.", def.name), &format!("You equipped {}.", def.name_en));
     }
 

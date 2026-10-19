@@ -45,7 +45,7 @@ pub fn decode_c2s(b: &[u8]) -> Option<serde_json::Value> {
 
 /** Combat events, the other hot path (same layouts as shared/src/binary.ts):
  *    atk: u8 2, u32 s, u32 tg
- *    dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot)
+ *    dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot, 16 blocked)
  *    fx:  u8 4, u32 s, u32 tg, u8 len, skill (utf-8)
  *  Anything else (or an unexpected shape) stays JSON: returns None. */
 pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
@@ -55,7 +55,7 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
     let obj = v.as_object()?;
     let kind = match t {
         "atk" if obj.len() == 3 => EV_ATK,
-        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot")) => EV_DMG,
+        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot" | "blk")) => EV_DMG,
         "fx" if obj.len() == 4 => EV_FX,
         _ => return None,
     };
@@ -66,7 +66,7 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
     b.extend_from_slice(&tg.to_le_bytes());
     if kind == 3 {
         b.extend_from_slice(&v.get("v")?.as_f64()?.to_le_bytes());
-        b.push(flag("crit") as u8 | (flag("miss") as u8) << 1 | (flag("heal") as u8) << 2 | (flag("dot") as u8) << 3);
+        b.push(flag("crit") as u8 | (flag("miss") as u8) << 1 | (flag("heal") as u8) << 2 | (flag("dot") as u8) << 3 | (flag("blk") as u8) << 4);
     } else if kind == 4 {
         let sk = v.get("skill")?.as_str()?.as_bytes();
         if sk.len() > 255 { return None; }
@@ -89,5 +89,12 @@ mod tests {
         let kinds: Vec<u8> = events.iter().map(|e| encode_event(e).unwrap()[0]).collect();
         assert_eq!(kinds, vec![EV_ATK, EV_DMG, EV_FX]);
         assert!(!kinds.contains(&snap[0]), "the snapshot's type byte {} is an event's", snap[0]);
+    }
+
+    #[test]
+    fn a_blocked_hit_stays_binary() {
+        let b = encode_event(&json!({ "t": "dmg", "s": 1, "tg": 2, "v": 10.0, "crit": true, "blk": true })).unwrap();
+        assert_eq!(b[0], EV_DMG);
+        assert_eq!(b[17], 1 | 16); // crit and blocked
     }
 }

@@ -378,6 +378,8 @@ export class Game {
     addEventListener('resize', () => this.resize());
     addEventListener('focus', () => (this.focused = true));
     addEventListener('blur', () => (this.focused = false));
+    // an armour set came in: players drawn without its pieces get them
+    addEventListener('gear-loaded', () => this.ents.forEach((c) => this.remodel(c)));
     this.applySettings(settings.s, Object.keys(settings.s) as (keyof Settings)[]);
     settings.on((s, changed) => this.applySettings(s, changed));
     this.ui.onMe();
@@ -877,6 +879,25 @@ export class Game {
     bar.style.display = (c.hp < 100 || c.id === this.targetId) && !(c.flags & F_DEAD) ? 'block' : 'none';
   }
 
+  /** A player's model again, in place (an armour set it wears came in: render/quaternius.ts loads them when first worn). */
+  private remodel(c: CEnt) {
+    const r = c.rec;
+    if (r.k !== 'p' || !c.rig) return;
+    const rig = playerModel(r.race, r.cls, r.w, r.a, r.lk, r.eq ?? [], r.we ?? 0);
+    rimLit(rig.root);
+    const skels = new Set<THREE.Skeleton>();
+    rig.root.traverse((o) => o instanceof THREE.SkinnedMesh && skels.add(o.skeleton));
+    for (const sk of skels) {
+      const update = sk.update.bind(sk);
+      sk.update = () => c.root.matrixWorldAutoUpdate && update();
+    }
+    c.root.remove(c.model);
+    c.rig.dispose?.();
+    c.root.add(rig.root);
+    c.rig = rig;
+    c.model = rig.root;
+  }
+
   private buildEnt(r: EntAdd): CEnt {
     const root = new THREE.Group();
     let rig: Rig | null = null;
@@ -1208,8 +1229,10 @@ export class Game {
     // what hits us, in the System tab (Options: off). Bleed and poison ticks returned above: they would flood it
     if (mine && settings.s.dmgLog) {
       const by = this.ents.get(m.s), who = by ? this.nameOf(by) : tx('Algo', 'Something'), crit = m.crit ? tx(' (crítico)', ' (critical)') : '';
-      this.ui.chat.add('log', '', tx(`${who} te pegó por ${m.v}${crit}`, `${who} hit you for ${m.v}${crit}`));
+      const blk = m.blk ? tx(' (bloqueado)', ' (blocked)') : '';
+      this.ui.chat.add('log', '', tx(`${who} te pegó por ${m.v}${crit}${blk}`, `${who} hit you for ${m.v}${crit}${blk}`));
     }
+    if (m.blk) this.floatText(t, tx('¡Bloqueó!', 'Blocked!'), 'f-block'); // caught on the shield: half the damage
     let sfx: Sfx = mine ? 'hurt' : m.crit ? 'crit' : 'hit';
     if (!mine && this.ents.get(m.s)?.rec.k === 'p' && (this.ents.get(m.s)!.rec as { cls?: string }).cls === 'mystic') sfx = 'magic';
     play(sfx, vol);

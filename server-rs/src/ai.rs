@@ -169,8 +169,8 @@ impl World {
                 let Some(p) = pe.player() else { return };
                 if pe.c.dead || p.dodge_until > t { return; }
                 if (pe.c.x - ax).hypot(pe.c.z - az) > sp.r + 0.5 { return; }
-                let dmg = phys_damage(p_atk, p.stats.p_def, sp.mult, false);
-                w.apply_damage(mid, pid, dmg, t, false, false);
+                let (dmg, blk) = w.blocked(pid, phys_damage(p_atk, p.stats.p_def, sp.mult, false));
+                w.apply_damage(mid, pid, dmg, t, false, false, blk);
                 if let Some(stun) = sp.stun {
                     w.apply_status(mid, pid, &crate::data::StatusApply { id: "stun".into(), ms: stun, chance: None, dot: None }, dmg, t);
                 }

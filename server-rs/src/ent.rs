@@ -206,6 +206,8 @@ impl Player {
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
+        if let Some(k) = self.spec.as_deref().and_then(|s| data.spec(s)).and_then(|s| s.block) { self.stats.block *= k; } // the tanks block more
+        self.stats.block = self.stats.block.min(0.75);
         if self.god { self.stats.speed *= 2.0; }
         let (s, m) = (&mut self.stats, &self.clan_mods);
         if *m != ClanMods::default() {

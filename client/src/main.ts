@@ -393,6 +393,8 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
   cam.lookAt(0, 1, 0);
   let key = '', model: THREE.Object3D | null = null, rig: ReturnType<typeof playerModel> | null = null;
   const t0 = performance.now();
+  const rebuild = () => (key = ''); // an armour set came in (render/quaternius.ts loads them when first worn)
+  addEventListener('gear-loaded', rebuild);
   renderer.setAnimationLoop(() => {
     const { race, cls, look } = get();
     const k = `${race}|${cls}|${look.g}|${look.hs}|${look.hc}`;
@@ -416,6 +418,7 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
     renderer.render(scene, cam);
   });
   return () => {
+    removeEventListener('gear-loaded', rebuild);
     renderer.setAnimationLoop(null);
     renderer.dispose();
   };
