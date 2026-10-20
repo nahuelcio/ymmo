@@ -355,6 +355,48 @@ mod tests {
         assert!(set.iter().all(|i| i.slot.is_some()));
     }
 
+    /// The PvP zone's world raid has to take a full party: a tank, healers to keep it up through the wounds its blows
+    /// leave, and damage to drop it before the enrage. Measured on a level 78 tank and mage in the full Infernal sets.
+    #[test]
+    fn war_avatar_needs_a_party() {
+        let data = d();
+        let gear = |ids: &[&str]| -> Vec<(&ItemDef, i64, bool)> { ids.iter().map(|k| (data.item(k).unwrap(), 0, false)).collect() };
+        let set = |s: &str, ks: &[&str]| -> Vec<String> { ks.iter().map(|k| format!("{s}_{k}")).collect() };
+        let plate = ["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"];
+        let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
+        let build = |cls: &str, lvl: i64, ids: Vec<String>| { let r: Vec<&str> = ids.iter().map(|s| s.as_str()).collect(); compute_stats("human", cls, lvl, &gear(&r), &[], "m") };
+        let tank = build("fighter", 78, set("infernal", &plate));
+        let mage = build("mystic", 78, set("infernal", &robe));
+        let tank71 = build("fighter", 71, set("emerald", &plate));
+        let boss_def = data.mobs["war_avatar"].clone();
+        let boss = mob_stats(&boss_def);
+        let herald = mob_stats(&data.mobs["war_herald"]);
+        // a hit's share of the target's HP, on average (phys_damage without its +-10%)
+        let share = |p_atk: f64, t: &Stats, mult: f64| 70.0 * p_atk / t.p_def * mult / t.max_hp;
+        let special = boss_def.special.as_ref().unwrap().mult;
+        let barrage = boss_def.barrage.as_ref().unwrap().mult;
+        let ph50 = boss_def.phases.iter().flatten().find(|p| p.at == 50.0).unwrap();
+        let (special50, barrage50) = (ph50.special.as_ref().unwrap().mult, ph50.barrage.as_ref().unwrap().mult);
+        let enrage = boss_def.enrage.as_ref().unwrap().atk;
+        println!("tank 78: P.Def {} HP {} | mage 78: P.Def {} HP {} | tank 71: P.Def {} HP {} | boss P.Atk {}", tank.p_def, tank.max_hp, mage.p_def, mage.max_hp, tank71.p_def, tank71.max_hp, boss.p_atk);
+        for (what, p_atk, mult) in [("auto", boss.p_atk, 1.0), ("special", boss.p_atk, special), ("special 50%", boss.p_atk, special50), ("barrage", boss.p_atk, barrage),
+                                    ("barrage 50%", boss.p_atk, barrage50), ("enraged auto", boss.p_atk * enrage, 1.0), ("herald", herald.p_atk, 1.0)] {
+            println!("{what:>13}: tank {:5.0} ({:3.0}%)  mage {:5.0} ({:3.0}%)  tank 71 {:3.0}%", 70.0 * p_atk / tank.p_def * mult, 100.0 * share(p_atk, &tank, mult),
+                     70.0 * p_atk / mage.p_def * mult, 100.0 * share(p_atk, &mage, mult), 100.0 * share(p_atk, &tank71, mult));
+        }
+        let auto = share(boss.p_atk, &tank, 1.0);
+        assert!((0.3..=0.45).contains(&auto), "its blows take a real bite of a tank: {auto:.2}");
+        assert!((0.5..=0.75).contains(&share(boss.p_atk, &mage, 1.0)), "and a mage cannot take them");
+        assert!(share(boss.p_atk, &tank71, 1.0) >= 0.3, "a level 71 tank feels them too");
+        for m in [special, special50] { assert!(share(boss.p_atk, &tank, m) < 0.8, "its special hurts the tank, it does not kill it outright"); }
+        for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "a circle on a mage nearly kills it"); }
+        assert!((0.1..=0.2).contains(&share(herald.p_atk, &mage, 1.0)), "a pack of heralds kills a healer left alone");
+        assert!(share(boss.p_atk * enrage, &tank, 1.0) >= 1.0, "enraged, it kills a tank in a blow");
+        let oh = boss_def.on_hit.as_ref().unwrap();
+        assert_eq!((oh.id.as_str(), oh.chance.unwrap_or(1.0)), ("wound", 1.0), "every blow wounds");
+        assert_eq!(crate::ent::WOUND_HEAL, 0.5);
+    }
+
     #[test]
     fn a_mystic_can_hold_a_magic_sword_and_a_shield() {
         let data = d();

@@ -9,12 +9,13 @@ impl World {
         let e = self.ents.get_mut(&pid).unwrap();
         if e.c.dead { return; }
         let stunned = e.c.has("stun", now);
+        let wound = e.c.heal_mul(now);
         let (px, pz) = (e.c.x, e.c.z);
         let p = e.player_mut().unwrap();
         let s = p.stats.clone();
         // sitting down out of combat recovers much faster (as in L2)
         let regen = if now - p.last_combat < 5000.0 { 0.6 } else if p.sitting.is_some() { 1.5 * 2.5 } else { 1.5 };
-        p.hp = (p.hp + s.hp_regen * dt * regen).min(s.max_hp);
+        p.hp = (p.hp + s.hp_regen * dt * regen * wound).min(s.max_hp);
         p.mp = (p.mp + s.mp_regen * dt * regen).min(s.max_mp);
         p.cp = (p.cp + s.cp_regen * dt).min(s.max_cp);
         if p.god { (p.hp, p.mp, p.cp) = (s.max_hp, s.max_mp, s.max_cp); }

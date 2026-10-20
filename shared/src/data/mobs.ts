@@ -409,17 +409,19 @@ const list: MobDef[] = [
   { id: 'relic_golem', name: 'Gólem de Reliquias', level: 78, shape: 'golem', color: 0x8a6a5a, scale: 1.5, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.6, hpMult: 3, atkMult: 1.2, defMult: 1.2,
     adena: [4200, 6500], drops: [{ item: 'magma_core', chance: 0.4, min: 1, max: 2 }, { item: 'abyss_essence', chance: 0.35, min: 1, max: 2 },
       { item: 'scroll_enchant_armor', chance: 0.08 }, { item: 'scroll_enchant_weapon', chance: 0.03 }] },
-  // its world raid, the strongest in the game: a giant orc in the Infernal plate (render/mobs.ts MOB_KNIGHT) that hits
-  // hard, rains circles on the crowd, roars round itself and enrages
-  { id: 'war_avatar', name: 'Avatar de la Guerra', level: 80, shape: 'orc', color: 0x8a1a12, scale: 3.6, aggressive: true, speed: 4.5, atkInterval: 1700, range: 6, hpMult: 400, atkMult: 2.2, defMult: 1.5,
-    respawn: 43_200_000, boss: true, onHit: { id: 'bleed', ms: 5000, chance: 0.35, dot: 0.3 },
-    special: { r: 9, windup: 1700, mult: 3, every: 9000, at: 'target' },
-    barrage: { count: 6, r: 5, windup: 2000, mult: 3, every: 12000, range: 40 },
+  // its world raid, the strongest in the game: a giant orc in the Infernal plate (render/mobs.ts MOB_KNIGHT) that takes a
+  // full party (server-rs formulas.rs war_avatar_needs_a_party): each blow takes over a third of a level 78 tank's life
+  // and wounds (healing halved), its circles nearly kill a mage, its heralds hunt the healers, and ten minutes in its
+  // enrage kills anyone still standing
+  { id: 'war_avatar', name: 'Avatar de la Guerra', level: 80, shape: 'orc', color: 0x8a1a12, scale: 3.6, aggressive: true, speed: 4.5, atkInterval: 1700, range: 6, hpMult: 400, atkMult: 80, defMult: 1.5,
+    respawn: 43_200_000, boss: true, onHit: { id: 'wound', ms: 6000, chance: 1 },
+    special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
+    barrage: { count: 6, r: 5, windup: 2000, mult: 1.3, every: 12000, range: 40 },
     pulse: { r: 25, windup: 4000, pct: 0.45, every: 30000 },
-    enrage: { after: 600000, haste: 2, atk: 1.5 },
+    enrage: { after: 600000, haste: 2, atk: 3 },
     phases: [
       { at: 75, adds: { mob: 'war_herald', count: 6 }, say: ['¡Que suenen los tambores! ¡A mí, heraldos!', 'Sound the drums! To me, heralds!'] },
-      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 3.4, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 3.2, every: 10000, range: 45 },
+      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 1.9, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 1.4, every: 10000, range: 45 },
         say: ['¡Cada uno de ustedes es una batalla más!', 'Each of you is one more battle!'] },
       { at: 25, adds: { mob: 'war_herald', count: 8 }, pulse: { r: 25, windup: 3500, pct: 0.45, every: 20000 }, say: ['¡LA GUERRA NUNCA TERMINA!', 'WAR NEVER ENDS!'] },
       { at: 10, haste: 1.6, say: ['¡Caigan conmigo!', 'Fall with me!'] },
@@ -427,7 +429,8 @@ const list: MobDef[] = [
     adena: [300000, 500000],
     drops: [{ item: 'scroll_enchant_sacred', chance: 1, min: 2, max: 2 }, { item: 'scroll_enchant_weapon', chance: 1, min: 4, max: 8 }, { item: 'scroll_enchant_armor', chance: 1, min: 8, max: 15 },
       ...setArmor('abyssal', 0.08), ...setArmor('ashforged', 0.08), ...setArmor('dragon', 0.06), ...setArmor('glacial', 0.06), ...setArmor('emerald', 0.05), ...setArmor('infernal', 0.04)] },
-  { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 1.3, respawn: 1e12, adena: [0, 0], drops: [] },
+  // they go for whoever the boss lets them: a pack of them kills a healer nobody covers
+  { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 17, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));

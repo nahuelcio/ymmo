@@ -81,7 +81,9 @@ pub fn tunables() -> Vec<Tunable> {
     }
     for m in data.mobs.values() {
         for (f, b) in [("hpMult", m.hp_mult), ("atkMult", m.atk_mult), ("defMult", m.def_mult)] {
-            add(format!("mob.{}.{f}", m.id), format!("{} {f}", m.name_en), b.unwrap_or(1.0), (0.1, 5.0));
+            // up to 5x, or 3x a boss's own (the War Avatar's 400 HP and 80 attack would not fit under 5)
+            let b = b.unwrap_or(1.0);
+            add(format!("mob.{}.{f}", m.id), format!("{} {f}", m.name_en), b, (0.1, (b * 3.0).max(5.0)));
         }
     }
     for c in data.classes.values() {

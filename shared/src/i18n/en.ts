@@ -860,6 +860,10 @@ export const EN = {
   "poison": {
    "name": "Poisoned",
    "desc": "Loses health every second."
+  },
+  "wound": {
+   "name": "War Wound",
+   "desc": "Healing received is halved."
   }
  }
 } as const;
