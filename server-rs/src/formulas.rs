@@ -166,7 +166,9 @@ pub fn mob_stats(m: &MobDef) -> Stats {
     let def = jround((30.0 + 3.0 * l) * mob_mult(m, "defMult", m.def_mult));
     Stats {
         max_hp: jround((50.0 + 15.0 * l + 1.5 * l * l) * mob_mult(m, "hpMult", m.hp_mult)),
-        p_atk: jround((4.0 + 3.0 * l) * mob_mult(m, "atkMult", m.atk_mult)),
+        // a player's P.Def (armour times level_mod) and HP both grow with level, so a hit's share of HP falls with their
+        // product: the cubic keeps a same-level mob's bite (plain_mobs_bite_at_every_level); the line is the newbie zones
+        p_atk: jround((4.0 + 3.0 * l + l.powi(3) / 180.0) * mob_mult(m, "atkMult", m.atk_mult)),
         p_def: def,
         m_def: def,
         accuracy: 80.0 + l,
@@ -405,6 +407,51 @@ mod tests {
         // wounded, the cleric's quick heal undoes about one of its blows: one healer falls behind, two keep up
         let mended = heal_amount(data.skill("divine_heal").unwrap().power, mage.m_atk) * crate::ent::WOUND_HEAL / tank.max_hp;
         assert!((1.0..=1.3).contains(&(mended / auto)), "a divine heal on a wounded tank against one blow: {:.2}", mended / auto);
+    }
+
+    /// A same-level plain mob has to matter at every level, not only in the newbie zones: mob_stats' cubic P.Atk keeps up
+    /// with a player's P.Def times HP. Measured on a human tank in its grade's plate and a mage in its robe, +0, at every
+    /// level. `cargo test plain_mobs -- --nocapture` prints the table.
+    #[test]
+    fn plain_mobs_bite_at_every_level() {
+        let data = d();
+        let gear = |ids: &[String]| -> Vec<(&ItemDef, i64, bool)> { ids.iter().map(|k| (data.item(k).unwrap(), 0, false)).collect() };
+        let own = |ks: &[&str]| -> Vec<String> { ks.iter().map(|k| k.to_string()).collect() };
+        let set = |s: &str| -> (Vec<String>, Vec<String>) {
+            let f = |ks: &[&str]| ks.iter().map(|k| format!("{s}_{k}")).collect();
+            (f(&["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"]),
+             f(&["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"]))
+        };
+        // no grade has no named set: its best heavy and light pieces
+        let ng = (own(&["brigandine_helm", "brigandine_tunic", "brigandine_gaiters", "reinforced_gloves", "reinforced_boots", "brigandine_shield",
+                        "hunter_cape", "ring_of_vigor", "earring_of_focus", "necklace_of_valor", "sword_of_revolution"]),
+                  own(&["karmian_hat", "karmian_tunic", "karmian_stockings", "reinforced_gloves", "reinforced_boots", "hunter_cape",
+                        "ring_of_vigor", "earring_of_focus", "necklace_of_valor", "staff_of_life"]));
+        let mut mob = data.mobs["keltir"].clone();
+        (mob.hp_mult, mob.def_mult, mob.atk_mult) = (None, None, None);
+        for l in 1..=data.c.max_level {
+            let (plate, robe) = match l {
+                1..=19 => ng.clone(),
+                20..=29 => set("abyssal"),
+                30..=39 => set("ashforged"),
+                40..=51 => set("dragon"),
+                52..=60 => set("glacial"),
+                61..=74 => set("emerald"),
+                _ => set("infernal"),
+            };
+            let (plate, robe) = (gear(&plate), gear(&robe));
+            assert!(plate.iter().chain(&robe).all(|g| data.wear_level(g.0) <= l), "level {l} can wear its set");
+            let tank = compute_stats("human", "fighter", l, &plate, &[], "m");
+            let mage = compute_stats("human", "mystic", l, &robe, &[], "m");
+            mob.level = l;
+            let p_atk = mob_stats(&mob).p_atk;
+            // a hit's share of the target's HP, on average (phys_damage without its +-10%)
+            let share = |t: &Stats| 70.0 * p_atk / t.p_def / t.max_hp;
+            let (t, m) = (share(&tank), share(&mage));
+            println!("lvl {l:2}  mob P.Atk {p_atk:5}  tank {:4.1}%  mage {:4.1}%", 100.0 * t, 100.0 * m);
+            assert!((0.04..=0.09).contains(&t), "level {l}: a same-level mob takes {:.1}% of a tank a hit", 100.0 * t);
+            assert!((0.06..=0.14).contains(&m) && m > t, "level {l}: and {:.1}% of a mage", 100.0 * m);
+        }
     }
 
     /// A heal restores a share of a same-level tank's HP at every grade, not a multiple of it (heal_amount). Measured
