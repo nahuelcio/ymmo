@@ -43,6 +43,11 @@ export const GENERIC_VFX: Record<string, Vfx> = {
     f.ring(feet(s), 0xcfe6ff, 1.6, 350);
     f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.4), size: [1.2, 2.2], spin: 8, life: 350, color: 0xcfe6ff, alpha: 0.7 });
   },
+  // a Force charge gathered by a hit with a pair of swords
+  charge: ({ f, s }) => {
+    f.p.emit({ cell: 'flare', n: 1, at: chest(s, 0.55), size: [0.3, 1.1], life: 320, color: 0x6ab8ff, bright: 1.6, spin: 6 });
+    f.motes(chest(s, 0.35), 0x6ab8ff, 500, { n: 6, r: 0.5, spin: 6, rise: 0.8, cell: 'glow' });
+  },
   escape: ({ f, s }) => {
     f.pillar(feet(s), 0x66aaff, 3000, 4);
     f.rune(feet(s), 1.6, 0x66aaff, 3000);
@@ -141,49 +146,133 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.motes(feet(s), 0xffaaaa, 1200, { n: 18, r: 0.6, spin: 1, rise: 2.6 });
   },
 
-  // ---- gladiator
-  double_slash: ({ f, s, t, color }) => {
-    f.slash(chest(t), chest(s), color, 1.4, 220);
-    later(130, () => f.slash(chest(t, 0.45), chest(s), 0xffe9a0, 1.4, 220));
-    later(130, () => f.burst(chest(t, 0.5), color, 0.5, 220));
+  // ---- gladiator: a pair of swords and its Force charges; the sonic skills throw blue shockwaves
+  sonic_focus: ({ f, s, color }) => {
+    // the force drawn in round the body, then held: one more charge
+    f.motes(feet(s), color, 800, { n: 16, r: 1, spin: 8, rise: 1.4, cell: 'glow' });
+    f.ring(feet(s), color, 1.2, 400);
+    later(380, () => f.burst(chest(s, 0.55), color, 0.55, 300));
   },
-  hamstring: ({ f, s, t, color }) => {
-    f.slash(chest(t, 0.25), chest(s, 0.3), color, 1.2, 260); // low cut at the legs
-    f.ring(feet(t), color, 1.3, 600);
-    f.p.emit({ cell: 'glow', n: 8, at: chest(t, 0.25), cone: 1, speed: [1, 2.5], gravity: 9, size: [0.14, 0.07], life: [400, 700], color: BLOOD, floor: t.pos.y + 0.05 });
+  triple_slash: ({ f, s, t, color }) => {
+    // right, left, then both blades together: three cuts crossing on the target
+    f.slash(chest(t), chest(s).add(new THREE.Vector3(1, 0.7, 0)), color, 1.6, 240);
+    later(120, () => f.slash(chest(t), chest(s).add(new THREE.Vector3(-1, 0.7, 0)), color, 1.6, 240));
+    later(240, () => {
+      f.slash(chest(t, 0.5), chest(s), 0xffffff, 2, 280);
+      f.burst(chest(t), color, 0.8, 300);
+    });
   },
-  bloodlust: ({ f, s, color }) => {
-    f.motes(feet(s), color, 1200, { n: 22, r: 0.9, spin: 10, rise: 1.8, cell: 'glow' });
-    f.dome(feet(s), color, 1.3, 800);
-    f.p.emit({ cell: 'smoke', n: 6, at: chest(s, 0.4), shape: 'sphere', r: 0.5, up: 0.8, size: [0.8, 1.6], life: 1000, color: 0x5a0a10, alpha: 0.45, solid: true, spin: 1 });
+  double_sonic_slash: ({ f, s, t, color }) => {
+    f.slash(chest(t), chest(s).add(new THREE.Vector3(1, 0.7, 0)), color, 1.9, 280);
+    later(130, () => f.slash(chest(t), chest(s).add(new THREE.Vector3(-1, 0.7, 0)), color, 1.9, 280));
+    later(130, () => sonicBurst(f, chest(t), color, 1));
   },
-  rend: ({ f, s, t, color }) => {
-    [-0.35, 0, 0.35].forEach((dy, i) => later(i * 90, () => f.slash(chest(t, 0.6 + dy), chest(s), color, 1.3, 240)));
-    later(270, () => f.p.emit({ cell: 'glow', n: 12, at: chest(t, 0.6), cone: 1.3, speed: [1.5, 3], gravity: 9, size: [0.15, 0.08], life: [500, 800], color: BLOOD, floor: t.pos.y + 0.05 }));
+  sonic_blaster: ({ f, s, t, color }) => {
+    // a crescent of force flung from the blades at the target
+    f.slash(chest(s, 0.55).add(new THREE.Vector3(0, 0.2, 0)), chest(s), color, 1.2, 200);
+    f.projectile(chest(s, 0.55), at(t), color, 320, 0.45, 'ice');
+    later(320, () => sonicBurst(f, chest(t), color, 0.9));
   },
-  blade_storm: ({ f, s, color, aoe }) => {
-    for (let i = 0; i < 6; i++) {
-      later(i * 90, () => {
-        const a = (i / 6) * Math.PI * 2;
-        const p = chest(s, 0.5).add(new THREE.Vector3(Math.cos(a) * aoe * 0.6, 0, Math.sin(a) * aoe * 0.6));
-        f.slash(p, chest(s, 0.5), color, 1.3, 240);
+  war_roar: ({ f, s, color }) => {
+    f.p.emit({ cell: 'burst', n: 1, at: head(s), size: [1, 3], life: 450, color, bright: 1.4 }); // the roar
+    f.ring(feet(s), color, 1.6, 400);
+    later(160, () => f.ring(feet(s), color, 3.2, 600));
+    f.flame(feet(s), 0.6, 1000, color);
+    f.smoke(feet(s), 1.2, 900, 0x9a8a70, 5);
+  },
+  sonic_storm: ({ f, s, t, color, aoe }) => {
+    // waves thrown at the spot, bursting over the whole area
+    f.projectile(chest(s, 0.55), at(t), color, 340, 0.5, 'ice');
+    later(340, () => {
+      sonicBurst(f, chest(t, 0.4), color, 1.2);
+      f.ring(feet(t), color, aoe, 600);
+      later(140, () => f.ring(feet(t), 0xcfeaff, aoe * 0.6, 500));
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + Math.random(), r = aoe * (0.3 + Math.random() * 0.4);
+        later(i * 70, () => sonicBurst(f, chest(t, 0.4).add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)), color, 0.6));
+      }
+    });
+  },
+  sonic_guard: ({ f, s, color }) => {
+    f.dome(feet(s), color, 1.4, 800);
+    f.p.emit({ cell: 'slash', n: 4, at: chest(s, 0.55), shape: 'ring', r: 0.9, size: [1, 1.4], spin: 14, life: 500, color, bright: 1.3 }); // the blades whirling to guard
+    f.ring(feet(s), color, 1.6, 400);
+  },
+  triple_sonic_slash: ({ f, s, t, color }) => {
+    [[1, 0.7], [-1, 0.7], [0, 1.4]].forEach(([x, y], i) => later(i * 110, () => f.slash(chest(t), chest(s).add(new THREE.Vector3(x, y, 0)), color, 2.1, 280)));
+    later(330, () => {
+      sonicBurst(f, chest(t), color, 1.3);
+      f.shards(chest(t), 0xcfeaff, 12, 1.4, 700);
+    });
+  },
+  sonic_buster: ({ f, s, t, color }) => {
+    // both blades down at once: the wave hammers the target to the ground
+    f.slash(chest(t), above(chest(s), 1.2), color, 2.2, 300);
+    later(120, () => {
+      sonicBurst(f, chest(t, 0.5), color, 1.2);
+      f.ring(feet(t), color, 2.2, 500);
+      f.debris(feet(t), 0x8a7a60, 10, 1.4);
+      f.stun(head(t));
+    });
+  },
+  sonic_move: ({ f, s, color }) => {
+    f.ring(feet(s), color, 1.6, 350);
+    f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.4), size: [1.2, 2.2], spin: 8, life: 400, color, alpha: 0.7 });
+    f.motes(feet(s), color, 900, { n: 12, r: 0.6, spin: 4, rise: 0.4, cell: 'streak' });
+    f.dust(feet(s), 500);
+  },
+  dual_blade_dance: ({ f, s, color, aoe }) => {
+    // spinning with both blades out: cuts all round, and the blood they draw
+    f.p.emit({ cell: 'slash', n: 6, at: chest(s, 0.5), shape: 'ring', r: aoe * 0.35, size: [1.2, 1.8], spin: 12, life: 500, color, bright: 1.3 });
+    for (let i = 0; i < 2; i++) later(i * 160, () => f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.4), flat: true, size: [aoe * 0.7, aoe * 1.6], spin: 14, life: 380, color, bright: 1.3 }));
+    f.ring(feet(s), color, aoe, 500);
+    later(200, () => f.shards(chest(s, 0.5), BLOOD, 16, aoe * 0.6, 700));
+  },
+  sonic_rage: ({ f, s, color }) => {
+    // every charge at once: the force flares up round the body
+    f.pillar(feet(s), color, 900, 3.5);
+    f.p.emit({ cell: 'burst', n: 1, at: chest(s), size: [1, 2.8], life: 420, color, bright: 1.5 });
+    f.motes(feet(s), color, 1200, { n: 22, r: 0.9, spin: 9, rise: 2.4, cell: 'flare' });
+    f.light(chest(s), color, 10, 6, 600);
+  },
+  storm_slash: ({ f, s, t, color }) => {
+    // the blades crossed and swept down: a storm of force on one target
+    f.slash(chest(t), chest(s).add(new THREE.Vector3(1.2, 1, 0)), color, 2.4, 320);
+    f.slash(chest(t), chest(s).add(new THREE.Vector3(-1.2, 1, 0)), color, 2.4, 320);
+    later(150, () => {
+      sonicBurst(f, chest(t), color, 1.5);
+      f.bolt(above(feet(t), 6), chest(t), 0xcfeaff, 260);
+      f.flash(chest(t), 0xcfeaff, 1.2);
+    });
+  },
+
+  // ---- Duelist (76-78)
+  duelist_spirit: ({ f, s, color }) => {
+    f.flame(feet(s), 0.6, 1100, color);
+    f.p.emit({ cell: 'halo', n: 1, at: chest(s), size: [1.2, 2.6], life: 800, color, alpha: 0.7 });
+    f.motes(feet(s), color, 1200, { n: 16, r: 0.8, spin: 5, rise: 2.4, cell: 'flare' });
+    f.ring(feet(s), color, 2.2, 500);
+  },
+  sonic_barrier: ({ f, s, color }) => {
+    f.dome(feet(s), color, 1.7, 1000);
+    later(150, () => f.dome(feet(s), 0xcfeaff, 1.4, 800));
+    f.ring(feet(s), color, 2, 500);
+    f.p.emit({ cell: 'flare', n: 6, at: feet(s), shape: 'ring', r: 1.6, up: 1.5, size: [0.6, 0.1], life: 900, color: 0xffffff, bright: 1.3 });
+  },
+  thousand_sonic_slashes: ({ f, s, t, color }) => {
+    // cut after cut, faster than the eye, then every charge let go at once
+    for (let k = 0; k < 10; k++) {
+      later(k * 55, () => {
+        const a = k * 1.9, spot = chest(t).add(new THREE.Vector3(Math.cos(a) * 0.25, ((k % 3) - 1) * 0.3, Math.sin(a) * 0.25));
+        f.slash(spot, chest(s).add(new THREE.Vector3(Math.cos(a), 0.6, Math.sin(a))), k % 2 ? 0xffffff : color, 1.7, 220);
       });
     }
-    f.p.emit({ cell: 'swirl', n: 1, at: feet(s).setY(s.pos.y + 0.3), flat: true, size: [aoe, aoe * 2], spin: 12, life: 600, color, bright: 1.3 });
-    f.ring(feet(s), color, aoe, 600);
-  },
-  war_cry: ({ f, s, color, aoe }) => {
-    f.p.emit({ cell: 'burst', n: 1, at: head(s), size: [1, 3], life: 450, color, bright: 1.4 });
-    f.ring(feet(s), color, 1.5, 400);
-    later(180, () => f.ring(feet(s), color, aoe * 0.8, 600));
-    later(360, () => f.ring(feet(s), color, aoe, 800));
-    f.smoke(feet(s), 1.4, 900, 0x9a8a70, 6);
-  },
-  execute: ({ f, s, t, color }) => {
-    f.slash(chest(t), chest(s), 0xffffff, 2.2, 340);
-    f.pillar(feet(t), color, 1000, 4);
-    f.burst(chest(t), color, 1.6, 500);
-    f.p.emit({ cell: 'glow', n: 18, at: chest(t, 0.8), cone: 1.4, speed: [2, 4], gravity: 9, size: [0.18, 0.08], life: [600, 1000], color: 0x6a0010, floor: t.pos.y + 0.05 });
+    later(560, () => {
+      sonicBurst(f, chest(t), color, 1.8);
+      f.ring(feet(t), color, 3, 600);
+      f.light(chest(t), color, 18, 10, 700);
+      f.stun(head(t), 2000);
+    });
   },
 
   // ---- mystic
@@ -382,38 +471,6 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.stun(head(t), 2000);
   },
 
-  // ---- gladiator 55-75
-  cross_cut: ({ f, s, t, color }) => {
-    f.slash(chest(t), chest(s).add(new THREE.Vector3(1, 0.8, 0)), color, 2, 280);
-    later(110, () => f.slash(chest(t), chest(s).add(new THREE.Vector3(-1, 0.8, 0)), color, 2, 280));
-    f.shards(chest(t), BLOOD, 12, 1.3, 700);
-  },
-  berserk: ({ f, s, color }) => {
-    f.burst(chest(s), color, 1.1, 400);
-    f.ring(feet(s), color, 2.2, 500);
-    f.flame(feet(s), 0.8, 1200, 0xff3311);
-    f.motes(feet(s), color, 1200, { n: 14, r: 0.8, spin: 4, rise: 2.4, cell: 'flare' });
-    f.p.emit({ cell: 'halo', n: 1, at: chest(s), size: [1.2, 2.6], life: 800, color, alpha: 0.7 });
-  },
-  blade_dance: ({ f, s, color, aoe }) => {
-    f.p.emit({ cell: 'slash', n: 6, at: chest(s, 0.5), shape: 'ring', r: aoe * 0.4, size: [1.2, 1.8], spin: 10, life: 450, color, bright: 1.3 });
-    f.ring(feet(s), color, aoe, 500);
-    later(150, () => f.ring(feet(s), color, aoe * 0.7, 500));
-    f.shards(chest(s, 0.5), BLOOD, 16, aoe * 0.6, 700);
-  },
-  crippling_strike: ({ f, s, t, color }) => {
-    f.slash(above(feet(t), 0.4), chest(s), color, 1.6, 300); // low, at the legs
-    f.burst(above(feet(t), 0.4), color, 0.8, 300);
-    f.debris(feet(t), 0x8a7a60, 8, 0.8);
-    f.p.emit({ cell: 'ring', n: 2, at: above(feet(t), 0.3), flat: true, size: [0.6, 1.4], life: 700, color, alpha: 0.7 });
-  },
-  decapitate: ({ f, s, t, color }) => {
-    f.slash(head(t), above(chest(s), 1.2), color, 2.6, 340);
-    f.flash(head(t), 0xff2222, 1.2);
-    f.shards(head(t), BLOOD, 18, 1.6, 800);
-    f.p.emit({ cell: 'burst', n: 1, at: head(t), size: [0.5, 2.4], life: 350, color: 0xff3030, bright: 1.5 });
-  },
-
   // ---- sorcerer 55-75
   chain_lightning: ({ f, s, t, color, aoe }) => {
     f.bolt(above(chest(s), 0.5), chest(t), color, 260);
@@ -530,37 +587,6 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.p.emit({ cell: 'flare', n: 1, at: above(head(s), 2.5), size: [4, 1.5], life: 1200, color: 0xffb040, bright: 1.6 });
   },
 
-  // ---- Duelist (76-78)
-  riposte: ({ f, s, color }) => {
-    f.p.emit({ cell: 'slash', n: 4, at: chest(s, 0.55), shape: 'ring', r: 0.9, size: [1, 1.4], spin: 14, life: 500, color, bright: 1.3 });
-    f.ring(feet(s), color, 1.6, 400);
-    f.motes(feet(s), color, 900, { n: 14, r: 0.9, spin: 12, rise: 0.6, cell: 'glow' });
-  },
-  thousand_cuts: ({ f, s, color, aoe }) => {
-    // cut after cut all around, faster than the eye
-    for (let k = 0; k < 8; k++) {
-      later(k * 60, () => {
-        const a = k * 0.785, spot = chest(s, 0.5).add(new THREE.Vector3(Math.cos(a) * aoe * 0.5, ((k % 2) - 0.5) * 0.6, Math.sin(a) * aoe * 0.5));
-        f.slash(spot, chest(s, 0.5), color, 1.6, 240);
-      });
-    }
-    later(480, () => {
-      f.ring(feet(s), color, aoe, 600);
-      f.shards(chest(s, 0.5), BLOOD, 20, aoe * 0.7, 800);
-    });
-  },
-  final_verdict: ({ f, s, t, color }) => {
-    f.rune(feet(t), 1.4, 0x8a0a0a, 900);
-    later(250, () => {
-      f.slash(chest(t), above(chest(s), 1.5), color, 3, 380);
-      f.slash(chest(t), chest(s).add(new THREE.Vector3(1.5, 0, 0)), 0xff3030, 2.6, 380);
-      f.flash(chest(t), 0xff2020, 1.6);
-      f.burst(chest(t), 0xff4040, 1.8, 500);
-      f.stun(head(t), 2000);
-      f.light(chest(t), 0xff2020, 18, 10, 700);
-    });
-  },
-
   // ---- Archmage (76-78)
   arcane_mastery: ({ f, s, color }) => {
     f.rune(feet(s), 2.2, color, 1600);
@@ -662,6 +688,13 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.dome(feet(s), color, 1.1, 800);
   },
 };
+
+/** Where a sonic wave lands: a ring of force bursting outwards, white at its heart. */
+function sonicBurst(f: FxManager, p: THREE.Vector3, color: number, size: number) {
+  f.burst(p, color, size, 380);
+  f.p.emit({ cell: 'ring', n: 1, at: p, size: [size * 0.4, size * 2.6], life: 380, color: 0xcfeaff, bright: 1.4, fadeIn: 0 });
+  f.p.emit({ cell: 'ring', n: 1, at: p, flat: true, size: [size * 0.5, size * 3], life: 450, color, bright: 1.3, fadeIn: 0 });
+}
 
 function hot(c: number) {
   return new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.5).getHex();

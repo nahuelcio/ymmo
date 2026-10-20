@@ -70,6 +70,8 @@ export interface SelfState {
   /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time); blk: block chance in % */
   atkSpd: number; castSpd: number; speed: number; cdr: number; blk?: number;
   adena: number; karma: number; pk: number; pvp: number; flagged: boolean; pvpOn: boolean;
+  /** Force charges (the gladiator's): held now, and how many its specialization can hold (0: none) */
+  charges?: number; maxCharges?: number;
   skills: string[];
   buffs: { id: string; rem: number }[];
   zone: string;

@@ -39,7 +39,7 @@ export function hex(c: number): string {
 const SHARED_ICON: Record<string, string> = {
   ring: 'ring', earring: 'earring', necklace: 'necklace', blade: 'samurai_longsword', staff: 'sages_staff', helm: 'full_plate_helmet', plate: 'full_plate_armor',
   robe: 'demons_tunic', greaves: 'brigandine_gaiters', gauntlets: 'reinforced_gloves', boots: 'reinforced_boots', shield: 'shield', buckler: 'shield',
-  circlet: 'demons_circlet', gloves: 'short_gloves', shoes: 'leather_sandals', cape: 'cape',
+  circlet: 'demons_circlet', gloves: 'short_gloves', shoes: 'leather_sandals', cape: 'cape', duals: 'duals',
   pelt: 'wolf_pelt', healing: 'greater_healing_potion', mana: 'greater_mana_potion',
 };
 /** The icon file an item uses: its own, or the one for its kind (abyssal_ring and ring_of_vigor both draw `ring`). */
@@ -107,7 +107,7 @@ export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw 
   lines.push(`<div class="tt-title">${mw ? `<span class="tt-mw">${name}</span>` : name}${count > 1 ? ` (${count})` : ''}${gradeTxt}</div>`);
   const st = (k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef') => enchanted(d, k, ench);
   if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}${d.twoHanded ? tx(' · a dos manos, sin escudo', ' · two-handed, no shield') : ''}</span>`);
-  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`, d.block && `${tx('Bloqueo', 'Block')} ${blockPct(d, ench)}%`, d.speed && `${tx('Velocidad', 'Speed')} +${speedPct(d)}%`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
+  if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`, d.block && `${tx('Bloqueo', 'Block')} ${blockPct(d, ench)}%`, d.speed && `${tx('Velocidad', 'Speed')} +${speedPct(d)}%`, d.evasion && `${tx('Evasión', 'Evasion')} +${d.evasion}`, d.atkSpd && `${tx('Vel.Atq', 'Atk.Spd')} +${pct(d.atkSpd)}`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
   if (d.block) lines.push(`<span class="tt-dim">${tx('Un golpe físico bloqueado hace la mitad de daño.', 'A blocked physical hit does half its damage.')}</span>`);
   if (d.slot && mw) lines.push(...masterworkLines(d.type === 'weapon'));
   const need = wearLevel(d);
@@ -121,7 +121,12 @@ export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw 
 export function skillTip(skillId: string): string {
   const s = SKILLS[skillId];
   if (!s) return '';
-  return `<div class="tt-title">${esc(skillName(skillId, lang))} <span class="tt-dim">${tx('Nv', 'Lv')} ${s.level}</span></div>${esc(skillDesc(skillId, lang))}<br>
+  const need = [
+    s.weapon === 'bow' ? tx('Requiere un arco.', 'Needs a bow.') : s.weapon === 'dagger' ? tx('Requiere una daga.', 'Needs a dagger.') : s.weapon === 'dual' ? tx('Requiere un par de espadas.', 'Needs a pair of swords.') : '',
+    s.spend ? tx(`Gasta ${s.spend} ${s.spend === 1 ? 'carga' : 'cargas'} de fuerza.`, `Spends ${s.spend} Force ${s.spend === 1 ? 'charge' : 'charges'}.`) : '',
+    s.charge ? (s.charge >= 99 ? tx('Llena las cargas de fuerza.', 'Fills the Force charges.') : tx(`Junta ${s.charge} ${s.charge === 1 ? 'carga' : 'cargas'} de fuerza.`, `Gathers ${s.charge} Force ${s.charge === 1 ? 'charge' : 'charges'}.`)) : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="tt-title">${esc(skillName(skillId, lang))} <span class="tt-dim">${tx('Nv', 'Lv')} ${s.level}</span></div>${esc(skillDesc(skillId, lang))}<br>${need ? `<span class="tt-dim">${need}</span><br>` : ''}
     <span class="tt-dim">MP ${s.mp} · ${tx('Lanzamiento', 'Cast')} ${(s.cast / 1000).toFixed(1)} s · ${tx('Recarga', 'Cooldown')} ${(s.cooldown / 1000).toFixed(0)} s${s.range > 3 ? ` · ${tx('Alcance', 'Range')} ${s.range}` : ''}</span>`;
 }
 

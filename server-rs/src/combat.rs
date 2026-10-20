@@ -79,6 +79,13 @@ impl World {
         let crit = rnd() * 100.0 < crit_c;
         let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, p_def, 1.0, crit));
         self.apply_damage(pid, tid, dmg, now, crit, false, blk);
+        // a hit with a pair of swords now and then gathers a Force charge (L2's Sonic Mastery)
+        if let Some(p) = self.pl_mut(pid) {
+            if p.weapon_type() == Some("dual") && rnd() < DUAL_CHARGE_CHANCE && p.add_charges(1) {
+                let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+                self.send_near(x, z, json!({ "t": "fx", "s": pid, "tg": pid, "skill": "charge" }));
+            }
+        }
     }
 
     /** A physical hit on a player carrying a shield: one in `block` of them is caught on it and does half its damage. */
@@ -306,6 +313,26 @@ impl World {
         }
     }
 
+    /** The mobs fighting `pid` round it lose its trail: they turn on whoever else they hate, or go home. */
+    fn vanish(&mut self, pid: u32) {
+        let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        for id in self.near(x, z, 25.0) {
+            let Some(m) = self.ents.get_mut(&id).and_then(|e| e.mob_mut()) else { continue };
+            if map_get(&m.threat, pid).is_none() && m.target != Some(pid) { continue; }
+            map_del(&mut m.hate, pid);
+            map_del(&mut m.threat, pid);
+            if m.target == Some(pid) {
+                m.target = m.threat.iter().copied().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|t| t.0);
+                m.taunt_until = 0.0;
+                if m.target.is_none() {
+                    m.hate.clear();
+                    m.reset_fight();
+                    m.returning = true;
+                }
+            }
+        }
+    }
+
     pub fn kill_mob(&mut self, mid: u32, now: f64) {
         let (x, z, tpl, hate, camp_id) = {
             let e = self.ents.get_mut(&mid).unwrap();
@@ -395,6 +422,7 @@ impl World {
             t.intent = None;
             t.escape_at = 0.0;
             t.buffs.clear();
+            t.charges = 0;
             t.recalc();
             (e.c.x, e.c.z)
         };
@@ -460,6 +488,16 @@ impl World {
         }
         if p.cooldowns.get(&def.id).copied().unwrap_or(0.0) > now { return self.sys(pid, &format!("{} todavía no está lista.", def.name), &format!("{} is not ready yet.", def.name_en)); }
         if p.mp < def.mp { return self.sys(pid, "No te alcanza el MP.", "Not enough MP."); }
+        if let Some(w) = def.weapon.as_deref().filter(|w| p.weapon_type() != Some(*w)) {
+            return match w {
+                "bow" => self.sys(pid, "Necesitás un arco equipado.", "You need a bow equipped."),
+                "dual" => self.sys(pid, "Necesitás un par de espadas equipado.", "You need a pair of swords equipped."),
+                _ => self.sys(pid, "Necesitás una daga equipada.", "You need a dagger equipped."),
+            };
+        }
+        if let Some(n) = def.spend.filter(|&n| p.charges < n) {
+            return self.sys(pid, &format!("Necesitás {n} cargas de fuerza."), &format!("You need {n} Force charges."));
+        }
         let mut target = pid;
         let cur = p.target.filter(|t| self.ents.contains_key(t));
         if def.target == "friend" {
@@ -523,8 +561,11 @@ impl World {
         let def = &crate::admin::tuned_skill(d().skill(&skill).unwrap());
         {
             let p = self.pl_mut(pid).unwrap();
-            if p.mp < def.mp { return; }
+            if p.mp < def.mp || def.spend.is_some_and(|n| p.charges < n) { return; }
             p.mp -= def.mp;
+            // the sonic skills spend Force charges, Sonic Focus and Sonic Rage gather them
+            if let Some(n) = def.spend { p.charges -= n; }
+            if let Some(n) = def.charge { p.add_charges(n); }
             let cd = (def.cooldown * (1.0 - p.stats.cdr)).round();
             p.cooldowns.insert(def.id.clone(), now + cd);
             p.send(json!({ "t": "cd", "key": def.id, "ms": cd }));
@@ -548,7 +589,9 @@ impl World {
                     if def.kind == "phys" {
                         if rnd() > hit_chance(st.accuracy + 10.0, eva) { self.send_miss(pid, tg); continue; }
                         let crit = rnd() * 100.0 < st.crit;
-                        let (dmg, blk) = self.blocked(tg, phys_damage(st.p_atk, p_def, def.power, crit));
+                        // a stab in the back
+                        let back = def.behind.filter(|_| { let t = &self.ents[&tg].c; is_behind(px, pz, t.x, t.z, t.ry) }).unwrap_or(1.0);
+                        let (dmg, blk) = self.blocked(tg, phys_damage(st.p_atk, p_def, def.power * back, crit));
                         self.apply_damage(pid, tg, dmg, now, crit, false, blk);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                     } else {
@@ -594,6 +637,7 @@ impl World {
                 }
             }
             "buff" => {
+                if def.vanish.unwrap_or(false) { self.vanish(pid); }
                 let Some(buff) = &def.buff else { return };
                 for tg in std::iter::once(target).chain(self.party_around(pid, target, def.aoe)) {
                     let Some(t) = self.pl_mut(tg) else { continue };

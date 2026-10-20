@@ -65,9 +65,11 @@ const CAPES: Record<string, string> = {
   wool_cape: 'wool', hunter_cape: 'hunter', knight_cape: 'knight', abyssal_cape: 'abyssal', ashforged_cape: 'ashforged', dragon_cape: 'dragon',
   glacial_cape: 'glacial', emerald_cape: 'emerald', infernal_cape: 'infernal',
 };
-type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile;
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile | LightFile;
 /** A region set's mage gear, a file a set (q/gear/mage_<set>.glb): `robe`, `circlet`, `gloves` and `feet`. */
 type MageFile = `mage_${string}`;
+/** a set's light armour (the archer's and the assassin's), a file of its own: nodes 'hood', 'chest', 'gloves', 'legs', 'feet' */
+type LightFile = `light_${string}`;
 const gear: Partial<Record<GearFile, THREE.Object3D>> = {};
 /** The male bind pose's inverse bone matrices, in `joints` order: the body pieces were modelled in it, so a woman's
  * bones carry them over onto her (and every race's scaling onto it). */
@@ -81,10 +83,11 @@ const SET_PIECE: Record<string, [GearSet, string]> = {
 };
 /** A set's model for an armour item, when there is one: the node to wear and the colour to dye the cloth under it. */
 export function armorPiece(id: string): { node: THREE.Object3D; under: number } | undefined {
-  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|gloves|greaves|boots|shoes)$/.exec(id);
-  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', gloves: 'gloves', greaves: 'legs', boots: 'feet', shoes: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
-  // a mage's pieces (the robe, the cloth gloves, the shoes) come in a file of their own
-  const file: GearFile | undefined = m && /^(robe|gloves|shoes)$/.test(m[2]) ? `mage_${m[1]}` : set;
+  const m = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(plate|robe|gauntlets|gloves|greaves|boots|shoes|jerkin|bracers|leggings|treads)$/.exec(id);
+  const [set, name] = m ? [m[1] as GearSet, { plate: 'chest', robe: 'robe', gauntlets: 'gloves', gloves: 'gloves', greaves: 'legs', boots: 'feet', shoes: 'feet',
+    jerkin: 'chest', bracers: 'gloves', leggings: 'legs', treads: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
+  // a mage's pieces (the robe, the cloth gloves, the shoes) and the light armour come in files of their own
+  const file: GearFile | undefined = m && /^(robe|gloves|shoes)$/.test(m[2]) ? `mage_${m[1]}` : m && /^(jerkin|bracers|leggings|treads)$/.test(m[2]) ? `light_${m[1]}` : set;
   const node = file && wantGear(file)?.getObjectByName(name);
   return node ? { node, under: UNDER[set!] ?? 0x3a3530 } : undefined;
 }
@@ -148,7 +151,7 @@ function toSkin(m: THREE.Mesh) {
   g.deleteAttribute('_weights');
   m.userData.skinned = true;
 }
-export type Helm = keyof typeof HELMS | GearSet | MageFile;
+export type Helm = keyof typeof HELMS | GearSet | MageFile | LightFile;
 /** Head items with a model: which one, whether it covers the hair and whether it closes over the face (no ears or tusks). */
 export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: boolean }> = {
   brigandine_helm: { model: 'HelmD' }, full_plate_helmet: { model: 'HelmC', closed: true },
@@ -159,6 +162,8 @@ export const HEADGEAR: Record<string, { model: Helm; hair?: boolean; closed?: bo
   infernal_helm: { model: 'infernal', closed: true },
   // the mages' crowns sit over the hair, and leave the ears and the face as they are
   ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [`${s}_circlet`, { model: `mage_${s}` as Helm, hair: true }])),
+  // the light armour's hoods hide the hair and the ears, leaving the face
+  ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [`${s}_hood`, { model: `light_${s}` as Helm, closed: true }])),
 };
 /**
  * One model per weapon item, also from Fiend, built upright (+Y) with the grip at the origin. Staffs are
@@ -176,7 +181,9 @@ let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
 /** The region sets' swords and staffs, a file a set (q/gear/weapons_<set>.glb, tools/art/blender/gear.py): nodes 'blade' and 'staff'. */
-const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff)$/;
+const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff|bow|dagger)$/;
+/** the plain bows and daggers, modelled in gear.py like the sets' weapons: one file, a node each */
+const BASIC_WEAPONS = new Set(['short_bow', 'hunting_bow', 'composite_bow', 'stiletto']);
 /**
  * The item's own weapon model, if it has one (geometry and materials are shared between instances). A set's sword or
  * staff comes in with its file: until then there is none (the caller draws the plain one), and 'gear-loaded' redraws.
@@ -184,7 +191,7 @@ const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|
 export function qWeapon(item: string | null): THREE.Object3D | null {
   if (!item) return null;
   if (WEAPONS.includes(item)) return props[item].clone();
-  const m = SET_WEAPON.exec(item);
+  const m = BASIC_WEAPONS.has(item) ? ['', 'basic', item] : SET_WEAPON.exec(item);
   const node = m && wantGear(`weapons_${m[1]}`)?.getObjectByName(m[2]);
   if (!node) return null;
   const w = node.clone(), held = new THREE.Group();
@@ -194,7 +201,7 @@ export function qWeapon(item: string | null): THREE.Object3D | null {
   if (m[2] === 'staff') {
     held.rotation.z = -Math.PI / 2;
     held.position.z = 0.05;
-  } else held.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'ZYX'));
+  } else if (!/bow$/.test(m[2])) held.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'ZYX')); // a bow stays upright
   return held;
 }
 
@@ -390,6 +397,8 @@ export function loadQ(): Promise<void> {
     });
     armature.m!.updateMatrixWorld(true);
     restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
+    // a pair of swords swings with each hand in turn: the same slash with the left
+    if (clips.Sword_Attack) clips.Sword_Attack_M = mirrorClip(clips.Sword_Attack, armature.m!, 'Sword_Attack_M');
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
@@ -493,6 +502,10 @@ export interface QOpts {
   noTop?: boolean; noLegs?: boolean; suit?: number;
   /** weapon built along +Z with the grip at the origin */
   inHand?: THREE.Object3D | null;
+  /** inHand is a bow: held upright in the left hand, and drawn and loosed as it shoots (aimBow) */
+  bow?: boolean;
+  /** a second weapon, in the left hand (a pair of swords): the attacks then swing with each hand in turn */
+  offHand?: THREE.Object3D | null;
 }
 
 export interface QAnim {
@@ -502,6 +515,161 @@ export interface QAnim {
   floor: number;
   /** a cape's cloth, as capeCloth moves it */
   cape?: QCape;
+  /** a bow's arms, as aimBow poses them */
+  bow?: BowArms;
+  /** a pair of swords: whether the swing under way is the left hand's, and how far into it the last frame was */
+  dual?: { left: boolean; age: number };
+}
+
+/** The bones a bow is drawn with, and how far into the archer's stance the arms are (0..1). */
+/** A modelled bow's string, drawn by the client between its tips (the node's `bow_tips`, its own space), pulled back
+ * to the drawing hand as the bow is drawn. */
+interface BowString { node: THREE.Object3D; line: THREE.Line; top: THREE.Vector3; bottom: THREE.Vector3 }
+const stringMat = new THREE.LineBasicMaterial({ color: 0xe8e0c8 });
+/** A modelled bow's node (it carries its tips), none for the plain one. */
+function bowNode(held: THREE.Object3D): THREE.Object3D | undefined {
+  let node: THREE.Object3D | undefined;
+  held.traverse((o) => { if (!node && (o.userData.bow_tips as number[] | undefined)?.length === 6) node = o; });
+  return node;
+}
+function bowString(held: THREE.Object3D): BowString | undefined {
+  const node = bowNode(held);
+  if (!node) return undefined;
+  const t = node.userData.bow_tips as number[];
+  const [top, bottom] = [new THREE.Vector3(t[0], t[1], t[2]), new THREE.Vector3(t[3], t[4], t[5])];
+  const g = new THREE.BufferGeometry().setFromPoints([top, top.clone().lerp(bottom, 0.5), bottom]);
+  const line = new THREE.Line(g, stringMat);
+  line.frustumCulled = false;
+  node.add(line);
+  return { node, line, top, bottom };
+}
+interface BowArms {
+  root: THREE.Object3D; head: THREE.Object3D; string?: BowString;
+  /** what holds the bow in the fist (attach's anchor), its turn as the hand carries it, and how far it is held upright */
+  grip?: THREE.Object3D; gripRest: THREE.Quaternion; hold: number;
+  uaL: THREE.Object3D; laL: THREE.Object3D; handL: THREE.Object3D; uaR: THREE.Object3D; laR: THREE.Object3D; handR: THREE.Object3D; w: number }
+const _aq = new THREE.Quaternion(), _aq2 = new THREE.Quaternion(), _aq3 = new THREE.Quaternion(), _av = new THREE.Vector3(), _av2 = new THREE.Vector3();
+const _fwd = new THREE.Vector3(), _left = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
+/** Turn `bone` so that the way to its child `tip` points along the world direction `dir`, `w` of the way. */
+function aimBone(bone: THREE.Object3D, tip: THREE.Object3D, dir: THREE.Vector3, w: number) {
+  bone.updateWorldMatrix(true, true);
+  const from = _av.setFromMatrixPosition(tip.matrixWorld).sub(_av2.setFromMatrixPosition(bone.matrixWorld)).normalize();
+  const world = _aq.setFromUnitVectors(from, dir).multiply(bone.getWorldQuaternion(_aq2));
+  const local = bone.parent!.getWorldQuaternion(_aq3).invert().multiply(world);
+  bone.quaternion.slerp(local, w);
+}
+/** Two-bone IK: turn `upper` and `lower` so that `hand` reaches `target`, the elbow bending towards `pole`, `w` of the way. */
+const _ik = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+function reach(upper: THREE.Object3D, lower: THREE.Object3D, hand: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3, w: number) {
+  upper.updateWorldMatrix(true, true);
+  const [S, E, H, u, v, e] = _ik;
+  S.setFromMatrixPosition(upper.matrixWorld);
+  E.setFromMatrixPosition(lower.matrixWorld);
+  H.setFromMatrixPosition(hand.matrixWorld);
+  const a = S.distanceTo(E), b = E.distanceTo(H);
+  u.subVectors(target, S);
+  const d = THREE.MathUtils.clamp(u.length(), Math.abs(a - b) + 1e-3, a + b - 1e-3);
+  u.normalize();
+  v.copy(pole).addScaledVector(u, -pole.dot(u)).normalize();
+  const cos = THREE.MathUtils.clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1);
+  e.copy(S).addScaledVector(u, cos * a).addScaledVector(v, Math.sqrt(1 - cos * cos) * a); // where the elbow goes
+  aimBone(upper, lower, E.subVectors(e, S).normalize(), w);
+  lower.updateWorldMatrix(true, true);
+  aimBone(lower, hand, H.subVectors(target, S.setFromMatrixPosition(lower.matrixWorld)).normalize(), w);
+}
+const _tgt = new THREE.Vector3(), _pole = new THREE.Vector3(), _head = new THREE.Vector3(), _str = new THREE.Vector3();
+/**
+ * An archer's arms, over the idle or the jog (the animations have no bow): the bow arm straight out ahead at shoulder
+ * height; the other hand takes the string at the bow, draws it back to the cheek over the first half of a shot, the
+ * elbow up behind, and lets go, slipping back past the ear. Held drawn while a skill is aimed. Eases in and out.
+ */
+function aimBow(b: BowArms, s: AnimState, dt: number) {
+  const shot = s.atkAge < ATK_MS ? s.atkAge / ATK_MS : -1;
+  const down = s.deadAge >= 0 || s.swimming || (s.sitAge ?? -1) >= 0;
+  const want = down ? 0 : s.casting || shot >= 0 ? 1 : 0;
+  b.w += (want - b.w) * Math.min(1, dt * 10);
+  b.hold += ((down ? 0 : 1) - b.hold) * Math.min(1, dt * 6);
+  b.root.getWorldQuaternion(_aq3);
+  const fwd = _fwd.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize();
+  const left = _left.set(fwd.z, 0, -fwd.x); // facing +z, the left hand is on +x
+  if (b.w < 0.01) {
+    straightBowArm(b, b.hold);
+    holdBow(b, fwd);
+    return pullString(b, 0);
+  }
+  const phase = s.casting ? 0.5 : Math.max(0, shot);
+  const drawn = THREE.MathUtils.smoothstep(phase, 0.05, 0.5), loosed = THREE.MathUtils.smoothstep(phase, 0.55, 0.72);
+  const sc = b.root.getWorldScale(_av2).y;
+  // the bow arm, straight out ahead, a touch up
+  _d1.copy(fwd).addScaledVector(left, 0.08).setY(0.06).normalize();
+  aimBone(b.uaL, b.laL, _d1, b.w);
+  aimBone(b.laL, b.handL, _d1, b.w);
+  b.handL.updateWorldMatrix(true, false);
+  // the string, a hand's breadth inside the bow; the cheek, beside the jaw; past the ear, let go
+  _str.setFromMatrixPosition(b.handL.matrixWorld).addScaledVector(fwd, -0.12 * sc).addScaledVector(left, -0.04 * sc);
+  b.head.updateWorldMatrix(true, false);
+  _head.setFromMatrixPosition(b.head.matrixWorld);
+  _tgt.copy(_head).addScaledVector(left, -0.08 * sc).addScaledVector(fwd, 0.07 * sc).y -= 0.1 * sc;
+  _tgt.lerpVectors(_str, _tgt, drawn);
+  if (loosed > 0) _tgt.lerp(_av.copy(_head).addScaledVector(left, -0.2 * sc).addScaledVector(fwd, -0.14 * sc), loosed);
+  // the elbow out to the side, at shoulder height: the forearm level with the arrow
+  _pole.copy(left).multiplyScalar(-1).addScaledVector(fwd, -0.15).setY(0.05);
+  reach(b.uaR, b.laR, b.handR, _tgt, _pole, b.w);
+  straightBowArm(b, b.hold * (1 - b.w));
+  holdBow(b, fwd);
+  pullString(b, b.w * drawn * (1 - loosed));
+}
+/** The bow arm carried straight, the forearm in line with the upper arm (the clips bend the elbow, a running one most),
+ * `k` of the way; the upper arm keeps its own swing. */
+function straightBowArm(b: BowArms, k: number) {
+  if (k < 0.01) return;
+  b.uaL.updateWorldMatrix(true, true);
+  _d2.setFromMatrixPosition(b.laL.matrixWorld).sub(_av.setFromMatrixPosition(b.uaL.matrixWorld)).normalize();
+  aimBone(b.laL, b.handL, _d2, k);
+}
+const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vector3(), _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(),
+  _bq2 = new THREE.Quaternion();
+/**
+ * How the bow sits in the fist, whatever way the clip turns the hand: carried (standing, running) it lies along the
+ * body, one limb ahead a little lower than the other behind, its back to the ground and its string on top; drawn it
+ * stands upright, its back towards where the archer faces and the string towards the archer; between the two as the
+ * draw comes and goes. Fallen, sitting or swimming it goes with the hand again.
+ */
+function holdBow(b: BowArms, fwd: THREE.Vector3) {
+  const g = b.grip;
+  if (!g) return;
+  g.quaternion.copy(b.gripRest);
+  if (b.hold < 0.01) return;
+  g.parent!.updateWorldMatrix(true, false);
+  // carried: the bow's Y (its limbs) along fwd, dipping forward; its X (its back) down
+  _by.copy(fwd).multiplyScalar(Math.cos(0.25)).y -= Math.sin(0.25);
+  _by.normalize();
+  _bx.set(0, -1, 0).addScaledVector(_by, _by.y).normalize();
+  _bz.crossVectors(_bx, _by);
+  _bq.setFromRotationMatrix(_bm.makeBasis(_bx, _by, _bz));
+  if (b.w > 0.001) {
+    // drawn: its X along fwd, its Y up
+    _by.set(0, 1, 0);
+    _bz.crossVectors(fwd, _by);
+    _bq2.setFromRotationMatrix(_bm.makeBasis(fwd, _by, _bz));
+    _bq.slerp(_bq2, b.w);
+  }
+  g.quaternion.slerp(g.parent!.getWorldQuaternion(_aq).invert().multiply(_bq), b.hold);
+}
+/** The string's middle: at rest between the tips, pulled `k` of the way to the drawing hand. */
+function pullString(b: BowArms, k: number) {
+  const st = b.string;
+  if (!st) return;
+  const pos = st.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+  const mid = _av.copy(st.top).lerp(st.bottom, 0.5);
+  if (k > 0.001) {
+    b.handR.updateWorldMatrix(true, false);
+    st.node.updateWorldMatrix(true, false);
+    const hand = _av2.setFromMatrixPosition(b.handR.matrixWorld).applyMatrix4(_m.copy(st.node.matrixWorld).invert());
+    mid.lerp(hand, k);
+  }
+  pos.setXYZ(1, mid.x, mid.y, mid.z);
+  pos.needsUpdate = true;
 }
 
 /** How far behind the body a chest piece or robe stands (z, the male bind pose) over the shoulder blades and at the
@@ -723,6 +891,36 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
 }
 
 /** Hangs `o` from a bone keeping the orientation it was modelled in (bones have arbitrary axes). */
+/**
+ * A clip played on the other side of the body: each left bone moves as its right one did and the other way round,
+ * mirrored across the body's plane (x = 0). The bones' own axes are not mirror images of each other's, so every key is
+ * corrected by the rest pose: q'(m B) = K(par B)⁻¹ · mirror(q B) · K(B), with K(X) = mirror(P X)⁻¹ · P(m X), P the rest
+ * world rotations and mirror(x, y, z, w) = (x, −y, −z, w); a position p becomes K(par B)⁻¹ · (−px, py, pz).
+ */
+function mirrorClip(clip: THREE.AnimationClip, rig: THREE.Object3D, name: string): THREE.AnimationClip {
+  const other = (n: string) => n.replace(/_([lr])$/, (_, s: string) => (s === 'l' ? '_r' : '_l'));
+  const mirror = (q: THREE.Quaternion) => q.set(q.x, -q.y, -q.z, q.w);
+  rig.updateMatrixWorld(true);
+  const K = (o: THREE.Object3D | null) => {
+    if (!o) return new THREE.Quaternion();
+    const m = rig.getObjectByName(other(o.name)) ?? o;
+    return mirror(o.getWorldQuaternion(new THREE.Quaternion())).invert().multiply(m.getWorldQuaternion(new THREE.Quaternion()));
+  };
+  const q = new THREE.Quaternion(), v = new THREE.Vector3();
+  const tracks = clip.tracks.map((t) => {
+    const { nodeName, propertyName } = THREE.PropertyBinding.parseTrackName(t.name);
+    const out = t.clone(); // its own copy of the keys
+    out.name = `${other(nodeName)}.${propertyName}`;
+    const bone = rig.getObjectByName(nodeName);
+    if (!bone) return out;
+    const kp = K(bone.parent).invert(), kb = K(bone), vals = out.values;
+    if (propertyName === 'quaternion') for (let i = 0; i < vals.length; i += 4) mirror(q.fromArray(vals, i)).premultiply(kp).multiply(kb).toArray(vals, i);
+    else if (propertyName === 'position') for (let i = 0; i < vals.length; i += 3) v.fromArray(vals, i).setX(-vals[i]).applyQuaternion(kp).toArray(vals, i);
+    return out;
+  });
+  return new THREE.AnimationClip(name, clip.duration, tracks);
+}
+
 function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number) {
   const q = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
   const anchor = new THREE.Group();
@@ -964,11 +1162,19 @@ export function qPlayer(o: QOpts): Rig {
   }
   if (o.helm) {
     const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
-    const model = fixed ? props[o.helm] : wantGear(o.helm as GearFile)?.getObjectByName(o.helm.startsWith('mage_') ? 'circlet' : 'helm');
+    const model = fixed ? props[o.helm] : wantGear(o.helm as GearFile)?.getObjectByName(o.helm.startsWith('mage_') ? 'circlet' : o.helm.startsWith('light_') ? 'hood' : 'helm');
     const [y, z, s] = fixed ?? [0, 0, 1];
     if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
-  if (o.inHand) attach(byName.hand_r, o.inHand, -0.09, -0.02, 0.03, 0.85);
+  // a bow in the left hand (the right draws the string), any other weapon in the right; the plain bow (models.ts, while
+  // a model loads) has its back towards +Z where the modelled ones have it towards +X, and is held by its string: its
+  // grip goes in the fist
+  if (o.bow && o.inHand && !bowNode(o.inHand)) {
+    o.inHand.rotation.y += Math.PI / 2;
+    o.inHand.position.x -= 0.6;
+  }
+  if (o.inHand) attach(o.bow ? byName.hand_l : byName.hand_r, o.inHand, o.bow ? 0.09 : -0.09, -0.02, 0.03, 0.85);
+  if (o.offHand) attach(byName.hand_l, o.offHand, 0.09, -0.02, 0.03, 0.85);
 
   const mixer = new THREE.AnimationMixer(arm);
   const acts: Record<string, THREE.AnimationAction> = {}, w: Record<string, number> = {};
@@ -978,12 +1184,14 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0, cape,
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0, cape, dual: o.offHand ? { left: true, age: Infinity } : undefined,
+      bow: o.bow ? { root, head: byName.Head, string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
+        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined,
       legs: ['calf_l', 'calf_r', 'foot_l', 'foot_r'].map((n) => ({ bone: byName[n], rest: byName[n].quaternion.clone() })) },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
@@ -1016,10 +1224,16 @@ export function animateQ(q: QAnim, s: AnimState): number {
     if (!clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
-  else if (s.casting) cur = 'Spell_Simple_Idle_Loop';
-  else if (s.atkAge < ATK_MS) {
-    cur = atk;
-    q.acts[atk].time = (s.atkAge / ATK_MS) * (clips[atk].duration - 0.02);
+  // an archer neither swings nor casts with its hands up: aimBow draws the bow over the idle or the jog
+  else if (s.casting && !q.bow) cur = 'Spell_Simple_Idle_Loop';
+  else if (s.atkAge < ATK_MS && !q.bow) {
+    // a pair of swords: every new swing (its age starts over) with the other hand
+    if (q.dual) {
+      if (s.atkAge < q.dual.age) q.dual.left = !q.dual.left;
+      q.dual.age = s.atkAge;
+    }
+    cur = q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
+    q.acts[cur].time = (s.atkAge / ATK_MS) * (clips[cur].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
   // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
@@ -1043,6 +1257,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.floor += (floor - q.floor) * Math.min(1, dt * 8);
   if (q.floor < 0.01) q.floor = 0;
   if (q.floor > 0) for (const l of q.legs) l.bone.quaternion.slerp(l.rest, q.floor);
+  if (q.bow) aimBow(q.bow, s, dt);
   if (q.cape) capeCloth(q.cape, s, dt);
   return steps;
 }
@@ -1103,6 +1318,16 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Escudos: ['broadsword', 'brigandine_tunic', null, null, null, null, null],
     // each region set with its sword and its staff, side by side
     Armas: [null, null, null, null, null, null, null],
+    // the archer's bows and the assassin's daggers: the plain ones, then each region set's (over its plate)
+    Arcos: [null, null, null, null, null, null, null],
+    // each region set's light armour (the archer's and the assassin's): hood, jerkin, bracers, leggings, treads
+    ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
+      `Ligera ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
+      [`${s}_bow`, `${s}_jerkin`, `${s}_hood`, `${s}_bracers`, `${s}_leggings`, `${s}_treads`, null, `${s}_cape`],
+    ])),
+    Dagas: [null, null, null, null, null, null, null],
+    // the gladiator's pairs of swords, the same way: Atacar swings each hand in turn
+    Duales: [null, null, null, null, null, null, null],
     // each region set's mage gear (tools/art/blender/gear.py mage_<set>), and all the crowns side by side
     ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
       `Místico ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
@@ -1123,6 +1348,25 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       r.dispose?.();
     }
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
+    if (tier === 'Arcos' || tier === 'Dagas' || tier === 'Duales') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
+      const bow = tier === 'Arcos';
+      const kind = bow ? 'bow' : tier === 'Duales' ? 'duals' : 'dagger';
+      const plain = { bow: ['short_bow', 'hunting_bow', 'composite_bow'], dagger: ['dagger', 'assassin_dagger', 'stiletto'], duals: ['short_sword_duals', 'broadsword_duals', 'revolution_duals', 'samurai_duals'] }[kind];
+      const list = [...plain, ...sets.map((s) => `${s}_${kind}`)];
+      rigs = list.map((w, i) => {
+        const set = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_/.exec(w)?.[1];
+        const rig = playerModel(race, 'fighter', w, set ? `${set}_plate` : 'brigandine_tunic', { g, hs: i % 3, hc: 0 },
+          set ? [`${set}_helm`, `${set}_gauntlets`, `${set}_greaves`, `${set}_boots`, null] : ['brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', null]);
+        rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
+        // a still swing (?atk=) is the right hand's; ?left holds it on the left one's
+        if (p.has('left') && rig.q?.dual) rig.q.dual = { left: true, age: -Infinity };
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
     if (tier === 'Armas') {
       const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
       const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
@@ -1206,6 +1450,8 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   // ?walk=6: running, the rigs go forward at that speed (m/s) for real, the camera with them, as in the game (a cape
   // trails in still air, not in the wind it gets running in place)
   const walk = Number(p.get('walk')) || 0, walked = new THREE.Vector3();
+  // ?atk=350: the attack held at that moment (ms into it), to see a pose frame by frame (an archer's draw)
+  const atkAt = p.has('atk') ? Number(p.get('atk')) : undefined;
   since = clock();
   let last = clock();
   renderer.setAnimationLoop(() => {
@@ -1223,7 +1469,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       rig.root.rotation.y = spin ? now / 2500 : ry;
       animate(rig, {
         moving: false, casting: false, t: now / 1000 + i,
-        atkAge: state === 'Atacar' ? age % 1100 : Infinity, deadAge: state === 'Morir' ? age : -1, ...STATES[state],
+        atkAge: state === 'Atacar' ? (atkAt ?? age % 1100) : Infinity, deadAge: state === 'Morir' ? age : -1, ...STATES[state],
       });
     });
     renderer.render(scene, cam);

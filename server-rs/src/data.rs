@@ -61,8 +61,13 @@ pub struct ItemDef {
     pub block: Option<f64>,
     /** how much faster its wearer runs, a fraction (a cape's: 0.03 is 3%) */
     pub speed: Option<f64>,
+    /** points of evasion, and how much faster its wearer attacks (a fraction): the light armour's */
+    pub evasion: Option<f64>,
+    pub atk_spd: Option<f64>,
     /** a weapon held in both hands: no shield with it */
     pub two_handed: Option<bool>,
+    /** a pair of swords: the sword it is two of */
+    pub pair: Option<String>,
     pub price: i64,
     pub stack: Option<bool>,
     #[serde(rename = "use")]
@@ -156,6 +161,9 @@ pub struct BuffMods {
     pub speed: Option<f64>,
     pub atk_spd: Option<f64>,
     pub cast_spd: Option<f64>,
+    /** points added, not multipliers */
+    pub crit: Option<f64>,
+    pub evasion: Option<f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -183,6 +191,15 @@ pub struct SkillDef {
     pub aoe_on_self: Option<bool>,
     pub buff: Option<BuffDef>,
     pub status: Option<StatusApply>,
+    /** the weapon it needs in hand ("bow", "dagger") */
+    pub weapon: Option<String>,
+    /** damage multiplied by this when the caster is behind its target */
+    pub behind: Option<f64>,
+    /** the mobs fighting the caster lose its trail */
+    pub vanish: Option<bool>,
+    /** Force charges it gives (99: all) and that it needs and spends */
+    pub charge: Option<u32>,
+    pub spend: Option<u32>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -265,6 +282,11 @@ pub struct SpecDef {
     pub parent: Option<String>,
     /** how much more often it blocks with a shield (1.5: half again) */
     pub block: Option<f64>,
+    /** the weapon its skills ask for, and the extra critical chance (points) while holding it */
+    pub weapon: Option<String>,
+    pub crit: Option<f64>,
+    /** how many Force charges it can hold (the gladiator's) */
+    pub charges: Option<u32>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

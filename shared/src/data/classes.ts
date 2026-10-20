@@ -68,19 +68,33 @@ export const CLASSES: Record<ClassType, ClassDef> = {
  * Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. At EVOLVE_LEVEL the
  * quest "El Despertar" (shared/src/data/quests.ts) turns it into its evolution (`parent`), which keeps its skills.
  */
-export type Spec = 'knight' | 'gladiator' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'archmage' | 'hierophant';
-export interface SpecDef { name: string; base: ClassType; desc: string; parent?: Spec; /** how much more often it blocks with a shield (1.5: half again) */ block?: number }
+export type Spec = 'knight' | 'gladiator' | 'archer' | 'assassin' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'sharpshooter' | 'shade' | 'archmage' | 'hierophant';
+export interface SpecDef {
+  name: string; base: ClassType; desc: string; parent?: Spec;
+  /** how much more often it blocks with a shield (1.5: half again) */
+  block?: number;
+  /** the weapon its skills ask for (SkillDef.weapon) */
+  weapon?: 'bow' | 'dagger' | 'dual';
+  /** extra critical chance (points) while it holds that weapon */
+  crit?: number;
+  /** how many Force charges it can hold (the gladiator's sonic skills spend them) */
+  charges?: number;
+}
 export const SPEC_LEVEL = 20;
 export const EVOLVE_LEVEL = 76;
 
 export const SPECS: Record<Spec, SpecDef> = {
   knight: { name: 'Caballero', base: 'fighter', block: 1.5, desc: 'Tanque. Aguanta, aturde y mantiene a los enemigos encima suyo.' },
-  gladiator: { name: 'Gladiador', base: 'fighter', desc: 'Daño cuerpo a cuerpo. Golpes brutales, sangrados y furia.' },
+  gladiator: { name: 'Gladiador', base: 'fighter', weapon: 'dual', charges: 5, desc: 'Una espada en cada mano. Acumula fuerza y la descarga en golpes sónicos.' },
+  archer: { name: 'Arquero', base: 'fighter', weapon: 'bow', desc: 'Daño a distancia. Flechas, ralentizaciones y veneno desde lejos.' },
+  assassin: { name: 'Asesino', base: 'fighter', weapon: 'dagger', crit: 8, desc: 'Dagas, golpes críticos, veneno y puñaladas por la espalda.' },
   sorcerer: { name: 'Hechicero', base: 'mystic', desc: 'Daño mágico. Fuego, hielo y rayos sobre grupos enteros.' },
   cleric: { name: 'Clérigo', base: 'mystic', desc: 'Sanador. Curaciones grandes y bendiciones para el grupo.' },
   // the third specialization (level 76)
   phoenix_knight: { name: 'Paladín del Fénix', base: 'fighter', parent: 'knight', block: 1.5, desc: 'Caballero renacido del fuego: su escudo arde y sus heridas se cierran solas.' },
-  duelist: { name: 'Duelista', base: 'fighter', parent: 'gladiator', desc: 'Gladiador que hizo de la pelea un arte: rápido, preciso y letal.' },
+  duelist: { name: 'Duelista', base: 'fighter', parent: 'gladiator', weapon: 'dual', charges: 8, desc: 'Gladiador que hizo de las dos espadas un arte: más fuerza acumulada, golpes sónicos letales.' },
+  sharpshooter: { name: 'Francotirador', base: 'fighter', parent: 'archer', weapon: 'bow', crit: 5, desc: 'Arquero que no falla: cada flecha va al punto débil.' },
+  shade: { name: 'Sombra', base: 'fighter', parent: 'assassin', weapon: 'dagger', crit: 12, desc: 'Asesino que se funde con la oscuridad: nadie lo ve venir.' },
   archmage: { name: 'Archimago', base: 'mystic', parent: 'sorcerer', desc: 'Hechicero que domina todas las escuelas: su poder no tiene techo.' },
   hierophant: { name: 'Hierofante', base: 'mystic', parent: 'cleric', desc: 'Clérigo que habla con los dioses: sus milagros alcanzan a todo el grupo.' },
 };

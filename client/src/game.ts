@@ -12,7 +12,7 @@ import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATE
 import { GATHER, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
-import { MELEE_RANGE } from '../../shared/src/formulas';
+import { BOW_RANGE, MELEE_RANGE } from '../../shared/src/formulas';
 import { dashEnd, findPath, navGrid, pushOut, tripLegs } from '../../shared/src/collision';
 import type { Net } from './net';
 import { CameraController } from './render/camera';
@@ -572,7 +572,9 @@ export class Game {
       else s.atkAt = performance.now();
       const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
       if (ranged) play('miss', this.near(s) * 0.5);
-      if (t && ranged) {
+      // an archer looses an arrow as the drawn string goes (quaternius.ts aimBow: a little over half the shot)
+      if (t && this.holdsBow(s)) this.fx.arrow(this.bowHand(s), () => t.pos.clone().setY(t.pos.y + t.height * 0.55), { delay: 380 });
+      else if (t && ranged) {
         this.fx.projectile(s.pos.clone().setY(s.pos.y + s.height * 0.6), () => t.pos.clone().setY(t.pos.y + t.height * 0.5), 0xd8b070, 260, 0.1);
       }
     });
@@ -1267,6 +1269,15 @@ export class Game {
     GENERIC_VFX[id]({ f: this.fx, s, t, color: 0xffffff, aoe: 6 });
   }
 
+  /** Whether this body holds a bow (a player's bow item, or an archer mob). */
+  private holdsBow(c: CEnt) {
+    return c.rec.k === 'p' ? !!c.rec.w && ITEMS[c.rec.w]?.weaponType === 'bow' : false;
+  }
+  /** Where an arrow leaves: the bow hand, about shoulder height in front of the body. */
+  private bowHand(c: CEnt) {
+    return c.pos.clone().add(new THREE.Vector3(Math.sin(c.ry) * 0.6, c.height * 0.82, Math.cos(c.ry) * 0.6));
+  }
+
   private onFx(sId: number, tId: number, skill: string) {
     const s = this.ents.get(sId), t = this.ents.get(tId);
     if (!s) return;
@@ -1286,9 +1297,28 @@ export class Game {
       return;
     }
     if (skill === 'escape') return this.vfx('escape', s);
+    if (skill === 'charge') return this.vfx('charge', s); // a pair of swords' hit gathered a Force charge
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
     if (!def || !t) return;
+    // the archer's skills: arrows, loosed as the shot goes (the draw was held through the cast)
+    if (def.weapon === 'bow' && def.kind === 'phys') {
+      s.atkAt = performance.now() - 330; // the loose (aimBow), not the draw again
+      const hit = () => t.pos.clone().setY(t.pos.y + t.height * 0.55);
+      const fire = skill === 'fire_arrow', poison = def.status?.id === 'poison';
+      const tint = fire ? 0xff7a1a : poison ? 0x7ac83a : def.color;
+      this.fx.arrow(this.bowHand(s), hit, { delay: 60, fire, color: tint, onHit: () => {
+        this.fx.burst(hit(), tint, def.aoe ? 1.2 : 0.8, 380);
+        if (def.aoe) this.fx.ring(t.pos.clone(), tint, def.aoe, 550);
+      } });
+      // a volley: more arrows falling on the area round the target
+      if (def.aoe) for (let i = 0; i < 7; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * def.aoe * 0.8;
+        const spot = t.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+        this.fx.arrow(spot.clone().setY(spot.y + 9), () => spot, { delay: 200 + i * 60, fire, color: tint, onHit: () => this.fx.burst(spot, tint, 0.5, 260) });
+      }
+      return;
+    }
     const vfx = SKILL_VFX[skill];
     if (vfx) return vfx({ f: this.fx, s, t, color: def.color, aoe: def.aoe ?? 6 });
     // fallback for a skill without its own signature (skill-fx.ts): generic by kind
@@ -1406,7 +1436,7 @@ export class Game {
     // walking up to whatever we interact with: predict it like a click-move (the server walks the same way)
     if (m.t === 'attack' || m.t === 'pickup' || m.t === 'talk') {
       const t = this.ents.get(m.id);
-      if (t) this.predictChase(t, m.t === 'attack' ? MELEE_RANGE + t.radius - 0.3 : m.t === 'pickup' ? 1.2 : 2.5);
+      if (t) this.predictChase(t, m.t === 'attack' ? this.reach() + t.radius - 0.3 : m.t === 'pickup' ? 1.2 : 2.5);
     } else if (m.t === 'skill') {
       const def = SKILLS[m.skill], t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
       if (def && t && def.target === 'enemy' && this.isHostile(t)) this.predictChase(t, Math.max(0.5, def.range + t.radius - 0.4));
@@ -1479,6 +1509,12 @@ export class Game {
     return !!best;
   }
 
+  /** How far our auto-attack reaches: a bow's range, or arm's length (server-rs player.rs). */
+  private reach() {
+    const w = this.inv.find((i) => i.s === 'weapon');
+    return w && ITEMS[w.i]?.weaponType === 'bow' ? BOW_RANGE : MELEE_RANGE;
+  }
+
   attackTarget() {
     const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
     if (!cur || cur.flags & F_DEAD || (cur.rec.k !== 'n' && cur.rec.k !== 'i' && !this.isHostile(cur) && !this.ctrl)) this.ensureEnemyTarget();
@@ -1489,7 +1525,7 @@ export class Game {
     // prediction: already in reach and the swing timer is ready -> start the swing on the click
     const self = this.self, now = performance.now();
     const interval = 60000 / Math.max(1, this.me.atkSpd);
-    if (self && !(self.flags & (F_DEAD | F_CASTING)) && now - self.atkAt > interval && self.pos.distanceTo(c.pos) <= MELEE_RANGE + c.radius - 0.2 && (this.isHostile(c) || this.ctrl)) {
+    if (self && !(self.flags & (F_DEAD | F_CASTING)) && now - self.atkAt > interval && self.pos.distanceTo(c.pos) <= this.reach() + c.radius - 0.2 && (this.isHostile(c) || this.ctrl)) {
       self.atkAt = now;
       this.predictedSwing = now;
       // instant local cue; the real hit sound and number still come from the server's 'dmg'

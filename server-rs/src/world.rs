@@ -562,6 +562,7 @@ impl World {
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
             "pAtk": s.p_atk, "mAtk": s.m_atk, "pDef": s.p_def, "mDef": s.m_def, "acc": s.accuracy, "eva": s.evasion, "crit": s.crit, "blk": (s.block * 100.0).round(),
+            "charges": p.charges, "maxCharges": p.max_charges(),
             "atkSpd": jround(60000.0 / s.atk_interval), "castSpd": jround(100.0 / s.cast_mul), "speed": jround(s.speed * 20.0), "cdr": (s.cdr * 100.0).round(),
             "adena": p.adena, "karma": p.karma, "pk": p.pk, "pvp": p.pvp, "flagged": p.pvp_until > self.now, "pvpOn": p.pvp_on,
             "skills": skills, "buffs": buffs,
