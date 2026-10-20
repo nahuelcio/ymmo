@@ -413,7 +413,7 @@ const list: MobDef[] = [
   // full party (server-rs formulas.rs war_avatar_needs_a_party): each blow takes over a third of a level 78 tank's life
   // and wounds (healing halved), its circles nearly kill a mage, its heralds hunt the healers, and ten minutes in its
   // enrage kills anyone still standing
-  { id: 'war_avatar', name: 'Avatar de la Guerra', level: 80, shape: 'orc', color: 0x8a1a12, scale: 3.6, aggressive: true, speed: 4.5, atkInterval: 1700, range: 6, hpMult: 400, atkMult: 80, defMult: 1.5,
+  { id: 'war_avatar', name: 'Avatar de la Guerra', level: 80, shape: 'orc', color: 0x8a1a12, scale: 3.6, aggressive: true, speed: 4.5, atkInterval: 1700, range: 6, hpMult: 400, atkMult: 6.32, defMult: 1.5,
     respawn: 43_200_000, boss: true, onHit: { id: 'wound', ms: 6000, chance: 1 },
     special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
     barrage: { count: 6, r: 5, windup: 2000, mult: 1.3, every: 12000, range: 40 },
@@ -430,7 +430,7 @@ const list: MobDef[] = [
     drops: [{ item: 'scroll_enchant_sacred', chance: 1, min: 2, max: 2 }, { item: 'scroll_enchant_weapon', chance: 1, min: 4, max: 8 }, { item: 'scroll_enchant_armor', chance: 1, min: 8, max: 15 },
       ...setArmor('abyssal', 0.08), ...setArmor('ashforged', 0.08), ...setArmor('dragon', 0.06), ...setArmor('glacial', 0.06), ...setArmor('emerald', 0.05), ...setArmor('infernal', 0.04)] },
   // they go for whoever the boss lets them: a pack of them kills a healer nobody covers
-  { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 17, respawn: 1e12, adena: [0, 0], drops: [] },
+  { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 1.41, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));
