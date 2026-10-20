@@ -18,7 +18,7 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -148,8 +148,6 @@ type Pick = { ent?: CEnt; node?: NodeDef; point?: THREE.Vector3 };
 const SWIM_BODY_Y = WATER_LEVEL - 0.05;
 /** Got up since it last sat down (the server may not have said so yet, for our own character). */
 const isStanding = (c: CEnt) => c.standAt !== undefined && c.standAt > (c.sitAt ?? -Infinity);
-/** How far sitting on the ground lowers the body (the sitting clip is made for a chair). */
-const SIT_GROUND_DROP = 0.44;
 /** What the cast bar says while working a node. */
 const GATHER_LABEL: Record<'chop' | 'mine' | 'pick', () => string> = {
   chop: () => tx('Talando…', 'Chopping…'),
