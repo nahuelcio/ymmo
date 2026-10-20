@@ -1,7 +1,7 @@
 // Status effects (crowd control and damage over time). The server applies and
 // ticks them; clients learn about them through entity flag bits.
 
-export type StatusId = 'stun' | 'slow' | 'bleed' | 'poison';
+export type StatusId = 'stun' | 'slow' | 'bleed' | 'poison' | 'wound';
 
 export interface StatusDef { flag: number; icon: string; name: string; desc: string }
 
@@ -10,6 +10,8 @@ export const STATUSES: Record<StatusId, StatusDef> = {
   slow: { flag: 256, icon: '🐌', name: 'Ralentizado', desc: 'Se mueve un 40% más lento.' },
   bleed: { flag: 512, icon: '🩸', name: 'Sangrando', desc: 'Pierde vida cada segundo.' },
   poison: { flag: 1024, icon: '☠️', name: 'Envenenado', desc: 'Pierde vida cada segundo.' },
+  // the War Avatar's blows (data/mobs.ts): bit 8192, the first free one past F_GATHER (protocol.ts)
+  wound: { flag: 8192, icon: '💔', name: 'Herida de Guerra', desc: 'Las curas que recibe rinden la mitad.' },
 };
 
 export const STATUS_IDS = Object.keys(STATUSES) as StatusId[];

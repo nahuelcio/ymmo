@@ -20,6 +20,8 @@ pub const F_SITTING: u16 = 2048;
 /** felling, mining or picking a world node */
 pub const F_GATHER: u16 = 4096;
 pub const SLOW_MUL: f64 = 0.6;
+/** how much of any healing a wounded body (the War Avatar's blows) gets */
+pub const WOUND_HEAL: f64 = 0.5;
 
 pub enum Out { Text(String), Bin(Vec<u8>) }
 
@@ -73,6 +75,8 @@ impl Common {
     }
     pub fn has(&self, s: &str, now: f64) -> bool { self.statuses.get(s).map_or(false, |st| st.until > now) }
     pub fn speed_mul(&self, now: f64) -> f64 { if self.has("slow", now) { SLOW_MUL } else { 1.0 } }
+    /** How much of a heal lands on this body: half while wounded. */
+    pub fn heal_mul(&self, now: f64) -> f64 { if self.has("wound", now) { WOUND_HEAL } else { 1.0 } }
     pub fn base_flags(&self, now: f64) -> u16 {
         let mut f = if self.dead { F_DEAD } else { 0 } | if self.moving { F_MOVING } else { 0 };
         for (id, st) in &self.statuses {

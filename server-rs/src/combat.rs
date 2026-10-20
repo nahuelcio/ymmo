@@ -600,7 +600,7 @@ impl World {
                         self.apply_damage(pid, tg, dmg, now, crit, false, false);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                         if def.kind == "drain" && !self.ents[&pid].c.dead {
-                            let heal = jround(dmg * 0.5);
+                            let heal = jround(dmg * 0.5 * self.ents[&pid].c.heal_mul(now));
                             let p = self.pl_mut(pid).unwrap();
                             p.hp = (p.hp + heal).min(p.stats.max_hp);
                             p.send(json!({ "t": "dmg", "s": pid, "tg": pid, "v": heal, "heal": true }));
@@ -611,15 +611,19 @@ impl World {
             "heal" => {
                 let m_atk = self.pl(pid).unwrap().stats.m_atk;
                 let amount = jround(def.power * (1.0 + m_atk / 100.0));
+                // a wounded body (the War Avatar's blows) gets half of it
                 for ally in self.party_around(pid, target, def.aoe) {
+                    let mul = self.ents.get(&ally).map_or(1.0, |e| e.c.heal_mul(now));
                     let Some(a) = self.pl_mut(ally) else { continue };
                     let before = a.hp;
-                    a.hp = (a.hp + amount).min(a.stats.max_hp);
+                    a.hp = (a.hp + amount * mul).min(a.stats.max_hp);
                     let msg = json!({ "t": "dmg", "s": pid, "tg": ally, "v": jround(a.hp - before), "heal": true });
                     self.send(pid, msg.clone());
                     self.send(ally, msg);
                 }
-                let (before, after, is_player) = match &mut self.ents.get_mut(&target).unwrap().k {
+                let tgt = self.ents.get_mut(&target).unwrap();
+                let amount = amount * tgt.c.heal_mul(now);
+                let (before, after, is_player) = match &mut tgt.k {
                     Kind::Player(t) => { let b = t.hp; t.hp = (t.hp + amount).min(t.stats.max_hp); (b, t.hp, true) }
                     Kind::Mob(m) => { let b = m.hp; m.hp = (m.hp + amount).min(m.stats.max_hp); (b, m.hp, false) }
                     _ => return,

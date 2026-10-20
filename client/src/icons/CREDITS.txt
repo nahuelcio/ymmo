@@ -51,3 +51,6 @@ item: duals <- the samurai_longsword drawing twice, one mirrored: two swords cro
 
 Added for the mystic's magic swords (same source and licence), file <- original:
 item: spellblade <- lorc/sparkling-sabre
+
+Added for the War Avatar's wound (same source and licence), file <- original:
+status: wound <- lorc/broken-heart

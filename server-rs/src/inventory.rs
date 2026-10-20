@@ -157,10 +157,11 @@ impl World {
             self.pl_mut(pid).unwrap().escape_at = now + 3000.0;
             self.sys(pid, "En 3 segundos volvés a la aldea...", "You will be returned to the village in 3 seconds...");
         }
+        let wound = self.ents[&pid].c.heal_mul(now);
         let p = self.pl_mut(pid).unwrap();
         if let Some(hp) = u.hp {
             let before = p.hp;
-            p.hp = (p.hp + hp).min(p.stats.max_hp);
+            p.hp = (p.hp + hp * wound).min(p.stats.max_hp);
             p.send(json!({ "t": "dmg", "s": pid, "tg": pid, "v": jround(p.hp - before), "heal": true }));
         }
         if let Some(mp) = u.mp {
