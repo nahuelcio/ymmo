@@ -10,7 +10,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, armorPiece, capePiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
-export { SIT_GROUND_DROP } from './quaternius';
+export { SIT_GROUND_DROP, STRIKE_LEAD } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -44,7 +44,13 @@ export interface Rig {
 export interface AnimState {
   moving: boolean;
   atkAge: number; // ms since last attack started (Infinity if none)
+  /** this swing is a stab (a dagger's skill): a dagger otherwise cuts and stabs in turn */
+  atkStab?: boolean;
   casting: boolean;
+  /** what the cast does with the weapon (game.ts castMove): readies it for a blow, or raises it (a fighter's buff or
+   * taunt); none for a spell, cast with the free hand. castAge: ms since the cast began */
+  castMove?: 'strike' | 'raise';
+  castAge?: number;
   deadAge: number; // ms since death (-1 alive)
   t: number; // seconds
   /** /dance emote */
@@ -701,6 +707,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
       inHand: held(),
       bow: !!weapon && ITEMS[weapon]?.weaponType === 'bow',
+      dagger: !!weapon && ITEMS[weapon]?.weaponType === 'dagger',
       offHand: pair ? held() : null,
     });
   }
