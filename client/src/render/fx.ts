@@ -27,6 +27,11 @@ const hot = (c: number, k = 0.6) => new THREE.Color(c).lerp(new THREE.Color(0xff
 const darker = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
 export type Trail = 'magic' | 'fire' | 'ice' | 'dark' | 'holy' | 'none';
 
+// an arrow's parts, along +z (Object3D.lookAt points +z at the target), shared by every arrow in flight
+const ARROW_SHAFT = new THREE.CylinderGeometry(0.012, 0.012, 0.78, 5).rotateX(Math.PI / 2);
+const ARROW_HEAD = new THREE.ConeGeometry(0.03, 0.1, 4).rotateX(Math.PI / 2).translate(0, 0, 0.43);
+const ARROW_FLETCH = new THREE.PlaneGeometry(0.07, 0.16).rotateX(Math.PI / 2).translate(0, 0, -0.33);
+
 /**
  * Spell and combat effects: textured particles (render/particles.ts) for glow, sparks, fire, smoke and dirt,
  * a few meshes where a solid shape reads better (columns of light, wards, telegraphs), and short flashes
@@ -149,6 +154,42 @@ export class FxManager {
     this.p.emit({ cell: 'slash', n: 1, at: pos, size: [size * 1.4, size * 2.2], rot: tilt + 0.15, spin: 0, life: dur * 0.8, color: 0xffffff, alpha: 0.8, fadeIn: 0.05, jitter: 0 });
     const dir = V().subVectors(pos, from).setY(0).normalize();
     this.p.emit({ cell: 'streak', n: 8, at: pos, dir, cone: 0.8, speed: [4, 8], size: 0.3, life: [180, 340], color: hot(color, 0.5), bright: 1.5, stretch: 0.045, gravity: 6, drag: 3 });
+  }
+
+  /**
+   * An arrow: a shaft with its head and fletching flying from `from` to wherever `to` says the target is now, on a low
+   * arc, nose along its flight, `delay` ms after the call (the bow loosed). `color` tints a faint trail; `fire` sets it
+   * alight. `onHit` when it lands.
+   */
+  arrow(from: THREE.Vector3, to: () => THREE.Vector3, opts: { delay?: number; color?: number; fire?: boolean; onHit?: () => void } = {}) {
+    const fly = () => {
+      const start = from.clone(), dist = start.distanceTo(to()), dur = Math.max(110, (dist / 55) * 1000);
+      const g = new THREE.Group();
+      const shaft = new THREE.Mesh(ARROW_SHAFT, this.basic(0x8a6a44, 1, THREE.FrontSide, THREE.NormalBlending));
+      const head = new THREE.Mesh(ARROW_HEAD, this.basic(0xc8ccd0, 1, THREE.FrontSide, THREE.NormalBlending));
+      const feathers = this.basic(0xe8e0d0, 1, THREE.DoubleSide, THREE.NormalBlending);
+      const fletch = new THREE.Mesh(ARROW_FLETCH, feathers), fletch2 = new THREE.Mesh(ARROW_FLETCH, feathers);
+      fletch2.rotation.z = Math.PI / 2; // two vanes, crossed
+      g.add(shaft, head, fletch, fletch2);
+      const cur = V(), prev = start.clone();
+      const tr = this.rate(opts.fire ? 90 : 40);
+      this.add(g, dur, (k, dt) => {
+        cur.lerpVectors(start, to(), k);
+        cur.y += Math.sin(k * Math.PI) * Math.min(1.2, dist * 0.04);
+        g.position.copy(cur);
+        if (cur.distanceToSquared(prev) > 1e-8) g.lookAt(V().copy(cur).multiplyScalar(2).sub(prev));
+        prev.copy(cur);
+        const n = tr(dt);
+        if (n) this.p.emit({ cell: 'glow', n, at: cur, size: opts.fire ? 0.35 : 0.12, life: opts.fire ? 260 : 160, color: opts.fire ? 0xff7a1a : opts.color ?? 0xe8d8b0, bright: opts.fire ? 1.6 : 0.8, alpha: opts.fire ? 1 : 0.45, jitter: 0.04 });
+        if (k > 0.97 && opts.onHit) {
+          const f = opts.onHit;
+          opts.onHit = undefined;
+          f();
+        }
+      });
+    };
+    if (opts.delay) setTimeout(fly, opts.delay);
+    else fly();
   }
 
   /** A shockwave on the ground: a ring of light racing out over a wash of glow, kicking up dust. */

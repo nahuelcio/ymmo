@@ -59,6 +59,9 @@ export function foldable(box: HTMLElement, head: HTMLElement, id: string, start 
 
 export class Hud {
   private statusEl!: HTMLDivElement;
+  /** the gladiator's Force charges, one orb each, under the MP bar */
+  private chargesEl!: HTMLDivElement;
+  private chargesKey = '';
   private atkEl!: HTMLDivElement;
   private atkCd!: HTMLDivElement;
   private dashEl!: HTMLDivElement;
@@ -105,6 +108,9 @@ export class Hud {
       'CP (Combat Points): soak the damage other players deal before your HP drops. No protection against monsters.');
     this.hp = bar(st, 'bar-hp', 'HP');
     this.mp = bar(st, 'bar-mp', 'MP');
+    this.chargesEl = el('div', 'charges', st);
+    this.chargesEl.title = tx('Cargas de fuerza: las juntan Concentración Sónica y los golpes con un par de espadas; las gastan las habilidades sónicas.',
+      'Force charges: gathered by Sonic Focus and by hits with a pair of swords; spent by the sonic skills.');
     this.xp = bar(st, 'bar-xp');
     this.buffs = el('div', 'buffs', root);
     this.statusEl = el('div', 'status-row', root);
@@ -473,6 +479,13 @@ export class Hud {
     const life = m.maxHp > 0 ? m.hp / m.maxHp : 1;
     document.getElementById('game')!.style.filter = life < 0.3 ? `grayscale(${(1 - life / 0.3).toFixed(2)})` : '';
     this.mp.root.classList.toggle('low', m.maxMp > 0 && m.mp / m.maxMp < 0.3);
+    const charges = m.charges ?? 0, maxCharges = m.maxCharges ?? 0, key = `${charges}/${maxCharges}`;
+    if (key !== this.chargesKey) {
+      this.chargesKey = key;
+      this.chargesEl.innerHTML = '';
+      this.chargesEl.style.display = maxCharges > 0 ? '' : 'none';
+      for (let i = 0; i < maxCharges; i++) el('span', `charge${i < charges ? ' on' : ''}`, this.chargesEl);
+    }
     if (m.xpNeed > 0) {
       this.xp.set(m.xp, m.xpNeed);
       this.xp.text.textContent = `XP ${((m.xp / m.xpNeed) * 100).toFixed(2)}%`;
@@ -551,8 +564,9 @@ export class Hud {
       // each bar padded or cut to its size (bars 2-3 were ten slots wide before)
       const bars = Array.from({ length: BARS }, (_, b) => Array.from({ length: SIZE[b] }, (_, i) => {
         const s = v.bars![b]?.[i];
-        // auto-attack used to sit on the bar: free the slot an old layout still gives it
-        return s && (s.type === 'skill' || s.type === 'item') && typeof s.id === 'string' ? { type: s.type, id: s.id } : null;
+        // auto-attack used to sit on the bar: free the slot an old layout still gives it; and a skill no longer in the
+        // game (the gladiator's before its dual-sword kit)
+        return s && (s.type === 'skill' || s.type === 'item') && typeof s.id === 'string' && (s.type === 'item' || SKILLS[s.id]) ? { type: s.type, id: s.id } : null;
       }));
       const flags = (a: unknown, n: number) => Array.from({ length: n }, (_, k) => Array.isArray(a) && !!a[k]);
       return { v: 2, bars, known: Array.isArray(v.known) ? v.known.filter((k) => typeof k === 'string') : [], shown: flags(v.shown, BARS - 1), collapsed: flags(v.collapsed, BARS - 1) };
@@ -709,6 +723,7 @@ export class Hud {
 
   update(now: number) {
     // cooldown overlays
+    const held = this.g.inv.find((it) => it.s === 'weapon'), wielded = held ? ITEMS[held.i]?.weaponType : undefined;
     this.slotEls.forEach((els, b) => els.forEach((s, i) => {
       const sl = this.st?.bars[b][i];
       if (!sl) return;
@@ -721,6 +736,11 @@ export class Hud {
       if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
+      // a skill that asks for a weapon not in hand (the archer's bow, the assassin's dagger)
+      const need = sl.type === 'skill' ? SKILLS[sl.id]?.weapon : undefined;
+      s.classList.toggle('noweapon', !!need && need !== wielded);
+      // a sonic skill with fewer Force charges gathered than it spends
+      s.classList.toggle('nocharge', sl.type === 'skill' && (this.g.me.charges ?? 0) < (SKILLS[sl.id]?.spend ?? 0));
       // the skill pressed during the cast, waiting to go when it ends
       s.classList.toggle('queued', sl.type === 'skill' && sl.id === this.g.queuedSkill && !!this.g.castBar?.skill);
     }));

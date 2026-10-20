@@ -8,6 +8,8 @@ export type Grade = 'NG' | 'D' | 'C' | 'B' | 'A' | 'S';
 export const SHIELD_BLOCK: Record<Grade, number> = { NG: 0.15, D: 0.18, C: 0.21, B: 0.24, A: 0.27, S: 0.3 };
 /** How much faster a cape lets its wearer run, by its grade: 2% at NG up to 5% at S (enchanting adds to its defences, not this). */
 export const CAPE_SPEED: Record<Grade, number> = { NG: 0.02, D: 0.025, C: 0.03, B: 0.035, A: 0.04, S: 0.05 };
+/** how much evasion and attack speed a set's light armour gives, by grade (a multiplier on each piece's share) */
+export const LIGHT_EDGE: Record<Grade, number> = { NG: 0.8, D: 1, C: 1.25, B: 1.5, A: 1.75, S: 2 };
 
 export interface ItemDef {
   id: string;
@@ -18,7 +20,9 @@ export interface ItemDef {
   /** the grade its model is drawn as, when that differs from its grade (pieces re-graded for the level 78 cap keep their look) */
   look?: Grade;
   /** cosmetic: picks the model and the tooltip label, combat only reads the stats */
-  weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger' | 'pickaxe';
+  weaponType?: 'sword' | 'staff' | 'blunt' | 'axe' | 'spear' | 'dagger' | 'bow' | 'dual' | 'pickaxe';
+  /** a pair of swords (weaponType 'dual'): the sword it is two of, as a blacksmith joins them (its recipe) and as it is drawn */
+  pair?: string;
   pAtk?: number; mAtk?: number; pDef?: number; mDef?: number; hp?: number; mp?: number;
   /** cooldown reduction for skills, as a fraction: 0.1 = 10% shorter (capped at 50% in total) */
   cdr?: number;
@@ -26,6 +30,9 @@ export interface ItemDef {
   block?: number;
   /** how much faster its wearer runs, as a fraction: 0.03 = 3% (a cape's) */
   speed?: number;
+  /** points of evasion, and how much faster its wearer attacks (a fraction: 0.02 = 2%): the light armour's */
+  evasion?: number;
+  atkSpd?: number;
   /** a weapon held in both hands: no shield with it */
   twoHanded?: boolean;
   price: number;
@@ -52,6 +59,12 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
   return [
     { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color, ...craft(6) },
     { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'staff', twoHanded: true, pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
+    // a pair of its swords, one in each hand (the gladiator's): a blacksmith joins two of the blade
+    { id: `${p}_duals`, name: `Hojas Duales ${pl}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'dual', pair: `${p}_blade`, twoHanded: true,
+      pAtk: r(w * 1.25), mAtk: r(w * 0.55), price: r(price * 15), icon: '⚔️', color, craft: { mats: [[`${p}_blade`, 2]], adena: r(price * 3) } },
+    // the archer's bow (at range, two hands) and the assassin's dagger (less of the sword's power, their skills make it up)
+    { id: `${p}_bow`, name: `Arco ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'bow', twoHanded: true, pAtk: r(w * 0.95), mAtk: r(w * 0.4), price: price * 6, icon: '🏹', color, ...craft(6) },
+    { id: `${p}_dagger`, name: `Daga ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'dagger', pAtk: r(w * 0.85), mAtk: r(w * 0.5), price: price * 5, icon: '🗡️', color, ...craft(5) },
     armor('helm', `Yelmo ${sg}`, 'head', '⛑️', 2, { pDef: r(a * 0.4), mDef: r(a * 0.12) }),
     // a mage's crown, gloves and shoes: less of the plate's P.Def, more M.Def and MP, as the robe has
     armor('circlet', `Diadema ${sg}`, 'head', '👑', 2, { pDef: r(a * 0.27), mDef: r(a * 0.25), mp: r(j * 0.6) }),
@@ -65,11 +78,34 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
     armor('gloves', `Guantes ${pl}`, 'gloves', '🧤', 1.5, { pDef: r(a * 0.15), mDef: r(a * 0.14), mp: r(j * 0.4) }),
     armor('boots', `Botas ${pl}`, 'feet', '👢', 1.5, { pDef: r(a * 0.23), mDef: r(a * 0.05) }),
     armor('shoes', `Zapatos ${pl}`, 'feet', '🥿', 1.5, { pDef: r(a * 0.15), mDef: r(a * 0.14), mp: r(j * 0.4) }),
+    // the light armour (the archer's and the assassin's): less of the plate's P.Def, more M.Def, and evasion and a
+    // quicker hand in its place; a hood rather than a helm
+    armor('hood', `Capucha ${sg}`, 'head', '🥷', 2, { pDef: r(a * 0.28), mDef: r(a * 0.16), evasion: r(2 * LIGHT_EDGE[grade]), atkSpd: +(0.01 * LIGHT_EDGE[grade]).toFixed(3) }),
+    armor('jerkin', `Jubón ${sg}`, 'chest', '🦺', 4, { pDef: r(a * 0.7), mDef: r(a * 0.3), evasion: r(3 * LIGHT_EDGE[grade]), atkSpd: +(0.02 * LIGHT_EDGE[grade]).toFixed(3) }),
+    armor('bracers', `Brazales ${pl}`, 'gloves', '🧤', 1.5, { pDef: r(a * 0.16), mDef: r(a * 0.08), evasion: r(1 * LIGHT_EDGE[grade]), atkSpd: +(0.015 * LIGHT_EDGE[grade]).toFixed(3) }),
+    armor('leggings', `Calzas ${pl}`, 'legs', '👖', 3, { pDef: r(a * 0.37), mDef: r(a * 0.16), evasion: r(2 * LIGHT_EDGE[grade]), atkSpd: +(0.01 * LIGHT_EDGE[grade]).toFixed(3) }),
+    armor('treads', `Botines ${pl}`, 'feet', '🥾', 1.5, { pDef: r(a * 0.16), mDef: r(a * 0.08), evasion: r(1 * LIGHT_EDGE[grade]), atkSpd: +(0.005 * LIGHT_EDGE[grade]).toFixed(3) }),
     armor('ring', `Anillo ${sg}`, 'ring', '💍', 2, { mDef: r(j * 0.15), hp: j }),
     armor('earring', `Pendiente ${sg}`, 'earring', '✨', 2, { mDef: r(j * 0.17), mp: r(j * 1.5) }),
     armor('necklace', `Collar ${sg}`, 'amulet', '📿', 3, { mDef: r(j * 0.2), hp: r(j * 1.4), mp: j }),
   ];
 }
+
+/** A pair of a plain sword: its look and grade, a quarter more of its power, two hands (no shield); a blacksmith joins two. */
+function dualsOf(sword: string, name: string): ItemDef {
+  const sw = SWORDS[sword];
+  const r = Math.round;
+  return { id: sword === 'sword_of_revolution' ? 'revolution_duals' : sword === 'samurai_longsword' ? 'samurai_duals' : `${sword}_duals`, name, type: 'weapon', slot: 'weapon',
+    grade: sw.grade, ...(sw.look && { look: sw.look }), weaponType: 'dual', pair: sword, twoHanded: true, pAtk: r(sw.pAtk * 1.25), mAtk: sw.mAtk,
+    price: r(sw.price * 2.5), icon: '⚔️', color: sw.color, craft: { mats: [[sword, 2]], adena: r(sw.price * 0.5) } };
+}
+/** the plain swords a pair is made of (filled from the list below, before the pairs are built) */
+const SWORDS: Record<string, { grade: Grade; look?: Grade; pAtk: number; mAtk: number; price: number; color: number }> = {
+  short_sword: { grade: 'NG', pAtk: 8, mAtk: 6, price: 80, color: 0xb8c4cc },
+  broadsword: { grade: 'NG', pAtk: 11, mAtk: 7, price: 600, color: 0xc8d0d8 },
+  sword_of_revolution: { grade: 'NG', look: 'D', pAtk: 20, mAtk: 12, price: 6000, color: 0x9ad0ff },
+  samurai_longsword: { grade: 'D', look: 'C', pAtk: 33, mAtk: 18, price: 30000, color: 0xff6a6a },
+};
 
 const list: ItemDef[] = [
   { id: 'adena', name: 'Adena', type: 'currency', price: 1, stack: true, icon: '🪙', color: 0xffd34d },
@@ -85,6 +121,14 @@ const list: ItemDef[] = [
   { id: 'woodcutter_axe', name: 'Hacha de Leñador', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'axe', pAtk: 6, mAtk: 3, price: 120, icon: '🪓', color: 0x8a6a4a, desc: 'Sirve para talar árboles.' },
   { id: 'miner_pickaxe', name: 'Pico de Minero', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'pickaxe', pAtk: 6, mAtk: 3, price: 120, icon: '⛏️', color: 0x8a8f95, desc: 'Sirve para picar rocas.' },
   { id: 'spear', name: 'Lanza', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'spear', twoHanded: true, pAtk: 11, mAtk: 7, price: 650, icon: '🔱', color: 0xb8c4cc },
+  // pairs of swords (the gladiator's), each joined by a blacksmith from two of its sword
+  ...([['short_sword', 'Espadas Cortas Duales'], ['broadsword', 'Espadas Anchas Duales'], ['sword_of_revolution', 'Espadas de la Revolución Duales'],
+    ['samurai_longsword', 'Espadas Samurái Duales']] as const).map(([sw, name]) => dualsOf(sw, name)),
+  // bows: the archer's (any warrior can shoot one; the archer's skills ask for it)
+  { id: 'short_bow', name: 'Arco Corto', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'bow', twoHanded: true, pAtk: 10, mAtk: 4, price: 600, icon: '🏹', color: 0x9a7a4a, craft: { mats: [['wood_log', 12]], adena: 150 } },
+  { id: 'hunting_bow', name: 'Arco de Cazador', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'bow', twoHanded: true, pAtk: 20, mAtk: 8, price: 6000, icon: '🏹', color: 0x6a8a3a },
+  { id: 'composite_bow', name: 'Arco Compuesto', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'bow', twoHanded: true, pAtk: 32, mAtk: 12, price: 30000, icon: '🏹', color: 0xb05a2a },
+  { id: 'stiletto', name: 'Estilete', type: 'weapon', slot: 'weapon', grade: 'D', look: 'C', weaponType: 'dagger', pAtk: 29, mAtk: 16, price: 26000, icon: '🗡️', color: 0x9a6ad8 },
   { id: 'assassin_dagger', name: 'Daga del Asesino', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'dagger', pAtk: 19, mAtk: 12, price: 5800, icon: '🗡️', color: 0x7adf6a },
   { id: 'battle_axe', name: 'Hacha de Batalla', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'axe', twoHanded: true, pAtk: 22, mAtk: 10, price: 6500, icon: '🪓', color: 0xffb060, craft: { mats: [['iron_ore', 40], ['wood_log', 20]], adena: 2000 } },
   { id: 'partisan', name: 'Partesana', type: 'weapon', slot: 'weapon', grade: 'NG', look: 'D', weaponType: 'spear', twoHanded: true, pAtk: 21, mAtk: 11, price: 6200, icon: '🔱', color: 0xa8d8e8 },

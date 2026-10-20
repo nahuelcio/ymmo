@@ -145,6 +145,8 @@ pub struct Player {
     pub pvp_on: bool,
     /** inside a full-PvP zone (last tick): flagged all the while; leaving, the flag runs out */
     pub in_pvp: bool,
+    /** Force charges (the gladiator's): built up by Sonic Focus and its hits, spent by the sonic skills; not saved */
+    pub charges: u32,
     pub auto_loot: bool,
     pub dodge_until: f64,
     pub rtt: f64,
@@ -203,12 +205,33 @@ impl Player {
     pub fn one_way(&self) -> f64 { (self.rtt / 2.0).min(150.0) }
     pub fn send(&self, v: Value) { self.out.value(&v); }
     pub fn equipped_in(&self, slot: &str) -> Option<&InvItem> { self.inv.iter().find(|i| i.s.as_deref() == Some(slot)) }
+    /** How many Force charges this character can hold: its specialization's (an evolution's own, else its parent's). */
+    pub fn max_charges(&self) -> u32 {
+        self.spec.as_deref().and_then(|s| d().spec(s)).and_then(|s| s.charges).unwrap_or(0)
+    }
+    /** Add Force charges (99: fill up), up to what it can hold; whether any were added. */
+    pub fn add_charges(&mut self, n: u32) -> bool {
+        let before = self.charges;
+        self.charges = (self.charges + n).min(self.max_charges());
+        self.charges > before
+    }
+
+    /** The kind of weapon in hand ("sword", "bow", "dagger"...), none bare-handed. */
+    pub fn weapon_type(&self) -> Option<&'static str> {
+        let it = self.inv.iter().find(|i| i.s.as_deref() == Some("weapon"))?;
+        d().item(&it.i)?.weapon_type.as_deref()
+    }
+
     pub fn recalc(&mut self) {
         let data = d();
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
         let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
         if let Some(k) = self.spec.as_deref().and_then(|s| data.spec(s)).and_then(|s| s.block) { self.stats.block *= k; } // the tanks block more
+        // the assassin's eye for a weak spot, with a dagger in hand (the spec's weapon)
+        if let Some(sp) = self.spec.as_deref().and_then(|s| data.spec(s)) {
+            if let (Some(w), Some(c)) = (&sp.weapon, sp.crit) { if self.weapon_type() == Some(w.as_str()) { self.stats.crit += c; } }
+        }
         self.stats.block = self.stats.block.min(0.75);
         if self.god { self.stats.speed *= 2.0; }
         let (s, m) = (&mut self.stats, &self.clan_mods);

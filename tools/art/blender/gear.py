@@ -54,7 +54,7 @@ HEAD = os.environ.get('GEAR_HEAD', '')
 ONLY = os.environ.get('GEAR_ONLY', '')
 LIGHT = float(os.environ.get('GEAR_LIGHT', '2.2'))  # how much coarser the game's copy is than the dense model
 BUDGET = {'helm': 8000, 'chest': 12000, 'gloves': 5000, 'legs': 5000, 'feet': 5000, 'shield': 4000, 'blade': 3000, 'staff': 3500, 'robe': 12000,
-          'circlet': 4000}  # the triangles each piece may have in the game
+          'circlet': 4000, 'hood': 7000, 'bow': 3000, 'dagger': 2000, 'short_bow': 1500, 'hunting_bow': 2000, 'composite_bow': 2500, 'stiletto': 1500}  # the triangles each piece may have in the game
 PART = os.environ.get('GEAR_PART', '')  # only these pieces of each set (helm, chest, gloves, legs, feet, shield)
 ZOOM = os.environ.get('GEAR_ZOOM', '')  # body previews closer in: "height,width" in metres (0.85,0.6 frames the hips), or "x,height,width"
 
@@ -3712,6 +3712,384 @@ def infernal_staff():
     return p
 
 
+# ---------------------------------------------------------------- bows and daggers (the archer's and the assassin's)
+
+BOW_LIMB = 0.62  # a bow's half-length: the grip at the origin, the tips up and down +-Y
+
+
+def bow_curve(s, sign, depth=0.2, recurve=0.05):
+    """A point of a bow's limb (s 0 at the grip, 1 at its tip; sign +1 the upper limb, -1 the lower), its back towards
+    +X: bent back towards the archer (-X) and, near the tip, curving forward again (a recurve). Built upright, as held at
+    the bind pose in the left hand, whose arm points +X (quaternius.ts qWeapon leaves a bow standing)."""
+    return Vector((-depth * s ** 1.6 + recurve * smooth(0.78, 1.0, s) ** 2, sign * BOW_LIMB * s, 0.0))
+
+
+def bow_limbs(width=0.044, tip=0.018, thick=0.027, from_s=0.16, depth=0.2, recurve=0.05, n=26):
+    """Both limbs of a bow, out from the riser to each tip: a flat section (wide across Z, thin across the bend),
+    tapering. Returns the mesh and the tips (where the client strings it)."""
+    n = max(8, int(round(n / RES)))
+    meshes, tips = [], []
+    for sign in (1, -1):
+        rings = []
+        for k in range(n + 1):
+            f = k / n
+            s = lerp(from_s, 1.0, f)
+            c = bow_curve(s, sign, depth, recurve)
+            t = (bow_curve(min(1.0, s + 0.01), sign, depth, recurve) - bow_curve(max(0.0, s - 0.01), sign, depth, recurve)).normalized()
+            nrm = Vector((-t.y, t.x, 0.0))
+            w, th = lerp(width, tip, f ** 0.8), lerp(thick, thick * 0.65, f)
+            rings.append([c + nrm * (math.cos(a) * th / 2) + Vector((0, 0, 1)) * (math.sin(a) * w / 2) for a in (2 * math.pi * j / 12 for j in range(12))])
+        meshes.append(loft(rings))
+        tips.append(bow_curve(1.0, sign, depth, recurve))
+    return merge(*meshes), tips
+
+
+def bow_piece(name, tips):
+    """A bow's piece: its budget, and where its tips are for the client's string (the node's extras)."""
+    p = Piece(name)
+    p.extras['bow_tips'] = [c for t in tips for c in t]
+    return p
+
+
+def bow_riser(p, body, leather, wire, r=0.025, half=0.11):
+    """A bow's riser, the stiff middle the limbs leave from, and the grip wound in leather."""
+    p.add(body, *tube([Vector((0.006, -half, 0)), Vector((0.012, 0, 0)), Vector((0.006, half, 0))], [r * 0.85, r * 1.1, r * 0.85], 14))
+    core, w = grip(-0.065, 0.065, r * 0.98, True)
+    p.add(leather, *core)
+    if wire:
+        p.add(wire, *w)
+
+
+def short_bow():
+    """A simple longbow of yew: one stave bent back to the string, a leather grip."""
+    wood = mat('yew', 0x8a5a32, 'wood', rough=0.7)
+    leather = mat('bow_leather', 0x5a3a22, 'leather', rough=0.8)
+    limbs, tips = bow_limbs(0.04, 0.018, 0.028, 0.1, 0.17, 0.0)
+    p = bow_piece('short_bow', tips)
+    p.add(wood, *limbs)
+    bow_riser(p, wood, leather, None, 0.023, 0.08)
+    return p
+
+
+def hunting_bow():
+    """A hunter's bow of dark ash, its tips flicked forward, the grip wound in green cord, a horn nock at each tip."""
+    wood = mat('ash_dark', 0x4a3424, 'wood', rough=0.7)
+    leather = mat('hunt_leather', 0x3a2a1a, 'leather', rough=0.8)
+    cord = mat('hunt_cord', 0x4a6a2a, 'cloth', rough=0.9)
+    horn_m = mat('hunt_horn', 0xd8cdb0, 'enamel', rough=0.4)
+    limbs, tips = bow_limbs(0.042, 0.018, 0.027, 0.14, 0.19, 0.035)
+    p = bow_piece('hunting_bow', tips)
+    p.add(wood, *limbs)
+    bow_riser(p, wood, leather, cord)
+    for t in tips:
+        p.add(horn_m, *oball(t, (0.014, 0.022, 0.014)))
+    return p
+
+
+def composite_bow():
+    """A composite bow of horn and sinew: a strong recurve, its limbs backed in red lacquer, bound in sinew at the riser
+    and the tips, ivory nocks."""
+    body = mat('comp_lacquer', 0x8a2a1a, 'enamel', rough=0.35)
+    leather = mat('comp_leather', 0x2a1a12, 'leather', rough=0.8)
+    sinew = mat('comp_sinew', 0xd8c8a0, 'cloth', rough=0.85)
+    limbs, tips = bow_limbs(0.046, 0.019, 0.028, 0.16, 0.21, 0.07)
+    p = bow_piece('composite_bow', tips)
+    p.add(body, *limbs)
+    bow_riser(p, body, leather, sinew)
+    for sign in (1, -1):
+        for s in (0.2, 0.86):
+            c = bow_curve(s, sign, 0.21, 0.07)
+            p.add(sinew, *tube([c - Vector((0, 0.012, 0)), c + Vector((0, 0.012, 0))], 0.027, 12))
+    for t in tips:
+        p.add(sinew, *oball(t, (0.015, 0.024, 0.015)))
+    return p
+
+
+def dagger_blade(length=0.36, width=0.028, thick=0.011):
+    """A dagger's blade: straight, drawn to a point over its last third."""
+    return blade(length, width, thick, GUARD, lambda t: 1.0 - 0.15 * t if t < 0.66 else max(0.0, (1 - t) / 0.34) ** 0.9 * 0.9, (0.0, 0.0), n=30)
+
+
+def stiletto():
+    """A stiletto: a thin three-sided steel spike, a small cross guard and a wound grip."""
+    steel = mat('stiletto_steel', 0xb8bcc4, 'steel', rough=0.25, metal=0.9)
+    dark = mat('stiletto_grip', 0x2a1e30, 'leather', rough=0.8)
+    p = Piece('stiletto')
+    p.add(steel, *blade(0.36, 0.016, 0.011, GUARD, lambda t: 1.0 - 0.6 * t, n=24), sharp=30)
+    p.add(steel, *tube([Vector((-0.045, GUARD - 0.004, 0)), Vector((0.045, GUARD - 0.004, 0))], [0.006, 0.006], 8))
+    core, wire = grip(-0.03, GUARD - 0.012, 0.012, True)
+    p.add(dark, *core)
+    p.add(steel, *wire)
+    p.add(steel, *oball(Vector((0, -0.045, 0)), (0.016, 0.018, 0.016)))
+    return p
+
+
+def infernal_bow():
+    """The black knight's bow: limbs of black lacquer edged in gold and worked in gilt scrollwork, a strong recurve
+    whose tips end in gold horns curling back, a riser of gold set with the dark stone, the grip in black leather wound
+    with gold."""
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    body = mat('infernal_bowlimb', 0x0b0c0f, 'enamel', engrave='scroll', engrave_color=0xc9a245, emboss=True, rough=0.14, metal=0.6, bump=1.2,
+               trim=0xc9a245, sheen=0x161a24, gloss=0.85, scale=0.07, panels=True)
+    limbs, tips = bow_limbs(0.07, 0.035, 0.06, 0.16, 0.21, 0.075)
+    p = bow_piece('bow', tips)
+    p.add(body, *limbs, deco=lambda q, d: smooth(0.006, 0.01, d) * (0.5 + 0.5 * smooth(0.2, 0.3, abs(q.y))), sharp=30)
+    bow_riser(p, gold, leather, gold, 0.04, 0.12)
+    for sign in (1, -1):
+        t = tips[sign < 0]
+        p.add(gold, *horn(t, (0.4, sign * 1.0, 0), Vector((0, sign, 0)), (-1.0, 0, 0), 0.09, 0.019))
+        c = bow_curve(0.17, sign, 0.21, 0.075)
+        p.add(gold, *tube([c - Vector((0, 0.012, 0)), c + Vector((0, 0.012, 0))], 0.045, 12))
+    p.add(stone, *oball(Vector((0.045, 0.0, 0)), (0.015, 0.022, 0.015)))
+    return p
+
+
+def infernal_dagger():
+    """The black knight's dagger: a blade of black lacquered steel edged in gold, gilt scrollwork down its flats, a gold
+    guard curling into small spirals, black leather wound with gold and a gold pommel set with the dark stone."""
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    orn_b = mat('infernal_blade', 0x0b0c0f, 'enamel', engrave='scroll', engrave_color=0xc9a245, emboss=True, rough=0.14, metal=0.6, bump=1.2,
+                trim=0xc9a245, sheen=0x161a24, gloss=0.85, scale=0.075, panels=True)
+    p = Piece('dagger')
+    w_at = blade_at(0.028, 0.36, GUARD, lambda t: 1.0 - 0.15 * t if t < 0.66 else max(0.0, (1 - t) / 0.34) ** 0.9 * 0.9)
+    p.add(orn_b, *dagger_blade(), deco=lambda q: smooth(0.9, 0.78, abs(q.x) / w_at(q.y)) * 0.85, sharp=30)
+    for s in (1, -1):
+        pts = [Vector((s * 0.012, GUARD - 0.004, 0)), Vector((s * 0.045, GUARD + 0.004, 0))]
+        c = Vector((s * 0.055, GUARD - 0.012, 0))
+        for k in range(1, 17):
+            r = 0.012 * (1 - 0.6 * k / 16)
+            a = math.pi / 2 - (k / 16) * 1.7 * math.pi
+            pts.append(c + Vector((r * math.cos(a) * s, r * math.sin(a), 0)))
+        p.add(gold, *tube(pts, [0.006 - 0.004 * k / (len(pts) - 1) for k in range(len(pts))], 8))
+    p.add(gold, *oball(Vector((0, GUARD - 0.005, 0)), (0.02, 0.012, 0.015)))
+    core, wire = grip(-0.04, GUARD - 0.016, 0.012, True)
+    p.add(leather, *core)
+    p.add(gold, *wire)
+    p.add(gold, *oball(Vector((0, -0.055, 0)), (0.018, 0.021, 0.018)))
+    p.add(stone, *oball(Vector((0, -0.055, 0.015)), (0.009, 0.009, 0.006)))
+    return p
+
+
+# the region sets' bows (as thick in the limb as the infernal one) and daggers
+
+def collar(p, m, s, depth, recurve, r=0.045):
+    """A band round both limbs where they leave the riser, at s along them."""
+    for sign in (1, -1):
+        c = bow_curve(s, sign, depth, recurve)
+        p.add(m, *tube([c - Vector((0, 0.012, 0)), c + Vector((0, 0.012, 0))], r, 14))
+
+
+def abyssal_bow():
+    """The abyssal bow: limbs of blued steel etched with waves, a riser lacquered sea blue bound in polished steel with a
+    nautilus shell on its back, a pearl capping each tip."""
+    steel, accent, gilt = abyssal_mats()
+    pearl = mat('pearl', 0xe6eef2, 'enamel', rough=0.1, metal=0.2, sheen=0xc8d8f0, gloss=0.9)
+    leather = mat('abyssal_grip', 0x1a2a3a, 'leather', rough=0.7)
+    depth, recurve = 0.2, 0.06
+    limbs, tips = bow_limbs(0.07, 0.035, 0.06, 0.16, depth, recurve)
+    p = bow_piece('bow', tips)
+    p.add(steel, *limbs, deco=lambda q: 1.0, sharp=30)
+    bow_riser(p, accent, leather, gilt, 0.04, 0.12)
+    collar(p, gilt, 0.17, depth, recurve)
+    for t in tips:
+        p.add(pearl, *oball(t, (0.026, 0.028, 0.026)))
+    shell, _, _ = spiral_shell((0.052, 0.0, 0.0), 0.004, 2.0, 0.2, 0.42)
+    p.add(pearl, *shell)
+    return p
+
+
+def abyssal_dagger():
+    """The abyssal parrying dagger: a slender blade of bright steel, its ricasso blued and etched with waves, a little
+    cup like a scallop over the hand lacquered sea blue, straight quillons, a wire-wound grip and a pearl pommel."""
+    steel, accent, gilt = abyssal_mats()
+    bright = mat('abyssal_bright', 0xb4c0cc, 'steel', rough=0.16, metal=0.95)
+    pearl = mat('pearl', 0xe6eef2, 'enamel', rough=0.1, metal=0.2, sheen=0xc8d8f0, gloss=0.9)
+    wire_m = mat('abyssal_wire', 0x8aa0b8, 'steel', rough=0.25, metal=0.95)
+    p = Piece('dagger')
+    p.add(bright, *blade(0.33, 0.022, 0.009, GUARD + 0.03, lambda t: (1.0 - 0.4 * t) if t < 0.85 else 0.6 * max(0.0, (1 - t) / 0.15) ** 0.9, (0.3, 0.4), n=28), sharp=30)
+    p.add(steel, *blade(0.03, 0.023, 0.0105, GUARD, lambda t: 1.0, n=6), deco=lambda q: 1.0)
+    rings = []
+    na = int(48 / RES) // 12 * 12
+    for k in range(7):
+        a = math.pi / 2 * (0.15 + 0.85 * k / 6)
+        y, r = GUARD + 0.002 - 0.03 * math.cos(a), 0.034 * math.sin(a)
+        rings.append([(r * math.cos(2 * math.pi * i / na) * (1 + 0.06 * math.cos(12 * 2 * math.pi * i / na) * k / 6), y,
+                       r * math.sin(2 * math.pi * i / na) * (1 + 0.06 * math.cos(12 * 2 * math.pi * i / na) * k / 6)) for i in range(na)])
+    v, f = loft(rings, cap=False)
+    p.add(accent, v, f, solid=0.002, roll=0.0012, roll_mat=gilt, deco=lambda q: 1.0, sharp=50)
+    p.add(gilt, *tube([Vector((-0.07, GUARD + 0.004, 0)), Vector((0.07, GUARD + 0.004, 0))], 0.0045, 10))
+    for x in (-0.07, 0.07):
+        p.add(gilt, *oball(Vector((x, GUARD + 0.004, 0)), (0.007, 0.007, 0.007)))
+    core, wire = grip(-0.04, GUARD - 0.028, 0.0115, True)
+    p.add(mat('abyssal_grip', 0x1a2a3a, 'leather', rough=0.7), *core)
+    p.add(wire_m, *wire)
+    p.add(pearl, *oball(Vector((0, -0.055, 0)), (0.019, 0.021, 0.019)))
+    return p
+
+
+def ashforged_bow():
+    """The ashforged war bow: a heavy self bow of dark oak, nicked from use, bound in blackened iron where the limbs
+    leave the riser and twice along each, iron caps on its tips and an old leather grip."""
+    steel, mail, leather, wool = ash_mats()
+    iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+    oak = mat('ash_oak', 0x3e2c20, 'wood', rough=0.85)
+    depth, recurve = 0.19, 0.0
+    limbs, tips = bow_limbs(0.068, 0.034, 0.058, 0.14, depth, recurve)
+    p = bow_piece('bow', tips)
+    nicks = dents(*[(bow_curve(s, sg, depth, recurve) + Vector((0.026, 0, 0)), 0.012, 0.003) for s, sg in ((0.4, 1), (0.62, -1), (0.8, 1), (0.3, -1))])
+    p.add(oak, *limbs, bump=nicks)
+    bow_riser(p, iron, leather, None, 0.04, 0.1)
+    for s in (0.16, 0.45, 0.72):
+        collar(p, iron, s, depth, recurve, 0.044 - 0.012 * s)
+    for t in tips:
+        p.add(iron, *tube([t - Vector((0, 0.03 * (1 if t.y > 0 else -1), 0)), t + Vector((0, 0.02 * (1 if t.y > 0 else -1), 0))], [0.022, 0.012], 10))
+    return p
+
+
+def ashforged_dagger():
+    """The ashforged rondel dagger: a stiff blade of blackened steel worn bright at the edges, iron discs for a guard and a
+    pommel, a grip of old leather."""
+    steel, mail, leather, wool = ash_mats()
+    iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+    p = Piece('dagger')
+    p.add(steel, *dagger_blade(0.37, 0.024, 0.013), sharp=30)
+    for y, r in ((GUARD - 0.006, 0.03), (-0.055, 0.026)):
+        p.add(iron, *placed(tube([Vector((0, -0.006, 0)), Vector((0, 0.006, 0))], [r, r], 18), (0, y, 0), (0, 1, 0)))
+    core, _ = grip(-0.048, GUARD - 0.012, 0.013)
+    p.add(leather, *core, forge=creased(0.0006))
+    return p
+
+
+def dragon_bow():
+    """The dragon bow: a fierce recurve of red-lacquered scales over dark steel, edged in steel, its tips hooking into
+    dragon's talons, a riser of dark steel bound in steel with a red stone set in its back."""
+    dark, red, rim = dragon_mats()
+    gem_m = mat('dragon_gem', 0x8a0a10, 'enamel', rough=0.06, metal=0.3, sheen=0xd02020, gloss=0.95)
+    leather = mat('dragon_grip', 0x5a1210, 'leather', rough=0.7)
+    depth, recurve = 0.22, 0.09
+    limbs, tips = bow_limbs(0.072, 0.034, 0.06, 0.16, depth, recurve)
+    p = bow_piece('bow', tips)
+    p.add(red, *limbs, deco=scaled, sharp=30)
+    bow_riser(p, dark, leather, rim, 0.04, 0.12)
+    collar(p, rim, 0.17, depth, recurve)
+    for t in tips:
+        up = 1 if t.y > 0 else -1
+        for k in range(3):
+            a = 2 * math.pi * k / 3
+            d = Vector((math.cos(a), 0, math.sin(a)))
+            p.add(rim, *talon(t + d * 0.012, Vector((0, up, 0)) * 0.4 + d, Vector((0, up, 0)) * 0.6 + Vector((0.6, 0, 0)), 0.06, 0.009))
+    p.add(gem_m, *oball(Vector((0.046, 0.0, 0)), (0.016, 0.024, 0.016)))
+    return p
+
+
+def dragon_dagger():
+    """The dragon dagger: a broad leaf of dark steel, a ricasso of red scales, a guard of two small dragon's wings, a red
+    leather grip and a claw for a pommel gripping a red stone."""
+    dark, red, rim = dragon_mats()
+    blade_m = mat('dragon_blade', 0x4a4e56, 'steel', rough=0.2, metal=0.95)
+    gem_m = mat('dragon_gem', 0x8a0a10, 'enamel', rough=0.06, metal=0.3, sheen=0xd02020, gloss=0.95)
+    p = Piece('dagger')
+    shape = lambda t: (1.0 + 0.15 * math.sin(math.pi * min(1.0, t / 0.7))) if t < 0.72 else max(0.0, (1 - t) / 0.28) ** 0.8 * 1.03
+    p.add(blade_m, *blade(0.31, 0.031, 0.011, GUARD + 0.03, shape, (0.35, 0.5), n=28), sharp=30)
+    p.add(red, *blade(0.03, 0.032, 0.0125, GUARD, lambda t: 1.0, n=6), deco=scaled)
+    for s in (1, -1):
+        wp = wing(Vector((s * 0.014, GUARD, 0)), Vector((s * 0.05, GUARD + 0.028, 0)),
+                  [Vector((s * 0.085, GUARD + 0.045, 0)), Vector((s * 0.085, GUARD + 0.018, 0)), Vector((s * 0.068, GUARD - 0.004, 0))],
+                  Vector((s * 0.024, GUARD - 0.008, 0)))
+        p.add(dark, *wp['membrane'], solid=0.0025, roll=0.0008, roll_mat=rim, deco=scaled, sharp=30)
+        p.add(rim, *wp['bones'])
+    core, wire = grip(-0.045, GUARD - 0.012, 0.012, True)
+    p.add(mat('dragon_grip', 0x5a1210, 'leather', rough=0.7), *core)
+    p.add(rim, *wire)
+    p.add(gem_m, *oball(Vector((0, -0.07, 0)), (0.014, 0.016, 0.014)))
+    for k in range(3):
+        a = 2 * math.pi * k / 3
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        p.add(rim, *talon(Vector((0, -0.05, 0)) + d * 0.007, -UP * 0.4 + d, -UP * 0.6 - d * 0.6, 0.032, 0.0045))
+    return p
+
+
+def glacial_bow():
+    """The glacial bow: limbs of pale steel furred with frost, bound in colder blue where they leave the riser, each tip
+    breaking into a spray of ice crystals, a grip of white leather and crystals growing from the riser's back."""
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    leather = mat('glacial_grip', 0xd8dee4, 'leather', rough=0.75)
+    depth, recurve = 0.2, 0.06
+    limbs, tips = bow_limbs(0.07, 0.034, 0.06, 0.16, depth, recurve)
+    p = bow_piece('bow', tips)
+    p.add(steel, *limbs, deco=lambda q, d: smooth(0.008, 0.014, d), sharp=30)
+    bow_riser(p, deep, leather, rim, 0.04, 0.12)
+    collar(p, deep, 0.17, depth, recurve)
+    for t in tips:
+        up = 1 if t.y > 0 else -1
+        p.add(ice, *facet_crystal(t, (0.2, up, 0), 0.08, 0.016))
+        p.add(ice, *facet_crystal(t, (0.7, up * 0.6, 0.3), 0.05, 0.01))
+        p.add(ice, *facet_crystal(t, (0.6, up * 0.7, -0.35), 0.045, 0.009))
+    for a, l in ((0.0, 0.07), (0.5, 0.05), (-0.5, 0.05)):
+        p.add(ice, *facet_crystal(Vector((0.035, 0.0, 0)), (1.0, math.sin(a), 0.4 * a), l, 0.012))
+    return p
+
+
+def glacial_dagger():
+    """The glacial dagger: a blade of pale steel etched with frost, quillons drawn down into icicles, a grip of white
+    leather and a crystal of ice for a pommel."""
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    p = Piece('dagger')
+    w_at = blade_at(0.028, 0.36, GUARD, lambda t: 1.0 - 0.15 * t if t < 0.66 else max(0.0, (1 - t) / 0.34) ** 0.9 * 0.9)
+    p.add(steel, *dagger_blade(), deco=lambda q: smooth(0.75, 0.55, abs(q.x) / w_at(q.y)), sharp=30)
+    for s in (1, -1):
+        ic = spline([Vector((s * 0.014, GUARD - 0.004, 0)), Vector((s * 0.05, GUARD + 0.002, 0)), Vector((s * 0.075, GUARD - 0.02, 0)),
+                     Vector((s * 0.08, GUARD - 0.045, 0))], 5)
+        p.add(ice, *tube(ic, along(ic, 0.008, 0.006, 0.003, 0.0005), 6, fixed=True))
+    p.add(deep, *tube([Vector((-0.018, GUARD - 0.004, 0)), Vector((0.018, GUARD - 0.004, 0))], 0.011, 12), deco=lambda q: 1.0)
+    core, wire = grip(-0.04, GUARD - 0.014, 0.012, True)
+    p.add(mat('glacial_grip', 0xd8dee4, 'leather', rough=0.75), *core)
+    p.add(rim, *wire)
+    p.add(ice, *facet_crystal(Vector((0, -0.04, 0)), (0, -1, 0), 0.05, 0.013))
+    return p
+
+
+def emerald_bow():
+    """The emerald bow: an elven recurve of emerald lacquer edged in silver, silver leaves springing from the riser up
+    and down each limb and curling at the tips, an emerald set in the riser's back, the grip wound in silver."""
+    scale_m, smooth_, silver, mail, glass = emerald_mats()
+    depth, recurve = 0.21, 0.08
+    limbs, tips = bow_limbs(0.068, 0.032, 0.058, 0.16, depth, recurve)
+    p = bow_piece('bow', tips)
+    p.add(smooth_, *limbs, deco=trimmed(0.009), sharp=30)
+    bow_riser(p, smooth_, silver, silver, 0.04, 0.12)
+    collar(p, silver, 0.17, depth, recurve)
+    leaf = blade(0.075, 0.016, 0.005, 0.0, lambda t: math.sin(math.pi * min(1.0, t)) ** 0.7 if t < 1 else 0.0, n=12)
+    for sign in (1, -1):
+        for s, side in ((0.22, 1), (0.3, -1), (0.38, 1)):
+            c = bow_curve(s, sign, depth, recurve) + Vector((0.028, 0, 0))
+            p.add(silver, *placed(leaf, c, (0.6, sign * 1.0, side * 0.5), (0, 0, 1)))
+        t = tips[sign < 0]
+        p.add(silver, *placed(blade(0.09, 0.02, 0.005, 0.0, lambda q: math.sin(math.pi * min(1.0, q)) ** 0.6 if q < 1 else 0.0, n=12), t, (0.8, sign * 0.6, 0), (0, 0, 1)))
+    p.add(glass, *oball(Vector((0.046, 0.0, 0)), (0.015, 0.022, 0.015)))
+    return p
+
+
+def emerald_dagger():
+    """The emerald dagger: a leaf-shaped blade of silvered steel etched with vines, quillons swept up like leaves, a grip
+    of emerald lacquer wound with silver and an emerald in a silver pommel."""
+    scale_m, smooth_, silver, mail, glass = emerald_mats()
+    blade_m = mat('emerald_steel', 0xc4ccd2, 'steel', engrave='vines', rough=0.16, metal=0.95)
+    p = Piece('dagger')
+    shape = lambda t: (0.85 + 0.45 * math.sin(math.pi * min(1.0, t / 0.78)) ** 1.5) if t < 0.78 else max(0.0, (1 - t) / 0.22) ** 0.75 * 0.85
+    w_at = blade_at(0.027, 0.34, GUARD, shape)
+    p.add(blade_m, *blade(0.34, 0.027, 0.01, GUARD, shape, (0.3, 0.6), n=28), deco=lambda q: smooth(0.5, 0.3, abs(q.x) / w_at(q.y)), sharp=30)
+    leaf = blade(0.05, 0.012, 0.004, 0.0, lambda t: math.sin(math.pi * min(1.0, t)) ** 0.7 if t < 1 else 0.0, n=10)
+    for s in (1, -1):
+        p.add(silver, *placed(leaf, (s * 0.01, GUARD - 0.002, 0), (s * 1.0, 0.55, 0), (0, 1, 0)))
+    core, wire = grip(-0.042, GUARD - 0.012, 0.0115, True)
+    p.add(smooth_, *core, deco=lambda q: 1.0)
+    p.add(silver, *wire)
+    p.add(silver, *oball(Vector((0, -0.056, 0)), (0.016, 0.017, 0.016)))
+    p.add(glass, *oball(Vector((0, -0.056, 0.012)), (0.009, 0.009, 0.006)))
+    return p
+
+
 # ---------------------------------------------------------------- mage gear: robes, circlets, gloves and shoes
 
 LEGS = ('pelvis', 'spine_01', 'thigh_l', 'thigh_r', 'calf_l', 'calf_r')
@@ -4095,6 +4473,234 @@ def infernal_shoes():
          ('calf_l', 'foot_l'), solid=0.0018, roll=0.0007)
     both(p, gold, band_plate(foot, 0.045, -1.3, 1.3, 0.198, 0.25, 0.0058, 0.008), ('ball_l',), solid=0.0024, roll=0.001)
     both(p, sole, band_plate(foot, 0.045, math.pi - 1.25, math.pi + 1.25, -0.085, 0.25, 0.0052, 0.01), ('foot_l', 'ball_l'), solid=0.0048)
+    return p
+
+
+# ---------------------------------------------------------------- light armour: the archer's and the assassin's
+#
+# One build for every set (light_hood, light_jerkin...), dressed in each set's own look (LIGHT_LOOKS): its cloth for the
+# hood and the collar, its tooled leather, the metal of its studs, buckles and caps, its stone and the emblem on the brow,
+# the forearms and the knees, and a touch of its own (a fur trim, a crest, a shell).
+
+def light_look(set_id):
+    """A set's materials for its light armour (only that set's: the others' would be made for nothing)."""
+    gold = 0xc9a245
+    leather = lambda name, color, engrave, ecolor, trim, **kw: mat(name, color, 'leather', engrave=engrave, engrave_color=ecolor, emboss=bool(ecolor),
+                                                                  trim=trim, panels=True, **kw)
+    if set_id == 'infernal':
+        io, ib, ig, im, il, ist = infernal_mats()
+        return dict(cloth=infernal_silk(0.1), collar=infernal_silk(0.1), rim=ig, metal=ig, cop=io, stone=ist, emblem='star',
+                    hide=leather('infernal_hide', 0x111013, 'scroll', gold, gold, rough=0.45, gloss=0.45, scale=0.1),
+                    kid=leather('infernal_kid', 0x121014, 'scroll', gold, gold, rough=0.45, gloss=0.4, scale=0.06),
+                    boot=leather('infernal_boot', 0x131116, 'scroll', gold, gold, rough=0.5, gloss=0.35, scale=0.09),
+                    belt=mat('infernal_belt', 0x141215, 'leather', rough=0.5))
+    if set_id == 'abyssal':
+        a_steel, a_lac, a_rim = abyssal_mats()
+        a_silk, a_sash, a_pearl, a_shell = abyssal_cloth()
+        return dict(cloth=a_silk, collar=a_sash, rim=a_rim, metal=a_rim, cop=a_lac, stone=a_pearl, emblem='shell', shell=a_shell,
+                    hide=leather('abyssal_hide', 0x0f2a4a, 'waves', 0x9fc3dc, 0x8fa9bf, rough=0.45, sheen=0x1d4a6e, gloss=0.4, scale=0.1),
+                    kid=leather('abyssal_kid', 0x0c1a2c, 'waves', 0x7aa0c0, 0x8fa9bf, rough=0.45, gloss=0.35, scale=0.06),
+                    boot=leather('abyssal_boot', 0x0d1f34, 'waves', 0x7aa0c0, 0x8fa9bf, rough=0.5, gloss=0.35, scale=0.09),
+                    belt=mat('abyssal_belt', 0x16283a, 'leather', rough=0.55))
+    if set_id == 'ashforged':
+        sh_steel, sh_mail, sh_leather, sh_wool = ash_mats()
+        s_habit, s_patch, s_hood = ash_cloth()
+        iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+        return dict(cloth=s_hood, collar=s_habit, rim=s_patch, metal=iron, cop=sh_steel, stone=None, emblem='rivet',
+                    hide=leather('ash_hide', 0x2e2621, 'stitch', None, 0x4a4b4e, rough=0.85),
+                    kid=leather('ash_kid', 0x2a221d, 'stitch', None, 0x4a4b4e, rough=0.85),
+                    boot=leather('ash_boot', 0x2a221d, 'stitch', None, 0x4a4b4e, rough=0.85),
+                    belt=sh_leather)
+    if set_id == 'dragon':
+        d_steel, d_scale, d_rim = dragon_mats()
+        d_silk, d_panel, d_stone = dragon_cloth()
+        return dict(cloth=d_silk, collar=d_panel, rim=d_rim, metal=d_rim, cop=d_scale, stone=d_stone, emblem='star', crest=d_scale,
+                    hide=leather('dragon_hide', 0x5a0e12, 'scales', 0x22070a, 0x80868f, rough=0.45, sheen=0x8e1f1c, gloss=0.45, scale=0.06),
+                    kid=leather('dragon_kid', 0x2a0a0c, 'scales', 0x14050a, 0x80868f, rough=0.45, gloss=0.35, scale=0.05),
+                    boot=leather('dragon_boot', 0x2e0c0e, 'scales', 0x14050a, 0x80868f, rough=0.5, gloss=0.35, scale=0.07),
+                    belt=mat('dragon_belt', 0x2a1416, 'leather', rough=0.55))
+    if set_id == 'glacial':
+        g_steel, g_deep, g_rim, g_fur, g_ice, g_cloth = glacial_mats()
+        g_white, g_blue = glacial_cloth()[:2]
+        return dict(cloth=g_blue, collar=g_white, rim=g_rim, metal=g_rim, cop=g_steel, stone=g_ice, emblem='star', fur=g_fur,
+                    hide=leather('glacial_hide', 0x4f7898, 'frost', 0xe6eef5, 0xc6d6e3, rough=0.6, frost=0.3, scale=0.1),
+                    kid=leather('glacial_kid', 0xd8dee4, 'frost', 0x8fb0cc, 0xc6d6e3, rough=0.6, scale=0.06),
+                    boot=leather('glacial_boot', 0x3c5a74, 'frost', 0xe6eef5, 0xc6d6e3, rough=0.6, frost=0.3, scale=0.09),
+                    belt=mat('glacial_belt', 0x2f4357, 'leather', rough=0.6))
+    e_scale, e_smooth, e_silver, e_mail, e_glass = emerald_mats()
+    e_silk = emerald_cloth()[0]
+    return dict(cloth=e_silk, collar=e_silk, rim=e_silver, metal=e_silver, cop=e_scale, stone=e_glass, emblem='leaf',
+                hide=leather('emerald_hide', 0x0b4f30, 'vines', 0xc0c6cc, 0xb7bcc2, rough=0.45, sheen=0x0e5e3c, gloss=0.45, scale=0.1),
+                kid=leather('emerald_kid', 0x0a3a24, 'vines', 0xa8b0b8, 0xb7bcc2, rough=0.45, gloss=0.4, scale=0.06),
+                boot=leather('emerald_boot', 0x0c3a26, 'vines', 0xa8b0b8, 0xb7bcc2, rough=0.5, gloss=0.35, scale=0.09),
+                belt=mat('emerald_belt', 0x1a2a1e, 'leather', rough=0.55))
+
+
+def light_emblem(L, surf, normal, r, skin=None):
+    """A set's emblem at a point of a surface: a star of its metal set with its stone (infernal, dragon, glacial), a
+    shell (abyssal), a leaf (emerald), or a plain rivet (ashforged). `surf(u, v, off)` is the surface round it, (0, 0)
+    its centre."""
+    at, n = surf(0.0, 0.0, 0.0), normal
+    kw = {} if skin is None else {'skin': skin}
+    out = []
+    if L['emblem'] == 'rivet':
+        out.append((L['metal'], rivet(at + n * 0.001, n, r * 0.45, washer=r * 0.7), {}))
+    elif L['emblem'] == 'shell':
+        shell, _, _ = spiral_shell((0.0, 0.0, 0.0), r * 0.08, 1.8, 0.2, 0.42)
+        t_, n_, b_ = frame(n)
+        v, f = shell
+        out.append((L['shell'], ([at + n * (r * 0.25) + t_ * q.x + b_ * q.y + n_ * q.z for q in v], f), {}))
+        out.append((L['stone'], oball(at + n * (r * 0.3), (r * 0.25, r * 0.25, r * 0.25)), {}))
+    elif L['emblem'] == 'leaf':
+        leaf = outline([(0.0, -r), (r * 0.55, -r * 0.2), (r * 0.4, r * 0.5), (0.0, r * 1.1), (-r * 0.4, r * 0.5), (-r * 0.55, -r * 0.2)], 6)
+        out.append((L['metal'], plate(lambda u, v: surf(u, v, 0.0018), lambda u, v: sd_poly(u, v, leaf), -r, r, -r * 1.1, r * 1.2, h=0.0012),
+                    dict(solid=0.0018, roll=0.0008)))
+        out.append((L['stone'], gem(at + n * 0.0035, n, r * 0.3), {}))
+    else:
+        star_ = outline(star((0.0, 0.0), r, r * 0.65, 8), 4)
+        out.append((L['metal'], plate(lambda u, v: surf(u, v, 0.0018), lambda u, v: sd_poly(u, v, star_), -r * 1.25, r * 1.25, -r * 1.25, r * 1.25, h=0.0012),
+                    dict(solid=0.002, roll=0.0009, bump=lambda q: 0.0025 * gauss((q - at).length, r * 0.6))))
+        if L['stone']:
+            out.append((L['stone'], gem(at + n * 0.004, n, r * 0.31), {}))
+    return [(m, mesh, {**extra, **kw}) for m, mesh, extra in out]
+
+
+def light_hood(set_id):
+    """A set's hood: a deep hood of its cloth drawn up into a point behind, a seam down the back, its face opening and its
+    hem bordered and embroidered round the hem, hanging in soft folds, flaring over the nape; its emblem on the brow;
+    a fur trim round the face (glacial), a low crest of scales down the seam (dragon)."""
+    L = light_look(set_id)
+    p = Piece('hood')
+    p.budget, p.tex = 7000, 2048
+    rim = lambda a: lerp(0.168, -0.055, smooth(0.42, 0.95, a)) - 0.035 * smooth(1.7, math.pi, a)
+    sk = Skull(yc=0.12, zc=-0.004, w=0.128, h=0.16, df=0.138, db=0.146, n=2.0, peak=0.38, keel=(0.0, 0.12), keel_from=0.06, rim=rim,
+               lower=lambda a, u: 1.0 + 5.0 * u * u)
+    folds = lambda q: 0.0045 * math.sin(7.0 * math.atan2(q.x, q.z - sk.zc)) * smooth(0.13, -0.06, q.y) * smooth(0.3, 1.2, abs(math.atan2(q.x, q.z - sk.zc)))
+    p.add(L['cloth'], *sk.mesh(sk.cols(112, extra_cols([0.0, math.pi]))), solid=0.0028, roll=0.0016, roll_mat=L['rim'], bump=folds,
+          deco=ornate(0.012, lambda q: smooth(0.035, 0.0, q.y)))
+    RU = 0.13
+    for m, mesh, kw in light_emblem(L, lambda u, v, off: sk.point(u / RU, 0.19 + v, off), sk.normal(0.0, 0.19), 0.02):
+        p.add(m, *mesh, **kw)
+    if L.get('fur'):
+        # a ruff of white fur round the face opening, from the brow down both cheeks
+        fur_sd = lambda u, v: max(rim(abs(u / RU)) - v, v - rim(abs(u / RU)) - 0.026, abs(u / RU) - 1.05)
+        p.add(L['fur'], *plate(lambda u, v: sk.point(u / RU, v, 0.006 + 0.006 * math.sin(math.pi * clamp((v - rim(abs(u / RU))) / 0.026))), fur_sd,
+                              -1.1 * RU, 1.1 * RU, -0.08, 0.2, h=0.004 if RES <= 1 else 0.0075),
+              solid=0.006, bump=furry(0.003, 4.0), forge=False, sharp=80, whole=True)
+    if L.get('crest'):
+        path = midline(sk, 0.27, 0.0, 22)[len(midline(sk, 0.27, 0.0, 22)) // 2:]  # down the back
+        hs = [0.002 + 0.007 * max(0.0, math.sin(5 * math.pi * k / (len(path) - 1))) for k in range(len(path))]
+        p.add(L['crest'], *fin(sk, path, hs, top=0.0012, foot=0.005), deco=lambda q: 1.0)
+    return p
+
+
+def light_jerkin(set_id):
+    """A set's light harness: a jerkin of its tooled leather fitted close, a band of tooling down the front closed by
+    studs and over the yoke; short sleeves, small rounded spaulders bordered, its emblem at their crown; a skirt to
+    mid-thigh, slit before and behind; a belt with its emblem; a baldric across the chest from the right shoulder,
+    buckled; a high collar of its cloth up under the jaw (no neck shows between the hood and the jerkin)."""
+    L = light_look(set_id)
+    p = Piece('chest')
+    p.budget, p.tex, p.min_ratio = 12000, 2048, 0.03
+    hide, metal, belt = L['hide'], L['metal'], L['belt']
+    F = forms()
+    torso, arm = F['torso'], F['arm']
+    gw = gown_form()
+    edge = dict(solid=0.0026, roll=0.0013, roll_mat=L['rim'])
+    front = lambda q: smooth(0.034, 0.026, abs(q.x)) if q.z > 0 else 0.0
+    p.add(hide, *ring_plate(torso, 0.17, 0.975, 1.505, 0.0045), deco=ornate(0.01, lambda q: max(front(q), smooth(1.37, 1.4, q.y))), skin=TORSO,
+          **edge)
+    for y in (1.08, 1.14, 1.2, 1.26, 1.32, 1.38):
+        p.add(metal, *rivet(torso.point(0.0, y, 0.0062), torso.normal(0.0, y), 0.0045, washer=0.007), skin=TORSO)
+    both(p, hide, ring_plate(arm, 0.08, -0.07, 0.17, 0.0055), ('clavicle_l', 'upperarm_l'), deco=PLAIN, **edge)
+    capoff = lambda u, v: 0.013 + 0.005 * smooth(-0.03, -0.075, v)
+    both(p, hide, teeth_plate(arm, 0.09, -2.3, 2.3, -0.075, 0.09, capoff, 2, 0.03, 'high', shape='round'), ('clavicle_l', 'upperarm_l'),
+         deco=ornate(0.009), sharp=35, **edge)
+    for m, mesh, kw in light_emblem(L, lambda u, v, off: arm.point(u / 0.09, v, capoff(u, v) + off), arm.normal(0.0, 0.0), 0.015):
+        both(p, m, mesh, ('clavicle_l', 'upperarm_l'), **kw)
+    p.add(hide, *gown_skirt(gw, top=1.045, hem=0.8, slit=0.97, folds=8, fold=0.004), deco=ornate(0.011, lambda q: smooth(0.87, 0.84, q.y)),
+          skin=gown_skin(slit=0.97, knee=0.6, hem=0.8), **edge)
+    hip = ('pelvis', 'spine_01')
+    p.add(belt, *strap(gw, [(2 * math.pi * k / 96, 1.0) for k in range(97)], 0.034, 0.0035, 0.0105), skin=hip, forge=creased(0.0004))
+    for y in (0.983, 1.017):
+        p.add(metal, *tube([gw.point(2 * math.pi * k / 96, y, 0.0125) for k in range(96)], 0.0017, 6, closed=True), skin=hip)
+    for m, mesh, kw in light_emblem(L, lambda u, v, off: gw.point(u / 0.16, 1.0 + v, 0.0142 + off), gw.normal(0.0, 1.0), 0.03):
+        p.add(m, *mesh, skin=hip, **kw)
+    silk = L['collar']
+    neck = Cone(-0.022, 1.46, 0.088, 0.088, 1.63, 0.06, 0.062)
+    top = lambda a: 1.612 - 0.045 * (1 + math.cos(a)) / 2
+    collar_sd = lambda u, v: max(1.465 - v, v - top(u / 0.09))
+    p.add(silk, *plate(lambda u, v: neck.point(u / 0.09, v, 0.006 + 0.008 * smooth(1.52, 1.47, v)), collar_sd, -math.pi * 0.09, math.pi * 0.09, 1.455,
+                       1.62, h=0.003, periodic=True), deco=ornate(0.009), skin=('neck_01', 'spine_03'), solid=0.0026, roll=0.0013, roll_mat=L['rim'], sharp=40)
+    path = [(lerp(-0.62, 0.78, k / 24), lerp(1.49, 1.04, k / 24)) for k in range(25)]
+    p.add(belt, *strap(torso, path, 0.03, 0.003, 0.0105), skin=TORSO, forge=creased(0.0004))
+    a, y = lerp(-0.62, 0.78, 0.4), lerp(1.49, 1.04, 0.4)
+    p.add(metal, *band_plate(torso, 0.17, a - 0.14, a + 0.14, y - 0.022, y + 0.022, 0.0152, 0.004), skin=TORSO, solid=0.0025, roll=0.001)
+    return p
+
+
+def light_bracers(set_id):
+    """Gloves of fine kid, and bracers of the set's tooled leather from the wrist to below the elbow, bordered, buckled
+    with two straps, its emblem on the back of each."""
+    L = light_look(set_id)
+    p = Piece('gloves')
+    p.budget = 5000
+    F = forms()
+    fore = F['forearm']
+    hx = bone('hand_l')
+    tips = tuple(f'{f}_04_leaf_l' for f in ('index', 'middle', 'ring', 'pinky', 'thumb'))
+    fingers = ('hand_l',) + FINGERS_L + THUMB_L + tips
+    both(p, L['kid'], skin_patch(fingers + ('lowerarm_l',), keep=lambda v: v.x > hx.x - 0.04), fingers + ('lowerarm_l',), whole=True, deco=PLAIN, wound=True)
+    edge = dict(solid=0.0024, roll=0.0012, roll_mat=L['rim'])
+    both(p, L['hide'], ring_plate(fore, 0.07, 0.035, 0.215, lambda u, v: 0.0035 + 0.003 * beak(u, 0.05)), ('lowerarm_l',), deco=ornate(0.008), sharp=28,
+         **edge)
+    for t in (0.075, 0.175):
+        both(p, L['belt'], ring_plate(fore, 0.07, t - 0.008, t + 0.008, 0.0075), ('lowerarm_l',), deco=PLAIN, solid=0.002)
+        both(p, L['metal'], band_plate(fore, 0.07, -0.25, 0.25, t - 0.011, t + 0.011, 0.0098, 0.003), ('lowerarm_l',), solid=0.002, roll=0.0009)
+    for m, mesh, kw in light_emblem(L, lambda u, v, off: fore.point(u / 0.07, 0.125 + v, 0.0062 + off), fore.normal(0.0, 0.125), 0.011):
+        both(p, m, mesh, ('lowerarm_l',), **kw)
+    return p
+
+
+def light_leggings(set_id):
+    """Leggings of the set's leather close over the thighs and knees, a knee cop bordered with its emblem, and a strap
+    round each thigh, buckled."""
+    L = light_look(set_id)
+    p = Piece('legs')
+    p.budget = 6000
+    F = forms()
+    thigh, knee = F['thigh'], F['knee']
+    edge = dict(solid=0.0024, roll=0.0012, roll_mat=L['rim'])
+    both(p, L['hide'], band_plate(thigh, 0.085, -0.9, 3.6, 0.05, 0.17, 0.004, 0.01), ('thigh_l',), deco=PLAIN, **edge)
+    both(p, L['hide'], ring_plate(thigh, 0.085, 0.15, 0.42, 0.004), ('thigh_l',), deco=PLAIN, **edge)
+    both(p, L['hide'], ring_plate(knee, 0.065, -0.06, 0.07, 0.0045), ('thigh_l', 'calf_l'), deco=PLAIN, **edge)
+    dome = lambda q: 0.007 * gauss((q - knee.at(0.0, 0.0)).length, 0.03)
+    both(p, L['cop'], band_plate(knee, 0.065, -1.0, 1.0, -0.042, 0.045, 0.0085, 0.02), ('thigh_l', 'calf_l'), bump=dome, deco=ornate(0.007), **edge)
+    for m, mesh, kw in light_emblem(L, lambda u, v, off: knee.point(u / 0.065, v, 0.0165 + off), knee.normal(0.0, 0.0), 0.013):
+        both(p, m, mesh, ('thigh_l', 'calf_l'), **kw)
+    both(p, L['belt'], ring_plate(thigh, 0.085, 0.2, 0.222, 0.0075), ('thigh_l',), deco=PLAIN, solid=0.002)
+    both(p, L['metal'], band_plate(thigh, 0.085, -0.22, 0.22, 0.197, 0.225, 0.0098, 0.003), ('thigh_l',), solid=0.002, roll=0.0009)
+    return p
+
+
+def light_treads(set_id):
+    """Boots of the set's soft leather to below the knee, the top turned down in a tooled cuff, two straps buckled up the
+    shaft, a toe cap of its metal and a sole."""
+    L = light_look(set_id)
+    p = Piece('feet')
+    p.budget = 5000
+    sole = mat('sole', 0x17130f, 'leather', rough=0.85)
+    F = forms()
+    calf, foot = F['calf'], F['foot']
+    edge = dict(solid=0.0024, roll=0.0011, roll_mat=L['rim'])
+    both(p, L['boot'], ring_plate(calf, 0.06, 0.05, 0.455, 0.0034), ('calf_l', 'foot_l'), deco=PLAIN, **edge)
+    both(p, L['boot'], ring_plate(foot, 0.045, -0.085, 0.25, 0.0034), ('foot_l', 'ball_l'), deco=PLAIN, **edge)
+    both(p, L['boot'], ring_plate(calf, 0.06, 0.04, 0.12, lambda u, v: 0.007 + 0.004 * smooth(0.12, 0.04, v)), ('calf_l',), deco=ornate(0.008), **edge)
+    for t in (0.24, 0.36):
+        both(p, L['belt'], ring_plate(calf, 0.06, t - 0.008, t + 0.008, 0.0062), ('calf_l',), deco=PLAIN, solid=0.002)
+        both(p, L['metal'], band_plate(calf, 0.06, -0.3, 0.3, t - 0.011, t + 0.011, 0.0085, 0.003), ('calf_l',), solid=0.002, roll=0.0009)
+    both(p, L['metal'], band_plate(foot, 0.045, -1.3, 1.3, 0.198, 0.25, 0.006, 0.008), ('ball_l',), solid=0.0024, roll=0.001)
+    both(p, sole, band_plate(foot, 0.045, math.pi - 1.25, math.pi + 1.25, -0.085, 0.25, 0.0054, 0.01), ('foot_l', 'ball_l'), solid=0.0048)
     return p
 
 
@@ -6240,12 +6846,20 @@ SETS = {
     'shield_abyssal': {'shield': abyssal_shield}, 'shield_ashforged': {'shield': ashforged_shield}, 'shield_dragon': {'shield': dragon_shield},
     'shield_glacial': {'shield': glacial_shield}, 'shield_emerald': {'shield': emerald_shield}, 'shield_infernal': {'shield': infernal_shield},
     # each set's sword and staff, a file a set (client/src/render/quaternius.ts qWeapon)
-    **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
+    **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff'],
+                         **{k: globals()[f'{s}_{k}'] for k in ('bow', 'dagger') if f'{s}_{k}' in globals()}}
+       for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
+    # the plain bows and the stiletto (quaternius.ts BASIC_WEAPONS), a node each
+    'weapons_basic': {'short_bow': short_bow, 'hunting_bow': hunting_bow, 'composite_bow': composite_bow, 'stiletto': stiletto},
     # the capes, a file each (client/src/render/quaternius.ts CAPES)
     'cape_infernal': {'cape': infernal_cape}, 'cape_wool': {'cape': wool_cape},
     **{f'cape_{k}': {'cape': globals()[f'{k}_cape']} for k in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'hunter', 'knight')},
     # each set's mage gear, a file a set (client/src/render/quaternius.ts armorPiece, HEADGEAR)
     'mage_infernal': {'robe': infernal_robe, 'circlet': infernal_circlet, 'gloves': infernal_mage_gloves, 'feet': infernal_shoes},
+    # the light armour (quaternius.ts LightFile): the archer's and the assassin's
+    **{f'light_{s}': {k: (lambda f, s=s: lambda: f(s))(f) for k, f in (('hood', light_hood), ('chest', light_jerkin), ('gloves', light_bracers),
+                                                                      ('legs', light_leggings), ('feet', light_treads))}
+       for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
     **{f'mage_{s}': {'robe': globals()[f'{s}_robe'], 'circlet': globals()[f'{s}_circlet'], 'gloves': globals()[f'{s}_mage_gloves'],
                      'feet': globals()[f'{s}_shoes']} for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald')},
 }
@@ -6284,8 +6898,8 @@ def run(set_id, pieces):
         print(f'[gear] {set_id}.{name}: {dense} tris dense, {tris(ob)} for the game')
     if PREVIEW:
         os.makedirs(PREVIEW, exist_ok=True)
-        heads = [o for o in objs if o.name.startswith(('helm', 'circlet'))]
-        held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff')]
+        heads = [o for o in objs if o.name.startswith(('helm', 'circlet', 'hood'))]
+        held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff', 'bow', 'dagger', 'short_bow', 'hunting_bow', 'composite_bow', 'stiletto')]
         if heads:
             preview(heads[0], set_id)
         if held:

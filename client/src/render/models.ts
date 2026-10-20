@@ -636,7 +636,7 @@ function apron(torso: THREE.Object3D, color: number) {
 function weaponKindOf(itemId: string | null, cls: ClassType): WeaponKind {
   if (!itemId) return null;
   const wt = ITEMS[itemId]?.weaponType;
-  return wt === 'dagger' ? 'sword' : wt ?? (cls === 'mystic' ? 'staff' : 'sword'); // no procedural dagger: a sword stands in
+  return wt === 'dagger' || wt === 'dual' ? 'sword' : wt ?? (cls === 'mystic' ? 'staff' : 'sword'); // no procedural dagger: a sword stands in (a pair: one each hand)
 }
 
 /**
@@ -685,6 +685,9 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
     const robe = !!wChest && wChest.node.name === 'robe';
     const wLegs = legs && !robe ? armorPiece(legs.id) : undefined;
     const under = (d: ItemDef | null, w?: { under: number }): QZone => (w ? { ranger: false, dye: w.under } : zone(d));
+    // a pair of swords is its sword twice, one in each hand
+    const pair = weapon ? ITEMS[weapon]?.pair : undefined, shown = pair ?? weapon;
+    const held = () => enchanted(qWeapon(shown) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant);
     return qPlayer({
       g: look.g, skin, hair, hairStyle: look.hs, bald: buzz, beard, hideHair,
       chest: under(chestDef, wChest), legs: under(legs, wLegs), feet: under(feet, wFeet), gloves: wGloves ? undefined : gloves?.color,
@@ -695,7 +698,9 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       noTop: !!wChest, noLegs: !!wLegs || robe, suit: (wChest ?? wLegs ?? wFeet ?? wGloves)?.under,
       scale: r.height * 1.08, bulk: 1 + (r.bulk - 1) * 0.6, brawn: race === 'orc' ? 1.14 : race === 'dwarf' ? 1.06 : undefined, helm: gear?.model,
       head: race === 'dwarf' ? 1.12 : undefined, ...(!gear?.closed && { ears: elf ? 'elf_ears' as const : race === 'orc' ? 'orc_ears' as const : undefined, tusks: race === 'orc' }),
-      inHand: enchanted(qWeapon(weapon) ?? heldWeapon(weaponKindOf(weapon, cls), weapon ? ITEMS[weapon]?.color : undefined, lookGrade(it(weapon))), weaponEnchant),
+      inHand: held(),
+      bow: !!weapon && ITEMS[weapon]?.weaponType === 'bow',
+      offHand: pair ? held() : null,
     });
   }
   const robe = !!chestDef && (chestDef.id === 'karmian_tunic' || chestDef.id === 'demons_tunic' || (cls === 'mystic' && lookGrade(chestDef) === 'NG'));

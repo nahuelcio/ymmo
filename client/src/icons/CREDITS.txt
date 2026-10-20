@@ -8,22 +8,20 @@ item: ring <- delapouite/diamond-ring, earring <- delapouite/earrings, necklace 
   sea_pearl <- delapouite/oyster-pearl, ruin_relic <- delapouite/amphora, ember_shard <- lorc/burning-embers, citadel_sigil <- lorc/wax-seal,
   drake_scale <- lorc/scale-mail, dragon_fang <- lorc/saber-tooth
 skill: shield_bash <- lorc/shield-bounces, challenge <- lorc/screaming, fortress <- lorc/stone-tower, holy_strike <- lorc/winged-sword,
-  guardian_aura <- lorc/aura, earthquake <- lorc/earth-crack, last_stand <- zeromancer/heart-plus, double_slash <- lorc/crossed-slashes,
-  hamstring <- lorc/broken-bone, bloodlust <- lorc/dripping-blade, rend <- lorc/ragged-wound, blade_storm <- lorc/spinning-blades,
-  war_cry <- lorc/sonic-shout, execute <- lorc/decapitation, fireball <- lorc/fireball, frost_nova <- lorc/frozen-orb,
+  guardian_aura <- lorc/aura, earthquake <- lorc/earth-crack, last_stand <- zeromancer/heart-plus,
+  fireball <- lorc/fireball, frost_nova <- lorc/frozen-orb,
   arcane_power <- lorc/magic-swirl, lightning <- lorc/focused-lightning, meteor <- lorc/meteor-impact, soul_drain <- lorc/spectre,
   inferno <- lorc/fire-ring, divine_heal <- sbed/health-increase, holy_shield <- lorc/bordered-shield, smite <- lorc/sunbeams,
   might <- delapouite/biceps, restoration <- lorc/heart-bottle, haste <- lorc/wingfoot, miracle <- lorc/angel-wings
 
 Added for the level 55-78 skills and the third specialization (same source and licence), file <- original:
 skill: aegis_charge <- delapouite/charging-bull, iron_bulwark <- delapouite/brick-wall, judgment <- lorc/scales,
-  shield_of_faith <- delapouite/templar-shield, titan_slam <- lorc/hammer-drop, cross_cut <- lorc/crossed-sabres,
-  berserk <- delapouite/enrage, blade_dance <- lorc/spinning-sword, crippling_strike <- lorc/foot-trip, decapitate <- lorc/guillotine,
+  shield_of_faith <- delapouite/templar-shield, titan_slam <- lorc/hammer-drop,
   chain_lightning <- lorc/lightning-branches, blizzard <- lorc/snowing, mana_surge <- lorc/magic-palm, void_bolt <- lorc/black-hole-bolas,
   apocalypse <- lorc/burning-meteor, mass_heal <- delapouite/heart-wings, sanctuary <- delapouite/church, holy_nova <- lorc/sun-radiations,
   blessing_of_ages <- delapouite/scroll-quill, divine_light <- lorc/beams-aura, phoenix_ward <- lorc/fire-shield,
-  phoenix_strike <- lorc/fire-dash, rebirth <- lorc/fire-silhouette, riposte <- lorc/sword-clash, thousand_cuts <- lorc/lightning-slashes,
-  final_verdict <- delapouite/executioner-hood, arcane_mastery <- lorc/crystal-ball, star_fall <- delapouite/falling-star,
+  phoenix_strike <- lorc/fire-dash, rebirth <- lorc/fire-silhouette,
+  arcane_mastery <- lorc/crystal-ball, star_fall <- delapouite/falling-star,
   oblivion <- lorc/portal, divine_grace <- lorc/angel-outfit, sacred_judgment <- lorc/justice-star, grand_miracle <- lorc/rainbow-star
 
 Added for the shields (same source and licence), file <- original:
@@ -31,3 +29,22 @@ item: shield <- lorc/bordered-shield (the holy_shield skill's drawing)
 
 Added for the capes:
 item: cape <- drawn for this game (a cloak with its clasp), no outside source
+
+Added for the archer and the assassin (same source and licence), file <- original:
+skill: power_shot <- lorc/high-shot, pinning_arrow <- lorc/pierced-body, eagle_eye <- lorc/eagle-emblem, venom_arrow <- lorc/poison-bottle,
+  multi_shot <- lorc/striking-arrows, tailwind <- lorc/windy-stripes, piercing_arrow <- lorc/supersonic-arrow, arrow_rain <- lorc/arrow-scope,
+  focus <- lorc/meditation, concussive_shot <- lorc/barbed-arrow, fire_arrow <- lorc/flaming-arrow, deadly_shot <- lorc/broadhead-arrow,
+  perfect_aim <- lorc/targeting, arrow_storm <- lorc/arrow-flights, headshot <- lorc/headshot, stab <- lorc/stiletto, low_blow <- lorc/punch,
+  venom_blade <- lorc/dripping-knife, backstab <- lorc/backstab, evasion <- lorc/dodging, fan_of_knives <- lorc/thrown-daggers,
+  eviscerate <- lorc/bleeding-wound, vanish <- delapouite/invisible, killer_instinct <- lorc/sly, hemorrhage <- lorc/drop,
+  shadow_dance <- lorc/shadow-follower, assassinate <- lorc/cloak-dagger, shadow_veil <- lorc/hood, death_mark <- lorc/skull-crossed-bones,
+  silent_execution <- lorc/ninja-mask
+
+Added for the gladiator's dual-sword rework (same source and licence), file <- original; triple_slash, war_roar,
+dual_blade_dance and thousand_sonic_slashes are the old gladiator skills' drawings, renamed:
+skill: sonic_focus <- lorc/concentration-orb, triple_slash <- lorc/crossed-slashes, double_sonic_slash <- lorc/crossed-swords,
+  sonic_blaster <- lorc/wind-slap, war_roar <- lorc/sonic-shout, sonic_storm <- lorc/whirlwind, sonic_guard <- lorc/sword-clash,
+  triple_sonic_slash <- lorc/sword-spin, sonic_buster <- lorc/sonic-lightning, sonic_move <- lorc/sprint,
+  dual_blade_dance <- lorc/spinning-sword, sonic_rage <- lorc/lightning-frequency, storm_slash <- lorc/lightning-saber,
+  duelist_spirit <- delapouite/fencer, sonic_barrier <- lorc/energy-shield, thousand_sonic_slashes <- lorc/lightning-slashes
+item: duals <- the samurai_longsword drawing twice, one mirrored: two swords crossed

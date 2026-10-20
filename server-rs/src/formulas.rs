@@ -18,6 +18,17 @@ pub struct Stats {
 
 pub const BASE_SPEED: f64 = 6.0;
 pub const MELEE_RANGE: f64 = 2.2;
+/** how often an auto-attack hit with a pair of swords gathers a Force charge */
+pub const DUAL_CHARGE_CHANCE: f64 = 0.25;
+/** how far a bow shoots (auto-attack) */
+pub const BOW_RANGE: f64 = 15.0;
+
+/** Whether an attacker at (ax, az) is behind a target at (tx, tz) facing `ry` (World::face: atan2(dx, dz)). */
+pub fn is_behind(ax: f64, az: f64, tx: f64, tz: f64, ry: f64) -> bool {
+    let (dx, dz) = (ax - tx, az - tz);
+    let d = dx.hypot(dz);
+    d > 1e-6 && (ry.sin() * dx + ry.cos() * dz) / d < -0.25
+}
 pub const PARTY_BONUS: [f64; 10] = [1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
 pub const MAX_PARTY: usize = 9;
 pub const PVP_FLAG_MS: f64 = 30000.0;
@@ -81,7 +92,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let ench = &d().enchant;
     let lm = level_mod(level);
     let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    let (mut block, mut run) = (0.0, 0.0);
+    let (mut block, mut run, mut eva, mut quick) = (0.0, 0.0, 0.0, 0.0);
     let (mut mw_atk, mut mw_cast) = (0.0, 0.0);
     for &(it, e, mw) in equipped {
         let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
@@ -99,6 +110,8 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         mp_bonus += ib("mp", it.mp);
         cdr_sum += ib("cdr", it.cdr);
         run += ib("speed", it.speed); // a cape's quicker stride: enchanting adds to its defences, not to this
+        eva += ib("evasion", it.evasion); // the light armour's, enchanting neither
+        quick += ib("atkSpd", it.atk_spd);
         if mw {
             let (a, c, cd) = masterwork_bonus(race, cls, it.kind == "weapon");
             mw_atk += a;
@@ -107,7 +120,10 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         }
     }
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba, mut bc) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let (mut b_crit, mut b_eva) = (0.0, 0.0);
     for b in buffs {
+        b_crit += b.crit.unwrap_or(0.0);
+        b_eva += b.evasion.unwrap_or(0.0);
         bp *= b.p_atk.unwrap_or(1.0);
         bpd *= b.p_def.unwrap_or(1.0);
         bm *= b.m_atk.unwrap_or(1.0);
@@ -128,9 +144,9 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         p_def: jround((20.0 + arm_p) * lm * r.p_def * bpd),
         m_def: jround((15.0 + arm_m) * lm * r.m_def * bmd),
         accuracy: 80.0 + level as f64 + r.accuracy,
-        evasion: 30.0 + level as f64 + r.evasion,
-        crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit,
-        atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk))),
+        evasion: 30.0 + level as f64 + r.evasion + b_eva + eva,
+        crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit + b_crit,
+        atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk) * (1.0 + quick.min(0.2)))),
         cast_mul: 1.0 / (r.cast_spd * bc * (1.0 + mw_cast)),
         speed: BASE_SPEED * r.speed * bs * (1.0 + run.min(0.1)),
         hp_regen: max_hp * 0.008 + 0.5,
@@ -290,6 +306,86 @@ mod tests {
         let boss = &d().mobs["war_avatar"];
         assert!(boss.barrage.is_some() && boss.pulse.is_some() && boss.enrage.is_some());
         assert!(d().mobs.values().all(|m| m.id == "war_avatar" || m.level < boss.level), "the strongest boss in the game");
+    }
+
+    #[test]
+    fn behind_is_the_back_half() {
+        // a target at the origin facing +z (ry 0): an attacker at -z is behind it, at +z in front, at the side neither
+        assert!(is_behind(0.0, -2.0, 0.0, 0.0, 0.0));
+        assert!(!is_behind(0.0, 2.0, 0.0, 0.0, 0.0));
+        assert!(!is_behind(2.0, 0.0, 0.0, 0.0, 0.0));
+        // facing +x (ry pi/2): behind is -x
+        assert!(is_behind(-2.0, 0.1, 0.0, 0.0, std::f64::consts::FRAC_PI_2));
+    }
+
+    #[test]
+    fn archers_and_assassins() {
+        let data = d();
+        for (spec, weapon) in [("archer", "bow"), ("sharpshooter", "bow"), ("assassin", "dagger"), ("shade", "dagger")] {
+            let s = data.spec(spec).unwrap();
+            assert_eq!(s.weapon.as_deref(), Some(weapon), "{spec}");
+            let n = data.skills.iter().filter(|k| k.spec.as_deref() == Some(spec)).count();
+            assert!(n >= 3, "{spec} has {n} skills");
+            assert!(data.skills.iter().filter(|k| k.spec.as_deref() == Some(spec)).all(|k| k.weapon.as_deref() == Some(weapon)), "{spec}'s skills ask for a {weapon}");
+        }
+        assert_eq!(data.spec("sharpshooter").unwrap().parent.as_deref(), Some("archer"));
+        assert_eq!(data.spec("shade").unwrap().parent.as_deref(), Some("assassin"));
+        for set in ["abyssal", "ashforged", "dragon", "glacial", "emerald", "infernal"] {
+            assert_eq!(data.item(&format!("{set}_bow")).unwrap().weapon_type.as_deref(), Some("bow"));
+            assert_eq!(data.item(&format!("{set}_dagger")).unwrap().weapon_type.as_deref(), Some("dagger"));
+        }
+        // a buff's crit and evasion are points added
+        let focus = data.skill("focus").unwrap().buff.clone().unwrap();
+        let base = compute_stats("human", "fighter", 60, &[], &[], "m");
+        let buffed = compute_stats("human", "fighter", 60, &[], &[&focus.mods], "m");
+        assert!((buffed.crit - base.crit - 15.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn light_armour_dodges_and_quickens() {
+        let data = d();
+        let set = ["infernal_hood", "infernal_jerkin", "infernal_bracers", "infernal_leggings", "infernal_treads"].map(|id| data.item(id).unwrap());
+        let plate = ["infernal_helm", "infernal_plate", "infernal_gauntlets", "infernal_greaves", "infernal_boots"].map(|id| data.item(id).unwrap());
+        let wear = |items: &[&crate::data::ItemDef]| compute_stats("human", "fighter", 78, &items.iter().map(|i| (*i, 0, false)).collect::<Vec<_>>(), &[], "m");
+        let (light, heavy, bare) = (wear(&set), wear(&plate), wear(&[]));
+        assert!(light.p_def < heavy.p_def, "less P.Def than the plate");
+        assert!(light.evasion > bare.evasion + 15.0, "S-grade light armour: +18 evasion");
+        assert!(light.atk_interval < bare.atk_interval, "and a quicker hand");
+        assert!(set.iter().all(|i| i.slot.is_some()));
+    }
+
+    #[test]
+    fn gladiators_fight_with_a_pair() {
+        let data = d();
+        for spec in ["gladiator", "duelist"] {
+            let skills: Vec<_> = data.skills.iter().filter(|k| k.spec.as_deref() == Some(spec)).collect();
+            assert!(skills.len() >= 3, "{spec}");
+            assert!(skills.iter().all(|k| k.weapon.as_deref() == Some("dual")), "{spec}'s skills ask for a pair");
+            assert!(skills.iter().all(|k| k.spend.unwrap_or(0) <= data.spec(spec).unwrap().charges.unwrap()), "{spec} can hold what its skills spend");
+        }
+        assert_eq!(data.spec("gladiator").unwrap().charges, Some(5));
+        assert_eq!(data.spec("duelist").unwrap().charges, Some(8));
+        assert!(data.skills.iter().any(|k| k.charge.is_some()), "something gathers charges");
+        let pairs: Vec<_> = data.items.values().filter(|i| i.weapon_type.as_deref() == Some("dual")).collect();
+        assert!(pairs.len() >= 10);
+        for p in pairs {
+            let sword = p.pair.as_deref().unwrap();
+            assert_eq!(p.two_handed, Some(true), "{}", p.id);
+            let rec = p.craft.as_ref().unwrap();
+            assert_eq!(rec.mats, vec![(sword.to_string(), 2)], "{}: two of its sword", p.id);
+            assert!(data.npcs.iter().any(|n| n.craft.iter().flatten().any(|c| c == &p.id)), "a blacksmith joins {}", p.id);
+        }
+    }
+
+    #[test]
+    fn a_blacksmith_never_melts_an_enchanted_sword() {
+        use crate::ent::InvItem;
+        use crate::inventory::{count_mat_in, take_gear_in};
+        let row = |u, e, m| InvItem { u, i: "infernal_blade".into(), c: 1, s: None, e, l: false, m };
+        let mut inv = vec![row(1, 10, false), row(2, 0, false), row(3, 0, true), row(4, 0, false)];
+        assert_eq!(count_mat_in(&inv, "infernal_blade"), 2, "the +10 and the Masterwork do not count");
+        assert!(take_gear_in(&mut inv, "infernal_blade", 2));
+        assert_eq!(inv.iter().map(|i| i.u).collect::<Vec<_>>(), vec![1, 3], "the +10 and the Masterwork are still there");
     }
 
     #[test]

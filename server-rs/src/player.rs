@@ -1,6 +1,6 @@
 //! Per-tick player update: regen, buffs, escape, casting, intents (port of server/src/systems/player.ts).
 use crate::ent::*;
-use crate::formulas::MELEE_RANGE;
+use crate::formulas::{BOW_RANGE, MELEE_RANGE};
 use crate::data::d;
 use crate::world::World;
 
@@ -96,7 +96,8 @@ impl World {
                     return;
                 }
                 let (tx, tz, tr) = { let c = &self.ents[&id].c; (c.x, c.z, c.radius) };
-                let range = MELEE_RANGE + tr;
+                // a bow shoots from afar
+                let range = if self.pl(pid).unwrap().weapon_type() == Some("bow") { BOW_RANGE } else { MELEE_RANGE } + tr;
                 let pc = &self.ents[&pid].c;
                 if (pc.x - tx).hypot(pc.z - tz) > range {
                     self.step_toward(pid, tx, tz, speed, dt, range - 0.3);

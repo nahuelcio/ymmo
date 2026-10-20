@@ -160,6 +160,10 @@ export class InventoryPanel {
     if (db) rows.push(`<span class="${db > 0 ? 'tt-up' : 'tt-down'}">${tx('Bloqueo', 'Block')} ${db > 0 ? '+' : ''}${db}%</span>`);
     const ds = Math.round((speedPct(d) - (c ? speedPct(c) : 0)) * 10) / 10;
     if (ds) rows.push(`<span class="${ds > 0 ? 'tt-up' : 'tt-down'}">${tx('Velocidad', 'Speed')} ${ds > 0 ? '+' : ''}${ds}%</span>`);
+    // the light armour's evasion and attack speed
+    const de = (d.evasion ?? 0) - (c?.evasion ?? 0), da = Math.round(((d.atkSpd ?? 0) - (c?.atkSpd ?? 0)) * 1000) / 10;
+    if (de) rows.push(`<span class="${de > 0 ? 'tt-up' : 'tt-down'}">${tx('Evasión', 'Evasion')} ${de > 0 ? '+' : ''}${de}</span>`);
+    if (da) rows.push(`<span class="${da > 0 ? 'tt-up' : 'tt-down'}">${tx('Vel.Atq', 'Atk.Spd')} ${da > 0 ? '+' : ''}${da}%</span>`);
     const head = c ? `${tx('Contra lo equipado', 'Against equipped')}: ${esc(itemName(c.id, lang))}` : tx('No tenés nada equipado en ese lugar', 'Nothing equipped in that slot');
     return `<div class="tt-cmp"><span class="tt-dim">${head}</span><br>${rows.join(' &nbsp; ') || tx('Mismas estadísticas', 'Same stats')}</div>`;
   }

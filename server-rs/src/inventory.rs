@@ -44,6 +44,31 @@ pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
 
 pub fn count_item(p: &Player, item: &str) -> i64 { p.inv.iter().filter(|i| i.i == item && i.s.is_none()).map(|i| i.c).sum() }
 
+/** A recipe's materials in a bag: gear only as it came (+0, neither Masterwork nor a legacy piece: a blacksmith never
+ * melts down an enchanted sword to join a pair), anything else whatever it is. */
+pub fn count_mat_in(inv: &[InvItem], item: &str) -> i64 {
+    let gear = d().item(item).is_some_and(|i| i.slot.is_some());
+    inv.iter().filter(|i| i.i == item && i.s.is_none() && (!gear || (i.e == 0 && !i.l && !i.m))).map(|i| i.c).sum()
+}
+/** Takes `count` of a recipe's gear material out of a bag, only pieces as they came (count_mat_in). */
+pub fn take_gear_in(inv: &mut Vec<InvItem>, item: &str, count: i64) -> bool {
+    if count_mat_in(inv, item) < count { return false; }
+    let mut left = count;
+    let mut i = inv.len();
+    while i > 0 && left > 0 {
+        i -= 1;
+        let it = &inv[i];
+        if it.i != item || it.s.is_some() || it.e != 0 || it.l || it.m { continue; }
+        inv.remove(i);
+        left -= 1;
+    }
+    true
+}
+pub fn count_mat(p: &Player, item: &str) -> i64 { count_mat_in(&p.inv, item) }
+pub fn take_mat(p: &mut Player, item: &str, count: i64) -> bool {
+    if d().item(item).is_some_and(|i| i.slot.is_some()) { take_gear_in(&mut p.inv, item, count) } else { take_items(p, item, count) }
+}
+
 pub fn take_items(p: &mut Player, item: &str, count: i64) -> bool {
     if count_item(p, item) < count { return false; }
     let mut left = count;
@@ -253,10 +278,12 @@ impl World {
         let Some((def, rec)) = d().item(item).and_then(|i| Some((i, i.craft.as_ref()?))) else { return };
         let p = self.pl_mut(pid).unwrap();
         if p.adena < rec.adena { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
-        if rec.mats.iter().any(|(m, c)| count_item(p, m) < *c) { return self.sys(pid, "Te faltan materiales.", "You are missing materials."); }
+        if rec.mats.iter().any(|(m, c)| count_mat(p, m) < *c) {
+            return self.sys(pid, "Te faltan materiales (las armas tienen que estar en +0).", "You are missing materials (weapons must be +0).");
+        }
         // the piece goes in first: a full bag must not eat the materials
         if !add_item(p, item, 1) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
-        for (m, c) in &rec.mats { take_items(p, m, *c); }
+        for (m, c) in &rec.mats { take_mat(p, m, *c); }
         p.adena -= rec.adena;
         p.inv_dirty = true;
         // gear sometimes comes out a Masterwork when a dwarf has it made (MASTERWORK: never for anyone else); gear never stacks, so it is the
