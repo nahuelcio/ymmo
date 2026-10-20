@@ -212,7 +212,7 @@ export const NPCS: NpcDef[] = [
     greeting: 'No podemos dejar que Kaim Vanul se levante.' },
   // Bastión del Ocaso (terrain.ts DUSK): the Abyssal set over the counter, Ashforged and Dragon made to order from what the 30-50 zones drop
   { id: 'dusk_weapons', name: 'Varek', title: 'Maestro Armero', x: DUSK.x + 8, z: DUSK.z + 8, ry: Math.atan2(-8, -8), kind: 'shop', color: 0x7a2a2a,
-    shop: ['abyssal_blade', 'abyssal_bow', 'abyssal_dagger', 'abyssal_staff'], craft: ['abyssal_duals', 'ashforged_duals', 'dragon_duals', 'ashforged_blade', 'ashforged_bow', 'ashforged_dagger', 'ashforged_staff', 'dragon_blade', 'dragon_bow', 'dragon_dagger', 'dragon_staff'],
+    shop: ['abyssal_blade', 'abyssal_bow', 'abyssal_dagger', 'abyssal_staff', 'abyssal_spellblade'], craft: ['abyssal_duals', 'ashforged_duals', 'dragon_duals', 'ashforged_blade', 'ashforged_bow', 'ashforged_dagger', 'ashforged_staff', 'ashforged_spellblade', 'dragon_blade', 'dragon_bow', 'dragon_dagger', 'dragon_staff', 'dragon_spellblade'],
     greeting: 'El acero bueno no se compra hecho. Traeme con qué forjarlo.' },
   { id: 'dusk_armor', name: 'Isolda', title: 'Maestra Armadurera', x: DUSK.x + -8, z: DUSK.z + -8, ry: Math.atan2(8, 8), kind: 'shop', color: 0x2a4a7a,
     shop: ['abyssal_helm', 'abyssal_hood', 'abyssal_circlet', 'abyssal_shield', 'abyssal_cape', 'abyssal_plate', 'abyssal_jerkin', 'abyssal_robe', 'abyssal_greaves', 'abyssal_leggings', 'abyssal_gauntlets', 'abyssal_bracers', 'abyssal_gloves', 'abyssal_boots', 'abyssal_treads', 'abyssal_shoes', 'abyssal_ring', 'abyssal_earring', 'abyssal_necklace'],
@@ -240,7 +240,7 @@ export const NPCS: NpcDef[] = [
     greeting: 'El nido está despierto. Lo siento en los huesos.' },
   // Fuerte de Escarcha (levels 50-60): the Glacial set over the counter (shared/src/village.ts lays out where they stand)
   { id: 'frost_weapons', name: 'Bjorn', title: 'Maestro Armero', ...fort('frost_weapons'), kind: 'shop', color: 0x5a6a8a,
-    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff'], greeting: 'Acero templado en la nieve. No se quiebra con el frío.' },
+    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff', 'glacial_spellblade'], greeting: 'Acero templado en la nieve. No se quiebra con el frío.' },
   { id: 'frost_armor', name: 'Freya', title: 'Maestra Armadurera', ...fort('frost_armor'), kind: 'shop', color: 0x3a5a8a,
     shop: ['helm', 'circlet', 'hood', 'shield', 'cape', 'plate', 'robe', 'jerkin', 'greaves', 'leggings', 'gauntlets', 'gloves', 'bracers', 'boots', 'shoes', 'treads', 'ring', 'earring', 'necklace'].map((k) => `glacial_${k}`),
     greeting: 'Sin una buena coraza, en el norte durás lo que dura una tormenta.' },
@@ -264,7 +264,7 @@ export const NPCS: NpcDef[] = [
     greeting: 'El Rey Gélido sueña, y su sueño congela el norte.' },
   // Juncoverde (levels 60-70): the Emerald set made to order from the swamp's venom and the jungle's bark
   { id: 'reed_weapons', name: 'Tarek', title: 'Maestro Armero', ...fort('reed_weapons'), kind: 'shop', color: 0x4a7a3a,
-    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff'], craft: ['emerald_duals', 'glacial_duals', 'emerald_blade', 'emerald_bow', 'emerald_dagger', 'emerald_staff'],
+    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff', 'glacial_spellblade'], craft: ['emerald_duals', 'glacial_duals', 'emerald_blade', 'emerald_bow', 'emerald_dagger', 'emerald_staff', 'emerald_spellblade'],
     greeting: 'Las armas Esmeralda no se venden: se forjan. Traeme veneno y corteza.' },
   { id: 'reed_armor', name: 'Lyra', title: 'Maestra Armadurera', ...fort('reed_armor'), kind: 'shop', color: 0x3a6a5a,
     craft: ['helm', 'circlet', 'hood', 'shield', 'cape', 'plate', 'robe', 'jerkin', 'greaves', 'leggings', 'gauntlets', 'gloves', 'bracers', 'boots', 'shoes', 'treads', 'ring', 'earring', 'necklace'].map((k) => `emerald_${k}`),
@@ -289,7 +289,7 @@ export const NPCS: NpcDef[] = [
     greeting: 'Ssithra no es una leyenda. Le vi la cola.' },
   // Brasaoscura (levels 70-78): the Infernal set made to order from magma cores and abyss essence
   { id: 'ember_weapons', name: 'Draven', title: 'Maestro Armero', ...fort('ember_weapons'), kind: 'shop', color: 0x8a2a1a,
-    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff'], craft: ['emerald_duals', 'glacial_duals', 'infernal_duals', 'emerald_blade', 'emerald_bow', 'emerald_dagger', 'emerald_staff', 'infernal_blade', 'infernal_bow', 'infernal_dagger', 'infernal_staff'],
+    shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff', 'glacial_spellblade'], craft: ['emerald_duals', 'glacial_duals', 'infernal_duals', 'emerald_blade', 'emerald_bow', 'emerald_dagger', 'emerald_staff', 'emerald_spellblade', 'infernal_blade', 'infernal_bow', 'infernal_dagger', 'infernal_staff', 'infernal_spellblade'],
     greeting: 'Las armas Infernales nacen del magma y de la esencia del Abismo. Traeme las dos.' },
   { id: 'ember_armor', name: 'Ravena', title: 'Maestra Armadurera', ...fort('ember_armor'), kind: 'shop', color: 0x5a2a3a,
     craft: ['helm', 'circlet', 'hood', 'shield', 'cape', 'plate', 'robe', 'jerkin', 'greaves', 'leggings', 'gauntlets', 'gloves', 'bracers', 'boots', 'shoes', 'treads', 'ring', 'earring', 'necklace'].map((k) => `infernal_${k}`),

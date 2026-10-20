@@ -115,7 +115,7 @@ export const EN = {
   "short_bow": { "name": "Short Bow" }, "hunting_bow": { "name": "Hunting Bow" }, "composite_bow": { "name": "Composite Bow" }, "stiletto": { "name": "Stiletto" },
   "wool_cape": { "name": "Wool Cape" }, "hunter_cape": { "name": "Hunter's Cape" }, "knight_cape": { "name": "Knight's Cape" },
   ...Object.fromEntries([["abyssal", "Abyssal"], ["ashforged", "Ashforged"], ["dragon", "Dragon"], ["glacial", "Glacial"], ["emerald", "Emerald"], ["infernal", "Infernal"]].flatMap(([p, n]) =>
-   ["Blade", "Duals", "Staff", "Bow", "Dagger", "Hood", "Jerkin", "Bracers", "Leggings", "Treads", "Helm", "Circlet", "Shield", "Cape", "Plate", "Robe", "Greaves", "Gauntlets", "Gloves", "Boots", "Shoes", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
+   ["Blade", "Duals", "Staff", "Spellblade", "Bow", "Dagger", "Hood", "Jerkin", "Bracers", "Leggings", "Treads", "Helm", "Circlet", "Shield", "Cape", "Plate", "Robe", "Greaves", "Gauntlets", "Gloves", "Boots", "Shoes", "Ring", "Earring", "Necklace"].map((k) => [`${p}_${k.toLowerCase()}`, { "name": `${n} ${k}` }]))),
   "greater_healing_potion": { "name": "Greater Healing Potion", "desc": "Restores 400 HP." },
   "greater_mana_potion": { "name": "Greater Mana Potion", "desc": "Restores 180 MP." },
   "sea_pearl": { "name": "Sea Pearl" }, "ruin_relic": { "name": "Ruin Relic" }, "ember_shard": { "name": "Ember Shard" },

@@ -92,7 +92,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let ench = &d().enchant;
     let lm = level_mod(level);
     let (mut w_p, mut w_m, mut arm_p, mut arm_m, mut hp_bonus, mut mp_bonus, mut cdr_sum) = (4.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-    let (mut block, mut run, mut eva, mut quick) = (0.0, 0.0, 0.0, 0.0);
+    let (mut block, mut run, mut eva, mut quick, mut spell) = (0.0, 0.0, 0.0, 0.0, 0.0);
     let (mut mw_atk, mut mw_cast) = (0.0, 0.0);
     for &(it, e, mw) in equipped {
         let ib = |f: &str, v: Option<f64>| bal(&format!("item.{}.{f}", it.id), v.unwrap_or(0.0));
@@ -112,6 +112,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         run += ib("speed", it.speed); // a cape's quicker stride: enchanting adds to its defences, not to this
         eva += ib("evasion", it.evasion); // the light armour's, enchanting neither
         quick += ib("atkSpd", it.atk_spd);
+        spell += ib("castSpd", it.cast_spd); // a magic sword's quicker casting, enchanting neither
         if mw {
             let (a, c, cd) = masterwork_bonus(race, cls, it.kind == "weapon");
             mw_atk += a;
@@ -147,7 +148,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         evasion: 30.0 + level as f64 + r.evasion + b_eva + eva,
         crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit + b_crit,
         atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk) * (1.0 + quick.min(0.2)))),
-        cast_mul: 1.0 / (r.cast_spd * bc * (1.0 + mw_cast)),
+        cast_mul: 1.0 / (r.cast_spd * bc * (1.0 + mw_cast) * (1.0 + spell.min(0.2))),
         speed: BASE_SPEED * r.speed * bs * (1.0 + run.min(0.1)),
         hp_regen: max_hp * 0.008 + 0.5,
         mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
@@ -352,6 +353,27 @@ mod tests {
         assert!(light.evasion > bare.evasion + 15.0, "S-grade light armour: +18 evasion");
         assert!(light.atk_interval < bare.atk_interval, "and a quicker hand");
         assert!(set.iter().all(|i| i.slot.is_some()));
+    }
+
+    #[test]
+    fn a_mystic_can_hold_a_magic_sword_and_a_shield() {
+        let data = d();
+        let mut last = 0.0;
+        for set in ["abyssal", "ashforged", "dragon", "glacial", "emerald", "infernal"] {
+            let sword = data.item(&format!("{set}_spellblade")).unwrap();
+            let staff = data.item(&format!("{set}_staff")).unwrap();
+            assert!(!sword.two_handed.unwrap_or(false), "{set}: a shield goes with it");
+            let (sm, tm) = (sword.m_atk.unwrap(), staff.m_atk.unwrap());
+            assert!((sm - tm * 0.8).abs() <= 1.0, "{set}: a fifth less M.Atk than the staff ({sm} against {tm})");
+            let cast = sword.cast_spd.unwrap();
+            assert!(cast > last, "{set}: casts quicker than the sets before it");
+            last = cast;
+        }
+        assert_eq!(last, 0.1, "the infernal one: 10%");
+        let sword = data.item("infernal_spellblade").unwrap();
+        let cast = |eq: &[(&ItemDef, i64, bool)]| compute_stats("human", "mystic", 76, eq, &[], "m").cast_mul;
+        assert!((cast(&[]) / cast(&[(sword, 0, false)]) - 1.1).abs() < 1e-9, "it casts 10% quicker");
+        assert_eq!(cast(&[(sword, 0, false)]), cast(&[(sword, 10, false)]), "enchanting it does not");
     }
 
     #[test]
