@@ -3712,6 +3712,187 @@ def infernal_staff():
     return p
 
 
+# ---------------------------------------------------------------- magic swords (the mystic's, a shield beside them)
+
+SPELL_LEN, SPELL_W = 0.74, 0.024  # shorter than a knight's sword (one hand), its hilt the bigger part of its look
+
+
+def spell_blade(p, name, color, kind, engrave, ink, rough=0.18, metal=0.95, **kw):
+    """A magic sword's blade: straight, narrowing to a long point, with a broad fuller down which runes are worked in the
+    set's own pattern, inlaid in `ink` (there is no glow: the enchanting brings that)."""
+    m = mat(name, color, kind, engrave=engrave, engrave_color=ink, rough=rough, metal=metal, **kw)
+    shape = lambda t: (1.0 - 0.3 * t) if t < 0.84 else max(0.0, (1 - t) / 0.16) ** 0.8 * 0.75
+    w_at = blade_at(SPELL_W, SPELL_LEN, GUARD, shape)
+    p.add(m, *blade(SPELL_LEN, SPELL_W, 0.0066, GUARD, shape, (0.4, 0.8)), deco=lambda q: smooth(0.62, 0.38, abs(q.x) / w_at(q.y)), sharp=30)
+
+
+def spell_grip(p, leather, wire=None, y0=-0.1, top=GUARD - 0.014, r=0.0125):
+    core, w = grip(y0, top, r, wire)
+    p.add(leather, *core)
+    if w:
+        p.add(wire, *w)
+
+
+def face_stones(p, m, at, r, depth=0.008, out=0.0):
+    """A stone set on both faces of a guard or a pommel (the blade passes through the middle), `out` from the middle
+    (else half sunk at its own depth)."""
+    for z in (1, -1):
+        p.add(m, *oball(Vector(at) + Vector((0, 0, z * (out or depth * 1.5))), (r, r, depth)))
+
+
+def abyssal_spellblade():
+    """A mystic's sword of the abyssal harness: a blade of bright steel with waves inlaid in sea blue down its fuller, a
+    guard of two scallop shells in sea-blue lacquer fanning out along a gilt bar, a pearl on each face, a grip wound
+    with wire and a big pearl for a pommel."""
+    p = Piece('spellblade')
+    steel, accent, gilt = abyssal_mats()
+    pearl = mat('pearl', 0xe6eef2, 'enamel', rough=0.1, metal=0.2, sheen=0xc8d8f0, gloss=0.9)
+    spell_blade(p, 'abyssal_spell', 0xa8b6c4, 'steel', 'waves', 0x2e5680)
+    bar = spline([Vector((-0.1, GUARD - 0.012, 0)), Vector((0, GUARD - 0.002, 0)), Vector((0.1, GUARD - 0.012, 0))], 6)
+    p.add(gilt, *tube(bar, along(bar, 0.005, 0.0075, 0.005), 10))
+    for x in (-0.1, 0.1):
+        p.add(gilt, *oball(Vector((x, GUARD - 0.012, 0)), (0.009, 0.009, 0.009)))
+    for x in (-1, 1):  # the shells, fluted, fanning outwards along the bar
+        rings = []
+        na = int(36 / RES) // 9 * 9 or 9
+        for k in range(7):
+            t = k / 6
+            r = 0.008 + 0.034 * t
+            rings.append([(x * (0.016 + 0.05 * t), GUARD - 0.006 + r * math.sin(math.pi * i / (na - 1)) * (1 + 0.09 * math.cos(9 * math.pi * i / (na - 1))),
+                           (0.018 - 0.006 * t) * math.cos(math.pi * i / (na - 1))) for i in range(na)])
+        v, f = loft(rings, cap=False)
+        p.add(accent, v, f, solid=0.0025, roll=0.0016, roll_mat=gilt, deco=lambda q: 1.0, sharp=50)
+    face_stones(p, pearl, (0, GUARD - 0.006, 0), 0.013, 0.008)
+    spell_grip(p, mat('abyssal_grip', 0x1a2a3a, 'leather', rough=0.7), mat('abyssal_wire', 0x8aa0b8, 'steel', rough=0.25, metal=0.95))
+    p.add(gilt, *tube([Vector((0, -0.1, 0)), Vector((0, -0.114, 0))], [0.015, 0.012], 12))
+    p.add(pearl, *oball(Vector((0, -0.136, 0)), (0.025, 0.027, 0.025)))
+    return p
+
+
+def ashforged_spellblade():
+    """A battle-mage's sword of the ashforged company: a blade of blackened steel with a lattice of runes inlaid in
+    copper down its fuller, a heavy iron cross bent down at the ends, a lump of volcanic glass held by iron prongs on
+    each face, a grip of old leather, and for a pommel an iron cage round more of the black glass."""
+    p = Piece('spellblade')
+    steel, mail, leather, wool = ash_mats()
+    iron = mat('ash_iron', 0x3a3b3e, 'iron', rough=0.55, metal=0.85)
+    glass = mat('obsidian', 0x15100e, 'enamel', rough=0.08, metal=0.3, sheen=0x4a1a10, gloss=0.9)
+    spell_blade(p, 'ash_spell', 0x3a3a40, 'black', 'lattice', 0xb0622e, rough=0.5, metal=0.75)
+    cross = spline([Vector((-0.11, GUARD - 0.024, 0)), Vector((-0.04, GUARD, 0)), Vector((0.04, GUARD, 0)), Vector((0.11, GUARD - 0.024, 0))], 6)
+    p.add(iron, *tube(cross, along(cross, 0.0075, 0.0095, 0.0095, 0.0075), 10))
+    p.add(iron, *oball(Vector((0, GUARD - 0.004, 0)), (0.024, 0.018, 0.016)))
+    for z in (1, -1):
+        c = Vector((0, GUARD - 0.004, z * 0.022))
+        p.add(glass, *oball(c, (0.013, 0.016, 0.009), seg=9, rings=6), bump=hammered(0.002, 70.0))
+        for k in range(4):
+            a = math.pi / 2 * k + math.pi / 4
+            d = Vector((math.cos(a), math.sin(a), 0))
+            p.add(iron, *tube([c - Vector((0, 0, z * 0.008)) + d * 0.016, c + Vector((0, 0, z * 0.003)) + d * 0.011], 0.0025, 6))
+    spell_grip(p, leather)
+    for k in range(4):  # the pommel's cage
+        a = math.pi / 2 * k + math.pi / 4
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        bar = [Vector((0, -0.1, 0)) + d * 0.01, Vector((0, -0.118, 0)) + d * 0.027, Vector((0, -0.15, 0)) + d * 0.027, Vector((0, -0.17, 0)) + d * 0.005]
+        p.add(iron, *tube(spline(bar, 5), 0.0038, 7))
+    p.add(iron, *oball(Vector((0, -0.172, 0)), (0.009, 0.009, 0.009)))
+    p.add(glass, *oball(Vector((0, -0.135, 0)), (0.02, 0.024, 0.019), seg=10, rings=7), bump=hammered(0.003, 60.0))
+    return p
+
+
+def dragon_spellblade():
+    """A dragon-priest's sword: a blade of dark steel with scales inlaid in red down its fuller, a guard of grey steel
+    whose quillons hook down into talons, a red stone on each face, a grip of red scales, and for a pommel a dragon's
+    claw of four talons closing round a red orb, as on the dragon staff."""
+    p = Piece('spellblade')
+    dark, red, rim = dragon_mats()
+    gem_m = mat('dragon_gem', 0x8a0a10, 'enamel', rough=0.06, metal=0.3, sheen=0xd02020, gloss=0.95)
+    spell_blade(p, 'dragon_spell', 0x4a4e58, 'steel', 'scales', 0x9c2216, rough=0.24, scale=0.03)
+    p.add(rim, *oball(Vector((0, GUARD - 0.006, 0)), (0.028, 0.017, 0.019)))
+    for x in (-1, 1):
+        p.add(rim, *talon(Vector((x * 0.018, GUARD - 0.004, 0)), (x * 1.0, 0.3, 0), (x * 0.3, -1.0, 0), 0.115, 0.0095))
+    face_stones(p, gem_m, (0, GUARD - 0.006, 0), 0.012, 0.007, out=0.019)
+    core, _ = grip(-0.1, GUARD - 0.014, 0.0125)
+    p.add(red, *core, deco=lambda q: 1.0)
+    p.add(rim, *tube([Vector((0, -0.1, 0)), Vector((0, -0.114, 0))], [0.015, 0.013], 12))
+    p.add(gem_m, *oball(Vector((0, -0.145, 0)), (0.026, 0.026, 0.026), seg=12, rings=8))
+    for k in range(4):
+        a = 2 * math.pi * k / 4 + math.pi / 4
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        p.add(rim, *talon(Vector((0, -0.114, 0)) + d * 0.012, d - UP * 0.35, -UP * 0.45 - d * 1.2, 0.085, 0.0075))
+    return p
+
+
+def glacial_spellblade():
+    """A frost-mage's sword: a blade of pale steel, frost etched down its fuller, a guard of polished steel whose
+    quillons end in ice crystals, a crystal on each face, a grip of cold blue, and for a pommel a cluster of ice
+    crystals held in a ring of points, as on the glacial staff."""
+    p = Piece('spellblade')
+    steel, deep, rim, fur, ice, cloth = glacial_mats()
+    spell_blade(p, 'glacial_spell', 0x9cb6cc, 'steel', 'frost', 0x2f4d6b, rough=0.26, frost=0.25)
+    bar = spline([Vector((-0.07, GUARD - 0.006, 0)), Vector((0, GUARD, 0)), Vector((0.07, GUARD - 0.006, 0))], 6)
+    p.add(rim, *tube(bar, along(bar, 0.0055, 0.0075, 0.0055), 10))
+    for x in (-1, 1):
+        p.add(ice, *facet_crystal(Vector((x * 0.066, GUARD - 0.006, 0)), (x * 1.0, 0.4, 0), 0.075, 0.012))
+        p.add(ice, *facet_crystal(Vector((x * 0.05, GUARD - 0.004, 0)), (x * 0.5, 1.0, 0), 0.04, 0.008))
+    for z in (1, -1):
+        p.add(ice, *facet_crystal(Vector((0, GUARD - 0.004, z * 0.007)), (0, 0.2, z * 1.0), 0.03, 0.011))
+    core, _ = grip(-0.1, GUARD - 0.014, 0.0125)
+    p.add(deep, *core, deco=lambda q: 1.0)
+    for k in range(6):  # the ring of points round the pommel's crystals
+        a = 2 * math.pi * k / 6
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        claw = spline([Vector((0, -0.1, 0)) + d * 0.012, Vector((0, -0.12, 0)) + d * 0.022, Vector((0, -0.138, 0)) + d * 0.021], 4)
+        p.add(rim, *tube(claw, along(claw, 0.0038, 0.003, 0.0012), 7))
+    p.add(ice, *facet_crystal(Vector((0, -0.106, 0)), (0, -1, 0), 0.1, 0.015))
+    for a in (0.4, 2.5, 4.4):
+        p.add(ice, *facet_crystal(Vector((0, -0.112, 0)) + Vector((math.cos(a), 0, math.sin(a))) * 0.008, (math.cos(a) * 0.5, -1.0, math.sin(a) * 0.5), 0.06, 0.01))
+    return p
+
+
+def emerald_spellblade():
+    """An elven spell-sword: a blade of silvered steel with green vines inlaid down its fuller, quillons of silver leaves
+    swept down, an emerald on each face, a grip of emerald lacquer wound with silver, and for a pommel a crown of
+    leaves, silver and green, opening round an emerald, as on the emerald staff."""
+    p = Piece('spellblade')
+    scale, smooth_, silver, mail, glass = emerald_mats()
+    spell_blade(p, 'emerald_spell', 0xc4ccd2, 'steel', 'vines', 0x12806b, rough=0.16)
+    for x in (1, -1):
+        for tilt, size in ((-0.45, 1.0), (0.35, 0.65)):  # a big leaf swept down, a small one up beside the blade
+            leaf = blade(0.09 * size, 0.02 * size, 0.005, 0.0, lambda t: math.sin(math.pi * min(1.0, t)) ** 0.7 if t < 1 else 0.0, n=12)
+            p.add(silver if tilt < 0 else smooth_, *placed(leaf, (x * 0.014, GUARD - 0.006, 0), (x * 1.0, tilt, 0), (0, 1, 0)), deco=lambda q: 0.0)
+    p.add(silver, *tube([Vector((-0.022, GUARD - 0.006, 0)), Vector((0.022, GUARD - 0.006, 0))], 0.012, 12))
+    face_stones(p, glass, (0, GUARD - 0.006, 0), 0.011, 0.007)
+    spell_grip(p, smooth_, silver)
+    p.add(silver, *tube([Vector((0, -0.1, 0)), Vector((0, -0.112, 0))], [0.015, 0.012], 12))
+    p.add(glass, *oball(Vector((0, -0.14, 0)), (0.018, 0.026, 0.018), seg=10, rings=7))
+    for k in range(6):
+        a = 2 * math.pi * k / 6
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        leaf = blade(0.065, 0.016, 0.0045, 0.0, lambda t: math.sin(math.pi * t) ** 0.8, n=10)
+        p.add(smooth_ if k % 2 else silver, *placed(leaf, Vector((0, -0.112, 0)) + d * 0.011, d * 0.55 - UP, (math.cos(a + math.pi / 2), 0, math.sin(a + math.pi / 2))),
+              deco=lambda q: 0.0)
+    return p
+
+
+def infernal_spellblade():
+    """The black knight's spell-sword: a blade of black lacquered steel, gilt scrollwork down its fuller, a gold guard
+    from which two horns curl up beside the blade, the dark stone on each face, a grip of black leather wound with
+    gold, and for a pommel the dark stone ringed in gold, as on the infernal staff."""
+    p = Piece('spellblade')
+    orn, blk, gold, mail, leather, stone = infernal_mats()
+    spell_blade(p, 'infernal_spell', 0x0b0c0f, 'enamel', 'scroll', 0xc9a245, rough=0.14, metal=0.6, emboss=True, sheen=0x161a24, gloss=0.85, scale=0.05)
+    p.add(gold, *oball(Vector((0, GUARD - 0.008, 0)), (0.034, 0.018, 0.022)))
+    for x in (1, -1):
+        p.add(gold, *horn(Vector((x * 0.024, GUARD - 0.006, 0)), (x * 1.0, 0.15, 0), UP, (-x * 1.0, 0, 0), 0.11, 0.0105))
+    face_stones(p, stone, (0, GUARD - 0.008, 0), 0.012, 0.008, out=0.022)
+    spell_grip(p, leather, gold)
+    p.add(gold, *tube([Vector((0, -0.1, 0)), Vector((0, -0.112, 0))], [0.015, 0.013], 12))
+    p.add(stone, *oball(Vector((0, -0.138, 0)), (0.022, 0.027, 0.022), seg=12, rings=8))
+    p.add(gold, *tube([Vector((0, -0.138, 0)) + Vector((0.024 * math.cos(2 * math.pi * k / 24), 0, 0.024 * math.sin(2 * math.pi * k / 24))) for k in range(24)],
+                      0.0042, 7, closed=True))
+    return p
+
+
 # ---------------------------------------------------------------- bows and daggers (the archer's and the assassin's)
 
 BOW_LIMB = 0.62  # a bow's half-length: the grip at the origin, the tips up and down +-Y
@@ -6845,8 +7026,8 @@ SETS = {
     'shield_buckler': {'shield': buckler_shield}, 'shield_brigandine': {'shield': brigandine_shield}, 'shield_plate': {'shield': plate_shield},
     'shield_abyssal': {'shield': abyssal_shield}, 'shield_ashforged': {'shield': ashforged_shield}, 'shield_dragon': {'shield': dragon_shield},
     'shield_glacial': {'shield': glacial_shield}, 'shield_emerald': {'shield': emerald_shield}, 'shield_infernal': {'shield': infernal_shield},
-    # each set's sword and staff, a file a set (client/src/render/quaternius.ts qWeapon)
-    **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff'],
+    # each set's sword, staff, magic sword, bow and dagger, a file a set (client/src/render/quaternius.ts qWeapon)
+    **{f'weapons_{s}': {'blade': globals()[f'{s}_blade'], 'staff': globals()[f'{s}_staff'], 'spellblade': globals()[f'{s}_spellblade'],
                          **{k: globals()[f'{s}_{k}'] for k in ('bow', 'dagger') if f'{s}_{k}' in globals()}}
        for s in ('abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal')},
     # the plain bows and the stiletto (quaternius.ts BASIC_WEAPONS), a node each
@@ -6899,7 +7080,7 @@ def run(set_id, pieces):
     if PREVIEW:
         os.makedirs(PREVIEW, exist_ok=True)
         heads = [o for o in objs if o.name.startswith(('helm', 'circlet', 'hood'))]
-        held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff', 'bow', 'dagger', 'short_bow', 'hunting_bow', 'composite_bow', 'stiletto')]
+        held = [o for o in objs if o.name.split('.')[0] in ('blade', 'staff', 'spellblade', 'bow', 'dagger', 'short_bow', 'hunting_bow', 'composite_bow', 'stiletto')]
         if heads:
             preview(heads[0], set_id)
         if held:

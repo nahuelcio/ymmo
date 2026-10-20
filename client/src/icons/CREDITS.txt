@@ -48,3 +48,6 @@ skill: sonic_focus <- lorc/concentration-orb, triple_slash <- lorc/crossed-slash
   dual_blade_dance <- lorc/spinning-sword, sonic_rage <- lorc/lightning-frequency, storm_slash <- lorc/lightning-saber,
   duelist_spirit <- delapouite/fencer, sonic_barrier <- lorc/energy-shield, thousand_sonic_slashes <- lorc/lightning-slashes
 item: duals <- the samurai_longsword drawing twice, one mirrored: two swords crossed
+
+Added for the mystic's magic swords (same source and licence), file <- original:
+item: spellblade <- lorc/sparkling-sabre

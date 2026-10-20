@@ -181,7 +181,7 @@ let loading: Promise<void> | null = null;
 
 export const qReady = () => ready;
 /** The region sets' swords and staffs, a file a set (q/gear/weapons_<set>.glb, tools/art/blender/gear.py): nodes 'blade' and 'staff'. */
-const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff|bow|dagger)$/;
+const SET_WEAPON = /^(abyssal|ashforged|dragon|glacial|emerald|infernal)_(blade|staff|spellblade|bow|dagger)$/;
 /** the plain bows and daggers, modelled in gear.py like the sets' weapons: one file, a node each */
 const BASIC_WEAPONS = new Set(['short_bow', 'hunting_bow', 'composite_bow', 'stiletto']);
 /**
@@ -1328,6 +1328,8 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Dagas: [null, null, null, null, null, null, null],
     // the gladiator's pairs of swords, the same way: Atacar swings each hand in turn
     Duales: [null, null, null, null, null, null, null],
+    // each set's magic sword, held by a mystic in the set's robe with its shield
+    'Espadas Mágicas': [null, null, null, null, null, null, null],
     // each region set's mage gear (tools/art/blender/gear.py mage_<set>), and all the crowns side by side
     ...Object.fromEntries((['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'] as const).map((s) => [
       `Místico ${{ abyssal: 'Abisal', ashforged: 'Ceniza', dragon: 'Dragón', glacial: 'Glacial', emerald: 'Esmeralda', infernal: 'Infernal' }[s]}`,
@@ -1362,6 +1364,17 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
         rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
         // a still swing (?atk=) is the right hand's; ?left holds it on the left one's
         if (p.has('left') && rig.q?.dual) rig.q.dual = { left: true, age: -Infinity };
+        scene.add(rig.root);
+        return rig;
+      });
+      return;
+    }
+    if (tier === 'Espadas Mágicas') {
+      const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
+      const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
+      rigs = sets.map((s, i) => {
+        const rig = playerModel(race, 'mystic', `${s}_spellblade`, `${s}_robe`, { g, hs: i % 3, hc: 0 }, [`${s}_circlet`, `${s}_gloves`, `${s}_greaves`, `${s}_shoes`, `${s}_shield`]);
+        rig.root.position.set((i - (sets.length - 1) / 2) * 1.1, 0, 0);
         scene.add(rig.root);
         return rig;
       });

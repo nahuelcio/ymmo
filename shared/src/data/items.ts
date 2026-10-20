@@ -10,6 +10,8 @@ export const SHIELD_BLOCK: Record<Grade, number> = { NG: 0.15, D: 0.18, C: 0.21,
 export const CAPE_SPEED: Record<Grade, number> = { NG: 0.02, D: 0.025, C: 0.03, B: 0.035, A: 0.04, S: 0.05 };
 /** how much evasion and attack speed a set's light armour gives, by grade (a multiplier on each piece's share) */
 export const LIGHT_EDGE: Record<Grade, number> = { NG: 0.8, D: 1, C: 1.25, B: 1.5, A: 1.75, S: 2 };
+/** how much faster each set's magic sword (a mystic's one-handed weapon, a shield beside it) lets its wearer cast */
+export const SPELL_CAST: Record<string, number> = { abyssal: 0.04, ashforged: 0.05, dragon: 0.06, glacial: 0.07, emerald: 0.085, infernal: 0.1 };
 
 export interface ItemDef {
   id: string;
@@ -33,6 +35,8 @@ export interface ItemDef {
   /** points of evasion, and how much faster its wearer attacks (a fraction: 0.02 = 2%): the light armour's */
   evasion?: number;
   atkSpd?: number;
+  /** how much faster its wearer casts, as a fraction (0.1 = 10%): a magic sword's; enchanting does not change it */
+  castSpd?: number;
   /** a weapon held in both hands: no shield with it */
   twoHanded?: boolean;
   price: number;
@@ -59,6 +63,9 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
   return [
     { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color, ...craft(6) },
     { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'staff', twoHanded: true, pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
+    // the mystic's other choice: a sword in one hand, a shield in the other, and quicker casting for a fifth less M.Atk
+    { id: `${p}_spellblade`, name: `Espada Mágica ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'sword', pAtk: r(w * 0.55), mAtk: r(w * 1.06 * 0.8),
+      castSpd: SPELL_CAST[p], price: price * 6, icon: '🗡️', color, ...craft(6), desc: 'Espada de místico: hechiza más rápido y deja la otra mano libre para un escudo.' },
     // a pair of its swords, one in each hand (the gladiator's): a blacksmith joins two of the blade
     { id: `${p}_duals`, name: `Hojas Duales ${pl}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'dual', pair: `${p}_blade`, twoHanded: true,
       pAtk: r(w * 1.25), mAtk: r(w * 0.55), price: r(price * 15), icon: '⚔️', color, craft: { mats: [[`${p}_blade`, 2]], adena: r(price * 3) } },

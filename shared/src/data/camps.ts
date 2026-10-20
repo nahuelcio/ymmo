@@ -42,7 +42,7 @@ export const CAMPS: CampDef[] = [
   { id: 'yeti_den', name: 'Cubil de la Matriarca', zone: 'peaks', x: -840, z: -880, level: 59, leader: 'yeti_matriarch', banner: 0xd0e0f0,
     mobs: [{ mob: 'yeti', count: 4 }, { mob: 'frost_giant', count: 2 }], respawn: 300000,
     chest: { adena: [45000, 70000], loot: [{ item: 'supreme_healing_potion', chance: 1, min: 4, max: 8 }, { item: 'ice_crystal', chance: 1, min: 3, max: 6 },
-      { item: 'glacial_plate', chance: 0.08 }, { item: 'glacial_jerkin', chance: 0.08 }, { item: 'glacial_robe', chance: 0.08 }, { item: 'glacial_ring', chance: 0.1 }, { item: 'glacial_staff', chance: 0.05 }, { item: 'scroll_enchant_weapon', chance: 0.25 }] } },
+      { item: 'glacial_plate', chance: 0.08 }, { item: 'glacial_jerkin', chance: 0.08 }, { item: 'glacial_robe', chance: 0.08 }, { item: 'glacial_ring', chance: 0.1 }, { item: 'glacial_staff', chance: 0.05 }, { item: 'glacial_spellblade', chance: 0.05 }, { item: 'scroll_enchant_weapon', chance: 0.25 }] } },
   // the swamp region (60-70)
   { id: 'witch_coven', name: 'Aquelarre del Pantano', zone: 'swamp', x: 905, z: -906, level: 64, leader: 'bog_hag', banner: 0x4a2a4a,
     mobs: [{ mob: 'bog_witch', count: 3 }, { mob: 'bog_drowned', count: 4 }], respawn: 300000,

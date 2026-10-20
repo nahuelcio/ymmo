@@ -64,6 +64,8 @@ pub struct ItemDef {
     /** points of evasion, and how much faster its wearer attacks (a fraction): the light armour's */
     pub evasion: Option<f64>,
     pub atk_spd: Option<f64>,
+    /** how much faster its wearer casts (a fraction): a magic sword's */
+    pub cast_spd: Option<f64>,
     /** a weapon held in both hands: no shield with it */
     pub two_handed: Option<bool>,
     /** a pair of swords: the sword it is two of */
