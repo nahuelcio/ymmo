@@ -54,3 +54,22 @@ item: spellblade <- lorc/sparkling-sabre
 
 Added for the War Avatar's wound (same source and licence), file <- original:
 status: wound <- lorc/broken-heart
+
+Added for the swordsinger and the bladedancer (same source and licence), file <- original:
+skill: song_of_earth <- lorc/rock, song_of_wind <- lorc/feather, song_of_life <- lorc/sprout,
+  song_of_warding <- lorc/spiked-halo, song_of_hunter <- lorc/hunting-horn, song_of_water <- lorc/droplets,
+  song_of_vengeance <- lorc/shield-reflect, song_of_meditation <- lorc/lotus, song_of_renewal <- lorc/cycle,
+  song_of_vitality <- lorc/heart-organ, song_of_champion <- lorc/laurel-crown, song_of_protection <- lorc/bell-shield,
+  grand_sword_symphony <- lorc/music-spell, hammer_crush <- lorc/flat-hammer, sword_symphony <- lorc/lyre,
+  arrest <- lorc/manacles, dance_of_warrior <- lorc/swords-emblem, dance_of_fury <- delapouite/enrage,
+  dance_of_inspiration <- lorc/sunrise, dance_of_mystic <- lorc/magic-portal, dance_of_fire <- lorc/campfire,
+  dance_of_concentration <- lorc/psychic-waves, dance_of_vampire <- delapouite/vampire-dracula,
+  dance_of_siren <- delapouite/mermaid, dance_of_shadow <- lorc/shadow-grasp,
+  dance_of_berserker <- delapouite/viking-head, dance_of_spectral_guard <- lorc/haunting,
+  poison_blade_dance <- lorc/poison-gas, demonic_blade_dance <- lorc/horned-skull, dance_of_medusa <- lorc/snake-totem,
+  shadow_blade_dance <- lorc/curvy-knife, spectral_death_dance <- lorc/grim-reaper
+
+Added for the items still drawn as emoji (same source and licence), file <- original; bow, hood, jerkin, bracers,
+leggings, treads and pickaxe are shared by every item of that kind (common.ts SHARED_ICON):
+item: bow <- delapouite/bow-arrow, hood <- lorc/cowled, jerkin <- delapouite/sleeveless-jacket, bracers <- delapouite/gauntlet, leggings <- lorc/trousers, treads <- lorc/boots,
+  pickaxe <- lorc/mining, wild_berries <- delapouite/berries-bowl, wood_log <- delapouite/wood-pile, raw_stone <- delapouite/stone-pile, awakening_shard <- lorc/crystal-shine, scroll_enchant_sacred <- lorc/book-aura

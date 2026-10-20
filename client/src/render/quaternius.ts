@@ -1349,7 +1349,8 @@ export function animateQ(q: QAnim, s: AnimState): number {
   else if (s.casting && !q.bow) {
     // a melee skill readies the weapon for its blow while it is cast (a dagger drawn back for the stab, a blade raised
     // for the cut, a pair's next hand), a fighter's buff or taunt raises the weapon hand, a spell uses the free hand
-    if (s.castMove === 'strike' && q.armed) {
+    if (s.castMove === 'dance' && q.acts.Dance_Loop) cur = 'Dance_Loop'; // a bladedancer's dance is danced
+    else if (s.castMove === 'strike' && q.armed) {
       const next = q.dagger ? 'Punch_Jab_M' : q.dual && !q.dual.left ? 'Sword_Attack_M' : 'Sword_Attack';
       const hold = next === 'Punch_Jab_M' ? STAB_GUARD : SLASH_WINDUP;
       cur = q.acts[next] ? next : 'Spell_Simple_Idle_Loop';
@@ -1479,7 +1480,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Sentar: { sitAge: 5000 },
     'Sentar suelo': { sitAge: 5000, floorSit: true }, 'Preparar golpe': { casting: true, castMove: 'strike', castAge: 5000 },
-    'Alzar arma': { casting: true, castMove: 'raise', castAge: 5000 }, Morir: {} };
+    'Alzar arma': { casting: true, castMove: 'raise', castAge: 5000 }, 'Danzar (habilidad)': { casting: true, castMove: 'dance', castAge: 5000 }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
   let rigs: Rig[] = [];

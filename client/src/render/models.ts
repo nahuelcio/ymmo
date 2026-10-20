@@ -47,9 +47,9 @@ export interface AnimState {
   /** this swing is a stab (a dagger's skill): a dagger otherwise cuts and stabs in turn */
   atkStab?: boolean;
   casting: boolean;
-  /** what the cast does with the weapon (game.ts castMove): readies it for a blow, or raises it (a fighter's buff or
-   * taunt); none for a spell, cast with the free hand. castAge: ms since the cast began */
-  castMove?: 'strike' | 'raise';
+  /** what the cast does with the weapon (game.ts castMove): readies it for a blow, raises it (a fighter's buff or taunt,
+   * a song), or dances (a bladedancer's dance); none for a spell, cast with the free hand. castAge: ms since the cast began */
+  castMove?: 'strike' | 'raise' | 'dance';
   castAge?: number;
   deadAge: number; // ms since death (-1 alive)
   t: number; // seconds

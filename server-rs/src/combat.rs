@@ -74,11 +74,12 @@ impl World {
         let (p_def, _, eva) = self.def_stats(tid);
         let p = self.pl_mut(pid).unwrap();
         p.last_combat = now;
-        let (acc, crit_c, p_atk) = (p.stats.accuracy, p.stats.crit, p.stats.p_atk);
+        let (acc, crit_c, p_atk, crit_dmg, ranged) = (p.stats.accuracy, p.stats.crit, p.stats.p_atk, p.stats.crit_dmg, p.weapon_type() == Some("bow"));
         if rnd() > hit_chance(acc, eva) { return self.send_miss(pid, tid); }
         let crit = rnd() * 100.0 < crit_c;
-        let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, p_def, 1.0, crit));
+        let (dmg, blk) = self.blocked(tid, with_crit_dmg(phys_damage(p_atk, p_def, 1.0, crit), crit, crit_dmg));
         self.apply_damage(pid, tid, dmg, now, crit, false, blk);
+        if !ranged { self.reflect(tid, pid, dmg, now); }
         // a hit with a pair of swords now and then gathers a Force charge (L2's Sonic Mastery)
         if let Some(p) = self.pl_mut(pid) {
             if p.weapon_type() == Some("dual") && rnd() < DUAL_CHARGE_CHANCE && p.add_charges(1) {
@@ -86,6 +87,15 @@ impl World {
                 self.send_near(x, z, json!({ "t": "fx", "s": pid, "tg": pid, "skill": "charge" }));
             }
         }
+    }
+
+    /** A melee blow on a player under a reflect (Canción de la Venganza) sends part of it back to who dealt it. It goes back
+     * as damage over time does (`dot`), so it is neither reflected again nor drunk by a vampire. */
+    fn reflect(&mut self, tid: u32, src: u32, dmg: f64, now: f64) {
+        let r = self.pl(tid).map_or(0.0, |p| p.stats.reflect);
+        if r <= 0.0 || src == tid || self.ents.get(&src).map_or(true, |e| e.c.dead) || self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
+        let back = reflected(dmg, r);
+        if back > 0.0 { self.apply_damage(tid, src, back, now, false, true, false); }
     }
 
     /** A physical hit on a player carrying a shield: one in `block` of them is caught on it and does half its damage. */
@@ -103,6 +113,7 @@ impl World {
         let crit = rnd() * 100.0 < crit_c;
         let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, t.stats.p_def, 1.0, crit));
         self.apply_damage(mid, tid, dmg, now, crit, false, blk);
+        self.reflect(tid, mid, dmg, now);
         if let Some(oh) = on_hit.filter(|_| !blk) { // a blow caught on the shield leaves no poison or bleed
             if rnd() < oh.chance.unwrap_or(1.0) { self.apply_status(mid, tid, &oh, dmg, now); }
         }
@@ -204,6 +215,13 @@ impl World {
     pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool, blk: bool) {
         if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
         if self.pl(tid).is_some_and(|p| p.god) { return; }
+        // a vampire dealer (Danza del Vampiro) drinks part of a blow it lands (not of damage over time); a wound halves it
+        if !dot && src != tid {
+            let mul = self.ents.get(&src).map_or(1.0, |e| e.c.heal_mul(now));
+            if let Some(p) = self.pl_mut(src).filter(|p| p.stats.vampire > 0.0 && p.hp > 0.0) {
+                p.hp = (p.hp + lifesteal(dmg, p.stats.vampire) * mul).min(p.stats.max_hp);
+            }
+        }
         let mut msg = json!({ "t": "dmg", "s": src, "tg": tid, "v": dmg, "crit": crit });
         if dot { msg["dot"] = json!(true); }
         if blk { msg["blk"] = json!(true); }
@@ -591,12 +609,12 @@ impl World {
                         let crit = rnd() * 100.0 < st.crit;
                         // a stab in the back
                         let back = def.behind.filter(|_| { let t = &self.ents[&tg].c; is_behind(px, pz, t.x, t.z, t.ry) }).unwrap_or(1.0);
-                        let (dmg, blk) = self.blocked(tg, phys_damage(st.p_atk, p_def, def.power * back, crit));
+                        let (dmg, blk) = self.blocked(tg, with_crit_dmg(phys_damage(st.p_atk, p_def, def.power * back, crit), crit, st.crit_dmg));
                         self.apply_damage(pid, tg, dmg, now, crit, false, blk);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                     } else {
                         let crit = rnd() < 0.05;
-                        let dmg = magic_damage(st.m_atk, m_def, def.power, crit);
+                        let dmg = with_crit_dmg(magic_damage(st.m_atk, m_def, def.power, crit), crit, st.crit_dmg);
                         self.apply_damage(pid, tg, dmg, now, crit, false, false);
                         if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
                         if def.kind == "drain" && !self.ents[&pid].c.dead {
