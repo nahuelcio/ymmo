@@ -194,6 +194,13 @@ pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64 {
     jround(((70.0 * m_atk) / m_def.max(1.0)) * mult * rand_range(0.92, 1.08) * if crit { 1.8 } else { 1.0 }).max(1.0)
 }
 
+/**
+ * What a heal skill restores, before a wound halves it. M.Atk grows with about level² (the staff and level_mod both
+ * grow), max HP with level, so the heal takes the square root of the old 1 + M.Atk/100: a share of the target's HP
+ * at every grade rather than a multiple of it. Pinned by heals_stay_a_share_of_hp.
+ */
+pub fn heal_amount(power: f64, m_atk: f64) -> f64 { jround(power * (1.0 + m_atk / 100.0).sqrt()) }
+
 pub fn xp_to_next(level: i64) -> i64 {
     if level >= d().c.max_level { return 0; }
     jround(80.0 * (level as f64).powf(2.2) * past_50(level)) as i64
@@ -395,6 +402,51 @@ mod tests {
         let oh = boss_def.on_hit.as_ref().unwrap();
         assert_eq!((oh.id.as_str(), oh.chance.unwrap_or(1.0)), ("wound", 1.0), "every blow wounds");
         assert_eq!(crate::ent::WOUND_HEAL, 0.5);
+        // wounded, the cleric's quick heal undoes about one of its blows: one healer falls behind, two keep up
+        let mended = heal_amount(data.skill("divine_heal").unwrap().power, mage.m_atk) * crate::ent::WOUND_HEAL / tank.max_hp;
+        assert!((1.0..=1.3).contains(&(mended / auto)), "a divine heal on a wounded tank against one blow: {:.2}", mended / auto);
+    }
+
+    /// A heal restores a share of a same-level tank's HP at every grade, not a multiple of it (heal_amount). Measured
+    /// on a human tank and mystic in each grade's sets at both ends of its levels. `cargo test heals_stay -- --nocapture`
+    /// prints the table.
+    #[test]
+    fn heals_stay_a_share_of_hp() {
+        let data = d();
+        let plate = ["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"];
+        let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
+        let build = |cls: &str, lvl: i64, s: &str, ks: &[&str]| {
+            let eq: Vec<(&ItemDef, i64, bool)> = ks.iter().map(|k| (data.item(&format!("{s}_{k}")).unwrap(), 0, false)).collect();
+            compute_stats("human", cls, lvl, &eq, &[], "m")
+        };
+        // the share of the target's HP each heal restores
+        let bands = [("heal", 0.25, 0.35), ("greater_heal", 0.5, 0.7), ("divine_heal", 0.7, 0.9), ("mass_heal", 0.35, 0.45),
+                     ("restoration", 0.85, 1.15), ("miracle", 1.3, 1.7), ("divine_light", 1.8, 2.2), ("grand_miracle", 0.9, 1.1),
+                     ("last_stand", 0.4, 0.6), ("rebirth", 0.9, 1.1), ("second_wind", 0.15, 0.3)];
+        for k in data.skills.iter().filter(|k| k.kind == "heal") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
+        for (lvl, s) in [(20, "abyssal"), (30, "ashforged"), (39, "ashforged"), (40, "dragon"), (51, "dragon"), (52, "glacial"), (60, "glacial"),
+                         (61, "emerald"), (74, "emerald"), (75, "infernal"), (78, "infernal")] {
+            let (tank, mage) = (build("fighter", lvl, s, &plate), build("mystic", lvl, s, &robe));
+            let mut line = format!("lvl {lvl} {s:>9}: tank HP {:4}, M.Atk {:4} |", tank.max_hp, mage.m_atk);
+            for &(id, lo, hi) in &bands {
+                let k = data.skill(id).unwrap();
+                if k.level > lvl { continue; }
+                // a self-heal (the knights' and the human's) is the fighter's own: their M.Atk, on their HP
+                let caster = if k.target == "self" { &tank } else { &mage };
+                let share = heal_amount(k.power, caster.m_atk) / tank.max_hp;
+                line += &format!(" {id} {:.0}%", 100.0 * share);
+                assert!((lo..=hi).contains(&share), "level {lvl}: {id} heals {:.0}% of a tank's HP", 100.0 * share);
+            }
+            println!("{line}");
+        }
+        // gear and buffs still count, at about half their M.Atk: a +6 staff, or the hierophant's own three buffs
+        let staff = data.item("infernal_staff").unwrap();
+        let buffs: Vec<&BuffMods> = ["blessing", "blessing_of_ages", "divine_grace"].iter().map(|b| &data.skill(b).unwrap().buff.as_ref().unwrap().mods).collect();
+        let m_atk = |e: i64, b: &[&BuffMods]| compute_stats("human", "mystic", 78, &[(staff, e, false)], b, "m").m_atk;
+        for (what, m) in [("a +6 staff", m_atk(6, &[])), ("the buffs", m_atk(0, &buffs))] {
+            let gain = heal_amount(100.0, m) / heal_amount(100.0, m_atk(0, &[]));
+            assert!((1.15..=1.3).contains(&gain), "{what}: {gain:.2}x the heal");
+        }
     }
 
     #[test]
