@@ -652,6 +652,76 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.p.emit({ cell: 'flare', n: 1, at: above(head(t), 3.5), size: [5, 2], life: 1400, color: 0xffffff, bright: 1.7 });
   },
 
+  // ---- Cantor de Espadas / Musa de la Espada (L2's Swordsinger): songs over the party around, and the sword's own song
+  ...Object.fromEntries(['song_of_earth', 'song_of_wind', 'song_of_life', 'song_of_warding', 'song_of_hunter', 'song_of_water', 'song_of_vengeance',
+    'song_of_meditation', 'song_of_renewal', 'song_of_vitality', 'song_of_champion', 'song_of_protection'].map((id) => [id, songFx])),
+  hammer_crush: ({ f, s, t, color }) => {
+    f.slash(chest(t), above(chest(s), 1.1), color, 1.9, 300);
+    later(90, () => {
+      f.burst(chest(t, 0.5), color, 1.0, 320);
+      f.debris(feet(t), 0x8a7a60, 8, 1.0);
+      f.stun(head(t));
+    });
+  },
+  sword_symphony: ({ f, s, color, aoe }) => {
+    // the blade rings out: notes and cuts all round, the sound spreading over the ground
+    f.p.emit({ cell: 'slash', n: 6, at: chest(s, 0.5), shape: 'ring', r: aoe * 0.35, size: [1.1, 1.7], spin: 10, life: 450, color, bright: 1.3 });
+    f.motes(feet(s), color, 900, { n: 16, r: aoe * 0.5, spin: 4, rise: 1.6, cell: 'star' });
+    for (let i = 0; i < 3; i++) later(i * 130, () => f.ring(feet(s), color, aoe * (0.5 + i * 0.25), 550));
+  },
+  arrest: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 300, 0.25, 'magic');
+    later(300, () => {
+      f.ring(feet(t), color, 1.4, 700);
+      f.rune(feet(t), 1.1, color, 1200);
+      f.p.emit({ cell: 'ring', n: 3, at: above(feet(t), 0.4), flat: true, size: [0.6, 1.2], life: 900, color, alpha: 0.8 }); // the shackles
+    });
+  },
+  grand_sword_symphony: ({ f, s, color, aoe }) => {
+    f.pillar(feet(s), color, 900, 4);
+    f.motes(feet(s), color, 1400, { n: 30, r: aoe * 0.6, spin: 5, rise: 3, cell: 'star' });
+    for (let k = 0; k < 8; k++) {
+      later(k * 60, () => {
+        const a = (k / 8) * Math.PI * 2, spot = chest(s, 0.5).add(new THREE.Vector3(Math.cos(a) * aoe * 0.5, 0, Math.sin(a) * aoe * 0.5));
+        f.slash(spot, chest(s, 0.5), color, 1.6, 260);
+      });
+    }
+    later(480, () => {
+      f.ring(feet(s), color, aoe, 700);
+      f.light(chest(s), color, 14, aoe * 1.5, 700);
+    });
+  },
+
+  // ---- Bailarín de Hojas / Bailarín Espectral (L2's Bladedancer): dances over the party around, and the blade dances
+  ...Object.fromEntries(['dance_of_warrior', 'dance_of_fury', 'dance_of_inspiration', 'dance_of_mystic', 'dance_of_fire', 'dance_of_concentration',
+    'dance_of_vampire', 'dance_of_siren', 'dance_of_shadow', 'dance_of_berserker', 'dance_of_spectral_guard'].map((id) => [id, danceFx])),
+  poison_blade_dance: (c) => bladeDance(c, 0x7ac83a),
+  demonic_blade_dance: (c) => bladeDance(c, BLOOD),
+  shadow_blade_dance: (c) => bladeDance(c, 0x5a2a90),
+  dance_of_medusa: ({ f, s, color, aoe }) => {
+    // a gaze that turns to stone: a grey wave over everyone around, stone chips, and they stand frozen
+    f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.4), flat: true, size: [aoe * 0.5, aoe * 1.6], spin: 6, life: 600, color, bright: 1.1 });
+    later(200, () => {
+      f.ring(feet(s), 0xb0b0a0, aoe, 700);
+      f.debris(feet(s), 0x9a9a8a, 16, aoe * 0.6);
+      f.smoke(feet(s), aoe * 0.4, 1000, 0x8a8a80, 8);
+    });
+  },
+  spectral_death_dance: ({ f, s, color, aoe }) => {
+    f.dome(feet(s), color, 1.6, 600);
+    for (let k = 0; k < 10; k++) {
+      later(k * 55, () => {
+        const a = k * 1.3, spot = chest(s, 0.5).add(new THREE.Vector3(Math.cos(a) * aoe * 0.45, ((k % 3) - 1) * 0.3, Math.sin(a) * aoe * 0.45));
+        f.slash(spot, chest(s, 0.5), k % 2 ? 0xffffff : color, 1.7, 240);
+      });
+    }
+    later(560, () => {
+      f.ring(feet(s), color, aoe, 700);
+      f.shards(chest(s, 0.5), color, 20, aoe * 0.7, 800);
+      f.light(chest(s), color, 16, aoe * 1.5, 700);
+    });
+  },
+
   // ---- racial and gender
   second_wind: ({ f, s, color }) => {
     f.ring(feet(s), color, 1.2, 350);
@@ -694,6 +764,27 @@ function sonicBurst(f: FxManager, p: THREE.Vector3, color: number, size: number)
   f.burst(p, color, size, 380);
   f.p.emit({ cell: 'ring', n: 1, at: p, size: [size * 0.4, size * 2.6], life: 380, color: 0xcfeaff, bright: 1.4, fadeIn: 0 });
   f.p.emit({ cell: 'ring', n: 1, at: p, flat: true, size: [size * 0.5, size * 3], life: 450, color, bright: 1.3, fadeIn: 0 });
+}
+
+/** A song (the swordsinger's): notes rising round the singer, a halo over it, and the song spreading over the party around. */
+function songFx({ f, s, color, aoe }: VfxCtx) {
+  f.motes(feet(s), color, 1400, { n: 18, r: 0.9, spin: 2, rise: 2.6, cell: 'star' });
+  f.p.emit({ cell: 'halo', n: 1, at: head(s), size: [0.6, 1.6], life: 700, color, alpha: 0.6 });
+  f.ring(feet(s), color, 1.6, 500);
+  later(150, () => f.ring(feet(s), color, aoe, 1100));
+}
+/** A dance (the bladedancer's): swirls turning round the dancer and the dance spreading over the party around. */
+function danceFx({ f, s, color, aoe }: VfxCtx) {
+  for (let i = 0; i < 3; i++) later(i * 160, () => f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.35), flat: true, size: [1.2, 2.4], spin: 9 - i * 2, life: 600, color, bright: 1.3 }));
+  f.motes(feet(s), color, 1200, { n: 16, r: 1.1, spin: 7, rise: 1.2, cell: 'flare' });
+  later(200, () => f.ring(feet(s), color, aoe, 1000));
+}
+/** A blade dance: both swords cutting all round the dancer, and what they leave (poison, blood, shadow) flying off. */
+function bladeDance({ f, s, color, aoe }: VfxCtx, trail: number) {
+  f.p.emit({ cell: 'slash', n: 6, at: chest(s, 0.5), shape: 'ring', r: aoe * 0.35, size: [1.2, 1.8], spin: 12, life: 500, color, bright: 1.3 });
+  for (let i = 0; i < 2; i++) later(i * 160, () => f.p.emit({ cell: 'swirl', n: 1, at: chest(s, 0.4), flat: true, size: [aoe * 0.7, aoe * 1.6], spin: 14, life: 380, color, bright: 1.3 }));
+  f.ring(feet(s), color, aoe, 500);
+  later(200, () => f.shards(chest(s, 0.5), trail, 16, aoe * 0.6, 700));
 }
 
 function hot(c: number) {

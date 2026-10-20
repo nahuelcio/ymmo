@@ -166,6 +166,17 @@ pub struct BuffMods {
     /** points added, not multipliers */
     pub crit: Option<f64>,
     pub evasion: Option<f64>,
+    /** multipliers: max HP, HP and MP regeneration, critical damage (the songs' and dances') */
+    pub max_hp: Option<f64>,
+    pub hp_regen: Option<f64>,
+    pub mp_regen: Option<f64>,
+    pub crit_dmg: Option<f64>,
+    /** cooldown reduction added (a fraction) and accuracy points */
+    pub cdr: Option<f64>,
+    pub accuracy: Option<f64>,
+    /** fraction of the damage dealt that heals the dealer, of the melee damage taken that goes back */
+    pub vampire: Option<f64>,
+    pub reflect: Option<f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]

@@ -14,6 +14,9 @@ pub struct Stats {
     pub cdr: f64,
     /** the chance a physical hit is caught on the shield and does half its damage */
     pub block: f64,
+    /** a critical hit's damage on top of its x2 (1: plain), the share of the damage dealt that heals (vampire), and of
+     * the melee damage taken that goes back to whoever dealt it (reflect): the songs' and dances' */
+    pub crit_dmg: f64, pub vampire: f64, pub reflect: f64,
 }
 
 pub const BASE_SPEED: f64 = 6.0;
@@ -121,10 +124,19 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         }
     }
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba, mut bc) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
-    let (mut b_crit, mut b_eva) = (0.0, 0.0);
+    let (mut b_crit, mut b_eva, mut b_acc, mut b_cdr, mut b_vamp, mut b_refl) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    let (mut b_hp, mut b_hpr, mut b_mpr, mut b_cd) = (1.0, 1.0, 1.0, 1.0);
     for b in buffs {
         b_crit += b.crit.unwrap_or(0.0);
         b_eva += b.evasion.unwrap_or(0.0);
+        b_acc += b.accuracy.unwrap_or(0.0);
+        b_cdr += b.cdr.unwrap_or(0.0);
+        b_vamp += b.vampire.unwrap_or(0.0);
+        b_refl += b.reflect.unwrap_or(0.0);
+        b_hp *= b.max_hp.unwrap_or(1.0);
+        b_hpr *= b.hp_regen.unwrap_or(1.0);
+        b_mpr *= b.mp_regen.unwrap_or(1.0);
+        b_cd *= b.crit_dmg.unwrap_or(1.0);
         bp *= b.p_atk.unwrap_or(1.0);
         bpd *= b.p_def.unwrap_or(1.0);
         bm *= b.m_atk.unwrap_or(1.0);
@@ -134,7 +146,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         bc *= b.cast_spd.unwrap_or(1.0);
     }
     let lvl = (level - 1) as f64;
-    let max_hp = jround((cb("baseHp", c.base_hp) + cb("hpLvl", c.hp_lvl) * lvl) * r.hp + hp_bonus);
+    let max_hp = jround(((cb("baseHp", c.base_hp) + cb("hpLvl", c.hp_lvl) * lvl) * r.hp + hp_bonus) * b_hp);
     let max_mp = jround((cb("baseMp", c.base_mp) + cb("mpLvl", c.mp_lvl) * lvl) * r.mp + mp_bonus);
     let max_cp = jround(max_hp * c.cp_ratio);
     let mystic = cls == "mystic";
@@ -144,17 +156,18 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         m_atk: jround(w_m * lm * r.m_atk * bm * if mystic { 1.0 } else { 0.6 }),
         p_def: jround((20.0 + arm_p) * lm * r.p_def * bpd),
         m_def: jround((15.0 + arm_m) * lm * r.m_def * bmd),
-        accuracy: 80.0 + level as f64 + r.accuracy,
+        accuracy: 80.0 + level as f64 + r.accuracy + b_acc,
         evasion: 30.0 + level as f64 + r.evasion + b_eva + eva,
         crit: (if cls == "fighter" { 8.0 } else { 4.0 }) + r.crit + b_crit,
         atk_interval: jround(c.atk_interval / (r.atk_spd * ba * (1.0 + mw_atk) * (1.0 + quick.min(0.2)))),
         cast_mul: 1.0 / (r.cast_spd * bc * (1.0 + mw_cast) * (1.0 + spell.min(0.2))),
         speed: BASE_SPEED * r.speed * bs * (1.0 + run.min(0.1)),
-        hp_regen: max_hp * 0.008 + 0.5,
-        mp_regen: max_mp * if mystic { 0.015 } else { 0.01 } + 0.3,
+        hp_regen: (max_hp * 0.008 + 0.5) * b_hpr,
+        mp_regen: (max_mp * if mystic { 0.015 } else { 0.01 } + 0.3) * b_mpr,
         cp_regen: max_cp * 0.03,
-        cdr: cdr_sum.min(0.5), // ponytail: flat cap, half of every skill's recharge at most
+        cdr: (cdr_sum + b_cdr).min(0.5), // ponytail: flat cap, half of every skill's recharge at most
         block,
+        crit_dmg: b_cd, vampire: b_vamp.min(0.5), reflect: b_refl.min(0.5),
     }
 }
 
@@ -174,6 +187,7 @@ pub fn mob_stats(m: &MobDef) -> Stats {
         accuracy: 80.0 + l,
         evasion: 30.0 + l,
         crit: 3.0,
+        crit_dmg: 1.0,
         ..Default::default()
     }
 }
@@ -191,6 +205,12 @@ pub fn phys_damage(p_atk: f64, p_def: f64, mult: f64, crit: bool) -> f64 {
 pub fn block_hit(dmg: f64, block: f64, roll: f64) -> (f64, bool) {
     if block > 0.0 && roll < block { (jround(dmg * 0.5).max(1.0), true) } else { (dmg, false) }
 }
+
+/** A critical hit's damage multiplied by the dealer's critical damage (Danza del Fuego), a plain hit's as it is. */
+pub fn with_crit_dmg(dmg: f64, crit: bool, crit_dmg: f64) -> f64 { if crit { jround(dmg * crit_dmg).max(1.0) } else { dmg } }
+/** What a vampire dealer heals of a hit, and what a reflecting body sends back of a melee blow. */
+pub fn lifesteal(dmg: f64, vampire: f64) -> f64 { jround(dmg * vampire) }
+pub fn reflected(dmg: f64, reflect: f64) -> f64 { jround(dmg * reflect) }
 
 pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64 {
     jround(((70.0 * m_atk) / m_def.max(1.0)) * mult * rand_range(0.92, 1.08) * if crit { 1.8 } else { 1.0 }).max(1.0)
@@ -362,6 +382,42 @@ mod tests {
         assert!(light.evasion > bare.evasion + 15.0, "S-grade light armour: +18 evasion");
         assert!(light.atk_interval < bare.atk_interval, "and a quicker hand");
         assert!(set.iter().all(|i| i.slot.is_some()));
+    }
+
+    /// L2's Swordsinger and Bladedancer: songs and dances for the whole party around, the dances with a pair of swords.
+    #[test]
+    fn songs_and_dances_for_the_party() {
+        let data = d();
+        assert_eq!(data.spec("sword_muse").unwrap().parent.as_deref(), Some("swordsinger"));
+        assert_eq!(data.spec("spectral_dancer").unwrap().parent.as_deref(), Some("bladedancer"));
+        assert_eq!(data.spec("bladedancer").unwrap().weapon.as_deref(), Some("dual"));
+        for (spec, n) in [("swordsinger", 13), ("sword_muse", 3), ("bladedancer", 13), ("spectral_dancer", 3)] {
+            let skills: Vec<_> = data.skills.iter().filter(|k| k.spec.as_deref() == Some(spec)).collect();
+            assert_eq!(skills.len(), n, "{spec}'s skills");
+            let dancer = spec.contains("dancer");
+            for k in &skills {
+                if dancer { assert_eq!(k.weapon.as_deref(), Some("dual"), "{}: a dance asks for a pair", k.id); }
+                if k.kind == "buff" {
+                    assert_eq!(k.target, "self", "{}", k.id);
+                    assert!(k.aoe.unwrap_or(0.0) >= 15.0, "{}: the whole party around", k.id);
+                    assert_eq!(k.buff.as_ref().unwrap().dur, 300000.0, "{}: 5 minutes", k.id);
+                }
+            }
+        }
+        // the new buff stats
+        let base = compute_stats("human", "fighter", 50, &[], &[], "m");
+        let m = |f: fn(&mut BuffMods)| { let mut b = BuffMods::default(); f(&mut b); compute_stats("human", "fighter", 50, &[], &[&b], "m") };
+        assert!((m(|b| b.max_hp = Some(1.15)).max_hp / base.max_hp - 1.15).abs() < 0.01, "Vitalidad");
+        assert!((m(|b| b.hp_regen = Some(1.5)).hp_regen / base.hp_regen - 1.5).abs() < 1e-9, "Vida");
+        assert!((m(|b| b.mp_regen = Some(1.5)).mp_regen / base.mp_regen - 1.5).abs() < 1e-9, "Meditación");
+        assert_eq!(m(|b| b.accuracy = Some(6.0)).accuracy, base.accuracy + 6.0, "Inspiración");
+        assert_eq!(m(|b| b.cdr = Some(0.15)).cdr, 0.15, "Renovación");
+        assert_eq!(m(|b| b.cdr = Some(0.9)).cdr, 0.5, "cooldowns stay capped at half");
+        assert_eq!(base.crit_dmg, 1.0);
+        assert_eq!(with_crit_dmg(100.0, true, m(|b| b.crit_dmg = Some(1.35)).crit_dmg), 135.0, "Fuego: a crit hurts more");
+        assert_eq!(with_crit_dmg(100.0, false, 1.35), 100.0, "a plain hit does not");
+        assert_eq!(lifesteal(500.0, m(|b| b.vampire = Some(0.08)).vampire), 40.0, "Vampiro");
+        assert_eq!(reflected(500.0, m(|b| b.reflect = Some(0.2)).reflect), 100.0, "Venganza");
     }
 
     /// The PvP zone's world raid has to take a full party: a tank, healers to keep it up through the wounds its blows

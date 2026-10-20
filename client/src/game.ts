@@ -1281,8 +1281,9 @@ export class Game {
   }
   /** What a body does with its weapon while it casts (render/quaternius.ts animateQ): a melee fighter readies it for a
    * physical skill's blow, and raises it for a fighter's buff or taunt; anything else (a spell) is cast with the free hand. */
-  private castMove(c: CEnt): 'strike' | 'raise' | undefined {
+  private castMove(c: CEnt): 'strike' | 'raise' | 'dance' | undefined {
     const def = c.castSkill ? SKILLS[c.castSkill] : undefined;
+    if (def?.tune === 'dance') return 'dance'; // a bladedancer dances its dances
     if (!def || !this.meleeWeapon(c)) return undefined;
     if (def.kind === 'phys') return 'strike';
     return (def.kind === 'buff' || def.kind === 'taunt') && c.rec.k === 'p' && c.rec.cls === 'fighter' ? 'raise' : undefined;

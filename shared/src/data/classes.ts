@@ -68,7 +68,8 @@ export const CLASSES: Record<ClassType, ClassDef> = {
  * Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. At EVOLVE_LEVEL the
  * quest "El Despertar" (shared/src/data/quests.ts) turns it into its evolution (`parent`), which keeps its skills.
  */
-export type Spec = 'knight' | 'gladiator' | 'archer' | 'assassin' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'sharpshooter' | 'shade' | 'archmage' | 'hierophant';
+export type Spec = 'knight' | 'gladiator' | 'archer' | 'assassin' | 'swordsinger' | 'bladedancer' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'sharpshooter' | 'shade'
+  | 'sword_muse' | 'spectral_dancer' | 'archmage' | 'hierophant';
 export interface SpecDef {
   name: string; base: ClassType; desc: string; parent?: Spec;
   /** how much more often it blocks with a shield (1.5: half again) */
@@ -88,6 +89,8 @@ export const SPECS: Record<Spec, SpecDef> = {
   gladiator: { name: 'Gladiador', base: 'fighter', weapon: 'dual', charges: 5, desc: 'Una espada en cada mano. Acumula fuerza y la descarga en golpes sónicos.' },
   archer: { name: 'Arquero', base: 'fighter', weapon: 'bow', desc: 'Daño a distancia. Flechas, ralentizaciones y veneno desde lejos.' },
   assassin: { name: 'Asesino', base: 'fighter', weapon: 'dagger', crit: 8, desc: 'Dagas, golpes críticos, veneno y puñaladas por la espalda.' },
+  swordsinger: { name: 'Cantor de Espadas', base: 'fighter', block: 1.2, desc: 'Espada y escudo. Sus canciones le dan a toda la party defensa, velocidad, vida y críticos.' },
+  bladedancer: { name: 'Bailarín de Hojas', base: 'fighter', weapon: 'dual', desc: 'Una espada en cada mano. Sus danzas le dan a toda la party ataque, velocidad y críticos; sus hojas giran sobre los enemigos.' },
   sorcerer: { name: 'Hechicero', base: 'mystic', desc: 'Daño mágico. Fuego, hielo y rayos sobre grupos enteros.' },
   cleric: { name: 'Clérigo', base: 'mystic', desc: 'Sanador. Curaciones grandes y bendiciones para el grupo.' },
   // the third specialization (level 76)
@@ -95,6 +98,8 @@ export const SPECS: Record<Spec, SpecDef> = {
   duelist: { name: 'Duelista', base: 'fighter', parent: 'gladiator', weapon: 'dual', charges: 8, desc: 'Gladiador que hizo de las dos espadas un arte: más fuerza acumulada, golpes sónicos letales.' },
   sharpshooter: { name: 'Francotirador', base: 'fighter', parent: 'archer', weapon: 'bow', crit: 5, desc: 'Arquero que no falla: cada flecha va al punto débil.' },
   shade: { name: 'Sombra', base: 'fighter', parent: 'assassin', weapon: 'dagger', crit: 12, desc: 'Asesino que se funde con la oscuridad: nadie lo ve venir.' },
+  sword_muse: { name: 'Musa de la Espada', base: 'fighter', parent: 'swordsinger', block: 1.2, desc: 'Cantor cuya voz es un arma: sus canciones sostienen a la party y su espada canta la última nota.' },
+  spectral_dancer: { name: 'Bailarín Espectral', base: 'fighter', parent: 'bladedancer', weapon: 'dual', desc: 'Bailarín que danza entre la vida y la muerte: furia para la party, muerte para los que lo rodean.' },
   archmage: { name: 'Archimago', base: 'mystic', parent: 'sorcerer', desc: 'Hechicero que domina todas las escuelas: su poder no tiene techo.' },
   hierophant: { name: 'Hierofante', base: 'mystic', parent: 'cleric', desc: 'Clérigo que habla con los dioses: sus milagros alcanzan a todo el grupo.' },
 };
