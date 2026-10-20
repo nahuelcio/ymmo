@@ -610,7 +610,7 @@ impl World {
             }
             "heal" => {
                 let m_atk = self.pl(pid).unwrap().stats.m_atk;
-                let amount = jround(def.power * (1.0 + m_atk / 100.0));
+                let amount = heal_amount(def.power, m_atk);
                 // a wounded body (the War Avatar's blows) gets half of it
                 for ally in self.party_around(pid, target, def.aoe) {
                     let mul = self.ents.get(&ally).map_or(1.0, |e| e.c.heal_mul(now));
