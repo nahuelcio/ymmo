@@ -18,7 +18,7 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, STRIKE_LEAD, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -59,6 +59,11 @@ export interface CEnt {
   hp: number;
   flags: number;
   atkAt: number;
+  /** the swing under way is a dagger skill's stab (render/quaternius.ts animateQ) */
+  atkStab?: boolean;
+  /** the skill being cast and when it began: what the body does with its weapon meanwhile (castMove) */
+  castSkill?: string;
+  castAt?: number;
   deadAt: number;
   height: number;
   radius: number;
@@ -567,7 +572,7 @@ export class Game {
       if (!s) return;
       // our first swing was already played on the click (prediction)
       if (m.s === this.me.id && performance.now() - this.predictedSwing < 350) this.predictedSwing = 0;
-      else s.atkAt = performance.now();
+      else (s.atkAt = performance.now()), (s.atkStab = undefined);
       const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
       if (ranged) play('miss', this.near(s) * 0.5);
       // an archer looses an arrow as the drawn string goes (quaternius.ts aimBow: a little over half the shot)
@@ -579,6 +584,7 @@ export class Game {
     onSync('cast', (m) => m.s, (m) => {
       const s = this.ents.get(m.s);
       const def = SKILLS[m.skill];
+      if (s) (s.castSkill = m.skill), (s.castAt = performance.now());
       if (s && def) this.castFx.set(m.s, this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur)));
       if (s && def && m.dur > 250) play('cast', this.near(s));
       if (m.s === this.me.id && def && m.dur > 0) this.castBar = { end: performance.now() + m.dur, dur: m.dur, name: def.name, skill: m.skill };
@@ -1144,7 +1150,7 @@ export class Game {
       this.teles.delete(id);
     }
     const c = this.ents.get(id);
-    if (c) c.flags &= ~F_CASTING; // the next snapshot agrees: the server dropped the cast
+    if (c) (c.flags &= ~F_CASTING), (c.castSkill = undefined); // the next snapshot agrees: the server dropped the cast
     if (id === this.me.id) {
       if (this.castBar?.skill) this.castBar = null;
       this.queuedSkill = null;
@@ -1267,6 +1273,21 @@ export class Game {
     GENERIC_VFX[id]({ f: this.fx, s, t, color: 0xffffff, aoe: 6 });
   }
 
+  /** A player's weapon kind when it fights hand to hand with it (a blade, an axe, a hammer, a spear, a dagger, a pair): none
+   * for a bow, a staff or wand, or bare hands. */
+  private meleeWeapon(c: CEnt) {
+    const wt = c.rec.k === 'p' && c.rec.w ? ITEMS[c.rec.w]?.weaponType : undefined;
+    return wt && wt !== 'bow' && wt !== 'staff' ? wt : undefined;
+  }
+  /** What a body does with its weapon while it casts (render/quaternius.ts animateQ): a melee fighter readies it for a
+   * physical skill's blow, and raises it for a fighter's buff or taunt; anything else (a spell) is cast with the free hand. */
+  private castMove(c: CEnt): 'strike' | 'raise' | undefined {
+    const def = c.castSkill ? SKILLS[c.castSkill] : undefined;
+    if (!def || !this.meleeWeapon(c)) return undefined;
+    if (def.kind === 'phys') return 'strike';
+    return (def.kind === 'buff' || def.kind === 'taunt') && c.rec.k === 'p' && c.rec.cls === 'fighter' ? 'raise' : undefined;
+  }
+
   /** Whether this body holds a bow (a player's bow item, or an archer mob). */
   private holdsBow(c: CEnt) {
     return c.rec.k === 'p' ? !!c.rec.w && ITEMS[c.rec.w]?.weaponType === 'bow' : false;
@@ -1298,6 +1319,12 @@ export class Game {
     if (skill === 'charge') return this.vfx('charge', s); // a pair of swords' hit gathered a Force charge
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
+    if (def) s.castSkill = undefined;
+    // a melee skill lands with a blow, already wound up by the cast: a dagger stabs, the rest cut (a pair, hand after hand)
+    if (def && def.kind === 'phys' && this.meleeWeapon(s)) {
+      s.atkStab = this.meleeWeapon(s) === 'dagger';
+      s.atkAt = performance.now() - STRIKE_LEAD[s.atkStab ? 'stab' : 'slash'];
+    }
     if (!def || !t) return;
     // the archer's skills: arrows, loosed as the shot goes (the draw was held through the cast)
     if (def.weapon === 'bow' && def.kind === 'phys') {
@@ -2165,6 +2192,9 @@ export class Game {
           moving,
           atkAge: now - c.atkAt,
           casting: (c.flags & F_CASTING) !== 0,
+          castMove: c.flags & F_CASTING ? this.castMove(c) : undefined,
+          castAge: c.castAt ? now - c.castAt : Infinity,
+          atkStab: c.atkStab,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
           swimming,

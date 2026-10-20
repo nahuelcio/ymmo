@@ -399,6 +399,9 @@ export function loadQ(): Promise<void> {
     restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
     // a pair of swords swings with each hand in turn: the same slash with the left
     if (clips.Sword_Attack) clips.Sword_Attack_M = mirrorClip(clips.Sword_Attack, armature.m!, 'Sword_Attack_M');
+    // the jab with the right hand, the dagger's: a stab; and the spell gesture made with the weapon hand (a fighter's buff)
+    if (clips.Punch_Jab) clips.Punch_Jab_M = mirrorClip(clips.Punch_Jab, armature.m!, 'Punch_Jab_M');
+    if (clips.Spell_Simple_Idle_Loop) clips.Spell_Simple_Idle_Loop_M = mirrorClip(clips.Spell_Simple_Idle_Loop, armature.m!, 'Spell_Simple_Idle_Loop_M');
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
@@ -506,6 +509,8 @@ export interface QOpts {
   bow?: boolean;
   /** a second weapon, in the left hand (a pair of swords): the attacks then swing with each hand in turn */
   offHand?: THREE.Object3D | null;
+  /** inHand is a dagger: it cuts and stabs in turn, and its skills stab */
+  dagger?: boolean;
 }
 
 export interface QAnim {
@@ -523,6 +528,9 @@ export interface QAnim {
   bow?: BowArms;
   /** a pair of swords: whether the swing under way is the left hand's, and how far into it the last frame was */
   dual?: { left: boolean; age: number };
+  /** a dagger: whether the swing under way is a stab, how far into it the last frame was, and the dagger's anchor (turned
+   * to point the blade along the forearm as it stabs) with its rest pose and the forearm */
+  dagger?: { stab: boolean; age: number; grip?: THREE.Object3D; rest: THREE.Quaternion; la: THREE.Object3D; hand: THREE.Object3D };
 }
 
 /** The bones a bow is drawn with, and how far into the archer's stance the arms are (0..1). */
@@ -604,6 +612,25 @@ function hold(q: QAnim, bones: THREE.Object3D[]) {
     v.copy(b.quaternion);
     q.heldNow.push(b);
   }
+}
+
+/**
+ * A dagger held for the stab: a fist leaves the blade across, so as the jab plays (`w`, its weight) the anchor turns to
+ * point the blade along the forearm, the way it goes in. Otherwise it rests as attached.
+ */
+function stabGrip(d: NonNullable<QAnim['dagger']>, w: number) {
+  const g = d.grip;
+  if (!g) return;
+  g.quaternion.copy(d.rest);
+  if (w < 0.01) return;
+  d.la.updateWorldMatrix(true, false);
+  d.hand.updateWorldMatrix(true, false);
+  const along = _av2.setFromMatrixPosition(d.hand.matrixWorld).sub(_av.setFromMatrixPosition(d.la.matrixWorld)).normalize();
+  g.updateWorldMatrix(true, false);
+  const now = g.getWorldQuaternion(_aq2);
+  const blade = _av.set(0, 0, 1).applyQuaternion(now); // weapons are built along +Z, the grip at the origin
+  const world = _aq.setFromUnitVectors(blade, along).multiply(now);
+  g.quaternion.slerp(g.parent!.getWorldQuaternion(_aq3).invert().multiply(world), Math.min(1, w));
 }
 
 /** How far sitting on the ground lowers the body (game.ts, the gallery): from the chair clip's seat down to the hips on the floor. */
@@ -1265,13 +1292,15 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
   const lr = (n: string) => [byName[`${n}_l`], byName[`${n}_r`]];
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
     q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0, held: new Map(), heldNow: [], cape, dual: o.offHand ? { left: true, age: Infinity } : undefined,
+      dagger: o.dagger && o.inHand ? { stab: false, age: Infinity, grip: o.inHand.parent ?? undefined, rest: o.inHand.parent?.quaternion.clone() ?? new THREE.Quaternion(),
+        la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
       bow: o.bow ? { root, head: byName.Head, spine: ['spine_01', 'spine_02', 'spine_03'].map((n) => byName[n]), neck: byName.neck_01,
         string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
         gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined,
@@ -1281,6 +1310,12 @@ export function qPlayer(o: QOpts): Rig {
 }
 
 const ATK_MS = 700;
+/** Where a skill's blow is held while it is cast (clip seconds): the jab's guard, the dagger drawn back; the top of the
+ * sword swing's wind-up, the arm raised. */
+const STAB_GUARD = 0.12, SLASH_WINDUP = 0.3;
+/** How far into the 700 ms attack those are: game.ts starts a skill's blow there (it was wound up by the cast), so it
+ * lands as the skill does (Punch_Jab_M is 0.87 s, Sword_Attack 1.53 s, both played over ATK_MS). */
+export const STRIKE_LEAD = { stab: 100, slash: 140 };
 /** How far an archer turns side-on at full draw (radians: ~65°), the chest away from the mark. */
 const BOW_TURN = 1.13;
 /** Pose the character for this frame. Returns how many feet landed in it (footsteps). */
@@ -1311,14 +1346,27 @@ export function animateQ(q: QAnim, s: AnimState): number {
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
   // an archer neither swings nor casts with its hands up: aimBow draws the bow over the idle or the jog
-  else if (s.casting && !q.bow) cur = 'Spell_Simple_Idle_Loop';
-  else if (s.atkAge < ATK_MS && !q.bow) {
+  else if (s.casting && !q.bow) {
+    // a melee skill readies the weapon for its blow while it is cast (a dagger drawn back for the stab, a blade raised
+    // for the cut, a pair's next hand), a fighter's buff or taunt raises the weapon hand, a spell uses the free hand
+    if (s.castMove === 'strike' && q.armed) {
+      const next = q.dagger ? 'Punch_Jab_M' : q.dual && !q.dual.left ? 'Sword_Attack_M' : 'Sword_Attack';
+      const hold = next === 'Punch_Jab_M' ? STAB_GUARD : SLASH_WINDUP;
+      cur = q.acts[next] ? next : 'Spell_Simple_Idle_Loop';
+      if (cur === next) q.acts[cur].time = Math.min(hold, ((s.castAge ?? Infinity) / 250) * hold);
+    } else cur = s.castMove === 'raise' && q.acts.Spell_Simple_Idle_Loop_M ? 'Spell_Simple_Idle_Loop_M' : 'Spell_Simple_Idle_Loop';
+  } else if (s.atkAge < ATK_MS && !q.bow) {
     // a pair of swords: every new swing (its age starts over) with the other hand
     if (q.dual) {
       if (s.atkAge < q.dual.age) q.dual.left = !q.dual.left;
       q.dual.age = s.atkAge;
     }
-    cur = q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
+    // a dagger cuts and stabs in turn; its skills stab
+    if (q.dagger) {
+      if (s.atkAge < q.dagger.age) q.dagger.stab = s.atkStab ?? !q.dagger.stab;
+      q.dagger.age = s.atkAge;
+    }
+    cur = q.dagger?.stab && q.acts.Punch_Jab_M ? 'Punch_Jab_M' : q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
     q.acts[cur].time = (s.atkAge / ATK_MS) * (clips[cur].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
@@ -1345,6 +1393,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.floor += (floor - q.floor) * Math.min(1, dt * 8);
   if (q.floor < 0.01) q.floor = 0;
   if (q.floor > 0) floorSit(q, q.floor);
+  if (q.dagger) stabGrip(q.dagger, q.w.Punch_Jab_M ?? 0);
   if (q.bow) aimBow(q, q.bow, s, dt);
   if (q.cape) capeCloth(q.cape, s, dt, SIT_GROUND_DROP * q.floor);
   return steps;
@@ -1429,7 +1478,8 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Sentar: { sitAge: 5000 },
-    'Sentar suelo': { sitAge: 5000, floorSit: true }, Morir: {} };
+    'Sentar suelo': { sitAge: 5000, floorSit: true }, 'Preparar golpe': { casting: true, castMove: 'strike', castAge: 5000 },
+    'Alzar arma': { casting: true, castMove: 'raise', castAge: 5000 }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
   let rigs: Rig[] = [];
@@ -1573,6 +1623,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       animate(rig, {
         moving: false, casting: false, t: now / 1000 + i,
         atkAge: state === 'Atacar' ? (atkAt ?? age % 1100) : Infinity, deadAge: state === 'Morir' ? age : -1, ...STATES[state],
+        atkStab: p.has('stab') || undefined, // ?stab: a dagger's swing is always the stab (else cut and stab in turn)
       });
     });
     renderer.render(scene, cam);
