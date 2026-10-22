@@ -1062,11 +1062,17 @@ export function itemModel(itemId: string): THREE.Group {
     g.add(part(new THREE.CylinderGeometry(0.035, 0.04, 0.1, 6), 0xd8e8f0, 0, 0.27, 0)); // neck
     g.add(part(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 6), 0x8a5a30, 0, 0.33, 0)); // cork
   } else if (def?.type === 'armor') {
-    const slotShape: Record<string, THREE.BufferGeometry> = {
-      head: new THREE.SphereGeometry(0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5),
-      chest: B(0.36, 0.3, 0.14), legs: B(0.28, 0.34, 0.1), gloves: B(0.16, 0.12, 0.2), feet: B(0.16, 0.14, 0.26),
+    // every slot gear drops from (a shape missing here threw in part(), and the rest of that snapshot's arrivals were
+    // lost with it: a raid boss's cape or shield hid its scrolls), built only for the piece's own
+    const slotShape: Record<string, () => THREE.BufferGeometry> = {
+      head: () => new THREE.SphereGeometry(0.16, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      chest: () => B(0.36, 0.3, 0.14), legs: () => B(0.28, 0.34, 0.1), gloves: () => B(0.16, 0.12, 0.2), feet: () => B(0.16, 0.14, 0.26),
+      shield: () => new THREE.CylinderGeometry(0.22, 0.22, 0.05, 10), cape: () => B(0.42, 0.03, 0.36),
+      ring: () => new THREE.TorusGeometry(0.07, 0.02, 6, 12).rotateX(Math.PI / 2),
+      earring: () => new THREE.TorusGeometry(0.05, 0.015, 6, 10).rotateX(Math.PI / 2),
+      amulet: () => new THREE.TorusGeometry(0.12, 0.012, 4, 16).rotateX(Math.PI / 2),
     };
-    g.add(part(slotShape[def.slot ?? 'chest'], c, 0, 0.1, 0));
+    g.add(part((slotShape[def.slot ?? 'chest'] ?? slotShape.chest)(), c, 0, 0.1, 0));
   } else {
     // materials
     const shape: Record<string, () => THREE.Mesh> = {
