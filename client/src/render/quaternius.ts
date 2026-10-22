@@ -5,6 +5,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { animate, playerModel, type AnimState, type Rig } from './models';
 import { contactPhases, crossed } from './footfalls';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
+import { STAND_UP_MS } from '../../../shared/src/nodes';
 
 /**
  * Player characters built from the Quaternius modular kits (CC0): an outfit piece per
@@ -515,10 +516,7 @@ export interface QOpts {
 
 export interface QAnim {
   mixer: THREE.AnimationMixer; acts: Record<string, THREE.AnimationAction>; w: Record<string, number>; t: number; armed: boolean;
-  /** the bones a floor sit poses (floorSit), and how far into it the body is (0..1) */
-  sit: SitBones;
-  floor: number;
-  /** bones a pose on top of the clips (floorSit, aimBow) turned this frame, and the clip's value they had: put back
+  /** bones a pose on top of the clips (aimBow) turned this frame, and the clip's value they had: put back
    * before the mixer runs, since it only writes a bone whose clip value changed - a held key would otherwise keep last
    * frame's turn and the next one would add to it */
   held: Map<THREE.Object3D, THREE.Quaternion>; heldNow: THREE.Object3D[];
@@ -636,44 +634,6 @@ function stabGrip(d: NonNullable<QAnim['dagger']>, w: number) {
   const blade = _av.set(0, 0, 1).applyQuaternion(now); // weapons are built along +Z, the grip at the origin
   const world = _aq.setFromUnitVectors(blade, along).multiply(now);
   g.quaternion.slerp(g.parent!.getWorldQuaternion(_aq3).invert().multiply(world), Math.min(1, w));
-}
-
-/** How far sitting on the ground lowers the body (game.ts, the gallery): from the chair clip's seat down to the hips on the floor. */
-export const SIT_GROUND_DROP = 0.44;
-/** The bones a cross-legged floor sit poses, a side each ([left, right]). */
-interface SitBones {
-  root: THREE.Object3D; spine: THREE.Object3D;
-  thigh: THREE.Object3D[]; calf: THREE.Object3D[]; foot: THREE.Object3D[]; ball: THREE.Object3D[];
-  ua: THREE.Object3D[]; la: THREE.Object3D[]; hand: THREE.Object3D[];
-}
-const _sf = new THREE.Vector3(), _sl = new THREE.Vector3(), _sd = new THREE.Vector3(), _sk = new THREE.Vector3(), _ss = new THREE.Vector3();
-/**
- * Sitting on the ground, over the chair clip (there is no floor sit in the library): cross-legged, the knees open to
- * the sides, each shin crossing under the other knee (the right one in front), the feet on their outer edges; the back
- * leaning a little forward and the hands resting on the knees. The trunk and head keep the clip's breathing. `k` of the way.
- */
-function floorSit(q: QAnim, k: number) {
-  const b = q.sit;
-  hold(q, [b.spine, ...b.thigh, ...b.calf, ...b.foot, ...b.ua, ...b.la]);
-  b.root.getWorldQuaternion(_aq3);
-  const fwd = _sf.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize();
-  const left = _sl.set(fwd.z, 0, -fwd.x);
-  const sc = b.root.getWorldScale(_ss).y;
-  turnBone(b.spine, left, -0.1 * k); // the chair clip leans in over the knees: sat on the floor the back is straighter
-  for (const i of [0, 1]) {
-    const s = i === 0 ? 1 : -1, top = i === 1; // the right shin crosses in front of the left one
-    aimBone(b.thigh[i], b.calf[i], bodyDir(_sd, fwd, left, 0.55 * s, -0.24, 0.8), k);
-    aimBone(b.calf[i], b.foot[i], bodyDir(_sd, fwd, left, -0.9 * s, top ? -0.02 : -0.1, top ? -0.3 : -0.42), k);
-    aimBone(b.foot[i], b.ball[i], bodyDir(_sd, fwd, left, -0.45 * s, -0.3, 0.85), k);
-  }
-  for (const i of [0, 1]) {
-    const s = i === 0 ? 1 : -1;
-    b.calf[i].updateWorldMatrix(true, false);
-    // the wrist just above and behind the knee, the palm over it; the elbow out to the side and back
-    _sk.setFromMatrixPosition(b.calf[i].matrixWorld).addScaledVector(fwd, -0.04 * sc).addScaledVector(left, -0.02 * s * sc);
-    _sk.y += 0.08 * sc;
-    reach(b.ua[i], b.la[i], b.hand[i], _sk, bodyDir(_sd, fwd, left, s, -0.2, -0.6), k);
-  }
 }
 
 const _tgt = new THREE.Vector3(), _pole = new THREE.Vector3(), _head = new THREE.Vector3(), _str = new THREE.Vector3(), _bowAt = new THREE.Vector3();
@@ -869,8 +829,7 @@ function clothFrame(L: THREE.Vector3[], rows: number, cols: number, i: number, o
  * points keep their distances (a few rounds of relaxing each link), and are pushed out of the back, the hips and the
  * legs, then each one's bone takes its place and the cloth's turn there.
  */
-/** `sunk`: how far below the floor the body's root is (sat on the ground: game.ts lowers it), so the cloth lies on the floor. */
-function capeCloth(c: QCape, s: AnimState, dt: number, sunk = 0) {
+function capeCloth(c: QCape, s: AnimState, dt: number) {
   if (dt <= 0) return;
   c.root.updateWorldMatrix(true, true);
   const bodyW = c.body.matrixWorld, spineW = c.spine.matrixWorld;
@@ -898,7 +857,7 @@ function capeCloth(c: QCape, s: AnimState, dt: number, sunk = 0) {
   if (s.moving || speed > 1.5) air.addScaledVector(side, 0.9 * scale * Math.sin(s.t * 7.1)).y += 0.7 * scale * Math.sin(s.t * 5.3); // flutter
   air.addScaledVector(fwd, -0.5 * scale).addScaledVector(side, 0.45 * scale * Math.sin(s.t * 0.9) + 0.25 * scale * Math.sin(s.t * 2.3));
   air.sub(vel); // as the cloth feels it, carried along with the body (below)
-  const ground = rootPos.y + sunk + 0.02 * scale;
+  const ground = rootPos.y + 0.02 * scale;
   // the back's outward way now, and where the armour under each point is
   const out = _air2.set(0, 0, -1).applyQuaternion(c.spine.getWorldQuaternion(_q2).multiply(c.spineRest)).normalize();
   const under = c.anchors.map((list) => list.map(([m, k]) => m.getVertexPosition(k, new THREE.Vector3()).applyMatrix4(m.matrixWorld)));
@@ -1307,19 +1266,17 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit', ...DRIVEN_SKILL_CLIPS]) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit', 'KK_Sit_Floor_Down', 'KK_Sit_Floor_StandUp', ...DRIVEN_SKILL_CLIPS]) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
-  const lr = (n: string) => [byName[`${n}_l`], byName[`${n}_r`]];
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, floor: 0, held: new Map(), heldNow: [], cape, dual: o.offHand ? { left: true, age: Infinity } : undefined,
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, held: new Map(), heldNow: [], cape, dual: o.offHand ? { left: true, age: Infinity } : undefined,
       dagger: o.dagger && o.inHand ? { stab: false, age: Infinity, grip: o.inHand.parent ?? undefined, rest: o.inHand.parent?.quaternion.clone() ?? new THREE.Quaternion(),
         la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
       bow: o.bow ? { root, head: byName.Head, spine: ['spine_01', 'spine_02', 'spine_03'].map((n) => byName[n]), neck: byName.neck_01,
         string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
-        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, up: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined,
-      sit: { root, spine: byName.spine_01, thigh: lr('thigh'), calf: lr('calf'), foot: lr('foot'), ball: lr('ball'), ua: lr('upperarm'), la: lr('lowerarm'), hand: lr('hand') } },
+        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, up: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
 }
@@ -1418,8 +1375,13 @@ export function animateQ(q: QAnim, s: AnimState): number {
     q.acts.Sword_Attack.time = ((s.gather.age % s.gather.swingMs) / s.gather.swingMs) * (clips.Sword_Attack.duration - 0.02);
   } else if (s.gather && q.acts.Fixing_Kneeling) cur = 'Fixing_Kneeling';
   else if (sitAge >= 0) {
-    // on the floor there is no chair to lower onto: straight to the sitting loop, floorSit folding the legs as it sinks
-    if (s.floorSit || !clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
+    // on the floor, KayKit's sit (retargeted and grounded by q-assets.mjs): down onto it, then its seated loop
+    if (s.floorSit && q.acts.KK_Sit_Floor_Idle) {
+      if (sitAge > clips.KK_Sit_Floor_Down.duration * 1000 || !at('KK_Sit_Floor_Down', sitAge)) cur = 'KK_Sit_Floor_Idle';
+    } else if (!clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
+  } else if (s.floorSit && q.acts.KK_Sit_Floor_StandUp && standAge < STAND_UP_MS) {
+    // up off the floor in the time the server keeps us sat
+    at('KK_Sit_Floor_StandUp', (standAge / STAND_UP_MS) * clips.KK_Sit_Floor_StandUp.duration * 1000);
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
   // a skill's own animation while it is cast: its clip up to the point it holds (or on to its loop)
@@ -1494,15 +1456,9 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.mixer.update(dt);
   // the jog's clock runs at any weight: a foot lands when it passes one of the clip's landing moments
   const steps = jog && cur === 'Jog_Fwd_Loop' && q.w.Jog_Fwd_Loop > 0.5 ? crossed(jog0 / jog.getClip().duration, jog.time / jog.getClip().duration, jogSteps) : 0;
-  // Sitting on the floor: there is no floor-sit clip, so the chair sit is lowered to the ground (game.ts) and floorSit
-  // crosses its legs and rests its hands on the knees.
-  const floor = s.floorSit && (cur === 'Sitting_Enter' || cur === 'Sitting_Idle_Loop') ? 1 : 0;
-  q.floor += (floor - q.floor) * Math.min(1, dt * 8);
-  if (q.floor < 0.01) q.floor = 0;
-  if (q.floor > 0) floorSit(q, q.floor);
   if (q.dagger) stabGrip(q.dagger, Math.max(q.w.Punch_Jab_M ?? 0, q.w.KK_Stab ?? 0, q.w.KK_Dual_Stab ?? 0));
   if (q.bow) aimBow(q, q.bow, s, dt, bowAt === null ? null : { drawn: bowAt, up: bowUp(cur, q.acts[cur]?.time ?? 0) });
-  if (q.cape) capeCloth(q.cape, s, dt, SIT_GROUND_DROP * q.floor);
+  if (q.cape) capeCloth(q.cape, s, dt);
   return steps;
 }
 
@@ -1585,7 +1541,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Sentar: { sitAge: 5000 },
-    'Sentar suelo': { sitAge: 5000, floorSit: true }, 'Preparar golpe': { casting: true, castMove: 'strike', castAge: 5000 },
+    'Sentar suelo': { floorSit: true }, 'Preparar golpe': { casting: true, castMove: 'strike', castAge: 5000 },
     'Alzar arma': { casting: true, castMove: 'raise', castAge: 5000 }, 'Danzar (habilidad)': { casting: true, castMove: 'dance', castAge: 5000 }, Morir: {} };
   let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
@@ -1725,7 +1681,6 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       const at = (rig.root.userData.walked ??= new THREE.Vector3()) as THREE.Vector3; // a rig built since starts where the rest are
       rig.root.position.add(new THREE.Vector3().subVectors(walked, at));
       at.copy(walked);
-      rig.root.position.y = STATES[state].floorSit ? -SIT_GROUND_DROP : 0; // sat on the floor, as game.ts lowers it
       rig.root.rotation.y = spin ? now / 2500 : ry;
       animate(rig, {
         moving: false, casting: false, t: now / 1000 + i,
@@ -1736,6 +1691,11 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
         ...(p.has('skill') && (() => {
           const key = skillAnimOf(p.get('skill')!, p.get('weapon') ?? undefined), t = p.has('skillAt') ? Number(p.get('skillAt')) : age % 2400; // &skillAt: frozen there
           return t < 1000 ? { casting: true, castAnim: key, castAge: t } : { atkAnim: key, atkAge: t - 1000 };
+        })()),
+        // sat on the floor: down, seated for 3 s, up, and a second standing, over and over (&sitAt=<ms>: frozen there)
+        ...(STATES[state].floorSit && (() => {
+          const t = p.has('sitAt') ? Number(p.get('sitAt')) : age % 6000;
+          return t < 4000 ? { sitAge: t } : { standAge: t - 4000 };
         })()),
       });
     });
