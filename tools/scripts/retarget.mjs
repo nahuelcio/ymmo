@@ -77,7 +77,8 @@ export function retargetClip(src, clipName, tgtJson, map, hips, hold = {}, joint
   // the two rigs may face opposite ways: compare where their left hands are
   const side = (P, name) => P.nodes[P.byName[name]].wp.x;
   const pairs = Object.entries(map);
-  const leftSrc = pairs.find(([s, t]) => /hand_l$/.test(t))[0];
+  // the Quaternius rig's names, on either side (KayKit onto ours, or ours onto a Mixamo creature: creature-anims.mjs)
+  const leftSrc = pairs.find(([s, t]) => /hand_l$/.test(t) || /hand_l$/.test(s))[0];
   const flip = Math.sign(side(S, leftSrc)) !== Math.sign(side(T, map[leftSrc])) ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI) : new THREE.Quaternion();
 
   // the target's rest bones turned to point as the source's do (each towards its mapped child)
@@ -101,7 +102,7 @@ export function retargetClip(src, clipName, tgtJson, map, hips, hold = {}, joint
 
   // leg length ratio, for the hips' travel
   const legLen = (P, names) => names.slice(1).reduce((a, n, k) => a + P.nodes[P.byName[n]].wp.distanceTo(P.nodes[P.byName[names[k]]].wp), 0);
-  const srcLeg = pairs.filter(([, t]) => /^(thigh|calf|foot)_l$/.test(t)).map(([s]) => s);
+  const srcLeg = pairs.filter(([s, t]) => /^(thigh|calf|foot)_l$/.test(t) || /^(thigh|calf|foot)_l$/.test(s)).map(([s]) => s);
   const tgtLeg = srcLeg.map((s) => map[s]);
   const scale = legLen(T, tgtLeg) / legLen(S, srcLeg);
 

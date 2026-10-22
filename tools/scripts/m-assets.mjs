@@ -2,9 +2,12 @@
 //   Quaternius Ultimate Animated Animal Pack: Wolf.glb, Fox.glb (from poly.pizza)
 //   Creatures (CREATURES): Quaternius' Spider and Dragon and Poly by Google's Cobra (CC-BY 3.0) from poly.pizza, and
 //   OpenGameArt models exported from .blend by tools/art/blender/mobs_export.py into "<Mob Models>/glb" first
+//   The werewolf and the yeti (Sketchfab, CC-BY 4.0): built by tools/scripts/creature-anims.mjs and
+//   tools/art/blender/creatures.py into "<Mob Models>/glb" first (werewolf_sf.glb, yeti_sf.glb)
 //   KayKit Character Pack: Skeletons 1.1 (Kay Lousberg): the four skeletons and their weapons
 //   KayKit Character Animations 1.1 (Kay Lousberg): the Rig_Medium clips the skeletons share
-// Usage: node tools/scripts/m-assets.mjs <unzipped pack dir>...
+// Usage: node tools/scripts/m-assets.mjs <unzipped pack dir>... [--only=werewolf,yeti,skeletons]
+//   --only: rebuild just those outputs (the other packs need not be there); CREDITS.txt is always written
 // Keeps only the clips the game plays (the skeletons' retargeted onto one armature), names each scene after its model,
 // shrinks the texture to a 512px WebP and meshopt-compresses everything (via `npx @gltf-transform/cli`).
 import { execSync } from 'node:child_process';
@@ -12,7 +15,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const SRC = process.argv.slice(2);
+const SRC = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
+const want = (out) => !ONLY || ONLY.includes(out);
 if (!SRC.length || !SRC.every((d) => fs.existsSync(d))) throw new Error('usage: node tools/scripts/m-assets.mjs <unzipped pack dir>...');
 const OUT = path.resolve('client/public/m');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'm-assets-'));
@@ -28,7 +33,8 @@ const CREATURES = {
   limule: { file: 'limule.glb', clips: { Idle: 'Idle', Forward: 'Walk', 'Attack.000': 'Attack', OnBack: 'Death' } },
   golem: { file: 'golem.glb', clips: { idle: 'Idle', walk: 'Walk', smash: 'Attack' } },
   raptor: { file: 'raptor.glb', clips: { Velociraptor_Idle: 'Idle', Velociraptor_Run: 'Run', Velociraptor_Attack: 'Attack', Velociraptor_Death: 'Death' } },
-  werewolf: { file: 'werewolf.glb', clips: { 'idle-loop': 'Idle', 'run-loop': 'Run', attack: 'Attack', death: 'Death' } },
+  werewolf: { file: 'werewolf_sf.glb', clips: { Idle: 'Idle', Run: 'Run', Attack: 'Attack', Death: 'Death' } },
+  yeti: { file: 'yeti_sf.glb', clips: { Idle: 'Idle', Run: 'Run', Attack: 'Attack', Death: 'Death' } },
   forest: { file: 'forest.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Dying: 'Death' } },
 };
 const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Eating', 'Attack', 'Attack_Headbutt', 'Death'];
@@ -90,6 +96,7 @@ fs.mkdirSync(OUT, { recursive: true });
 
 // --- animals: one file each, with their clips
 for (const [out, file] of Object.entries(ANIMALS)) {
+  if (!want(out)) continue;
   trim(find(new RegExp(`[\\\\/]${file}$`)), tmp(file), { clips: ANIMAL_CLIPS });
   finish(tmp(file), `${out}.glb`);
 }
@@ -102,16 +109,20 @@ const texture = (f) => {
 
 // --- creatures: a file each, their clips renamed to the roles' names, textures shrunk
 for (const [out, { file, clips }] of Object.entries(CREATURES)) {
+  if (!want(out)) continue;
   const f = tmp(`creature_${out}.glb`);
   trim(find(new RegExp(`[\\\\/]${file.replace('.', '\\.')}$`)), f, { name: out, clips });
   editGlb(f, (g) => {
     // only the colour map: normal, specular and occlusion maps are not used by the game's materials
     for (const m of g.materials ?? []) {
+      if (m.emissiveTexture) delete m.emissiveFactor; // without its map, the factor alone would light the whole skin
       for (const k of ['normalTexture', 'occlusionTexture', 'emissiveTexture']) delete m[k];
       if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.metallicRoughnessTexture;
     }
   });
   gt(`prune "${f}" "${f}" --keep-leaves`);
+  // keys a straight line between their neighbours would give go (clips baked a key a frame, like the werewolf's idle)
+  gt(`resample "${f}" "${f}" --tolerance 0.001`);
   if ((JSON.parse(fs.readFileSync(f).subarray(20, 20 + fs.readFileSync(f).readUInt32LE(12))).images ?? []).length) texture(f);
   finish(f, `${out}.glb`);
 }
@@ -123,39 +134,41 @@ const glbOf = (name) => {
   trim(src, tmp(`${name}.glb`), { name });
   return tmp(`${name}.glb`);
 };
-for (const name of SKELETONS) {
-  const f = glbOf(name);
-  texture(f);
-  finish(f, `${name.toLowerCase()}.glb`);
-}
-// their weapons: one file, a scene per weapon named after it (no bones to clash)
-const weapons = tmp('skeleton_weapons.glb');
-gt(`merge ${WEAPONS.map((n) => `"${glbOf(n)}"`).join(' ')} "${weapons}"`);
-gt(`dedup "${weapons}" "${weapons}"`);
-texture(weapons);
-finish(weapons, 'skeleton_weapons.glb');
+if (want('skeletons')) {
+  for (const name of SKELETONS) {
+    const f = glbOf(name);
+    texture(f);
+    finish(f, `${name.toLowerCase()}.glb`);
+  }
+  // their weapons: one file, a scene per weapon named after it (no bones to clash)
+  const weapons = tmp('skeleton_weapons.glb');
+  gt(`merge ${WEAPONS.map((n) => `"${glbOf(n)}"`).join(' ')} "${weapons}"`);
+  gt(`dedup "${weapons}" "${weapons}"`);
+  texture(weapons);
+  finish(weapons, 'skeleton_weapons.glb');
 
-// --- the skeletons' clips, without the preview mannequin each animation file carries,
-// all retargeted onto the first file's armature (same bone names) so there is one set of bones
-const clipFiles = Object.entries(SKELETON_CLIPS).map(([set, clips]) => {
-  const f = tmp(`clips_${set}.glb`);
-  trim(find(new RegExp(`Rig_Medium[\\\\/]Rig_Medium_${set}\\.glb$`)), f, { clips, clipsOnly: true });
-  return `"${f}"`;
-});
-const anims = tmp('skeleton_anims.glb');
-gt(`merge ${clipFiles.join(' ')} "${anims}"`);
-editGlb(anims, (g) => {
-  const first = new Map();
-  const mark = (i) => {
-    if (!first.has(g.nodes[i].name)) first.set(g.nodes[i].name, i);
-    for (const c of g.nodes[i].children ?? []) mark(c);
-  };
-  for (const n of g.scenes[0].nodes) mark(n);
-  for (const a of g.animations) for (const c of a.channels) c.target.node = first.get(g.nodes[c.target.node].name);
-  g.scenes = [g.scenes[0]];
-  g.scene = 0;
-});
-finish(anims, 'skeleton_anims.glb');
+  // --- the skeletons' clips, without the preview mannequin each animation file carries,
+  // all retargeted onto the first file's armature (same bone names) so there is one set of bones
+  const clipFiles = Object.entries(SKELETON_CLIPS).map(([set, clips]) => {
+    const f = tmp(`clips_${set}.glb`);
+    trim(find(new RegExp(`Rig_Medium[\\\\/]Rig_Medium_${set}\\.glb$`)), f, { clips, clipsOnly: true });
+    return `"${f}"`;
+  });
+  const anims = tmp('skeleton_anims.glb');
+  gt(`merge ${clipFiles.join(' ')} "${anims}"`);
+  editGlb(anims, (g) => {
+    const first = new Map();
+    const mark = (i) => {
+      if (!first.has(g.nodes[i].name)) first.set(g.nodes[i].name, i);
+      for (const c of g.nodes[i].children ?? []) mark(c);
+    };
+    for (const n of g.scenes[0].nodes) mark(n);
+    for (const a of g.animations) for (const c of a.channels) c.target.node = first.get(g.nodes[c.target.node].name);
+    g.scenes = [g.scenes[0]];
+    g.scene = 0;
+  });
+  finish(anims, 'skeleton_anims.glb');
+}
 
 fs.writeFileSync(path.join(OUT, 'CREDITS.txt'), `Mob models, CC0 1.0 (public domain) unless noted: https://creativecommons.org/publicdomain/zero/1.0/
 wolf.glb, fox.glb, stag.glb, horse.glb, donkey.glb, alpaca.glb, bull.glb, cow.glb: Ultimate Animated Animal Pack by Quaternius (quaternius.com), via poly.pizza
@@ -167,12 +180,18 @@ crab.glb: Crab low poly animated 3D model by methodical pixel (opengameart.org/c
 limule.glb: Swamp Limule by Čestmír Dammer (CDmir) (opengameart.org/content/swamp-limule)
 golem.glb: Lava golem by gavlig (opengameart.org/content/lava-golem)
 raptor.glb: Velociraptor, Animated LowPoly Dinosaurs by Quaternius (quaternius.itch.io/animated-lowpoly-dinosaurs)
-werewolf.glb: Werewolf by br-n518 (opengameart.org/content/werewolf-0)
 forest.glb: Forest Monster by Čestmír Dammer (CDmir) (opengameart.org/content/forest-monster); its body only, without
   the tree on its back (that one used a CC BY-NC-SA texture)
 
 Not CC0 - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/):
 cobra.glb: "Cobra" by Poly by Google (poly.pizza/m/40_5Xq467-U)
+
+Not CC0 - Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/):
+werewolf.glb: based on "werewolf" (sketchfab.com/3d-models/werewolf-2dd83cb880f047d3bb2085f13e1efc08) by silvercrow101
+  (sketchfab.com/silvercrow101): its body cut to ~10k triangles and split into three colours, and run, attack and death
+  clips added (retargeted from Quaternius' Universal Animation Library, CC0)
+yeti.glb: based on "Yeti" (sketchfab.com/3d-models/yeti-daa4e743128f44c7859c5c34588518a7) by orioltron
+  (sketchfab.com/orioltron): rigged onto the werewolf's skeleton, moving with its clips
 
 Regenerate with tools/scripts/m-assets.mjs.
 `);
