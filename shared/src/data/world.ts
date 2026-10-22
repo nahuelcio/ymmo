@@ -63,6 +63,15 @@ export const ZONES: ZoneDef[] = [
   // same reason as the rift
   { id: 'howling_hollow', name: 'Hondonada de los Aullidos', x: -40, z: 300, r: 140, levels: '22-30', tint: [0.3, 0.32, 0.3], pvp: true,
     spawns: [{ mob: 'dire_wolf', count: 12 }, { mob: 'moon_cultist', count: 12 }, { mob: 'ghoul', count: 10 }, { mob: 'lycan_king', count: 1 }] },
+  // full PvP for the B grade, on the plain west of the Fuerte de Escarcha: passive creatures that drop ice crystals and
+  // the B-grade scrolls, and Ymirak in the middle
+  { id: 'blizzard_plains', name: 'Llanos de la Ventisca', x: -680, z: -740, r: 120, levels: '52-60', tint: [0.62, 0.7, 0.8], pvp: true,
+    spawns: [{ mob: 'glacier_stalker', count: 12 }, { mob: 'frost_zealot', count: 12 }, { mob: 'glacier_golem', count: 10 }, { mob: 'ymirak', count: 1 }] },
+  // full PvP for the A grade, between the Pantano Ponzoñoso and the Selva Antigua: passive creatures that drop the
+  // Emerald set's materials and the A-grade scrolls, and the Ancient Treant in the middle. The PvP zones go last, for the
+  // same reason as the rift
+  { id: 'mire_heart', name: 'Corazón de la Ciénaga', x: 840, z: -1240, r: 140, levels: '61-70', tint: [0.24, 0.32, 0.2], pvp: true,
+    spawns: [{ mob: 'bog_stalker', count: 12 }, { mob: 'mire_druid', count: 12 }, { mob: 'peat_golem', count: 10 }, { mob: 'ancient_treant', count: 1 }] },
 ];
 
 /** Inside a full-PvP zone. */
@@ -149,9 +158,13 @@ export const TELEPORTS = [
   { id: 'frost', name: 'Fuerte de Escarcha', x: FROST.x, z: FROST.z + 6, cost: 40000 },
   { id: 'tundra', name: 'Tundra Helada (Nv 50-55)', ...drop('tundra'), cost: 45000 },
   { id: 'peaks', name: 'Picos Helados (Nv 55-60)', ...drop('peaks'), cost: 50000 },
+  // just outside its edge, toward the Fuerte de Escarcha: nobody lands flagged
+  { id: 'blizzard_plains', name: 'Llanos de la Ventisca (PvP, Nv 52+)', x: -581, z: -839, cost: 50000 },
   { id: 'reed', name: 'Juncoverde', x: REED.x, z: REED.z + 6, cost: 60000 },
   { id: 'swamp', name: 'Pantano Ponzoñoso (Nv 60-65)', ...drop('swamp'), cost: 65000 },
   { id: 'jungle', name: 'Selva Antigua (Nv 65-70)', ...drop('jungle'), cost: 70000 },
+  // just outside its edge, toward Juncoverde: nobody lands flagged
+  { id: 'mire_heart', name: 'Corazón de la Ciénaga (PvP, Nv 61+)', x: 775, z: -1094, cost: 70000 },
   { id: 'ember', name: 'Brasaoscura', x: EMBER.x - 6, z: EMBER.z, cost: 80000 },
   { id: 'volcanic', name: 'Tierras Volcánicas (Nv 70-74)', ...drop('volcanic'), cost: 85000 },
   { id: 'abyss', name: 'Abismo (Nv 74-78)', ...drop('abyss'), cost: 90000 },

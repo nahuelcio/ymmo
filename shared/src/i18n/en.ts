@@ -112,6 +112,10 @@ export const EN = {
   "scroll_enchant_armor_c": { "name": "Scroll: Enchant Armor (C-grade)", "desc": "Raises a C-grade piece of armor or jewelry by +1 (C grade only). Right-click the piece to use it." },
   "scroll_enchant_weapon_d": { "name": "Scroll: Enchant Weapon (D-grade)", "desc": "Raises a D-grade weapon by +1 (D grade only). Right-click the weapon to use it." },
   "scroll_enchant_armor_d": { "name": "Scroll: Enchant Armor (D-grade)", "desc": "Raises a D-grade piece of armor or jewelry by +1 (D grade only). Right-click the piece to use it." },
+  "scroll_enchant_weapon_b": { "name": "Scroll: Enchant Weapon (B-grade)", "desc": "Raises a B-grade weapon by +1 (B grade only). Right-click the weapon to use it." },
+  "scroll_enchant_armor_b": { "name": "Scroll: Enchant Armor (B-grade)", "desc": "Raises a B-grade piece of armor or jewelry by +1 (B grade only). Right-click the piece to use it." },
+  "scroll_enchant_weapon_a": { "name": "Scroll: Enchant Weapon (A-grade)", "desc": "Raises an A-grade weapon by +1 (A grade only). Right-click the weapon to use it." },
+  "scroll_enchant_armor_a": { "name": "Scroll: Enchant Armor (A-grade)", "desc": "Raises an A-grade piece of armor or jewelry by +1 (A grade only). Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
   "wooden_buckler": { "name": "Wooden Buckler" }, "brigandine_shield": { "name": "Brigandine Shield" }, "full_plate_shield": { "name": "Full Plate Shield" },
   "short_sword_duals": { "name": "Dual Short Swords" }, "broadsword_duals": { "name": "Dual Broadswords" }, "revolution_duals": { "name": "Dual Swords of Revolution" },
@@ -259,7 +263,9 @@ export const EN = {
   "azgaroth": "Azgaroth, the Devourer", "abyss_spawn": "Abyss Spawn",
   "battlefield_carrion": "Battlefield Scavenger", "fallen_legionnaire": "Fallen Legionnaire", "relic_golem": "Relic Golem", "war_avatar": "Avatar of War", "war_herald": "Herald of War",
   "cinder_drakeling": "Cinder Drakeling", "flame_zealot": "Flame Zealot", "scorched_golem": "Scorched Golem", "ignaroth": "Ignaroth, Lord of Embers", "ember_whelp": "Ember Whelp",
-  "dire_wolf": "Dire Wolf", "moon_cultist": "Moon Cultist", "ghoul": "Ghoul", "lycan_king": "Fenrak, the Lycan King", "pack_lycan": "Pack Lycan"
+  "dire_wolf": "Dire Wolf", "moon_cultist": "Moon Cultist", "ghoul": "Ghoul", "lycan_king": "Fenrak, the Lycan King", "pack_lycan": "Pack Lycan",
+  "glacier_stalker": "Glacier Stalker", "frost_zealot": "Frost Zealot", "glacier_golem": "Glacier Golem", "ymirak": "Ymirak, the Frost Colossus", "blizzard_yeti": "Blizzard Yeti",
+  "bog_stalker": "Bog Stalker", "mire_druid": "Mire Druid", "peat_golem": "Peat Golem", "ancient_treant": "Ulmoroth, the Ancient Treant", "treant_sapling": "Treant Sapling"
  },
  "skills": {
   "provoke": {
@@ -788,7 +794,9 @@ export const EN = {
   "abyss": "The Abyss",
   "warfront": "Bloody Crossroads",
   "ember_rift": "Ember Rift",
-  "howling_hollow": "Howling Hollow"
+  "howling_hollow": "Howling Hollow",
+  "blizzard_plains": "Blizzard Plains",
+  "mire_heart": "Heart of the Mire"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -814,7 +822,9 @@ export const EN = {
   "abyss": "The Abyss (Lv 74-78)",
   "warfront": "Bloody Crossroads (PvP, Lv 76+)",
   "ember_rift": "Ember Rift (PvP, Lv 40+)",
-  "howling_hollow": "Howling Hollow (PvP, Lv 22+)"
+  "howling_hollow": "Howling Hollow (PvP, Lv 22+)",
+  "blizzard_plains": "Blizzard Plains (PvP, Lv 52+)",
+  "mire_heart": "Heart of the Mire (PvP, Lv 61+)"
  },
  "races": {
   "human": {
@@ -914,6 +924,10 @@ export const EN = {
   "burn": {
    "name": "Burning",
    "desc": "Loses health every second to the fire."
+  },
+  "frostbite": {
+   "name": "Frostbite",
+   "desc": "Moves 40% slower and loses health every second to the cold."
   }
  }
 } as const;

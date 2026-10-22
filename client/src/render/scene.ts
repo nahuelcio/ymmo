@@ -49,6 +49,10 @@ const SKIES: Record<string, SkyPal> = {
   ember_rift: { top: 0x3a1c18, horizon: 0xb06a48, ground: 0x2e1a12, sun: 0xff8a50, sunI: 1.8, hemi: 1.1, cloud: 0x6a4038, near: 0.1 },
   // the Hondonada de los Aullidos: a moonlit hollow
   howling_hollow: { top: 0x1e2438, horizon: 0x6a7488, ground: 0x24282a, sun: 0xc8d4ff, sunI: 1.3, hemi: 1.0, cloud: 0x4a5266, near: 0.12 },
+  // the Llanos de la Ventisca: a white-out
+  blizzard_plains: { top: 0x8a9cb0, horizon: 0xdce6ee, ground: 0xc4ccd4, sun: 0xe8f0ff, sunI: 1.6, hemi: 1.8, cloud: 0xe8eef4, near: 0.05 },
+  // the Corazón de la Ciénaga: green mist over the mire
+  mire_heart: { top: 0x3a4a30, horizon: 0x8a9a6a, ground: 0x2a3220, sun: 0xd0e0a0, sunI: 1.4, hemi: 1.1, cloud: 0x6a7a56, near: 0.04 },
   // whole regions (biomeWeight), so their towns and the land between zones get the sky too
   dusk: { top: 0x3a7ad8, horizon: 0xe2ddd0, ground: 0x5a4a30, sun: 0xffe2b0, sunI: 2.5, hemi: 1.6, cloud: 0xfff4e8 },
   heart: { top: 0x3a84d0, horizon: 0xc4e0d0, ground: 0x3a5a30, sun: 0xfff4d0, sunI: 2.6, hemi: 1.7, cloud: 0xffffff, near: 0.3 },

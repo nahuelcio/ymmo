@@ -6,7 +6,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import type { Race } from '../../../shared/src/data/classes';
 import { animate, heldWeapon, mobModel, playerModel, type AnimState, type Rig, type WeaponKind } from './models';
 import { loadQ, qPlayer, qReady, qWeapon, tintGear, type Helm } from './quaternius';
-import { addBeastFlames, addFlames } from './flame-fx';
+import { addBeastAura, addFlames } from './flame-fx';
 import { kitTexture, loadV } from './village';
 import { contactPhases, crossed } from './footfalls';
 
@@ -71,6 +71,8 @@ export const MOB_LOOK: Record<string, MobLook> = {
   dragon_cultist: { skin: 0xc8a080, hair: 0x2a1a1a, hs: 0, top: 0x7a2020, bottom: 0x3a1414, hood: 0x5a1414, weapon: 'staff_of_life' },
   flame_zealot: { skin: 0xc89a70, hair: 0x1a1010, hs: 0, top: 0xc04a14, bottom: 0x4a1a0a, hood: 0x8a2a0a, weapon: 'staff_of_life' },
   moon_cultist: { skin: 0xc8b0a0, hair: 0xd8d8e0, hs: 0, top: 0x2a2a5a, bottom: 0x1a1a2a, hood: 0xa8b0c8, weapon: 'sages_staff' },
+  frost_zealot: { skin: 0xd8d0c8, hair: 0xe8eef4, hs: 0, top: 0x3a6aa8, bottom: 0x1a2a40, hood: 0xd8e8f4, weapon: 'staff_of_life' },
+  mire_druid: { skin: 0xa89a7a, hair: 0x3a2a1a, hs: 0, beard: true, top: 0x3a5a2a, bottom: 0x2a3a1a, hood: 0x4a6a2a, weapon: 'willow_staff' },
   dragonkin: { skin: 0x3a6a5a, hs: 3, ears: 'elf_ears', head: 1.1, brawn: 1.2, bulk: 1.15, ranger: true, top: 0x3a4a44, bottom: 0x2a3430, helm: 'HelmD', pauldron: true, weapon: 'partisan' },
   // the walking dead
   zombie: { skin: ROT, hair: 0x2a2a20, hs: 1, top: 0x4a4a3a, bottom: 0x3a3428 },
@@ -188,13 +190,17 @@ interface GlbLook {
   rock?: number;
   /** its texture greyed and brightened by this much before the tint and dye: a white yeti from the dark werewolf */
   pale?: number;
-  /** a fire beast: a ring of fire round its feet, embers and flames at its jaw (flame-fx.ts addBeastFlames) */
+  /** a fire beast: a ring of fire round its feet, embers and flames at its jaw (flame-fx.ts addBeastAura) */
   fire?: boolean;
+  /** a frost beast: the same in the cold's colours, frost on its fists and head */
+  ice?: boolean;
   kind?: Rig['kind'];
 }
 
-/** A mob that fights with fire (the War Avatar, Ignaroth): its telegraphed circles land in flames (game.ts 'tele'). */
-export const fireMob = (tpl: string) => !!(MOB_GLB[tpl]?.fire || MOB_KNIGHT[tpl]?.fire);
+/** What a mob fights with: fire (the War Avatar, Ignaroth) or ice (Ymirak). Its telegraphed circles land in flames or
+ * in frost (game.ts 'tele'). */
+export const elementOf = (tpl: string): 'fire' | 'ice' | undefined =>
+  MOB_GLB[tpl]?.fire || MOB_KNIGHT[tpl]?.fire ? 'fire' : MOB_GLB[tpl]?.ice ? 'ice' : undefined;
 
 export const MOB_GLB: Record<string, GlbLook> = {
   cow: { model: 'cow', height: 1.6, clips: GRAZER },
@@ -297,6 +303,16 @@ export const MOB_GLB: Record<string, GlbLook> = {
   pack_lycan: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, tint: { Fur: 0x6a6866, Belly: 0x9a9690, Claws: 0x1c1a18 } },
   dire_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0x2a2a30, Main_Light: 0x4a4a52, Eyes_Black: 0xffc040 } },
   ghoul: { model: 'skeleton_minion', height: 1.9, pale: 1.3, tint: { skeleton: 0xa8b890, Glow: 0x80ff60 } },
+  // the Llanos de la Ventisca: hunters and golems of ice, the colossus and its yetis
+  glacier_stalker: { model: 'wolf', height: 1.3, tint: { Main: 0x9ac8e8, Main_Light: 0xe8f6ff, Eyes_Black: 0x40c0ff }, glow: 0x0a1a2a },
+  glacier_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xc8e4f8, glow: 0x1a4a7a, kind: 'humanoid' },
+  ymirak: { model: 'yeti', height: 1.9, clips: { run: 'Run' }, dye: 0xd8ecff, glow: 0x0a2a4a, ice: true },
+  blizzard_yeti: { model: 'yeti', height: 1.9, clips: { run: 'Run' }, dye: 0xeaf4ff },
+  // the Corazón de la Ciénaga: mud raptors, peat golems, the Ancient Treant and its saplings
+  bog_stalker: { model: 'raptor', height: 1.25, tint: { Brown: 0x3a3a1a, LightBrown: 0x6a6a3a, Black: 0x1a1a0a }, clips: { run: 'Run' } },
+  peat_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6a5a40, glow: 0x1a3a0a, kind: 'humanoid' },
+  ancient_treant: { model: 'forest', height: 2.1, dye: 0x9aa880, glow: 0x081404 },
+  treant_sapling: { model: 'forest', height: 2.1, dye: 0xa8c888, glow: 0x0a1a04 },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
@@ -444,7 +460,12 @@ function glbMob(tplId: string): Rig | null {
   }
   // wyverns fly: no footsteps
   if (a.acts.run && l.model !== 'wyvern') a.steps = runSteps(l.model, src, a.acts.run.getClip());
-  if (l.fire) addBeastFlames(root, t.scale, obj.getObjectByName('jaw_lower'));
+  if (l.fire) addBeastAura(root, t.scale, 'fire', [obj.getObjectByName('jaw_lower')]);
+  if (l.ice) {
+    // the yeti's Mixamo bones (mixamorigLeftHand_38 once three.js has cleaned the name)
+    const bone = (re: RegExp) => { let b: THREE.Object3D | undefined; obj.traverse((o) => { if (!b && (o as THREE.Bone).isBone && re.test(o.name)) b = o; }); return b; };
+    addBeastAura(root, t.scale, 'frost', [bone(/LeftHand(_\d+)?$/), bone(/RightHand(_\d+)?$/), bone(/Head(_\d+)?$/)]);
+  }
   return {
     root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * t.scale,
     anim: (s) => animateClips(a, s),

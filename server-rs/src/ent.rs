@@ -74,7 +74,8 @@ impl Common {
         Common { id, x, z, ry: 0.0, dead: false, hidden: false, moving: false, radius: 0.5, av: 0, cell: (i64::MIN, i64::MIN), nav: None, statuses: HashMap::new() }
     }
     pub fn has(&self, s: &str, now: f64) -> bool { self.statuses.get(s).map_or(false, |st| st.until > now) }
-    pub fn speed_mul(&self, now: f64) -> f64 { if self.has("slow", now) { SLOW_MUL } else { 1.0 } }
+    /** How fast this body moves: slowed by a slow or by frostbite (Ymirak's blows, which also deal damage over time). */
+    pub fn speed_mul(&self, now: f64) -> f64 { if self.has("slow", now) || self.has("frostbite", now) { SLOW_MUL } else { 1.0 } }
     /** How much of a heal lands on this body: half while wounded. */
     pub fn heal_mul(&self, now: f64) -> f64 { if self.has("wound", now) { WOUND_HEAL } else { 1.0 } }
     pub fn base_flags(&self, now: f64) -> u16 {

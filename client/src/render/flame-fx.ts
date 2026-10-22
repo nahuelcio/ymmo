@@ -19,7 +19,9 @@ const shared = { uTime: { value: 0 }, uViewH: { value: 800 } };
 const viewSize = new THREE.Vector2();
 
 const geos = new Map<Kind, THREE.BufferGeometry>();
-const mats = new Map<Kind, THREE.ShaderMaterial>();
+/** fire (white-yellow, orange, red) or frost (white, pale blue, deep blue): the same emitters in the cold's colours */
+export type Palette = 'fire' | 'frost';
+const mats = new Map<string, THREE.ShaderMaterial>();
 
 function geometry(kind: Kind): THREE.BufferGeometry {
   let g = geos.get(kind);
@@ -38,8 +40,8 @@ function geometry(kind: Kind): THREE.BufferGeometry {
   return g;
 }
 
-function material(kind: Kind): THREE.ShaderMaterial {
-  let m = mats.get(kind);
+function material(kind: Kind, palette: Palette): THREE.ShaderMaterial {
+  let m = mats.get(`${kind}:${palette}`);
   if (m) return m;
   const b: Burn = KINDS[kind];
   m = new THREE.ShaderMaterial({
@@ -74,7 +76,9 @@ function material(kind: Kind): THREE.ShaderMaterial {
         if (r > 1.0) discard;
         float soft = pow(1.0 - r, ${b.embers ? '0.6' : '1.6'});
         // white-yellow at the root, orange, then a deep red as it dies away
-        vec3 hot = vec3(1.0, 0.92, 0.55), mid = vec3(1.0, 0.42 + 0.12 * vHue, 0.06), cool = vec3(0.75, 0.07, 0.02);
+        ${palette === 'fire'
+          ? 'vec3 hot = vec3(1.0, 0.92, 0.55), mid = vec3(1.0, 0.42 + 0.12 * vHue, 0.06), cool = vec3(0.75, 0.07, 0.02);'
+          : 'vec3 hot = vec3(0.95, 0.98, 1.0), mid = vec3(0.55 + 0.15 * vHue, 0.82, 1.0), cool = vec3(0.2, 0.45, 0.9);'}
         vec3 col = vLife < 0.3 ? mix(hot, mid, vLife / 0.3) : mix(mid, cool, (vLife - 0.3) / 0.7);
         float a = soft * smoothstep(0.0, 0.1, vLife) * (1.0 - vLife) * ${b.embers ? '1.4' : '0.9'};
         gl_FragColor = vec4(col * ${b.embers ? '3.0' : '1.8'} * a, a);
@@ -83,12 +87,12 @@ function material(kind: Kind): THREE.ShaderMaterial {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  mats.set(kind, m);
+  mats.set(`${kind}:${palette}`, m);
   return m;
 }
 
-function points(kind: Kind): THREE.Points {
-  const p = new THREE.Points(geometry(kind), material(kind));
+function points(kind: Kind, palette: Palette = 'fire'): THREE.Points {
+  const p = new THREE.Points(geometry(kind), material(kind, palette));
   p.frustumCulled = false; // the points move in the shader: the geometry's bounds mean nothing
   p.renderOrder = 2;
   // the clock and the screen's height, set as it is drawn: nothing to tick from outside
@@ -100,9 +104,9 @@ function points(kind: Kind): THREE.Points {
 }
 
 /** An emitter on a bone, `up` metres above it in the world as the rig stands at rest (bones have arbitrary axes). */
-function onBone(bone: THREE.Object3D | undefined, kind: Kind, up = 0) {
+function onBone(bone: THREE.Object3D | undefined, kind: Kind, up = 0, palette: Palette = 'fire') {
   if (!bone) return;
-  const p = points(kind);
+  const p = points(kind, palette);
   if (up) {
     bone.updateWorldMatrix(true, false);
     const q = bone.getWorldQuaternion(new THREE.Quaternion()).invert(), s = bone.getWorldScale(new THREE.Vector3()).y;
@@ -123,12 +127,12 @@ export function addFlames(rig: { root: THREE.Object3D }) {
   rig.root.add(points('embers'));
 }
 
-/** A fire beast (render/mobs.ts GlbLook.fire): the ring of fire round its feet and the embers, `scale` times a man's,
- * and flames dripping from its jaw (`mouth`, one of the model's bones). */
-export function addBeastFlames(root: THREE.Object3D, scale: number, mouth?: THREE.Object3D) {
+/** A beast of fire or of frost (render/mobs.ts GlbLook.fire / ice): a ring round its feet and motes drifting up, `scale`
+ * times a man's, and more at some of the model's bones (its jaw, its fists). */
+export function addBeastAura(root: THREE.Object3D, scale: number, palette: Palette, bones: (THREE.Object3D | undefined)[]) {
   const g = new THREE.Group();
   g.scale.setScalar(scale);
-  g.add(points('ring'), points('embers'));
+  g.add(points('ring', palette), points('embers', palette));
   root.add(g);
-  onBone(mouth, 'fist');
+  for (const b of bones) onBone(b, 'fist', 0, palette);
 }

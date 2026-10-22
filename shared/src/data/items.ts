@@ -214,6 +214,11 @@ const list: ItemDef[] = [
   // dropped in the Hondonada de los Aullidos: they only enchant D-grade gear
   { id: 'scroll_enchant_weapon_d', name: 'Pergamino: Encantar Arma (Grado D)', type: 'consumable', grade: 'D', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado D (solo grado D). Click derecho sobre el arma para usarlo.' },
   { id: 'scroll_enchant_armor_d', name: 'Pergamino: Encantar Armadura (Grado D)', type: 'consumable', grade: 'D', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado D (solo grado D). Click derecho sobre la pieza para usarlo.' },
+  // dropped in the Llanos de la Ventisca (B) and the Corazón de la Ciénaga (A): they only enchant their grade's gear
+  { id: 'scroll_enchant_weapon_b', name: 'Pergamino: Encantar Arma (Grado B)', type: 'consumable', grade: 'B', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado B (solo grado B). Click derecho sobre el arma para usarlo.' },
+  { id: 'scroll_enchant_armor_b', name: 'Pergamino: Encantar Armadura (Grado B)', type: 'consumable', grade: 'B', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado B (solo grado B). Click derecho sobre la pieza para usarlo.' },
+  { id: 'scroll_enchant_weapon_a', name: 'Pergamino: Encantar Arma (Grado A)', type: 'consumable', grade: 'A', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado A (solo grado A). Click derecho sobre el arma para usarlo.' },
+  { id: 'scroll_enchant_armor_a', name: 'Pergamino: Encantar Armadura (Grado A)', type: 'consumable', grade: 'A', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado A (solo grado A). Click derecho sobre la pieza para usarlo.' },
   // Materials (vendor trash)
   { id: 'animal_skin', name: 'Cuero de Animal', type: 'material', stack: true, price: 12, icon: '🟫', color: 0x8b6b4b },
   { id: 'animal_bone', name: 'Hueso de Animal', type: 'material', stack: true, price: 10, icon: '🦴', color: 0xeeeedd },
