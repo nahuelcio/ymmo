@@ -18,7 +18,7 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, STRIKE_LEAD, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -59,8 +59,9 @@ export interface CEnt {
   hp: number;
   flags: number;
   atkAt: number;
-  /** the swing under way is a dagger skill's stab (render/quaternius.ts animateQ) */
+  /** the swing under way is a dagger skill's stab, or a skill's own blow (render/quaternius.ts animateQ, SKILL_ANIM) */
   atkStab?: boolean;
+  atkAnim?: string;
   /** the skill being cast and when it began: what the body does with its weapon meanwhile (castMove) */
   castSkill?: string;
   castAt?: number;
@@ -572,7 +573,7 @@ export class Game {
       if (!s) return;
       // our first swing was already played on the click (prediction)
       if (m.s === this.me.id && performance.now() - this.predictedSwing < 350) this.predictedSwing = 0;
-      else (s.atkAt = performance.now()), (s.atkStab = undefined);
+      else (s.atkAt = performance.now()), (s.atkStab = undefined), (s.atkAnim = undefined);
       const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
       if (ranged) play('miss', this.near(s) * 0.5);
       // an archer looses an arrow as the drawn string goes (quaternius.ts aimBow: a little over half the shot)
@@ -1275,6 +1276,11 @@ export class Game {
 
   /** A player's weapon kind when it fights hand to hand with it (a blade, an axe, a hammer, a spear, a dagger, a pair): none
    * for a bow, a staff or wand, or bare hands. */
+  /** The animation a skill plays (render/quaternius.ts SKILL_ANIM): its own, or the bow's draw and loose for a bow's shot. */
+  private skillAnim(skill: string | undefined) {
+    const def = skill ? SKILLS[skill] : undefined;
+    return def ? skillAnimOf(skill, def.weapon === 'bow' && def.kind === 'phys' ? 'bow' : undefined) : undefined;
+  }
   private meleeWeapon(c: CEnt) {
     const wt = c.rec.k === 'p' && c.rec.w ? ITEMS[c.rec.w]?.weaponType : undefined;
     return wt && wt !== 'bow' && wt !== 'staff' ? wt : undefined;
@@ -1321,15 +1327,19 @@ export class Game {
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
     const def = SKILLS[skill];
     if (def) s.castSkill = undefined;
-    // a melee skill lands with a blow, already wound up by the cast: a dagger stabs, the rest cut (a pair, hand after hand)
-    if (def && def.kind === 'phys' && this.meleeWeapon(s)) {
+    // a skill with its own animation plays its blow from where its cast held it (SKILL_ANIM: the dagger's, the shield's,
+    // the bow's); any other melee skill lands with a blow, already wound up by the cast: a dagger stabs, the rest cut
+    const anim = def ? this.skillAnim(skill) : undefined;
+    if (anim && skillStrikes(anim)) (s.atkAnim = anim), (s.atkStab = undefined), (s.atkAt = performance.now());
+    else if (def && def.kind === 'phys' && this.meleeWeapon(s)) {
       s.atkStab = this.meleeWeapon(s) === 'dagger';
+      s.atkAnim = undefined;
       s.atkAt = performance.now() - STRIKE_LEAD[s.atkStab ? 'stab' : 'slash'];
     }
     if (!def || !t) return;
     // the archer's skills: arrows, loosed as the shot goes (the draw was held through the cast)
     if (def.weapon === 'bow' && def.kind === 'phys') {
-      s.atkAt = performance.now() - 330; // the loose (aimBow), not the draw again
+      if (!anim) s.atkAt = performance.now() - 330; // the loose (aimBow), not the draw again
       const hit = () => t.pos.clone().setY(t.pos.y + t.height * 0.55);
       const fire = skill === 'fire_arrow', poison = def.status?.id === 'poison';
       const tint = fire ? 0xff7a1a : poison ? 0x7ac83a : def.color;
@@ -2194,6 +2204,8 @@ export class Game {
           atkAge: now - c.atkAt,
           casting: (c.flags & F_CASTING) !== 0,
           castMove: c.flags & F_CASTING ? this.castMove(c) : undefined,
+          castAnim: c.flags & F_CASTING ? this.skillAnim(c.castSkill) : undefined,
+          atkAnim: c.atkAnim,
           castAge: c.castAt ? now - c.castAt : Infinity,
           atkStab: c.atkStab,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,

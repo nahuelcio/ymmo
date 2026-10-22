@@ -1,23 +1,43 @@
 // Regenerates client/public/q from the Quaternius packs (all CC0):
-//   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library.
+//   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library 1 and 2.
+// and retargets a few clips from KayKit Character Animations 1.1 (Kay Lousberg, CC0; kaylousberg.com) onto the same rig:
+// the bow, the stab, the kick and the dodge, which the Quaternius libraries lack (retarget.mjs).
 // The heads come from heads.glb, built by art/blender/characters.py.
-// Usage: node scripts/q-assets.mjs <dir with the three packs unzipped> [--anims-only]
-//   --anims-only: rebuild just anims.gltf/.bin from the animation library (the other packs need not be there)
+// Usage: node scripts/q-assets.mjs <dir with the packs unzipped> [more dirs...] [--anims-only]
+//   --anims-only: rebuild just anims.gltf/.bin from the animation libraries (the other packs need not be there)
 // Keeps only BaseColor (as 1024px WebP, via `npx sharp-cli`) and the animation clips the game plays,
 // then quantizes and meshopt-compresses every model (via `npx @gltf-transform/cli`).
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import * as THREE from 'three';
+import { readAccessor, readGlb, retargetClip } from './retarget.mjs';
 
-const SRC = process.argv[2];
+const SRCS = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const ANIMS_ONLY = process.argv.includes('--anims-only');
-if (!SRC || !fs.existsSync(SRC)) throw new Error('usage: node scripts/q-assets.mjs <unzipped packs dir>');
+if (!SRCS.length || !SRCS.every((d) => fs.existsSync(d))) throw new Error('usage: node scripts/q-assets.mjs <unzipped packs dir> [more dirs...]');
 const OUT = path.resolve('client/public/q');
 const CLIPS = [
   'Idle_Loop', 'Jog_Fwd_Loop', 'Sword_Attack', 'Punch_Jab', 'Spell_Simple_Idle_Loop', 'Death01', 'Dance_Loop',
   // world interactions (shared/src/nodes.ts): sitting, swimming, picking
   'Sitting_Enter', 'Sitting_Idle_Loop', 'Sitting_Exit', 'Swim_Idle_Loop', 'Swim_Fwd_Loop', 'Fixing_Kneeling',
 ];
+/** From Universal Animation Library 2 (the same rig): the shield's blows and guard, quick cuts, a hook, a throw, a dash. */
+const CLIPS2 = ['Shield_OneShot', 'Shield_Dash', 'Idle_Shield_Loop', 'Sword_Regular_A', 'Sword_Regular_B', 'Melee_Hook', 'OverhandThrow', 'Sword_Dash'];
+/** From KayKit Character Animations 1.1 (Rig_Medium), retargeted: [library, clip, name in the game]. */
+const KAYKIT = [
+  ['CombatRanged', 'Ranged_Bow_Idle', 'KK_Bow_Idle'], ['CombatRanged', 'Ranged_Bow_Draw', 'KK_Bow_Draw'], ['CombatRanged', 'Ranged_Bow_Aiming_Idle', 'KK_Bow_Aim'],
+  ['CombatRanged', 'Ranged_Bow_Release', 'KK_Bow_Release'], ['CombatRanged', 'Ranged_Bow_Draw_Up', 'KK_Bow_Draw_Up'], ['CombatRanged', 'Ranged_Bow_Release_Up', 'KK_Bow_Release_Up'],
+  ['MovementAdvanced', 'Running_HoldingBow', 'KK_Bow_Run'], ['MovementAdvanced', 'Dodge_Backward', 'KK_Dodge_Back'],
+  ['CombatMelee', 'Melee_1H_Attack_Stab', 'KK_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Stab', 'KK_Dual_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Slice', 'KK_Dual_Slice'],
+  ['CombatMelee', 'Melee_Unarmed_Attack_Kick', 'KK_Kick'],
+];
+/** Rig_Medium's bones on ours (clavicles, the neck, spine_02 and the fingers have no counterpart: they hold their pose). */
+const KK_MAP = {
+  hips: 'pelvis', spine: 'spine_01', chest: 'spine_03', head: 'Head',
+  'upperarm.l': 'upperarm_l', 'lowerarm.l': 'lowerarm_l', 'wrist.l': 'hand_l', 'upperarm.r': 'upperarm_r', 'lowerarm.r': 'lowerarm_r', 'wrist.r': 'hand_r',
+  'upperleg.l': 'thigh_l', 'lowerleg.l': 'calf_l', 'foot.l': 'foot_l', 'toes.l': 'ball_l', 'upperleg.r': 'thigh_r', 'lowerleg.r': 'calf_r', 'foot.r': 'foot_r', 'toes.r': 'ball_r',
+};
 
 const walk = (d, o = []) => {
   for (const f of fs.readdirSync(d)) {
@@ -26,7 +46,7 @@ const walk = (d, o = []) => {
   }
   return o;
 };
-const all = walk(SRC);
+const all = SRCS.flatMap((d) => walk(d));
 const webp = (uri) => path.basename(uri).replace(/(_png)?\.png$/, '.webp');
 /** Quantize + meshopt in place (also prunes whatever the file no longer references). */
 const compress = (file) => {
@@ -90,6 +110,21 @@ const keep = (i) => {
   offset += len;
   return accessors.push({ ...a, bufferView: bufferViews.length - 1, byteOffset: 0 }) - 1;
 };
+/** A track that never moves (a held finger, a bone the clip leaves alone) as a single key: the same pose, a fraction of the bytes. */
+const still = (times, values, per) => {
+  for (let k = per; k < values.length; k++) if (Math.abs(values[k] - values[k % per]) > 1e-5) return null;
+  return [times.subarray ? times.subarray(0, 1) : times.slice(0, 1), values.slice(0, per)];
+};
+/** New float data (another file's, or retargeted) as an accessor; `time`: an animation input, which needs its min/max. */
+const addFloats = (arr, type, time = false) => {
+  const b = Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength);
+  chunks.push(Buffer.from(b));
+  bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: b.length });
+  offset += b.length;
+  const acc = { bufferView: bufferViews.length - 1, byteOffset: 0, componentType: 5126, count: arr.length / SIZE[type], type };
+  if (time) Object.assign(acc, { min: [arr[0]], max: [arr[arr.length - 1]] });
+  return accessors.push(acc) - 1;
+};
 const animations = CLIPS.map((name) => {
   const a = g.animations.find((x) => x.name === name);
   if (!a) throw new Error(`clip not found: ${name}`);
@@ -102,6 +137,57 @@ const animations = CLIPS.map((name) => {
     });
   return { name, channels, samplers };
 });
+
+// Universal Animation Library 2: the same 65 joints, so its channels only need pointing at this file's nodes (by name)
+const ual2 = all.find((f) => f.endsWith('UAL2_Standard.glb'));
+if (ual2) {
+  const u = readGlb(ual2), byName = Object.fromEntries(g.nodes.map((n, i) => [n.name, i]));
+  for (const name of CLIPS2) {
+    const a = u.json.animations.find((x) => x.name === name);
+    if (!a) throw new Error(`UAL2 clip not found: ${name}`);
+    const samplers = [];
+    const channels = a.channels
+      .filter((c) => byName[u.json.nodes[c.target.node].name] !== undefined)
+      .filter((c) => c.target.path === 'rotation' || (c.target.path === 'translation' && u.json.nodes[c.target.node].name === 'pelvis'))
+      .map((c) => {
+        const sm = a.samplers[c.sampler], per = c.target.path === 'rotation' ? 4 : 3;
+        let [ti, va] = [readAccessor(u, sm.input), readAccessor(u, sm.output)];
+        [ti, va] = still(ti, va, per) ?? [ti, va];
+        return { target: { node: byName[u.json.nodes[c.target.node].name], path: c.target.path },
+          sampler: samplers.push({ interpolation: sm.interpolation, input: addFloats(Float32Array.from(ti), 'SCALAR', true), output: addFloats(Float32Array.from(va), per === 4 ? 'VEC4' : 'VEC3') }) - 1 };
+      });
+    animations.push({ name, channels, samplers });
+  }
+} else console.warn('[q-assets] no UAL2_Standard.glb among the sources: its clips are left out');
+
+// KayKit: retargeted onto this rig, the fingers closed round a grip (the jab's first frame: both fists)
+const kkDir = all.find((f) => /Rig_Medium[\\/]Rig_Medium_CombatMelee\.glb$/.test(f));
+if (kkDir) {
+  const joints = new Set(g.skins[0].joints.map((j) => g.nodes[j].name));
+  const sword = g.animations.find((x) => x.name === 'Punch_Jab'); // both fists closed
+  const fist = {};
+  for (const c of sword.channels) {
+    const n = g.nodes[c.target.node].name;
+    if (c.target.path !== 'rotation' || !/^(thumb|index|middle|ring|pinky)_/.test(n)) continue;
+    const v = readAccessor({ json: g, bin }, sword.samplers[c.sampler].output);
+    fist[n] = new THREE.Quaternion(v[0], v[1], v[2], v[3]);
+  }
+  const libs = {};
+  for (const [lib, clip, name] of KAYKIT) {
+    const file = path.join(path.dirname(kkDir), `Rig_Medium_${lib}.glb`);
+    const src = (libs[lib] ??= readGlb(file));
+    const r = retargetClip(src, clip, g, KK_MAP, ['hips', 'pelvis'], fist, joints);
+    const times = Float32Array.from(r.times), input = addFloats(times, 'SCALAR', true);
+    let one;
+    const samplers = [], channels = [];
+    for (const t of r.tracks) {
+      const per = t.path === 'rotation' ? 4 : 3, held = still(times, t.values, per);
+      const inp = held ? (one ??= addFloats(Float32Array.of(times[0]), 'SCALAR', true)) : input;
+      channels.push({ target: { node: t.node, path: t.path }, sampler: samplers.push({ interpolation: 'LINEAR', input: inp, output: addFloats(Float32Array.from(held ? held[1] : t.values), per === 4 ? 'VEC4' : 'VEC3') }) - 1 });
+    }
+    animations.push({ name, channels, samplers });
+  }
+} else console.warn('[q-assets] no KayKit Rig_Medium animations among the sources: the bow, stab, kick and dodge clips are left out');
 const nodes = g.nodes.map(({ mesh, skin, ...n }) => n);
 fs.writeFileSync(path.join(OUT, 'anims.bin'), Buffer.concat(chunks));
 fs.writeFileSync(path.join(OUT, 'anims.gltf'), JSON.stringify({
