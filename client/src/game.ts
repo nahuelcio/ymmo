@@ -19,7 +19,7 @@ import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
-import { fireMob } from './render/mobs';
+import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -97,7 +97,7 @@ export interface CEnt {
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
   splashAt?: number;
-  /** last flame on it while it burns (the burn status) */
+  /** last flame (or frost) on it while it burns (or is frostbitten) */
   burnAt?: number;
 }
 
@@ -557,16 +557,18 @@ export class Game {
       const fx = this.fx.telegraph(m.x, m.z, m.r, m.ms);
       play('warn', c ? this.near(c) : 0.6);
       // a stun before it lands calls it off (castx): no slam
-      const fire = c?.rec.k === 'm' && fireMob(c.rec.tpl);
+      const element = c?.rec.k === 'm' ? elementOf(c.rec.tpl) : undefined;
       const timer = window.setTimeout(() => {
         this.teles.delete(key);
         play('slam', c ? this.near(c) : 0.6);
-        this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), 0xff6a3a, m.r, 450);
-        // a fire beast's circle bursts into flames: one in the middle, more spread over a wide one
-        if (fire) for (let i = 0, n = Math.min(8, Math.ceil(m.r / 3)); i < n; i++) {
+        this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), element === 'ice' ? 0x9ad8ff : 0xff6a3a, m.r, 450);
+        // a fire or frost beast's circle bursts into flames or frost: one in the middle, more spread over a wide one
+        if (element) for (let i = 0, n = Math.min(8, Math.ceil(m.r / 3)); i < n; i++) {
           const a = Math.random() * Math.PI * 2, d = i ? Math.sqrt(Math.random()) * m.r * 0.8 : 0;
-          const x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d;
-          this.fx.flame(new THREE.Vector3(x, heightAt(x, z), z), Math.min(2.2, m.r / 2), 1100);
+          const at = new THREE.Vector3(m.x + Math.cos(a) * d, 0, m.z + Math.sin(a) * d);
+          at.y = heightAt(at.x, at.z);
+          if (element === 'fire') this.fx.flame(at, Math.min(2.2, m.r / 2), 1100);
+          else this.fx.frost(at, Math.min(2.6, m.r / 2), 1500);
         }
         const self = this.self;
         if (self && settings.s.screenShake && Math.hypot(self.pos.x - m.x, self.pos.z - m.z) < m.r + 8) this.cam.shake(0.25);
@@ -2010,7 +2012,7 @@ export class Game {
       // swimming is slower: predict it with the server's own water cells, or it pulls us back every few metres
       // and so are slowed walkers, and stunned ones don't move: the server's step_toward/update_player do the same
       let step = c.flags & STATUSES.stun.flag ? 0
-        : (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1) * (c.flags & STATUSES.slow.flag ? SLOW_MUL : 1);
+        : (this.me.speed / 20) * dt * (isDeepCell(c.pos.x, c.pos.z) ? SWIM_SPEED : 1) * (c.flags & (STATUSES.slow.flag | STATUSES.frostbite.flag) ? SLOW_MUL : 1);
       // carry the step across waypoints, like the server's step_toward
       while (pr.path.length > 1) {
         const h = Math.hypot(pr.path[0].x - c.pos.x, pr.path[0].z - c.pos.z);
@@ -2195,10 +2197,12 @@ export class Game {
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming
       if (sitting) c.tag.position.y -= c.groundSit ? 0.75 : 0.55; // the plate drops with the seated body (lower on the floor)
       c.tag.visible = onScreen;
-      // burning: small flames licking up from it
-      if (onScreen && c.flags & STATUSES.burn.flag && now - (c.burnAt ?? 0) > 350) {
+      // burning: small flames licking up from it; frostbitten: frost settling on it
+      if (onScreen && c.flags & (STATUSES.burn.flag | STATUSES.frostbite.flag) && now - (c.burnAt ?? 0) > 350) {
         c.burnAt = now;
-        this.fx.flame(c.root.position.clone().setY(c.root.position.y + c.height * 0.3), 0.35, 650);
+        const at = c.root.position.clone().setY(c.root.position.y + c.height * 0.3);
+        if (c.flags & STATUSES.burn.flag) this.fx.flame(at, 0.35, 650);
+        else this.fx.frost(at, 0.45, 800);
       }
       // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
       if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);

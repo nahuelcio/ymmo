@@ -316,8 +316,9 @@ mod tests {
         assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
     }
 
-    /// The PvP zones' scrolls (C from the Grieta de las Brasas, D from the Hondonada de los Aullidos) only enchant their
-    /// own grade, and a piece of it spends one before a plain scroll.
+    /// The PvP zones' scrolls (D from the Hondonada de los Aullidos, C from the Grieta de las Brasas, B from the Llanos
+    /// de la Ventisca, A from the Corazón de la Ciénaga) only enchant their own grade, and a piece of it spends one before
+    /// a plain scroll.
     #[test]
     fn graded_scrolls_enchant_their_grade() {
         use crate::inventory::pick_scroll;
@@ -327,6 +328,11 @@ mod tests {
         assert_eq!((wc.grade.as_deref(), wd.grade.as_deref()), (Some("C"), Some("D")));
         assert_eq!(pick_scroll([wc, wd, w].into_iter(), "weapon", Some("D")).unwrap().id, wd.id, "a D piece takes the D scroll");
         assert_eq!(pick_scroll([wd].into_iter(), "weapon", Some("C")).err(), Some(Some("D")), "never a D scroll on C gear");
+        let (wb, wa) = (it("scroll_enchant_weapon_b"), it("scroll_enchant_weapon_a"));
+        assert_eq!((wb.grade.as_deref(), wa.grade.as_deref()), (Some("B"), Some("A")));
+        assert_eq!(pick_scroll([wa, wb, wc, w].into_iter(), "weapon", Some("B")).unwrap().id, wb.id, "a B piece takes the B scroll");
+        assert_eq!(pick_scroll([wa, wb, wc, w].into_iter(), "weapon", Some("A")).unwrap().id, wa.id, "an A piece takes the A scroll");
+        assert_eq!(pick_scroll([wa].into_iter(), "weapon", Some("B")).err(), Some(Some("A")), "never an A scroll on B gear");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "its own grade's first");
         assert_eq!(pick_scroll([wc, w].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "whatever the bag's order");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("D")).unwrap().id, w.id, "another grade takes the plain one");
@@ -349,9 +355,10 @@ mod tests {
         use crate::terrain::in_pvp_zone;
         assert!(in_pvp_zone(40.0, -800.0)); // the north crossroads
         for t in &d().towns { assert!(!in_pvp_zone(t.x, t.z), "{}", t.name); }
-        // the Encrucijada Sangrienta (76+), the Grieta de las Brasas (40-48) and the Hondonada de los Aullidos (22-30)
+        // the Encrucijada Sangrienta (76+), the Corazón de la Ciénaga (61-70), the Llanos de la Ventisca (52-60), the
+        // Grieta de las Brasas (40-48) and the Hondonada de los Aullidos (22-30)
         let pvp: Vec<_> = d().zones.iter().filter(|z| z.pvp == Some(true)).collect();
-        assert_eq!(pvp.len(), 3);
+        assert_eq!(pvp.len(), 5);
         for zn in pvp {
             assert!(in_pvp_zone(zn.x, zn.z), "{}: its world raid stands in the middle", zn.name);
             let tp = d().teleports.iter().find(|t| t.name.starts_with(&zn.name)).unwrap();
@@ -530,10 +537,10 @@ mod tests {
         for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "{boss_id}: a circle on a mage nearly kills it"); }
         assert!((0.1..=0.2).contains(&share(whelp.p_atk, &mage, 1.0)), "{boss_id}: a pack of its adds kills a healer left alone");
         assert!(share(boss.p_atk * enrage.atk, &tank, 1.0) >= 1.0, "{boss_id}: enraged, it kills a tank in a blow");
-        // its blows land fast: a cleric healing the tank with its two strongest heals of that level on cooldown falls
-        // behind, two keep up
+        // its blows land fast: a cleric healing the tank with its two strongest heals of that level on cooldown (not the
+        // minute-long Miracle) falls behind, two keep up
         let mut cures: Vec<_> = data.skills.iter()
-            .filter(|s| s.kind == "heal" && s.target == "friend" && s.aoe.is_none() && s.level <= level
+            .filter(|s| s.kind == "heal" && s.target == "friend" && s.aoe.is_none() && s.level <= level && s.cooldown <= 20000.0
                 && (s.spec.as_deref() == Some("cleric") || (s.spec.is_none() && s.cls.as_deref() == Some("mystic"))))
             .collect();
         cures.sort_by(|a, b| b.power.partial_cmp(&a.power).unwrap());
@@ -560,6 +567,26 @@ mod tests {
     /// Abyssal one.
     #[test]
     fn lycan_king_needs_a_party() { world_raid_needs_a_party("lycan_king", "pack_lycan", "bleed", 27, "ashforged", 22, "abyssal"); }
+
+    /// The Llanos de la Ventisca's (52-60, B grade): level 56 players in the Glacial set, a level 52 tank in the dragon one.
+    #[test]
+    fn ymirak_needs_a_party() { world_raid_needs_a_party("ymirak", "blizzard_yeti", "frostbite", 56, "glacial", 52, "dragon"); }
+
+    /// The Corazón de la Ciénaga's (61-70, A grade): level 65 players in the Emerald set, a level 61 tank in the Glacial one.
+    #[test]
+    fn ancient_treant_needs_a_party() { world_raid_needs_a_party("ancient_treant", "treant_sapling", "poison", 65, "emerald", 61, "glacial"); }
+
+    /// Ymirak's Congelación slows like a slow (and deals damage over time like a bleed, through tick_statuses).
+    #[test]
+    fn frostbite_slows() {
+        use crate::ent::{ActiveStatus, Common, SLOW_MUL};
+        let mut c = Common::new(1, 0.0, 0.0);
+        assert_eq!(c.speed_mul(0.0), 1.0);
+        c.statuses.insert("frostbite".into(), ActiveStatus { until: 6000.0, src: 2, dps: 10.0, next_tick: 1000.0 });
+        assert_eq!(c.speed_mul(0.0), SLOW_MUL);
+        assert_eq!(c.speed_mul(7000.0), 1.0, "and lets go when it wears off");
+        assert_eq!(d().status_flag("frostbite"), 32768, "the last bit the u16 flags hold");
+    }
 
     /// A same-level plain mob has to matter at every level, not only in the newbie zones: mob_stats' cubic P.Atk keeps up
     /// with a player's P.Def times HP. Measured on a human tank in its grade's plate and a mage in its robe, +0, at every

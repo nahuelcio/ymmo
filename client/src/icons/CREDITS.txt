@@ -80,3 +80,7 @@ status: burn <- lorc/burning-embers (the ember_shard drawing)
 
 Added for the Hondonada de los Aullidos (same source and licence), file <- original:
 item: scroll_enchant_weapon_d, scroll_enchant_armor_d <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
+
+Added for the Llanos de la Ventisca and the Corazón de la Ciénaga (same source and licence), file <- original:
+item: scroll_enchant_weapon_b, scroll_enchant_armor_b, scroll_enchant_weapon_a, scroll_enchant_armor_a <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
+status: frostbite <- lorc/frozen-orb (the frost_nova drawing)

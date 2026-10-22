@@ -496,6 +496,66 @@ const list: MobDef[] = [
       { item: 'scroll_enchant_weapon_d', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_d', chance: 1, min: 6, max: 12 }] },
   // they go for whoever the boss lets them: a pack of them tears down a healer nobody covers
   { id: 'pack_lycan', name: 'Licántropo de la Manada', level: 28, shape: 'beast', color: 0x6a6866, scale: 1.1, aggressive: true, speed: 6.5, atkInterval: 1300, range: 2, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
+  // Llanos de la Ventisca (full PvP, levels 52-60): passive creatures that drop ice crystals and the B-grade scrolls
+  // (items.ts: they only enchant B-grade gear)
+  { id: 'glacier_stalker', name: 'Acechador Glaciar', level: 53, shape: 'beast', color: 0x9ac8e8, scale: 1.3, aggressive: false, speed: 5.5, atkInterval: 1400, range: 2.2, hpMult: 2.2, atkMult: 1.1,
+    adena: [2800, 3900], drops: [{ item: 'ice_crystal', chance: 0.5, min: 1, max: 2 }, { item: 'scroll_enchant_armor_b', chance: 0.06 }, { item: 'scroll_enchant_weapon_b', chance: 0.02 }] },
+  { id: 'frost_zealot', name: 'Fanático de la Escarcha', level: 55, shape: 'orc', color: 0x4a7aaa, scale: 1.0, aggressive: false, speed: 4.5, atkInterval: 1800, range: 12, hpMult: 2.4, atkMult: 1.15,
+    adena: [3000, 4200], drops: [{ item: 'ice_crystal', chance: 0.45, min: 1, max: 2 }, { item: 'supreme_mana_potion', chance: 0.1 }, { item: 'scroll_enchant_armor_b', chance: 0.07 }, { item: 'scroll_enchant_weapon_b', chance: 0.025 }] },
+  { id: 'glacier_golem', name: 'Gólem Glaciar', level: 57, shape: 'golem', color: 0xa8d8f0, scale: 1.5, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.6, hpMult: 3, atkMult: 1.2, defMult: 1.2,
+    adena: [3300, 4600], drops: [{ item: 'ice_crystal', chance: 0.6, min: 1, max: 3 }, { item: 'scroll_enchant_armor_b', chance: 0.08 }, { item: 'scroll_enchant_weapon_b', chance: 0.03 }] },
+  // its world raid: a colossus of ice (render/mobs.ts, the yeti model) that takes a full party of level 52-60 (server-rs
+  // formulas.rs ymirak_needs_a_party): every blow freezes its victim (slowed, losing health), its slam and its hail
+  // nearly kill a mage, its yetis hunt the healers, and ten minutes in its enrage kills anyone still standing. Drops the
+  // B grade: weapons, armour and the scrolls that only enchant it
+  { id: 'ymirak', name: 'Ymirak, el Coloso de Escarcha', level: 60, shape: 'beast', color: 0xd8ecff, scale: 4.2, aggressive: true, speed: 4.5, atkInterval: 1100, range: 6.5, hpMult: 284, atkMult: 5.27, defMult: 1.5,
+    respawn: 28_800_000, boss: true, onHit: { id: 'frostbite', ms: 6000, chance: 1, dot: 0.15 },
+    special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
+    barrage: { count: 6, r: 5, windup: 2000, mult: 1.4, every: 12000, range: 40 },
+    pulse: { r: 22, windup: 4000, pct: 0.4, every: 30000 },
+    enrage: { after: 600000, haste: 2, atk: 3.2 },
+    phases: [
+      { at: 75, adds: { mob: 'blizzard_yeti', count: 6 }, say: ['¡Hijos de la ventisca, a cazar!', 'Children of the blizzard, hunt!'] },
+      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 1.9, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 1.5, every: 10000, range: 45 },
+        say: ['¡Que el granizo los entierre!', 'Let the hail bury you!'] },
+      { at: 25, adds: { mob: 'blizzard_yeti', count: 8 }, pulse: { r: 22, windup: 3500, pct: 0.4, every: 20000 }, say: ['¡ESTE HIELO NO SE DERRITE JAMÁS!', 'THIS ICE NEVER MELTS!'] },
+      { at: 10, haste: 1.6, say: ['¡Congélense conmigo!', 'Freeze with me!'] },
+    ],
+    adena: [150000, 220000],
+    drops: [{ item: 'glacial_blade', chance: 0.3 }, { item: 'glacial_duals', chance: 0.15 }, { item: 'glacial_bow', chance: 0.3 }, { item: 'glacial_dagger', chance: 0.3 }, { item: 'glacial_staff', chance: 0.3 }, { item: 'glacial_spellblade', chance: 0.3 },
+      ...setArmor('glacial', 0.15), { item: 'scroll_enchant_weapon_b', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_b', chance: 1, min: 6, max: 12 }] },
+  // they go for whoever the boss lets them: a pack of them tears down a healer nobody covers
+  { id: 'blizzard_yeti', name: 'Yeti de la Ventisca', level: 56, shape: 'beast', color: 0xf0f6ff, scale: 1.0, aggressive: true, speed: 6, atkInterval: 1300, range: 2, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
+  // Corazón de la Ciénaga (full PvP, levels 61-70): passive creatures that drop the Emerald set's materials and the
+  // A-grade scrolls (items.ts: they only enchant A-grade gear)
+  { id: 'bog_stalker', name: 'Acechador de la Ciénaga', level: 62, shape: 'beast', color: 0x4a5a2a, scale: 1.3, aggressive: false, speed: 6, atkInterval: 1300, range: 2.2, hpMult: 2.2, atkMult: 1.1,
+    adena: [4000, 5500], drops: [{ item: 'swamp_venom', chance: 0.45, min: 1, max: 2 }, { item: 'scroll_enchant_armor_a', chance: 0.06 }, { item: 'scroll_enchant_weapon_a', chance: 0.02 }] },
+  { id: 'mire_druid', name: 'Druida de la Ciénaga', level: 65, shape: 'orc', color: 0x3a5a2a, scale: 1.0, aggressive: false, speed: 4.5, atkInterval: 1800, range: 12, hpMult: 2.4, atkMult: 1.15,
+    adena: [4400, 6100], drops: [{ item: 'ancient_bark', chance: 0.45, min: 1, max: 2 }, { item: 'supreme_mana_potion', chance: 0.1 }, { item: 'scroll_enchant_armor_a', chance: 0.07 }, { item: 'scroll_enchant_weapon_a', chance: 0.025 }] },
+  { id: 'peat_golem', name: 'Gólem de Turba', level: 68, shape: 'golem', color: 0x4a3a24, scale: 1.5, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.6, hpMult: 3, atkMult: 1.2, defMult: 1.2,
+    adena: [4800, 6600], drops: [{ item: 'swamp_venom', chance: 0.4, min: 1, max: 2 }, { item: 'ancient_bark', chance: 0.4, min: 1, max: 2 }, { item: 'scroll_enchant_armor_a', chance: 0.08 }, { item: 'scroll_enchant_weapon_a', chance: 0.03 }] },
+  // its world raid: an ancient treant (render/mobs.ts, the forest model) that takes a full party of level 61-70
+  // (server-rs formulas.rs ancient_treant_needs_a_party): every blow poisons, its roots and its falling branches nearly
+  // kill a mage, its saplings hunt the healers, and ten minutes in its enrage kills anyone still standing. Drops the A
+  // grade: weapons, armour and the scrolls that only enchant it
+  { id: 'ancient_treant', name: 'Ulmoroth, el Treant Ancestral', level: 72, shape: 'golem', color: 0x3a5a24, scale: 3.6, aggressive: true, speed: 4, atkInterval: 1100, range: 6.5, hpMult: 265, atkMult: 4.83, defMult: 1.5,
+    respawn: 28_800_000, boss: true, onHit: { id: 'poison', ms: 6000, chance: 1, dot: 0.15 },
+    special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
+    barrage: { count: 6, r: 5, windup: 2000, mult: 1.4, every: 12000, range: 40 },
+    pulse: { r: 22, windup: 4000, pct: 0.4, every: 30000 },
+    enrage: { after: 600000, haste: 2, atk: 3.2 },
+    phases: [
+      { at: 75, adds: { mob: 'treant_sapling', count: 6 }, say: ['Brotad, hijos de la ciénaga.', 'Sprout, children of the mire.'] },
+      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 1.9, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 1.5, every: 10000, range: 45 },
+        say: ['¡Las raíces de mil años los van a ahogar!', 'Roots a thousand years old will choke you!'] },
+      { at: 25, adds: { mob: 'treant_sapling', count: 8 }, pulse: { r: 22, windup: 3500, pct: 0.4, every: 20000 }, say: ['¡EL BOSQUE ENTERO SE LEVANTA!', 'THE WHOLE FOREST RISES!'] },
+      { at: 10, haste: 1.6, say: ['¡Vuelvan a la tierra!', 'Return to the earth!'] },
+    ],
+    adena: [220000, 320000],
+    drops: [{ item: 'emerald_blade', chance: 0.3 }, { item: 'emerald_duals', chance: 0.15 }, { item: 'emerald_bow', chance: 0.3 }, { item: 'emerald_dagger', chance: 0.3 }, { item: 'emerald_staff', chance: 0.3 }, { item: 'emerald_spellblade', chance: 0.3 },
+      ...setArmor('emerald', 0.15), { item: 'scroll_enchant_weapon_a', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_a', chance: 1, min: 6, max: 12 }] },
+  // they go for whoever the boss lets them: a ring of them strangles a healer nobody covers
+  { id: 'treant_sapling', name: 'Retoño del Treant', level: 64, shape: 'golem', color: 0x6a8a3a, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1300, range: 2.2, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));
