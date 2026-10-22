@@ -44,6 +44,22 @@ pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
 
 pub fn count_item(p: &Player, item: &str) -> i64 { p.inv.iter().filter(|i| i.i == item && i.s.is_none()).map(|i| i.c).sum() }
 
+/** Which of the bag's scrolls of `kind` enchants a piece of `grade`: one made for that grade first, else a plain one; a
+ * scroll made for another grade never (the Grieta de las Brasas' C-grade scrolls). Err(Some(g)): the bag only holds
+ * scrolls of that kind for grade g. */
+pub fn pick_scroll<'a>(scrolls: impl Iterator<Item = &'a crate::data::ItemDef>, kind: &str, grade: Option<&str>) -> Result<&'a crate::data::ItemDef, Option<&'a str>> {
+    let (mut plain, mut other) = (None, None);
+    for s in scrolls {
+        if s.enchant.as_deref() != Some(kind) { continue; }
+        match s.grade.as_deref() {
+            None => plain = plain.or(Some(s)),
+            g if g == grade => return Ok(s),
+            g => other = other.or(g),
+        }
+    }
+    plain.ok_or(other)
+}
+
 /** A recipe's materials in a bag: gear only as it came (+0, neither Masterwork nor a legacy piece: a blacksmith never
  * melts down an enchanted sword to join a pair), anything else whatever it is. */
 pub fn count_mat_in(inv: &[InvItem], item: &str) -> i64 {
@@ -186,7 +202,7 @@ impl World {
     }
 
     /// Spend a matching scroll from the bag on a piece of gear: +1, or the piece is lost (see ENCHANT in the data). A
-    /// sacred scroll works on any piece and never fails.
+    /// sacred scroll works on any piece and never fails; a graded one only on its own grade (pick_scroll).
     pub fn enchant(&mut self, pid: u32, uid: u32, sacred: bool) {
         if self.ents[&pid].c.dead { return; }
         let data = d();
@@ -198,9 +214,11 @@ impl World {
         let kind = if def.kind == "weapon" { "weapon" } else { "armor" };
         if e >= cfg.max { return self.sys(pid, "Ese objeto ya no se puede encantar más.", "That item cannot be enchanted any further."); }
         let wanted = if sacred { "sacred" } else { kind };
-        let Some(scroll) = data.items.values().find(|s| s.enchant.as_deref() == Some(wanted) && count_item(p, &s.id) > 0) else {
-            if sacred { return self.sys(pid, "No tenés un pergamino sagrado.", "You have no sacred scroll."); }
-            return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that.");
+        let scroll = match pick_scroll(data.items.values().filter(|s| count_item(p, &s.id) > 0), wanted, def.grade.as_deref()) {
+            Ok(s) => s,
+            Err(_) if sacred => return self.sys(pid, "No tenés un pergamino sagrado.", "You have no sacred scroll."),
+            Err(Some(g)) => return self.sys(pid, &format!("Tu pergamino solo encanta equipo de grado {g}."), &format!("Your scroll only enchants {g}-grade gear.")),
+            Err(None) => return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that."),
         };
         take_items(p, &scroll.id, 1);
         let ok = crate::formulas::enchant_roll(e, sacred, rnd());

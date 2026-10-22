@@ -6,7 +6,7 @@ import { MOBS } from '../../../shared/src/data/mobs';
 import type { Race } from '../../../shared/src/data/classes';
 import { animate, heldWeapon, mobModel, playerModel, type AnimState, type Rig, type WeaponKind } from './models';
 import { loadQ, qPlayer, qReady, qWeapon, tintGear, type Helm } from './quaternius';
-import { addFlames } from './flame-fx';
+import { addBeastFlames, addFlames } from './flame-fx';
 import { kitTexture, loadV } from './village';
 import { contactPhases, crossed } from './footfalls';
 
@@ -69,6 +69,7 @@ export const MOB_LOOK: Record<string, MobLook> = {
   // cultists: robed humans under hoods
   abyssal_cultist: { skin: 0xb8a8b0, hair: 0x1a1a1a, hs: 0, top: 0x3a2a6a, bottom: 0x2a1a40, hood: 0x2a1a4a, weapon: 'apprentice_wand' },
   dragon_cultist: { skin: 0xc8a080, hair: 0x2a1a1a, hs: 0, top: 0x7a2020, bottom: 0x3a1414, hood: 0x5a1414, weapon: 'staff_of_life' },
+  flame_zealot: { skin: 0xc89a70, hair: 0x1a1010, hs: 0, top: 0xc04a14, bottom: 0x4a1a0a, hood: 0x8a2a0a, weapon: 'staff_of_life' },
   dragonkin: { skin: 0x3a6a5a, hs: 3, ears: 'elf_ears', head: 1.1, brawn: 1.2, bulk: 1.15, ranger: true, top: 0x3a4a44, bottom: 0x2a3430, helm: 'HelmD', pauldron: true, weapon: 'partisan' },
   // the walking dead
   zombie: { skin: ROT, hair: 0x2a2a20, hs: 1, top: 0x4a4a3a, bottom: 0x3a3428 },
@@ -186,8 +187,13 @@ interface GlbLook {
   rock?: number;
   /** its texture greyed and brightened by this much before the tint and dye: a white yeti from the dark werewolf */
   pale?: number;
+  /** a fire beast: a ring of fire round its feet, embers and flames at its jaw (flame-fx.ts addBeastFlames) */
+  fire?: boolean;
   kind?: Rig['kind'];
 }
+
+/** A mob that fights with fire (the War Avatar, Ignaroth): its telegraphed circles land in flames (game.ts 'tele'). */
+export const fireMob = (tpl: string) => !!(MOB_GLB[tpl]?.fire || MOB_KNIGHT[tpl]?.fire);
 
 export const MOB_GLB: Record<string, GlbLook> = {
   cow: { model: 'cow', height: 1.6, clips: GRAZER },
@@ -279,6 +285,11 @@ export const MOB_GLB: Record<string, GlbLook> = {
   azgaroth: { model: 'drake', height: 1.6, dye: 0x5a3a6a, glow: 0x3a0606 },
   abyss_spawn: { model: 'limule', height: 0.8, dye: 0x8a6aa0, glow: 0x14041c, kind: 'spider' },
   frost_guard: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Small_A', pale: 1.7, tint: { skeleton: 0xc0e0ff, Glow: 0x80d0ff } },
+  // the Grieta de las Brasas: drakes of ember, a burnt golem and their lord, a dragon on fire
+  cinder_drakeling: { model: 'drake', height: 1.4, dye: 0xd8703a, glow: 0x3a0c00 },
+  scorched_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x4a3a34, glow: 0x6a1c00, kind: 'humanoid' },
+  ignaroth: { model: 'drake', height: 1.6, dye: 0xe05a30, glow: 0x5a1200, fire: true },
+  ember_whelp: { model: 'drake', height: 1.3, dye: 0xffa060, glow: 0x5a1400 },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
@@ -426,6 +437,7 @@ function glbMob(tplId: string): Rig | null {
   }
   // wyverns fly: no footsteps
   if (a.acts.run && l.model !== 'wyvern') a.steps = runSteps(l.model, src, a.acts.run.getClip());
+  if (l.fire) addBeastFlames(root, t.scale, obj.getObjectByName('jaw_lower'));
   return {
     root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * t.scale,
     anim: (s) => animateClips(a, s),

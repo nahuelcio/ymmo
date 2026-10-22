@@ -122,3 +122,13 @@ export function addFlames(rig: { root: THREE.Object3D }) {
   rig.root.add(points('ring'));
   rig.root.add(points('embers'));
 }
+
+/** A fire beast (render/mobs.ts GlbLook.fire): the ring of fire round its feet and the embers, `scale` times a man's,
+ * and flames dripping from its jaw (`mouth`, one of the model's bones). */
+export function addBeastFlames(root: THREE.Object3D, scale: number, mouth?: THREE.Object3D) {
+  const g = new THREE.Group();
+  g.scale.setScalar(scale);
+  g.add(points('ring'), points('embers'));
+  root.add(g);
+  onBone(mouth, 'fist');
+}

@@ -208,6 +208,9 @@ const list: ItemDef[] = [
   // dropped by the Avatar de la Guerra (Encrucijada Sangrienta): never fails
   { id: 'scroll_enchant_sacred', name: 'Pergamino Sagrado de Encantamiento', type: 'consumable', stack: true, price: 150000, enchant: 'sacred', icon: '📜', color: 0xffe9a0, desc: 'Sube +1 seguro cualquier arma, armadura o joya: no puede fallar ni romperla.' },
   { id: 'scroll_enchant_armor', name: 'Pergamino: Encantar Armadura', type: 'consumable', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya. Click derecho sobre la pieza para usarlo.' },
+  // dropped in the Grieta de las Brasas: their grade is the only gear they enchant (server-rs inventory.rs enchant)
+  { id: 'scroll_enchant_weapon_c', name: 'Pergamino: Encantar Arma (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado C (solo grado C). Click derecho sobre el arma para usarlo.' },
+  { id: 'scroll_enchant_armor_c', name: 'Pergamino: Encantar Armadura (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado C (solo grado C). Click derecho sobre la pieza para usarlo.' },
   // Materials (vendor trash)
   { id: 'animal_skin', name: 'Cuero de Animal', type: 'material', stack: true, price: 12, icon: '🟫', color: 0x8b6b4b },
   { id: 'animal_bone', name: 'Hueso de Animal', type: 'material', stack: true, price: 10, icon: '🦴', color: 0xeeeedd },
@@ -256,6 +259,10 @@ export const enchanted = (d: ItemDef, k: 'pAtk' | 'mAtk' | 'pDef' | 'mDef', e = 
  */
 export const GRADE_LEVEL: Record<Grade, number> = { NG: 0, D: 20, C: 40, B: 52, A: 61, S: 75 };
 export const wearLevel = (d: ItemDef) => (d.grade ? GRADE_LEVEL[d.grade] : 0);
+/** Whether a scroll enchants a piece: its kind (weapon or armour), and its grade when it has one (the Grieta de las
+ * Brasas' C-grade scrolls; server-rs inventory.rs pick_scroll). */
+export const scrollFits = (scroll: ItemDef, piece: ItemDef) =>
+  scroll.enchant === (piece.type === 'weapon' ? 'weapon' : 'armor') && (!scroll.grade || scroll.grade === piece.grade);
 
 /**
  * Masterwork: a piece of gear a master crafts for a dwarf comes out a Masterwork `dwarfChance` of the time; for anyone

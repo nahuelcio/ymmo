@@ -53,6 +53,11 @@ export const ZONES: ZoneDef[] = [
   // raid in the middle
   { id: 'warfront', name: 'Encrucijada Sangrienta', x: 100, z: -750, r: 140, levels: '76+', tint: [0.42, 0.2, 0.18], pvp: true,
     spawns: [{ mob: 'battlefield_carrion', count: 12 }, { mob: 'fallen_legionnaire', count: 12 }, { mob: 'relic_golem', count: 10 }, { mob: 'war_avatar', count: 1 }] },
+  // full PvP for the C grade, north of the Orc Citadel under the Alturas del Levante: passive creatures that drop the
+  // dragon set's materials and the C-grade scrolls, and Ignaroth's lair in the middle. Last in the list: the spawns
+  // share one random sequence, so the zones before it keep theirs
+  { id: 'ember_rift', name: 'Grieta de las Brasas', x: 800, z: -280, r: 140, levels: '40-48', tint: [0.46, 0.24, 0.14], pvp: true,
+    spawns: [{ mob: 'cinder_drakeling', count: 12 }, { mob: 'flame_zealot', count: 12 }, { mob: 'scorched_golem', count: 10 }, { mob: 'ignaroth', count: 1 }] },
 ];
 
 /** Inside a full-PvP zone. */
@@ -132,6 +137,8 @@ export const TELEPORTS = [
   { id: 'citadel', name: 'Ciudadela Orca (Nv 35-40)', ...drop('citadel'), cost: 16000 },
   { id: 'valley', name: 'Valle del Dragón (Nv 40-45)', ...drop('valley'), cost: 22000 },
   { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', ...drop('nest'), cost: 30000 },
+  // between the Citadel and its south edge: nobody lands flagged
+  { id: 'ember_rift', name: 'Grieta de las Brasas (PvP, Nv 40+)', x: 815, z: -110, cost: 30000 },
   { id: 'frost', name: 'Fuerte de Escarcha', x: FROST.x, z: FROST.z + 6, cost: 40000 },
   { id: 'tundra', name: 'Tundra Helada (Nv 50-55)', ...drop('tundra'), cost: 45000 },
   { id: 'peaks', name: 'Picos Helados (Nv 55-60)', ...drop('peaks'), cost: 50000 },

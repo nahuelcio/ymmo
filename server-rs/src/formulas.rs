@@ -316,6 +316,21 @@ mod tests {
         assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
     }
 
+    /// The Grieta de las Brasas' scrolls only enchant their own grade, and a piece of it spends one before a plain scroll.
+    #[test]
+    fn graded_scrolls_enchant_their_grade() {
+        use crate::inventory::pick_scroll;
+        let it = |id: &str| d().item(id).unwrap();
+        let (w, wc, a) = (it("scroll_enchant_weapon"), it("scroll_enchant_weapon_c"), it("scroll_enchant_armor"));
+        assert_eq!(wc.grade.as_deref(), Some("C"));
+        assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "its own grade's first");
+        assert_eq!(pick_scroll([wc, w].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "whatever the bag's order");
+        assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("D")).unwrap().id, w.id, "another grade takes the plain one");
+        assert_eq!(pick_scroll([wc].into_iter(), "weapon", Some("D")).err(), Some(Some("C")), "never a C scroll on D gear");
+        assert_eq!(pick_scroll([wc, a].into_iter(), "weapon", None).err(), Some(Some("C")), "nor on ungraded gear");
+        assert_eq!(pick_scroll([a].into_iter(), "weapon", Some("C")).err(), Some(None), "nor an armour scroll on a weapon");
+    }
+
     #[test]
     fn sacred_enchants_never_fail() {
         for e in 0..16 { assert!(enchant_roll(e, true, 0.999), "+{e}"); }
@@ -326,16 +341,22 @@ mod tests {
     }
 
     #[test]
-    fn the_crossroads_is_full_pvp() {
+    fn the_pvp_zones_are_full_pvp() {
         use crate::terrain::in_pvp_zone;
         assert!(in_pvp_zone(40.0, -800.0)); // the north crossroads
-        assert!(in_pvp_zone(100.0, -750.0)); // where its world raid stands
         for t in &d().towns { assert!(!in_pvp_zone(t.x, t.z), "{}", t.name); }
-        let tp = d().teleports.iter().find(|t| t.id == "warfront").unwrap();
-        assert!(!in_pvp_zone(tp.x, tp.z), "the gatekeeper must not drop anyone flagged");
-        let boss = &d().mobs["war_avatar"];
-        assert!(boss.barrage.is_some() && boss.pulse.is_some() && boss.enrage.is_some());
-        assert!(d().mobs.values().all(|m| m.id == "war_avatar" || m.level < boss.level), "the strongest boss in the game");
+        // the Encrucijada Sangrienta (76+) and the Grieta de las Brasas (40-48)
+        let pvp: Vec<_> = d().zones.iter().filter(|z| z.pvp == Some(true)).collect();
+        assert_eq!(pvp.len(), 2);
+        for zn in pvp {
+            assert!(in_pvp_zone(zn.x, zn.z), "{}: its world raid stands in the middle", zn.name);
+            let tp = d().teleports.iter().find(|t| t.name.starts_with(&zn.name)).unwrap();
+            assert!(!in_pvp_zone(tp.x, tp.z), "{}: the gatekeeper must not drop anyone flagged", zn.name);
+            let boss = zn.spawns.iter().map(|s| &d().mobs[&s.mob]).find(|m| m.boss == Some(true)).unwrap();
+            assert!(boss.barrage.is_some() && boss.pulse.is_some() && boss.enrage.is_some(), "{}", boss.id);
+        }
+        let avatar = &d().mobs["war_avatar"];
+        assert!(d().mobs.values().all(|m| m.id == "war_avatar" || m.level < avatar.level), "the strongest boss in the game");
     }
 
     #[test]
@@ -463,6 +484,62 @@ mod tests {
         // wounded, the cleric's quick heal undoes about one of its blows: one healer falls behind, two keep up
         let mended = heal_amount(data.skill("divine_heal").unwrap().power, mage.m_atk) * crate::ent::WOUND_HEAL / tank.max_hp;
         assert!((1.0..=1.3).contains(&(mended / auto)), "a divine heal on a wounded tank against one blow: {:.2}", mended / auto);
+    }
+
+    /// The Grieta de las Brasas' world raid takes a full party of its levels as the Avatar takes one of 78: a tank, two
+    /// healers through the burns its blows leave, and damage to drop it before the enrage. Measured on level 45 players in
+    /// the dragon set (C) and a level 40 tank in the Ashforged one (D). `cargo test ignaroth -- --nocapture` prints it.
+    #[test]
+    fn ignaroth_needs_a_party() {
+        let data = d();
+        let gear = |ids: &[&str]| -> Vec<(&ItemDef, i64, bool)> { ids.iter().map(|k| (data.item(k).unwrap(), 0, false)).collect() };
+        let set = |s: &str, ks: &[&str]| -> Vec<String> { ks.iter().map(|k| format!("{s}_{k}")).collect() };
+        let plate = ["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"];
+        let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
+        let build = |cls: &str, lvl: i64, ids: Vec<String>| { let r: Vec<&str> = ids.iter().map(|s| s.as_str()).collect(); compute_stats("human", cls, lvl, &gear(&r), &[], "m") };
+        let tank = build("fighter", 45, set("dragon", &plate));
+        let mage = build("mystic", 45, set("dragon", &robe));
+        let tank40 = build("fighter", 40, set("ashforged", &plate));
+        let boss_def = data.mobs["ignaroth"].clone();
+        let boss = mob_stats(&boss_def);
+        let whelp = mob_stats(&data.mobs["ember_whelp"]);
+        let share = |p_atk: f64, t: &Stats, mult: f64| 70.0 * p_atk / t.p_def * mult / t.max_hp;
+        // every blow sets its target burning, a tick a second of dot times the blow: a blow and the burn until the next
+        let oh = boss_def.on_hit.as_ref().unwrap();
+        assert_eq!((oh.id.as_str(), oh.chance.unwrap_or(1.0)), ("burn", 1.0), "every blow burns");
+        let burnt = 1.0 + oh.dot.unwrap() * boss_def.atk_interval / 1000.0;
+        let special = boss_def.special.as_ref().unwrap().mult;
+        let barrage = boss_def.barrage.as_ref().unwrap().mult;
+        let ph50 = boss_def.phases.iter().flatten().find(|p| p.at == 50.0).unwrap();
+        let (special50, barrage50) = (ph50.special.as_ref().unwrap().mult, ph50.barrage.as_ref().unwrap().mult);
+        let enrage = boss_def.enrage.as_ref().unwrap();
+        println!("tank 45: P.Def {} HP {} | mage 45: P.Def {} HP {} | tank 40: P.Def {} HP {} | boss P.Atk {} HP {}", tank.p_def, tank.max_hp, mage.p_def, mage.max_hp, tank40.p_def, tank40.max_hp, boss.p_atk, boss.max_hp);
+        for (what, p_atk, mult) in [("auto + burn", boss.p_atk, burnt), ("special", boss.p_atk, special), ("special 50%", boss.p_atk, special50), ("barrage", boss.p_atk, barrage),
+                                    ("barrage 50%", boss.p_atk, barrage50), ("enraged auto", boss.p_atk * enrage.atk, 1.0), ("whelp", whelp.p_atk, 1.0)] {
+            println!("{what:>13}: tank {:3.0}%  mage {:3.0}%  tank 40 {:3.0}%", 100.0 * share(p_atk, &tank, mult), 100.0 * share(p_atk, &mage, mult), 100.0 * share(p_atk, &tank40, mult));
+        }
+        let auto = share(boss.p_atk, &tank, burnt);
+        assert!((0.3..=0.45).contains(&auto), "a blow and its burn take a real bite of a tank: {auto:.2}");
+        assert!((0.5..=0.75).contains(&share(boss.p_atk, &mage, burnt)), "and a mage cannot take them");
+        assert!(share(boss.p_atk, &tank40, burnt) >= 0.3, "a level 40 tank in D grade feels them too");
+        for m in [special, special50] { assert!(share(boss.p_atk, &tank, m) < 0.8, "its breath hurts the tank, it does not kill it outright"); }
+        for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "a fireball on a mage nearly kills it"); }
+        assert!((0.1..=0.2).contains(&share(whelp.p_atk, &mage, 1.0)), "a pack of whelps kills a healer left alone");
+        assert!(share(boss.p_atk * enrage.atk, &tank, 1.0) >= 1.0, "enraged, it kills a tank in a blow");
+        // its blows land fast: a cleric healing the tank with both its heals on cooldown falls behind, two keep up
+        let heals: f64 = ["divine_heal", "restoration"].iter().map(|id| { let s = data.skill(id).unwrap(); heal_amount(s.power, mage.m_atk) / tank.max_hp / (s.cooldown / 1000.0) }).sum();
+        let taken = auto / (boss_def.atk_interval / 1000.0);
+        println!("one cleric heals {:.0}% of the tank a second, the boss takes {:.0}%", 100.0 * heals, 100.0 * taken);
+        assert!((0.6..=0.9).contains(&(heals / taken)), "one cleric against its blows and burns: {:.2}", heals / taken);
+        // and it takes a party to drop it before the enrage: a fighter's blows and skills, about twice its auto-attack's
+        // damage, crits counted; the tank swings too, the healers do not
+        let dps = |s: &Stats, skills: f64| 70.0 * s.p_atk / boss.p_def * (1.0 + s.crit / 100.0) * skills / (s.atk_interval / 1000.0);
+        let dealer = build("fighter", 45, set("dragon", &["helm", "plate", "gauntlets", "greaves", "boots", "cape", "ring", "earring", "necklace", "blade"]));
+        let secs = |dealers: f64| boss.max_hp / (dealers * dps(&dealer, 2.0) + dps(&tank, 1.0));
+        let (full, four) = (secs(6.0), secs(2.0));
+        println!("a party of 9 (6 dealers): {full:.0} s | of 4 (2 dealers): {four:.0} s | enrage at {} s", enrage.after / 1000.0);
+        assert!((300.0..=480.0).contains(&full), "a full party drops it in 5 to 8 minutes: {full:.0} s");
+        assert!(four > enrage.after / 1000.0, "four players meet the enrage first: {four:.0} s");
     }
 
     /// A same-level plain mob has to matter at every level, not only in the newbie zones: mob_stats' cubic P.Atk keeps up

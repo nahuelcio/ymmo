@@ -45,6 +45,8 @@ const SKIES: Record<string, SkyPal> = {
   citadel: { top: 0x4a3a30, horizon: 0x9a8670, ground: 0x302820, sun: 0xe8c8a0, sunI: 1.8, hemi: 1.1, cloud: 0x80705e },
   valley: { top: 0x4a6e70, horizon: 0xa8c0a8, ground: 0x34402c, sun: 0xf0f0d0, sunI: 2.0, hemi: 1.4, cloud: 0xc8d4c8 },
   nest: { top: 0x3a2438, horizon: 0x9a6a6a, ground: 0x2a1c22, sun: 0xff9a70, sunI: 1.7, hemi: 1.0, cloud: 0x7a5058 },
+  // the Grieta de las Brasas: smoke over the embers
+  ember_rift: { top: 0x3a1c18, horizon: 0xb06a48, ground: 0x2e1a12, sun: 0xff8a50, sunI: 1.8, hemi: 1.1, cloud: 0x6a4038, near: 0.1 },
   // whole regions (biomeWeight), so their towns and the land between zones get the sky too
   dusk: { top: 0x3a7ad8, horizon: 0xe2ddd0, ground: 0x5a4a30, sun: 0xffe2b0, sunI: 2.5, hemi: 1.6, cloud: 0xfff4e8 },
   heart: { top: 0x3a84d0, horizon: 0xc4e0d0, ground: 0x3a5a30, sun: 0xfff4d0, sunI: 2.6, hemi: 1.7, cloud: 0xffffff, near: 0.3 },

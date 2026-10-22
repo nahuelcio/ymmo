@@ -431,6 +431,36 @@ const list: MobDef[] = [
       ...setArmor('abyssal', 0.08), ...setArmor('ashforged', 0.08), ...setArmor('dragon', 0.06), ...setArmor('glacial', 0.06), ...setArmor('emerald', 0.05), ...setArmor('infernal', 0.04)] },
   // they go for whoever the boss lets them: a pack of them kills a healer nobody covers
   { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 1.41, respawn: 1e12, adena: [0, 0], drops: [] },
+  // Grieta de las Brasas (full PvP, levels 40-48): passive creatures that drop the dragon set's materials and the C-grade
+  // scrolls (items.ts: they only enchant C-grade gear)
+  { id: 'cinder_drakeling', name: 'Dragoncillo de Ceniza', level: 40, shape: 'beast', color: 0x8a3a1a, scale: 1.2, aggressive: false, speed: 5.5, atkInterval: 1400, range: 2.2, hpMult: 2.2, atkMult: 1.1,
+    adena: [1200, 1800], drops: [{ item: 'drake_scale', chance: 0.5, min: 1, max: 2 }, { item: 'scroll_enchant_armor_c', chance: 0.06 }, { item: 'scroll_enchant_weapon_c', chance: 0.02 }] },
+  { id: 'flame_zealot', name: 'Fanático de la Llama', level: 42, shape: 'orc', color: 0xa03a1a, scale: 1.0, aggressive: false, speed: 4.5, atkInterval: 1800, range: 12, hpMult: 2.4, atkMult: 1.15,
+    adena: [1300, 1950], drops: [{ item: 'dragon_fang', chance: 0.45, min: 1, max: 2 }, { item: 'greater_mana_potion', chance: 0.12 }, { item: 'scroll_enchant_armor_c', chance: 0.07 }, { item: 'scroll_enchant_weapon_c', chance: 0.025 }] },
+  { id: 'scorched_golem', name: 'Gólem Calcinado', level: 44, shape: 'golem', color: 0x3a2a24, scale: 1.5, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.6, hpMult: 3, atkMult: 1.2, defMult: 1.2,
+    adena: [1450, 2150], drops: [{ item: 'drake_scale', chance: 0.4, min: 1, max: 2 }, { item: 'dragon_fang', chance: 0.4, min: 1, max: 2 }, { item: 'scroll_enchant_armor_c', chance: 0.08 }, { item: 'scroll_enchant_weapon_c', chance: 0.03 }] },
+  // its world raid: a fire dragon (render/mobs.ts) that takes a full party of level 40-48 (server-rs formulas.rs
+  // ignaroth_needs_a_party): every blow sets its victim burning, its breath and its rain of fire nearly kill a mage, its
+  // whelps hunt the healers, and ten minutes in its enrage kills anyone still standing. Drops the C grade: weapons,
+  // armour and the scrolls that only enchant it
+  { id: 'ignaroth', name: 'Ignaroth, Señor de las Brasas', level: 48, shape: 'beast', color: 0xc83a10, scale: 3.6, aggressive: true, speed: 4.5, atkInterval: 1100, range: 6, hpMult: 310, atkMult: 5.92, defMult: 1.5,
+    respawn: 21_600_000, boss: true, onHit: { id: 'burn', ms: 6000, chance: 1, dot: 0.15 },
+    special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
+    barrage: { count: 6, r: 5, windup: 2000, mult: 1.4, every: 12000, range: 40 },
+    pulse: { r: 22, windup: 4000, pct: 0.4, every: 30000 },
+    enrage: { after: 600000, haste: 2, atk: 3.2 },
+    phases: [
+      { at: 75, adds: { mob: 'ember_whelp', count: 6 }, say: ['¡Crías mías, salgan de la brasa! ¡Hay carne!', 'My whelps, out of the embers! There is meat!'] },
+      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 1.9, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 1.5, every: 10000, range: 45 },
+        say: ['¡Que llueva fuego sobre ustedes!', 'Let fire rain upon you!'] },
+      { at: 25, adds: { mob: 'ember_whelp', count: 8 }, pulse: { r: 22, windup: 3500, pct: 0.4, every: 20000 }, say: ['¡ESTA GRIETA ES MI HOGUERA!', 'THIS RIFT IS MY PYRE!'] },
+      { at: 10, haste: 1.6, say: ['¡Ardan conmigo!', 'Burn with me!'] },
+    ],
+    adena: [80000, 120000],
+    drops: [{ item: 'dragon_blade', chance: 0.3 }, { item: 'dragon_duals', chance: 0.15 }, { item: 'dragon_bow', chance: 0.3 }, { item: 'dragon_dagger', chance: 0.3 }, { item: 'dragon_staff', chance: 0.3 }, { item: 'dragon_spellblade', chance: 0.3 },
+      ...setArmor('dragon', 0.15), { item: 'scroll_enchant_weapon_c', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_c', chance: 1, min: 6, max: 12 }] },
+  // they go for whoever the boss lets them: a pack of them burns down a healer nobody covers
+  { id: 'ember_whelp', name: 'Cría de Brasa', level: 44, shape: 'beast', color: 0xd85a1a, scale: 1.0, aggressive: true, speed: 6, atkInterval: 1300, range: 1.8, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));

@@ -73,3 +73,7 @@ Added for the items still drawn as emoji (same source and licence), file <- orig
 leggings, treads and pickaxe are shared by every item of that kind (common.ts SHARED_ICON):
 item: bow <- delapouite/bow-arrow, hood <- lorc/cowled, jerkin <- delapouite/sleeveless-jacket, bracers <- delapouite/gauntlet, leggings <- lorc/trousers, treads <- lorc/boots,
   pickaxe <- lorc/mining, wild_berries <- delapouite/berries-bowl, wood_log <- delapouite/wood-pile, raw_stone <- delapouite/stone-pile, awakening_shard <- lorc/crystal-shine, scroll_enchant_sacred <- lorc/book-aura
+
+Added for the Grieta de las Brasas (same source and licence), file <- original:
+item: scroll_enchant_weapon_c, scroll_enchant_armor_c <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
+status: burn <- lorc/burning-embers (the ember_shard drawing)
