@@ -99,6 +99,7 @@ export class SettingsPanel {
       this.range(tx('Volumen de efectos', 'Effects volume'), 'volume', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : tx('Mudo', 'Muted')));
       this.range(tx('Volumen de música y ambiente', 'Music & ambience volume'), 'music', 0, 1, 0.05, (v) => (v ? `${Math.round(v * 100)}%` : tx('Mudo', 'Muted')));
       this.check(tx('Auto-loot (el botín va directo al inventario)', 'Auto-loot (loot goes straight to your bag)'), 'autoLoot');
+      this.check(tx('Atacar sin objetivo elige al enemigo más cercano', 'Attacking with no target picks the nearest enemy'), 'autoTarget');
       this.check(tx('Mostrar en el chat el daño que recibo (pestaña Sistema)', 'Show the damage I take in the chat (System tab)'), 'dmgLog');
       this.range(tx('Tamaño de la interfaz', 'UI scale'), 'uiScale', 0.7, 1.5, 0.05, (v) => `${Math.round(v * 100)}%`);
       if (!isTouchDevice()) {

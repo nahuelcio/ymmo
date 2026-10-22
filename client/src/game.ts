@@ -1553,7 +1553,10 @@ export class Game {
 
   attackTarget() {
     const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
-    if (!cur || cur.flags & F_DEAD || (cur.rec.k !== 'n' && cur.rec.k !== 'i' && !this.isHostile(cur) && !this.ctrl)) this.ensureEnemyTarget();
+    if (!cur || cur.flags & F_DEAD || (cur.rec.k !== 'n' && cur.rec.k !== 'i' && !this.isHostile(cur) && !this.ctrl)) {
+      if (!settings.s.autoTarget) return this.sys(tx('No tenés un enemigo seleccionado.', 'You have no enemy selected.'));
+      this.ensureEnemyTarget();
+    }
     if (this.targetId === null) return;
     const c = this.ents.get(this.targetId);
     if (!c || c.rec.k === 'i') return;
@@ -1779,13 +1782,21 @@ export class Game {
       hideTip();
       this.nodeTip = false;
     };
+    // a second click (or tap) on the same monster or enemy player, quick as a double click: attack it
+    let lastHit = { id: -1, at: 0 };
+    const clickEnt = (c: CEnt) => {
+      const now = performance.now(), again = c.id === lastHit.id && now - lastHit.at < 500;
+      lastHit = { id: again ? -1 : c.id, at: now }; // a third click starts over
+      this.interact(c);
+      if (again && this.isHostile(c)) this.attackTarget();
+    };
     el.addEventListener('pointerleave', dropNodeTip);
     el.addEventListener('pointerdown', (e) => {
       dropNodeTip();
       if (e.button !== 0 || e.pointerType === 'touch') return; // touch acts on tap (pointerup)
       (document.activeElement as HTMLElement | null)?.blur();
       const r = pick(e);
-      if (r.ent) this.interact(r.ent);
+      if (r.ent) clickEnt(r.ent);
       else if (r.node) this.useNode(r.node);
       else if (r.point) {
         this.moveTo(r.point, true);
@@ -1800,7 +1811,7 @@ export class Game {
       if (e.pointerType === 'touch' && !this.cam.touchDragged) {
         (document.activeElement as HTMLElement | null)?.blur();
         const r = pick(e);
-        if (r.ent) this.interact(r.ent);
+        if (r.ent) clickEnt(r.ent);
         else if (r.node) this.useNode(r.node);
         else if (r.point) this.moveTo(r.point, true);
       }
