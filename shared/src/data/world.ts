@@ -72,6 +72,11 @@ export const ZONES: ZoneDef[] = [
   // same reason as the rift
   { id: 'mire_heart', name: 'Corazón de la Ciénaga', x: 840, z: -1240, r: 140, levels: '61-70', tint: [0.24, 0.32, 0.2], pvp: true,
     spawns: [{ mob: 'bog_stalker', count: 12 }, { mob: 'mire_druid', count: 12 }, { mob: 'peat_golem', count: 10 }, { mob: 'ancient_treant', count: 1 }] },
+  // full PvP below the grades (NG), between the Colinas Goblin, the Cuartel Orco and the Páramos Malditos: passive
+  // creatures that drop bones and the NG scrolls, and the Skeleton King's barrow in the middle. Last in the list, for
+  // the same reason as the rift
+  { id: 'bone_field', name: 'Campo de Huesos', x: -360, z: 1040, r: 110, levels: '12-20', tint: [0.4, 0.4, 0.34], pvp: true,
+    spawns: [{ mob: 'grave_hound', count: 12 }, { mob: 'bone_adept', count: 12 }, { mob: 'barrow_golem', count: 10 }, { mob: 'skeleton_king', count: 1 }] },
 ];
 
 /** Inside a full-PvP zone. */
@@ -145,6 +150,8 @@ export const TELEPORTS = [
   { id: 'hills', name: 'Colinas Goblin (Nv 5-10)', ...drop('hills'), cost: 300 },
   { id: 'barracks', name: 'Cuartel Orco (Nv 10-15)', ...drop('barracks'), cost: 1000 },
   { id: 'wastes', name: 'Páramos Malditos (Nv 15-20)', ...drop('wastes'), cost: 2500 },
+  // just outside its edge, toward the Cuartel Orco and the Aldea del Alba: nobody lands flagged
+  { id: 'bone_field', name: 'Campo de Huesos (PvP, Nv 12+)', x: -235, z: 1075, cost: 4000 },
   { id: 'coast', name: 'Costa Abandonada (Nv 20-25)', ...drop('coast'), cost: 5000 },
   { id: 'ruins', name: 'Ruinas Hundidas (Nv 25-30)', ...drop('ruins'), cost: 8000 },
   // just outside its edge, toward the Bastión del Ocaso: nobody lands flagged

@@ -217,6 +217,8 @@ impl World {
         let scroll = match pick_scroll(data.items.values().filter(|s| count_item(p, &s.id) > 0), wanted, def.grade.as_deref()) {
             Ok(s) => s,
             Err(_) if sacred => return self.sys(pid, "No tenés un pergamino sagrado.", "You have no sacred scroll."),
+            // the Campo de Huesos' scrolls are for gear without a grade
+            Err(Some("NG")) => return self.sys(pid, "Tu pergamino solo encanta equipo sin grado.", "Your scroll only enchants no-grade gear."),
             Err(Some(g)) => return self.sys(pid, &format!("Tu pergamino solo encanta equipo de grado {g}."), &format!("Your scroll only enchants {g}-grade gear.")),
             Err(None) => return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that."),
         };

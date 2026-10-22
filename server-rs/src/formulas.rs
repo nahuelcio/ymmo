@@ -316,9 +316,9 @@ mod tests {
         assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
     }
 
-    /// The PvP zones' scrolls (D from the Hondonada de los Aullidos, C from the Grieta de las Brasas, B from the Llanos
-    /// de la Ventisca, A from the Corazón de la Ciénaga) only enchant their own grade, and a piece of it spends one before
-    /// a plain scroll.
+    /// The PvP zones' scrolls (NG from the Campo de Huesos, D from the Hondonada de los Aullidos, C from the Grieta de las
+    /// Brasas, B from the Llanos de la Ventisca, A from the Corazón de la Ciénaga) only enchant their own grade, and a
+    /// piece of it spends one before a plain scroll.
     #[test]
     fn graded_scrolls_enchant_their_grade() {
         use crate::inventory::pick_scroll;
@@ -333,6 +333,10 @@ mod tests {
         assert_eq!(pick_scroll([wa, wb, wc, w].into_iter(), "weapon", Some("B")).unwrap().id, wb.id, "a B piece takes the B scroll");
         assert_eq!(pick_scroll([wa, wb, wc, w].into_iter(), "weapon", Some("A")).unwrap().id, wa.id, "an A piece takes the A scroll");
         assert_eq!(pick_scroll([wa].into_iter(), "weapon", Some("B")).err(), Some(Some("A")), "never an A scroll on B gear");
+        let wng = it("scroll_enchant_weapon_ng");
+        assert_eq!(it("short_sword").grade.as_deref(), Some("NG"), "the starter sword has no grade");
+        assert_eq!(pick_scroll([w, wd, wng].into_iter(), "weapon", Some("NG")).unwrap().id, wng.id, "the starter sword takes the NG scroll");
+        assert_eq!(pick_scroll([wng].into_iter(), "weapon", Some("D")).err(), Some(Some("NG")), "never an NG scroll on D gear");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "its own grade's first");
         assert_eq!(pick_scroll([wc, w].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "whatever the bag's order");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("D")).unwrap().id, w.id, "another grade takes the plain one");
@@ -356,9 +360,9 @@ mod tests {
         assert!(in_pvp_zone(40.0, -800.0)); // the north crossroads
         for t in &d().towns { assert!(!in_pvp_zone(t.x, t.z), "{}", t.name); }
         // the Encrucijada Sangrienta (76+), the Corazón de la Ciénaga (61-70), the Llanos de la Ventisca (52-60), the
-        // Grieta de las Brasas (40-48) and the Hondonada de los Aullidos (22-30)
+        // Grieta de las Brasas (40-48), the Hondonada de los Aullidos (22-30) and the Campo de Huesos (12-20)
         let pvp: Vec<_> = d().zones.iter().filter(|z| z.pvp == Some(true)).collect();
-        assert_eq!(pvp.len(), 5);
+        assert_eq!(pvp.len(), 6);
         for zn in pvp {
             assert!(in_pvp_zone(zn.x, zn.z), "{}: its world raid stands in the middle", zn.name);
             let tp = d().teleports.iter().find(|t| t.name.starts_with(&zn.name)).unwrap();
@@ -497,20 +501,27 @@ mod tests {
         assert!((1.0..=1.3).contains(&(mended / auto)), "a divine heal on a wounded tank against one blow: {:.2}", mended / auto);
     }
 
+    /// What a world raid check dresses its tank (`plate`) and its mage (`robe`) in: a graded set's pieces (set_kit), or the
+    /// best pieces of the grade that has no set (NG, the Campo de Huesos').
+    struct Kit { name: &'static str, plate: Vec<String>, robe: Vec<String> }
+
+    fn set_kit(set: &'static str) -> Kit {
+        let of = |ks: &[&str]| -> Vec<String> { ks.iter().map(|k| format!("{set}_{k}")).collect() };
+        Kit { name: set, plate: of(&["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"]),
+              robe: of(&["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"]) }
+    }
+
     /// A PvP zone's world raid takes a full party of its levels, as the Avatar takes one of 78: a tank, two healers
     /// through the damage over time its blows leave (`status`), and damage to drop it before the enrage. Measured on a
-    /// tank and a mage of `level` in the `set` set, and a tank of `weak` in the `weak_set` one; `add` is the add its
-    /// phases call. `cargo test needs_a_party -- --nocapture` prints the tables.
-    fn world_raid_needs_a_party(boss_id: &str, add: &str, status: &str, level: i64, set_id: &str, weak: i64, weak_set: &str) {
+    /// tank and a mage of `level` in `kit`, and a tank of `weak` in `weak_kit`; `add` is the add its phases call.
+    /// `cargo test needs_a_party -- --nocapture` prints the tables.
+    fn world_raid_needs_a_party(boss_id: &str, add: &str, status: &str, level: i64, kit: Kit, weak: i64, weak_kit: Kit) {
         let data = d();
         let gear = |ids: &[&str]| -> Vec<(&ItemDef, i64, bool)> { ids.iter().map(|k| (data.item(k).unwrap(), 0, false)).collect() };
-        let set = |s: &str, ks: &[&str]| -> Vec<String> { ks.iter().map(|k| format!("{s}_{k}")).collect() };
-        let plate = ["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"];
-        let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
-        let build = |cls: &str, lvl: i64, ids: Vec<String>| { let r: Vec<&str> = ids.iter().map(|s| s.as_str()).collect(); compute_stats("human", cls, lvl, &gear(&r), &[], "m") };
-        let tank = build("fighter", level, set(set_id, &plate));
-        let mage = build("mystic", level, set(set_id, &robe));
-        let tank40 = build("fighter", weak, set(weak_set, &plate));
+        let build = |cls: &str, lvl: i64, ids: &[String]| { let r: Vec<&str> = ids.iter().map(|s| s.as_str()).collect(); compute_stats("human", cls, lvl, &gear(&r), &[], "m") };
+        let tank = build("fighter", level, &kit.plate);
+        let mage = build("mystic", level, &kit.robe);
+        let tank40 = build("fighter", weak, &weak_kit.plate);
         let boss_def = data.mobs[boss_id].clone();
         let boss = mob_stats(&boss_def);
         let whelp = mob_stats(&data.mobs[add]);
@@ -532,7 +543,7 @@ mod tests {
         let auto = share(boss.p_atk, &tank, burnt);
         assert!((0.3..=0.45).contains(&auto), "{boss_id}: a blow and its {status} take a real bite of a tank: {auto:.2}");
         assert!((0.5..=0.75).contains(&share(boss.p_atk, &mage, burnt)), "{boss_id}: and a mage cannot take them");
-        assert!(share(boss.p_atk, &tank40, burnt) >= 0.3, "{boss_id}: a level {weak} tank in {weak_set} feels them too");
+        assert!(share(boss.p_atk, &tank40, burnt) >= 0.3, "{boss_id}: a level {weak} tank in {} feels them too", weak_kit.name);
         for m in [special, special50] { assert!(share(boss.p_atk, &tank, m) < 0.8, "{boss_id}: its special hurts the tank, it does not kill it outright"); }
         for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "{boss_id}: a circle on a mage nearly kills it"); }
         assert!((0.1..=0.2).contains(&share(whelp.p_atk, &mage, 1.0)), "{boss_id}: a pack of its adds kills a healer left alone");
@@ -551,7 +562,7 @@ mod tests {
         // and it takes a party to drop it before the enrage: a fighter's blows and skills, about twice its auto-attack's
         // damage, crits counted; the tank swings too, the healers do not
         let dps = |s: &Stats, skills: f64| 70.0 * s.p_atk / boss.p_def * (1.0 + s.crit / 100.0) * skills / (s.atk_interval / 1000.0);
-        let dealer = build("fighter", level, set(set_id, &["helm", "plate", "gauntlets", "greaves", "boots", "cape", "ring", "earring", "necklace", "blade"]));
+        let dealer = build("fighter", level, &kit.plate.iter().filter(|id| !id.ends_with("shield")).cloned().collect::<Vec<_>>());
         let secs = |dealers: f64| boss.max_hp / (dealers * dps(&dealer, 2.0) + dps(&tank, 1.0));
         let (full, four) = (secs(6.0), secs(2.0));
         println!("a party of 9 (6 dealers): {full:.0} s | of 4 (2 dealers): {four:.0} s | enrage at {} s", enrage.after / 1000.0);
@@ -561,20 +572,35 @@ mod tests {
 
     /// The Grieta de las Brasas' (40-48, C grade): level 45 players in the dragon set, a level 40 tank in the Ashforged one.
     #[test]
-    fn ignaroth_needs_a_party() { world_raid_needs_a_party("ignaroth", "ember_whelp", "burn", 45, "dragon", 40, "ashforged"); }
+    fn ignaroth_needs_a_party() { world_raid_needs_a_party("ignaroth", "ember_whelp", "burn", 45, set_kit("dragon"), 40, set_kit("ashforged")); }
 
     /// The Hondonada de los Aullidos' (22-30, D grade): level 27 players in the Ashforged set, a level 22 tank in the
     /// Abyssal one.
     #[test]
-    fn lycan_king_needs_a_party() { world_raid_needs_a_party("lycan_king", "pack_lycan", "bleed", 27, "ashforged", 22, "abyssal"); }
+    fn lycan_king_needs_a_party() { world_raid_needs_a_party("lycan_king", "pack_lycan", "bleed", 27, set_kit("ashforged"), 22, set_kit("abyssal")); }
 
     /// The Llanos de la Ventisca's (52-60, B grade): level 56 players in the Glacial set, a level 52 tank in the dragon one.
     #[test]
-    fn ymirak_needs_a_party() { world_raid_needs_a_party("ymirak", "blizzard_yeti", "frostbite", 56, "glacial", 52, "dragon"); }
+    fn ymirak_needs_a_party() { world_raid_needs_a_party("ymirak", "blizzard_yeti", "frostbite", 56, set_kit("glacial"), 52, set_kit("dragon")); }
 
     /// The Corazón de la Ciénaga's (61-70, A grade): level 65 players in the Emerald set, a level 61 tank in the Glacial one.
     #[test]
-    fn ancient_treant_needs_a_party() { world_raid_needs_a_party("ancient_treant", "treant_sapling", "poison", 65, "emerald", 61, "glacial"); }
+    fn ancient_treant_needs_a_party() { world_raid_needs_a_party("ancient_treant", "treant_sapling", "poison", 65, set_kit("emerald"), 61, set_kit("glacial")); }
+
+    /// The Campo de Huesos' (12-20, no grade): level 17 players in the best gear without a grade (what Morvak drops), a
+    /// level 12 tank in the starter pieces.
+    #[test]
+    fn skeleton_king_needs_a_party() {
+        let ids = |ks: &[&str]| -> Vec<String> { ks.iter().map(|k| k.to_string()).collect() };
+        let jewels = ["ring_of_vigor", "earring_of_focus", "necklace_of_valor"];
+        let best = Kit {
+            name: "the best NG",
+            plate: ids(&[&["brigandine_helm", "brigandine_tunic", "reinforced_gloves", "brigandine_gaiters", "reinforced_boots", "brigandine_shield", "hunter_cape", "sword_of_revolution"][..], &jewels].concat()),
+            robe: ids(&[&["karmian_hat", "karmian_tunic", "reinforced_gloves", "karmian_stockings", "reinforced_boots", "hunter_cape", "staff_of_life"][..], &jewels].concat()),
+        };
+        let starter = Kit { name: "the starter pieces", plate: ids(&["leather_cap", "apprentice_tunic", "short_gloves", "apprentice_stockings", "leather_sandals", "wooden_buckler", "wool_cape", "short_sword"]), robe: vec![] };
+        world_raid_needs_a_party("skeleton_king", "risen_skeleton", "bleed", 17, best, 12, starter);
+    }
 
     /// Ymirak's Congelación slows like a slow (and deals damage over time like a bleed, through tick_statuses).
     #[test]

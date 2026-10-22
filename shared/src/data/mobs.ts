@@ -556,6 +556,42 @@ const list: MobDef[] = [
       ...setArmor('emerald', 0.15), { item: 'scroll_enchant_weapon_a', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_a', chance: 1, min: 6, max: 12 }] },
   // they go for whoever the boss lets them: a ring of them strangles a healer nobody covers
   { id: 'treant_sapling', name: 'Retoño del Treant', level: 64, shape: 'golem', color: 0x6a8a3a, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1300, range: 2.2, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
+  // Campo de Huesos (full PvP, levels 12-20): passive creatures that drop bones and the NG scrolls (items.ts: they only
+  // enchant gear without a grade)
+  { id: 'grave_hound', name: 'Sabueso de Fosa', level: 13, shape: 'beast', color: 0x8a9480, scale: 1.2, aggressive: false, speed: 6, atkInterval: 1300, range: 2.2, hpMult: 2.2, atkMult: 1.1,
+    adena: [150, 240], drops: [{ item: 'animal_bone', chance: 0.5, max: 2 }, { item: 'animal_skin', chance: 0.35 }, { item: 'scroll_enchant_armor_ng', chance: 0.06 }, { item: 'scroll_enchant_weapon_ng', chance: 0.02 }] },
+  { id: 'bone_adept', name: 'Adepto de Hueso', level: 15, shape: 'undead', color: 0xc8c0a8, scale: 1.0, aggressive: false, speed: 4.5, atkInterval: 1800, range: 12, hpMult: 2.4, atkMult: 1.15,
+    adena: [190, 300], drops: [{ item: 'cursed_bone', chance: 0.35 }, { item: 'mana_potion', chance: 0.1 }, { item: 'scroll_enchant_armor_ng', chance: 0.07 }, { item: 'scroll_enchant_weapon_ng', chance: 0.025 }] },
+  { id: 'barrow_golem', name: 'Gólem de Túmulo', level: 17, shape: 'golem', color: 0x8a8270, scale: 1.4, aggressive: false, speed: 3.5, atkInterval: 1800, range: 2.6, hpMult: 3, atkMult: 1.2, defMult: 1.1,
+    adena: [220, 370], drops: [{ item: 'stone_fragment', chance: 0.4, max: 2 }, { item: 'cursed_bone', chance: 0.3 }, { item: 'scroll_enchant_armor_ng', chance: 0.08 }, { item: 'scroll_enchant_weapon_ng', chance: 0.03 }] },
+  // its world raid: a skeleton king three men tall (render/mobs.ts, the skeleton warrior) that takes a full party of level
+  // 12-20 (server-rs formulas.rs skeleton_king_needs_a_party): its heavy axe swings slower than the other kings' (so a
+  // level 17 cleric's two heals can keep up with a second one) and leaves its victim bleeding, its cleave and its rain of
+  // bones nearly kill a mage, its risen dead hunt the healers, and ten minutes in its enrage kills anyone still
+  // standing. Drops the best gear without a grade and the scrolls that only enchant it
+  { id: 'skeleton_king', name: 'Morvak, el Rey Esqueleto', level: 22, shape: 'undead', color: 0xb8ae98, scale: 3.2, aggressive: true, speed: 4.5, atkInterval: 1400, range: 5, hpMult: 171, atkMult: 2.82, defMult: 1.5,
+    respawn: 10_800_000, boss: true, onHit: { id: 'bleed', ms: 6000, chance: 1, dot: 0.15 },
+    special: { r: 9, windup: 1700, mult: 1.8, every: 9000, at: 'target' },
+    barrage: { count: 6, r: 5, windup: 2000, mult: 1.4, every: 12000, range: 40 },
+    pulse: { r: 22, windup: 4000, pct: 0.4, every: 30000 },
+    enrage: { after: 600000, haste: 2, atk: 3.2 },
+    phases: [
+      { at: 75, adds: { mob: 'risen_skeleton', count: 6 }, say: ['¡Levántense, mis súbditos! ¡Hay carne fresca!', 'Rise, my subjects! There is fresh meat!'] },
+      { at: 50, haste: 1.3, special: { r: 12, windup: 1700, mult: 1.9, every: 8000, at: 'self', stun: 1500 }, barrage: { count: 10, r: 5, windup: 1800, mult: 1.5, every: 10000, range: 45 },
+        say: ['¡Sus huesos van a adornar mi trono!', 'Your bones will adorn my throne!'] },
+      { at: 25, adds: { mob: 'risen_skeleton', count: 8 }, pulse: { r: 22, windup: 3500, pct: 0.4, every: 20000 }, say: ['¡EL CAMPO ENTERO SE ALZA!', 'THE WHOLE FIELD RISES!'] },
+      { at: 10, haste: 1.6, say: ['¡Un rey no muere dos veces!', 'A king does not die twice!'] },
+    ],
+    adena: [8000, 14000],
+    drops: [
+      ...['sword_of_revolution', 'partisan', 'assassin_dagger', 'hunting_bow', 'staff_of_life', 'battle_axe', 'war_hammer'].map((item) => ({ item, chance: 0.1 })),
+      { item: 'revolution_duals', chance: 0.05 },
+      ...['brigandine_helm', 'brigandine_shield', 'brigandine_tunic', 'brigandine_gaiters', 'karmian_hat', 'karmian_tunic', 'karmian_stockings',
+        'reinforced_gloves', 'reinforced_boots', 'hunter_cape'].map((item) => ({ item, chance: 0.07 })),
+      ...['ring_of_vigor', 'ring_of_swiftness', 'earring_of_focus', 'necklace_of_valor'].map((item) => ({ item, chance: 0.05 })),
+      { item: 'scroll_enchant_weapon_ng', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_ng', chance: 1, min: 6, max: 12 }] },
+  // they go for whoever the king lets them: a pack of them tears down a healer nobody covers
+  { id: 'risen_skeleton', name: 'Esqueleto Alzado', level: 18, shape: 'undead', color: 0xd8d0b8, scale: 1.0, aggressive: true, speed: 6, atkInterval: 1300, range: 2, hpMult: 2, atkMult: 1.3, respawn: 1e12, adena: [0, 0], drops: [] },
 ];
 
 export const MOBS: Record<string, MobDef> = Object.fromEntries(list.map((m) => [m.id, m]));
