@@ -70,6 +70,7 @@ export const MOB_LOOK: Record<string, MobLook> = {
   abyssal_cultist: { skin: 0xb8a8b0, hair: 0x1a1a1a, hs: 0, top: 0x3a2a6a, bottom: 0x2a1a40, hood: 0x2a1a4a, weapon: 'apprentice_wand' },
   dragon_cultist: { skin: 0xc8a080, hair: 0x2a1a1a, hs: 0, top: 0x7a2020, bottom: 0x3a1414, hood: 0x5a1414, weapon: 'staff_of_life' },
   flame_zealot: { skin: 0xc89a70, hair: 0x1a1010, hs: 0, top: 0xc04a14, bottom: 0x4a1a0a, hood: 0x8a2a0a, weapon: 'staff_of_life' },
+  moon_cultist: { skin: 0xc8b0a0, hair: 0xd8d8e0, hs: 0, top: 0x2a2a5a, bottom: 0x1a1a2a, hood: 0xa8b0c8, weapon: 'sages_staff' },
   dragonkin: { skin: 0x3a6a5a, hs: 3, ears: 'elf_ears', head: 1.1, brawn: 1.2, bulk: 1.15, ranger: true, top: 0x3a4a44, bottom: 0x2a3430, helm: 'HelmD', pauldron: true, weapon: 'partisan' },
   // the walking dead
   zombie: { skin: ROT, hair: 0x2a2a20, hs: 1, top: 0x4a4a3a, bottom: 0x3a3428 },
@@ -291,6 +292,11 @@ export const MOB_GLB: Record<string, GlbLook> = {
   scorched_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x4a3a34, glow: 0x6a1c00, kind: 'humanoid' },
   ignaroth: { model: 'drake', height: 1.6, dye: 0xe05a30, glow: 0x5a1200, fire: true },
   ember_whelp: { model: 'drake', height: 1.3, dye: 0xffa060, glow: 0x5a1400 },
+  // the Hondonada de los Aullidos: the Lycan King and his pack, dark wolves and ghouls
+  lycan_king: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, tint: { Fur: 0x3a322c, Belly: 0x6a625a, Claws: 0x0c0a08 } },
+  pack_lycan: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, tint: { Fur: 0x6a6866, Belly: 0x9a9690, Claws: 0x1c1a18 } },
+  dire_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0x2a2a30, Main_Light: 0x4a4a52, Eyes_Black: 0xffc040 } },
+  ghoul: { model: 'skeleton_minion', height: 1.9, pale: 1.3, tint: { skeleton: 0xa8b890, Glow: 0x80ff60 } },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }
