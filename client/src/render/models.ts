@@ -10,7 +10,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, armorPiece, capePiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
-export { SIT_GROUND_DROP, STRIKE_LEAD } from './quaternius';
+export { SIT_GROUND_DROP, STRIKE_LEAD, skillAnimOf, skillStrikes } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -62,6 +62,12 @@ export interface AnimState {
   swimming?: boolean;
   /** sitting on the ground rather than a seat (straightens the legs) */
   floorSit?: boolean;
+  /** the gallery's ?clip=: this clip, on a loop, over everything else */
+  clip?: string;
+  /** a skill's own animation (quaternius.ts SKILL_ANIM, skillAnimOf): the one being cast (with castAge), and the one whose
+   * blow is playing (with atkAge) */
+  castAnim?: string;
+  atkAnim?: string;
   /** working a world node: how it moves, ms since it began and the length of one stroke */
   gather?: { anim: 'chop' | 'mine' | 'pick'; age: number; swingMs: number } | null;
 }

@@ -561,6 +561,8 @@ interface BowArms {
   spine: THREE.Object3D[]; neck: THREE.Object3D;
   /** what holds the bow in the fist (attach's anchor), its turn as the hand carries it, and how far it is held upright */
   grip?: THREE.Object3D; gripRest: THREE.Quaternion; hold: number;
+  /** how far the bow stands upright in the fist (0: carried along the body), eased so it turns rather than flips */
+  up: number;
   uaL: THREE.Object3D; laL: THREE.Object3D; handL: THREE.Object3D; uaR: THREE.Object3D; laR: THREE.Object3D; handR: THREE.Object3D; w: number }
 const _aq = new THREE.Quaternion(), _aq2 = new THREE.Quaternion(), _aq3 = new THREE.Quaternion(), _av = new THREE.Vector3(), _av2 = new THREE.Vector3();
 const _fwd = new THREE.Vector3(), _left = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
@@ -618,6 +620,9 @@ function hold(q: QAnim, bones: THREE.Object3D[]) {
  * A dagger held for the stab: a fist leaves the blade across, so as the jab plays (`w`, its weight) the anchor turns to
  * point the blade along the forearm, the way it goes in. Otherwise it rests as attached.
  */
+/** A dagger's stab: KayKit's (retargeted), or the jab mirrored to the right hand when an old animation file lacks it. */
+const STAB_CLIP = (q: QAnim) => (q.acts.KK_Stab ? 'KK_Stab' : 'Punch_Jab_M');
+
 function stabGrip(d: NonNullable<QAnim['dagger']>, w: number) {
   const g = d.grip;
   if (!g) return;
@@ -679,7 +684,17 @@ const _tgt = new THREE.Vector3(), _pole = new THREE.Vector3(), _head = new THREE
  * the cheekbone, the elbow behind the shoulder in line with the arrow; holds; and lets go, slipping back past the ear.
  * Held drawn while a skill is aimed. Eases in and out.
  */
-function aimBow(q: QAnim, b: BowArms, s: AnimState, dt: number) {
+function aimBow(q: QAnim, b: BowArms, s: AnimState, dt: number, clip: { drawn: number; up: number } | null = null) {
+  // a bow clip plays the arms (KayKit's idle, draw, aim and release): the bow only turns upright in the fist as the arm
+  // raises it (and back down as it lowers), its string drawn by the hand
+  if (clip) {
+    b.w = 0;
+    b.hold += (1 - b.hold) * Math.min(1, dt * 6);
+    b.up += (clip.up - b.up) * Math.min(1, dt * 10);
+    b.root.getWorldQuaternion(_aq3);
+    holdBow(b, _fwd.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize(), b.up);
+    return pullString(b, clip.drawn);
+  }
   hold(q, [...b.spine, b.neck, b.head, b.uaL, b.laL, b.uaR, b.laR]);
   const shot = s.atkAge < ATK_MS ? s.atkAge / ATK_MS : -1;
   const down = s.deadAge >= 0 || s.swimming || (s.sitAge ?? -1) >= 0;
@@ -742,7 +757,7 @@ const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vect
  * stands upright, its back towards where the archer faces and the string towards the archer; between the two as the
  * draw comes and goes. Fallen, sitting or swimming it goes with the hand again.
  */
-function holdBow(b: BowArms, fwd: THREE.Vector3) {
+function holdBow(b: BowArms, fwd: THREE.Vector3, up = (b.up += (b.w - b.up) * 0.25)) {
   const g = b.grip;
   if (!g) return;
   g.quaternion.copy(b.gripRest);
@@ -754,12 +769,12 @@ function holdBow(b: BowArms, fwd: THREE.Vector3) {
   _bx.set(0, -1, 0).addScaledVector(_by, _by.y).normalize();
   _bz.crossVectors(_bx, _by);
   _bq.setFromRotationMatrix(_bm.makeBasis(_bx, _by, _bz));
-  if (b.w > 0.001) {
+  if (up > 0.001) {
     // drawn: its X along fwd, its Y up
     _by.set(0, 1, 0);
     _bz.crossVectors(fwd, _by);
     _bq2.setFromRotationMatrix(_bm.makeBasis(fwd, _by, _bz));
-    _bq.slerp(_bq2, b.w);
+    _bq.slerp(_bq2, up);
   }
   g.quaternion.slerp(g.parent!.getWorldQuaternion(_aq).invert().multiply(_bq), b.hold);
 }
@@ -1292,7 +1307,7 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit']) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit', ...DRIVEN_SKILL_CLIPS]) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
   const lr = (n: string) => [byName[`${n}_l`], byName[`${n}_r`]];
@@ -1303,13 +1318,74 @@ export function qPlayer(o: QOpts): Rig {
         la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
       bow: o.bow ? { root, head: byName.Head, spine: ['spine_01', 'spine_02', 'spine_03'].map((n) => byName[n]), neck: byName.neck_01,
         string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
-        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined,
+        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, up: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined,
       sit: { root, spine: byName.spine_01, thigh: lr('thigh'), calf: lr('calf'), foot: lr('foot'), ball: lr('ball'), ua: lr('upperarm'), la: lr('lowerarm'), hand: lr('hand') } },
     dispose: () => skeletons.forEach((s) => s.dispose()),
   };
 }
 
 const ATK_MS = 700;
+/**
+ * A skill's own animation, from the CC0 libraries (UAL2's on this rig, KayKit's retargeted by q-assets.mjs): `cast` plays
+ * while it is cast, from its start up to `hold` (clip seconds) and held there - or, once over, `loop` on a loop (`loop:
+ * true`: the cast clip itself loops); `strike` plays as it goes off, from `from` at `speed`. Clip times come from where
+ * each clip's blow lands (its arm's fastest turn).
+ */
+interface SkillAnim { cast?: string; start?: number; hold?: number; loop?: string | true; speed?: number; strike?: string; from?: number }
+const STAB: SkillAnim = { cast: 'KK_Stab', hold: 0.28, strike: 'KK_Stab', from: 0.28, speed: 1.6 };
+const DUAL_STAB: SkillAnim = { cast: 'KK_Dual_Stab', hold: 0.22, strike: 'KK_Dual_Stab', from: 0.22, speed: 1.6 };
+const CUT_A: SkillAnim = { cast: 'Sword_Regular_A', hold: 0.12, strike: 'Sword_Regular_A', from: 0.12 };
+const CUT_B: SkillAnim = { cast: 'Sword_Regular_B', hold: 0.1, strike: 'Sword_Regular_B', from: 0.1 };
+const HOOK: SkillAnim = { cast: 'Melee_Hook', hold: 0.12, strike: 'Melee_Hook', from: 0.12 };
+const THROW: SkillAnim = { cast: 'OverhandThrow', hold: 0.25, strike: 'OverhandThrow', from: 0.25, speed: 1.2 };
+const KICK: SkillAnim = { cast: 'KK_Kick', hold: 0.25, strike: 'KK_Kick', from: 0.25, speed: 1.2 };
+const BASH: SkillAnim = { cast: 'Shield_OneShot', hold: 0, strike: 'Shield_OneShot', from: 0 };
+const CHARGE: SkillAnim = { cast: 'Shield_Dash', hold: 0.45, strike: 'Shield_Dash', from: 0.45 };
+const GUARD: SkillAnim = { cast: 'Idle_Shield_Loop', loop: true };
+// KayKit's draw opens reaching for an arrow from a stance its release does not end in: from BOW_NOCK it picks up where
+// the release's follow-through leaves the arms, so shot after shot runs on without the arm snapping back
+const BOW_NOCK = 0.33;
+const BOW: SkillAnim = { cast: 'KK_Bow_Draw', start: BOW_NOCK, speed: 1.5, loop: 'KK_Bow_Aim', strike: 'KK_Bow_Release', from: 0 };
+const BOW_UP: SkillAnim = { cast: 'KK_Bow_Draw_Up', start: BOW_NOCK, speed: 1.5, hold: 1.25, strike: 'KK_Bow_Release_Up', from: 0 };
+const SKILL_ANIM: Record<string, SkillAnim> = {
+  // the dagger's: stabs, quick cuts, a hook, a throw, a kick and a dodge back
+  stab: STAB, backstab: STAB, death_mark: STAB, assassinate: DUAL_STAB, silent_execution: DUAL_STAB,
+  venom_blade: CUT_A, hemorrhage: CUT_A, eviscerate: CUT_B, shadow_dance: HOOK, fan_of_knives: THROW, low_blow: KICK,
+  evasion: { cast: 'KK_Dodge_Back', hold: 0.38 },
+  // the shield's: the bash, the charge behind it, and the guard while a defence is cast
+  shield_bash: BASH, aegis_charge: CHARGE, fortress: GUARD, iron_bulwark: GUARD, shield_of_faith: GUARD, phoenix_ward: GUARD, guardian_aura: GUARD,
+  // the bow's (every bow skill draws, aims and looses; the volleys shoot up)
+  arrow_rain: BOW_UP, arrow_storm: BOW_UP, '@bow': BOW,
+};
+/** The clips the entity's clock drives (set to a time each frame), and the bow's string as each one leaves it. */
+const DRIVEN_SKILL_CLIPS = new Set(Object.values(SKILL_ANIM).flatMap((a) => [a.loop === true ? '' : a.cast ?? '', a.strike ?? '']).filter(Boolean));
+DRIVEN_SKILL_CLIPS.add('KK_Stab');
+/** The animation a skill plays (a key of SKILL_ANIM): its own, or the bow's for a bow skill; none for the rest. */
+/** Whether a skill's animation has a blow to play as it goes off (a buff's, a dodge's or a guard's has only its cast). */
+export const skillStrikes = (key: string | undefined) => !!(key && SKILL_ANIM[key]?.strike);
+export function skillAnimOf(skill: string | undefined, weapon?: string): string | undefined {
+  if (!skill) return undefined;
+  if (SKILL_ANIM[skill]) return skill;
+  return weapon === 'bow' ? '@bow' : undefined;
+}
+/** How far the string is drawn as a bow clip plays (the string follows the hand while it is). */
+/** How upright the bow stands as a bow clip plays: raised as the draw lifts it, lowered as the release follows through. */
+function bowUp(clip: string, t: number): number {
+  if (clip === 'KK_Bow_Draw' || clip === 'KK_Bow_Draw_Up') return THREE.MathUtils.smoothstep(t, 0.3, 0.6);
+  if (clip === 'KK_Bow_Aim') return 1;
+  if (clip === 'KK_Bow_Release' || clip === 'KK_Bow_Release_Up') return 1 - THREE.MathUtils.smoothstep(t, 0.45, 0.8);
+  return 0;
+}
+function bowDrawn(clip: string, t: number): number | null {
+  if (clip === 'KK_Bow_Draw' || clip === 'KK_Bow_Draw_Up') return THREE.MathUtils.smoothstep(t, 0.6, 1.0); // nocked first, then pulled back
+  if (clip === 'KK_Bow_Aim') return 1;
+  if (clip === 'KK_Bow_Release' || clip === 'KK_Bow_Release_Up') return t < 0.06 ? 1 : 0;
+  if (clip === 'KK_Bow_Idle') return 0;
+  return null;
+}
+/** The bow's auto-attack: drawn (from the nock) over the first 380 ms - game.ts looses the arrow then - and the release
+ * after it at BOW_REL_SPEED, so its follow-through reaches where the next draw starts as the next shot comes. */
+const BOW_LOOSE_MS = 380, BOW_REL_SPEED = 1.35;
 /** Where a skill's blow is held while it is cast (clip seconds): the jab's guard, the dagger drawn back; the top of the
  * sword swing's wind-up, the arm raised. */
 const STAB_GUARD = 0.12, SLASH_WINDUP = 0.3;
@@ -1332,6 +1408,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
     return true;
   };
   const sitAge = s.sitAge ?? -1, standAge = s.standAge ?? Infinity;
+  let bowAt: number | null = null; // a bow clip is playing: how far its string is drawn (aimBow leaves the arms to it)
   if (s.deadAge >= 0) {
     cur = 'Death01';
     q.acts.Death01.time = Math.min(s.deadAge / 1000, clips.Death01.duration - 0.02);
@@ -1345,18 +1422,44 @@ export function animateQ(q: QAnim, s: AnimState): number {
     if (s.floorSit || !clips.Sitting_Enter || sitAge > clips.Sitting_Enter.duration * 1000 || !at('Sitting_Enter', sitAge)) cur = 'Sitting_Idle_Loop';
   } else if (standAge < (clips.Sitting_Exit?.duration ?? 0) * 1000) at('Sitting_Exit', standAge);
   else if (s.swimming) cur = s.moving ? 'Swim_Fwd_Loop' : 'Swim_Idle_Loop';
+  // a skill's own animation while it is cast: its clip up to the point it holds (or on to its loop)
+  else if (s.casting && s.castAnim && SKILL_ANIM[s.castAnim]?.cast && q.acts[SKILL_ANIM[s.castAnim].cast!]) {
+    const a = SKILL_ANIM[s.castAnim], c = a.cast!, t = (a.start ?? 0) + ((s.castAge ?? 0) / 1000) * (a.speed ?? 1);
+    if (a.loop === true) cur = c;
+    else if (typeof a.loop === 'string' && t >= clips[c].duration && q.acts[a.loop]) cur = a.loop;
+    else {
+      cur = c;
+      q.acts[c].time = Math.min(t, a.hold ?? clips[c].duration - 0.02);
+    }
+    bowAt = bowDrawn(cur, q.acts[cur].time);
+  }
   // an archer neither swings nor casts with its hands up: aimBow draws the bow over the idle or the jog
   else if (s.casting && !q.bow) {
     // a melee skill readies the weapon for its blow while it is cast (a dagger drawn back for the stab, a blade raised
     // for the cut, a pair's next hand), a fighter's buff or taunt raises the weapon hand, a spell uses the free hand
     if (s.castMove === 'dance' && q.acts.Dance_Loop) cur = 'Dance_Loop'; // a bladedancer's dance is danced
     else if (s.castMove === 'strike' && q.armed) {
-      const next = q.dagger ? 'Punch_Jab_M' : q.dual && !q.dual.left ? 'Sword_Attack_M' : 'Sword_Attack';
-      const hold = next === 'Punch_Jab_M' ? STAB_GUARD : SLASH_WINDUP;
+      const next = q.dagger ? STAB_CLIP(q) : q.dual && !q.dual.left ? 'Sword_Attack_M' : 'Sword_Attack';
+      const hold = next === 'KK_Stab' ? 0.28 : next === 'Punch_Jab_M' ? STAB_GUARD : SLASH_WINDUP;
       cur = q.acts[next] ? next : 'Spell_Simple_Idle_Loop';
       if (cur === next) q.acts[cur].time = Math.min(hold, ((s.castAge ?? Infinity) / 250) * hold);
     } else cur = s.castMove === 'raise' && q.acts.Spell_Simple_Idle_Loop_M ? 'Spell_Simple_Idle_Loop_M' : 'Spell_Simple_Idle_Loop';
-  } else if (s.atkAge < ATK_MS && !q.bow) {
+  } else if (s.atkAnim && SKILL_ANIM[s.atkAnim]?.strike && q.acts[SKILL_ANIM[s.atkAnim].strike!]
+      && s.atkAge < ((clips[SKILL_ANIM[s.atkAnim].strike!].duration - (SKILL_ANIM[s.atkAnim].from ?? 0)) / (SKILL_ANIM[s.atkAnim].speed ?? 1)) * 1000) {
+    // a skill's own blow, from where its cast held it
+    const a = SKILL_ANIM[s.atkAnim];
+    cur = a.strike!;
+    q.acts[cur].time = Math.min((a.from ?? 0) + (s.atkAge / 1000) * (a.speed ?? 1), clips[cur].duration - 0.02);
+    bowAt = bowDrawn(cur, q.acts[cur].time);
+  } else if (q.bow && !s.atkAnim && q.acts.KK_Bow_Draw && q.acts.KK_Bow_Release
+      && s.atkAge < BOW_LOOSE_MS + (clips.KK_Bow_Release.duration / BOW_REL_SPEED) * 1000) {
+    // the bow's auto-attack: draw from the nock, loose as the arrow goes, the release playing out
+    cur = s.atkAge < BOW_LOOSE_MS ? 'KK_Bow_Draw' : 'KK_Bow_Release';
+    q.acts[cur].time = s.atkAge < BOW_LOOSE_MS ? BOW_NOCK + (s.atkAge / BOW_LOOSE_MS) * (1.0 - BOW_NOCK)
+      : Math.min(((s.atkAge - BOW_LOOSE_MS) / 1000) * BOW_REL_SPEED, clips.KK_Bow_Release.duration - 0.02);
+    bowAt = bowDrawn(cur, q.acts[cur].time);
+  } else if (s.atkAge < ATK_MS && !q.bow && !s.atkAnim) {
+    // (a skill with its own animation and no blow - a buff, a dodge, a guard - swings nothing as it goes off)
     // a pair of swords: every new swing (its age starts over) with the other hand
     if (q.dual) {
       if (s.atkAge < q.dual.age) q.dual.left = !q.dual.left;
@@ -1367,12 +1470,15 @@ export function animateQ(q: QAnim, s: AnimState): number {
       if (s.atkAge < q.dagger.age) q.dagger.stab = s.atkStab ?? !q.dagger.stab;
       q.dagger.age = s.atkAge;
     }
-    cur = q.dagger?.stab && q.acts.Punch_Jab_M ? 'Punch_Jab_M' : q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
+    cur = q.dagger?.stab && q.acts[STAB_CLIP(q)] ? STAB_CLIP(q) : q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
     q.acts[cur].time = (s.atkAge / ATK_MS) * (clips[cur].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
+  if (s.clip && q.acts[s.clip]) cur = s.clip; // the gallery's ?clip=
   // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
   if (!q.acts[cur]) cur = s.moving && !s.swimming ? 'Jog_Fwd_Loop' : 'Idle_Loop';
+  // an archer standing still keeps KayKit's bow stance: its release ends in it, so a shot settles back without a snap
+  if (cur === 'Idle_Loop' && q.bow && q.acts.KK_Bow_Idle) (cur = 'KK_Bow_Idle'), (bowAt = 0);
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) {
     // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
@@ -1394,8 +1500,8 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.floor += (floor - q.floor) * Math.min(1, dt * 8);
   if (q.floor < 0.01) q.floor = 0;
   if (q.floor > 0) floorSit(q, q.floor);
-  if (q.dagger) stabGrip(q.dagger, q.w.Punch_Jab_M ?? 0);
-  if (q.bow) aimBow(q, q.bow, s, dt);
+  if (q.dagger) stabGrip(q.dagger, Math.max(q.w.Punch_Jab_M ?? 0, q.w.KK_Stab ?? 0, q.w.KK_Dual_Stab ?? 0));
+  if (q.bow) aimBow(q, q.bow, s, dt, bowAt === null ? null : { drawn: bowAt, up: bowUp(cur, q.acts[cur]?.time ?? 0) });
   if (q.cape) capeCloth(q.cape, s, dt, SIT_GROUND_DROP * q.floor);
   return steps;
 }
@@ -1625,6 +1731,12 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
         moving: false, casting: false, t: now / 1000 + i,
         atkAge: state === 'Atacar' ? (atkAt ?? age % 1100) : Infinity, deadAge: state === 'Morir' ? age : -1, ...STATES[state],
         atkStab: p.has('stab') || undefined, // ?stab: a dagger's swing is always the stab (else cut and stab in turn)
+        clip: p.get('clip') ?? undefined, // ?clip=<name>: that clip on a loop (the libraries' clips, to look at them)
+        // ?skill=<id>: that skill cast for a second, then its blow, over and over (the bow's for a bow skill: &weapon=bow)
+        ...(p.has('skill') && (() => {
+          const key = skillAnimOf(p.get('skill')!, p.get('weapon') ?? undefined), t = p.has('skillAt') ? Number(p.get('skillAt')) : age % 2400; // &skillAt: frozen there
+          return t < 1000 ? { casting: true, castAnim: key, castAge: t } : { atkAnim: key, atkAge: t - 1000 };
+        })()),
       });
     });
     renderer.render(scene, cam);
