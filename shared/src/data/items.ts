@@ -219,6 +219,9 @@ const list: ItemDef[] = [
   { id: 'scroll_enchant_armor_b', name: 'Pergamino: Encantar Armadura (Grado B)', type: 'consumable', grade: 'B', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado B (solo grado B). Click derecho sobre la pieza para usarlo.' },
   { id: 'scroll_enchant_weapon_a', name: 'Pergamino: Encantar Arma (Grado A)', type: 'consumable', grade: 'A', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado A (solo grado A). Click derecho sobre el arma para usarlo.' },
   { id: 'scroll_enchant_armor_a', name: 'Pergamino: Encantar Armadura (Grado A)', type: 'consumable', grade: 'A', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado A (solo grado A). Click derecho sobre la pieza para usarlo.' },
+  // dropped in the Campo de Huesos: they only enchant gear without a grade (NG), the starter gear among it
+  { id: 'scroll_enchant_weapon_ng', name: 'Pergamino: Encantar Arma (Sin Grado)', type: 'consumable', grade: 'NG', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma sin grado (solo NG). Click derecho sobre el arma para usarlo.' },
+  { id: 'scroll_enchant_armor_ng', name: 'Pergamino: Encantar Armadura (Sin Grado)', type: 'consumable', grade: 'NG', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya sin grado (solo NG). Click derecho sobre la pieza para usarlo.' },
   // Materials (vendor trash)
   { id: 'animal_skin', name: 'Cuero de Animal', type: 'material', stack: true, price: 12, icon: '🟫', color: 0x8b6b4b },
   { id: 'animal_bone', name: 'Hueso de Animal', type: 'material', stack: true, price: 10, icon: '🦴', color: 0xeeeedd },

@@ -313,6 +313,12 @@ export const MOB_GLB: Record<string, GlbLook> = {
   peat_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0x6a5a40, glow: 0x1a3a0a, kind: 'humanoid' },
   ancient_treant: { model: 'forest', height: 2.1, dye: 0x9aa880, glow: 0x081404 },
   treant_sapling: { model: 'forest', height: 2.1, dye: 0xa8c888, glow: 0x0a1a04 },
+  // the Campo de Huesos: the Skeleton King and his risen, grave hounds, bone adepts and barrow golems
+  skeleton_king: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Axe', left: 'Skeleton_Shield_Large_A', tint: { skeleton: 0x9a9078, Glow: 0x60ff90 } },
+  risen_skeleton: { model: 'skeleton_minion', height: 1.9, right: 'Skeleton_Blade', tint: { skeleton: 0xd8d0b8, Glow: 0x60ff90 } },
+  bone_adept: { model: 'skeleton_mage', height: 1.9, right: 'Skeleton_Staff', pale: 1.2, tint: { skeleton: 0x9aa890, Glow: 0x60ff80 } },
+  grave_hound: { model: 'wolf', height: 1.3, tint: { Main: 0x8a9480, Main_Light: 0xb8c0a8, Eyes_Black: 0x80ff60 } },
+  barrow_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xb8b0a0, glow: 0x0a2a10, kind: 'humanoid' },
 };
 
 interface Loaded { scene: THREE.Object3D; height: number; base: number; clips: THREE.AnimationClip[] }

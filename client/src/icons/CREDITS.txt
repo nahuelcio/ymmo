@@ -84,3 +84,6 @@ item: scroll_enchant_weapon_d, scroll_enchant_armor_d <- the plain scrolls' draw
 Added for the Llanos de la Ventisca and the Corazón de la Ciénaga (same source and licence), file <- original:
 item: scroll_enchant_weapon_b, scroll_enchant_armor_b, scroll_enchant_weapon_a, scroll_enchant_armor_a <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
 status: frostbite <- lorc/frozen-orb (the frost_nova drawing)
+
+Added for the Campo de Huesos (same source and licence), file <- original:
+item: scroll_enchant_weapon_ng, scroll_enchant_armor_ng <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)

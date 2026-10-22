@@ -116,6 +116,8 @@ export const EN = {
   "scroll_enchant_armor_b": { "name": "Scroll: Enchant Armor (B-grade)", "desc": "Raises a B-grade piece of armor or jewelry by +1 (B grade only). Right-click the piece to use it." },
   "scroll_enchant_weapon_a": { "name": "Scroll: Enchant Weapon (A-grade)", "desc": "Raises an A-grade weapon by +1 (A grade only). Right-click the weapon to use it." },
   "scroll_enchant_armor_a": { "name": "Scroll: Enchant Armor (A-grade)", "desc": "Raises an A-grade piece of armor or jewelry by +1 (A grade only). Right-click the piece to use it." },
+  "scroll_enchant_weapon_ng": { "name": "Scroll: Enchant Weapon (No-grade)", "desc": "Raises a weapon without a grade by +1 (NG only). Right-click the weapon to use it." },
+  "scroll_enchant_armor_ng": { "name": "Scroll: Enchant Armor (No-grade)", "desc": "Raises a piece of armor or jewelry without a grade by +1 (NG only). Right-click the piece to use it." },
   "ring_of_vigor": { "name": "Ring of Vigor" },
   "wooden_buckler": { "name": "Wooden Buckler" }, "brigandine_shield": { "name": "Brigandine Shield" }, "full_plate_shield": { "name": "Full Plate Shield" },
   "short_sword_duals": { "name": "Dual Short Swords" }, "broadsword_duals": { "name": "Dual Broadswords" }, "revolution_duals": { "name": "Dual Swords of Revolution" },
@@ -265,7 +267,8 @@ export const EN = {
   "cinder_drakeling": "Cinder Drakeling", "flame_zealot": "Flame Zealot", "scorched_golem": "Scorched Golem", "ignaroth": "Ignaroth, Lord of Embers", "ember_whelp": "Ember Whelp",
   "dire_wolf": "Dire Wolf", "moon_cultist": "Moon Cultist", "ghoul": "Ghoul", "lycan_king": "Fenrak, the Lycan King", "pack_lycan": "Pack Lycan",
   "glacier_stalker": "Glacier Stalker", "frost_zealot": "Frost Zealot", "glacier_golem": "Glacier Golem", "ymirak": "Ymirak, the Frost Colossus", "blizzard_yeti": "Blizzard Yeti",
-  "bog_stalker": "Bog Stalker", "mire_druid": "Mire Druid", "peat_golem": "Peat Golem", "ancient_treant": "Ulmoroth, the Ancient Treant", "treant_sapling": "Treant Sapling"
+  "bog_stalker": "Bog Stalker", "mire_druid": "Mire Druid", "peat_golem": "Peat Golem", "ancient_treant": "Ulmoroth, the Ancient Treant", "treant_sapling": "Treant Sapling",
+  "grave_hound": "Grave Hound", "bone_adept": "Bone Adept", "barrow_golem": "Barrow Golem", "skeleton_king": "Morvak, the Skeleton King", "risen_skeleton": "Risen Skeleton"
  },
  "skills": {
   "provoke": {
@@ -796,7 +799,8 @@ export const EN = {
   "ember_rift": "Ember Rift",
   "howling_hollow": "Howling Hollow",
   "blizzard_plains": "Blizzard Plains",
-  "mire_heart": "Heart of the Mire"
+  "mire_heart": "Heart of the Mire",
+  "bone_field": "Bonefield"
  },
  "teleports": {
   "meadows": "Windy Meadows (Lv 1-5)",
@@ -824,7 +828,8 @@ export const EN = {
   "ember_rift": "Ember Rift (PvP, Lv 40+)",
   "howling_hollow": "Howling Hollow (PvP, Lv 22+)",
   "blizzard_plains": "Blizzard Plains (PvP, Lv 52+)",
-  "mire_heart": "Heart of the Mire (PvP, Lv 61+)"
+  "mire_heart": "Heart of the Mire (PvP, Lv 61+)",
+  "bone_field": "Bonefield (PvP, Lv 12+)"
  },
  "races": {
   "human": {
