@@ -97,6 +97,8 @@ export interface Settings {
   invertY: boolean;
   // gameplay
   autoLoot: boolean;
+  /** Attack with no enemy selected picks the nearest one (off: it does nothing until you select one) */
+  autoTarget: boolean;
   /** what hits us, written in the chat's System tab */
   dmgLog: boolean;
   volume: number;
@@ -164,6 +166,7 @@ export const DEFAULTS: Settings = {
   screenShake: true,
   invertY: false,
   autoLoot: false,
+  autoTarget: true,
   dmgLog: true,
   volume: 0.5,
   music: 0.35,

@@ -180,7 +180,7 @@ export class Hud {
     glyph('ui', 'attack', '⚔', atkIcon);
     atkIcon.style.background = 'radial-gradient(circle at 35% 30%, #ffaa44, #14161f 85%)';
     this.atkCd = el('div', 'cd', this.atkEl);
-    setTip(this.atkEl, () => `<div class="tt-title">${tx('Autoataque', 'Auto-attack')} <span class="tt-dim">${keyLabel(settings.s.keys.attack)}</span></div>${tx('Ataca al objetivo seleccionado y sigue pegándole. Sin objetivo, elige el monstruo más cercano. Con Ctrl, fuerza el ataque a un jugador.', 'Attacks the selected target and keeps swinging. With no target, picks the nearest monster. Hold Ctrl to force an attack on a player.')}`);
+    setTip(this.atkEl, () => `<div class="tt-title">${tx('Autoataque', 'Auto-attack')} <span class="tt-dim">${keyLabel(settings.s.keys.attack)}</span></div>${tx(`Ataca al objetivo seleccionado y sigue pegándole. ${settings.s.autoTarget ? 'Sin objetivo, elige el monstruo más cercano. ' : ''}Con Ctrl, fuerza el ataque a un jugador.`, `Attacks the selected target and keeps swinging. ${settings.s.autoTarget ? 'With no target, picks the nearest monster. ' : ''}Hold Ctrl to force an attack on a player.`)}`);
     this.atkEl.onclick = () => g.attackTarget();
 
     // Cast bar
