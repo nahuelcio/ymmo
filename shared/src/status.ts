@@ -1,7 +1,7 @@
 // Status effects (crowd control and damage over time). The server applies and
 // ticks them; clients learn about them through entity flag bits.
 
-export type StatusId = 'stun' | 'slow' | 'bleed' | 'poison' | 'wound';
+export type StatusId = 'stun' | 'slow' | 'bleed' | 'poison' | 'wound' | 'burn';
 
 export interface StatusDef { flag: number; icon: string; name: string; desc: string }
 
@@ -12,6 +12,8 @@ export const STATUSES: Record<StatusId, StatusDef> = {
   poison: { flag: 1024, icon: '☠️', name: 'Envenenado', desc: 'Pierde vida cada segundo.' },
   // the War Avatar's blows (data/mobs.ts): bit 8192, the first free one past F_GATHER (protocol.ts)
   wound: { flag: 8192, icon: '💔', name: 'Herida de Guerra', desc: 'Las curas que recibe rinden la mitad.' },
+  // Ignaroth's blows (Grieta de las Brasas): bit 16384, the last but one the u16 flags hold
+  burn: { flag: 16384, icon: '🔥', name: 'Quemadura', desc: 'Pierde vida cada segundo por el fuego.' },
 };
 
 export const STATUS_IDS = Object.keys(STATUSES) as StatusId[];
@@ -24,7 +26,7 @@ export interface StatusApply {
   ms: number;
   /** chance on hit (mob hits); for a skill's stun or slow, its base chance to land (server formulas.rs land_chance) */
   chance?: number;
-  /** damage per second as a fraction of the triggering hit (bleed/poison) */
+  /** damage per second as a fraction of the triggering hit (bleed/poison/burn) */
   dot?: number;
 }
 

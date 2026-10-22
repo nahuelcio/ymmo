@@ -1,7 +1,7 @@
 import { CLASSES, EVOLVE_LEVEL, evolutionOf, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
 import { makeMovable } from './movable';
 import { foldable } from './hud';
-import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
@@ -130,10 +130,9 @@ export class InventoryPanel {
     this.menu = m;
   }
 
-  /** Whether the bag holds a scroll that enchants this piece. */
+  /** Whether the bag holds a scroll that enchants this piece (of its kind, and of its grade if the scroll has one). */
   private hasScroll(id: string) {
-    const kind = ITEMS[id].type === 'weapon' ? 'weapon' : 'armor';
-    return this.g.inv.some((i) => !i.s && ITEMS[i.i].enchant === kind);
+    return this.g.inv.some((i) => !i.s && scrollFits(ITEMS[i.i], ITEMS[id]));
   }
 
   /** Enchant a piece, asking first once the attempt can fail. */
@@ -922,7 +921,7 @@ export function createHelp(root: HTMLElement): Win {
     <h4>Combate</h4>
     <p><b>Click izquierdo</b> en un monstruo o jugador para <b>seleccionarlo</b>; con <b>doble click</b> lo atacás directamente. El <b>autoataque</b> de la barra (o <b>Espacio</b>) lo ataca y sigue pegándole; sin objetivo, elige el más cercano (eso se apaga en <b>Opciones</b>). <b>Tab</b> va pasando por los monstruos cercanos.
     Las habilidades y pociones están en la barra de atajos: teclas <b>1-0</b> o <b>F1-F10</b>. Las habilidades nuevas se aprenden solas al subir de nivel.</p>
-    <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: <i data-gi="status/stun"></i> aturdido, <i data-gi="status/slow"></i> ralentizado, <i data-gi="status/bleed"></i> sangrado y <i data-gi="status/poison"></i> veneno. Aturdir a un jefe le corta el ataque especial.</p>
+    <p>Con <b>Shift</b> rodás hacia el cursor y sos invulnerable un instante (cada 5 s). Los jefes y algunos élites avisan sus golpes fuertes con un <b style="color:#ff5a3a">círculo rojo</b> en el piso: salí antes de que se llene. Algunas habilidades y monstruos dejan estados: <i data-gi="status/stun"></i> aturdido, <i data-gi="status/slow"></i> ralentizado, <i data-gi="status/bleed"></i> sangrado, <i data-gi="status/burn"></i> quemadura y <i data-gi="status/poison"></i> veneno. Aturdir a un jefe le corta el ataque especial.</p>
     <h4>Botín</h4>
     <p>Hacé click en los objetos del piso o apretá <b>Z</b> para juntar el más cercano. Los materiales se los podés vender a cualquier vendedor.</p>
     <h4>Aldea del Alba</h4>
@@ -968,7 +967,7 @@ const HELP_EN = `
     <h4>Combat</h4>
     <p><b>Left-click</b> a monster or player to <b>select</b> them; <b>double-click</b> to attack them right away. The bar's <b>auto-attack</b> (or <b>Space</b>) attacks them and keeps swinging; with no target it picks the nearest one (you can turn that off in <b>Settings</b>). <b>Tab</b> cycles through nearby monsters.
     Skills and potions live in the hotbar: keys <b>1-0</b> or <b>F1-F10</b>. New skills are learned automatically as you level up.</p>
-    <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: <i data-gi="status/stun"></i> stunned, <i data-gi="status/slow"></i> slowed, <i data-gi="status/bleed"></i> bleeding and <i data-gi="status/poison"></i> poisoned. Stunning a boss interrupts its special attack.</p>
+    <p><b>Shift</b> rolls toward the cursor and makes you invulnerable for an instant (every 5 s). Bosses and some elites telegraph heavy hits with a <b style="color:#ff5a3a">red circle</b> on the ground: get out before it fills. Some skills and monsters apply statuses: <i data-gi="status/stun"></i> stunned, <i data-gi="status/slow"></i> slowed, <i data-gi="status/bleed"></i> bleeding, <i data-gi="status/burn"></i> burning and <i data-gi="status/poison"></i> poisoned. Stunning a boss interrupts its special attack.</p>
     <h4>Loot</h4>
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Materials can be sold to any merchant.</p>
     <h4>Dawn Village</h4>

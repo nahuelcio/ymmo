@@ -19,6 +19,7 @@ import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
+import { fireMob } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -90,12 +91,14 @@ export interface CEnt {
   /** when it sat down / got up (F_SITTING edges), for the sit-down and get-up clips */
   sitAt?: number;
   standAt?: number;
-  /** sat on the ground (not a seat): the body is lowered to it, and raised back while getting up */
+  /** sat on the ground (not a seat): the floor-sit clips, not the chair's (render/quaternius.ts) */
   groundSit?: boolean;
   /** the node it is working (from the server's 'gather') and how many strokes were already shown */
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
   splashAt?: number;
+  /** last flame on it while it burns (the burn status) */
+  burnAt?: number;
 }
 
 /** Base interpolation delay (ms): one server tick plus margin; grows with measured network jitter. */
@@ -554,10 +557,17 @@ export class Game {
       const fx = this.fx.telegraph(m.x, m.z, m.r, m.ms);
       play('warn', c ? this.near(c) : 0.6);
       // a stun before it lands calls it off (castx): no slam
+      const fire = c?.rec.k === 'm' && fireMob(c.rec.tpl);
       const timer = window.setTimeout(() => {
         this.teles.delete(key);
         play('slam', c ? this.near(c) : 0.6);
         this.fx.ring(new THREE.Vector3(m.x, heightAt(m.x, m.z), m.z), 0xff6a3a, m.r, 450);
+        // a fire beast's circle bursts into flames: one in the middle, more spread over a wide one
+        if (fire) for (let i = 0, n = Math.min(8, Math.ceil(m.r / 3)); i < n; i++) {
+          const a = Math.random() * Math.PI * 2, d = i ? Math.sqrt(Math.random()) * m.r * 0.8 : 0;
+          const x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d;
+          this.fx.flame(new THREE.Vector3(x, heightAt(x, z), z), Math.min(2.2, m.r / 2), 1100);
+        }
         const self = this.self;
         if (self && settings.s.screenShake && Math.hypot(self.pos.x - m.x, self.pos.z - m.z) < m.r + 8) this.cam.shake(0.25);
       }, m.ms);
@@ -2185,6 +2195,11 @@ export class Game {
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming
       if (sitting) c.tag.position.y -= c.groundSit ? 0.75 : 0.55; // the plate drops with the seated body (lower on the floor)
       c.tag.visible = onScreen;
+      // burning: small flames licking up from it
+      if (onScreen && c.flags & STATUSES.burn.flag && now - (c.burnAt ?? 0) > 350) {
+        c.burnAt = now;
+        this.fx.flame(c.root.position.clone().setY(c.root.position.y + c.height * 0.3), 0.35, 650);
+      }
       // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
       if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);
       // far rigs are tiny on screen: skip their (per-bone) animation

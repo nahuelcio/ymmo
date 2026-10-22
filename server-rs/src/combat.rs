@@ -124,7 +124,9 @@ impl World {
         let Some(e) = self.ents.get_mut(&tid) else { return };
         if e.c.dead { return; }
         let dps = sa.dot.map_or(0.0, |dot| jround(hit * dot).max(1.0));
-        e.c.statuses.insert(sa.id.clone(), ActiveStatus { until: now + sa.ms, src, dps, next_tick: now + 1000.0 });
+        // a refresh keeps the damage over time's clock: struck again within a second, it still ticks every second
+        let next_tick = e.c.statuses.get(&sa.id).filter(|s| s.until > now).map_or(now + 1000.0, |s| s.next_tick);
+        e.c.statuses.insert(sa.id.clone(), ActiveStatus { until: now + sa.ms, src, dps, next_tick });
         if sa.id == "stun" {
             e.c.moving = false;
             let (x, z) = (e.c.x, e.c.z);
