@@ -149,3 +149,86 @@ export function retargetClip(src, clipName, tgtJson, map, hips, hold = {}, joint
   }
   return { times, tracks: [...out.values()] };
 }
+
+/** A glTF's nodes as a three.js hierarchy at rest, to pose and measure: { obj(name), pose(tracks, frame), update() }. */
+export function skeleton(json) {
+  const objs = json.nodes.map((n) => {
+    const o = new THREE.Object3D();
+    o.position.fromArray(n.translation ?? [0, 0, 0]);
+    o.quaternion.fromArray(n.rotation ?? [0, 0, 0, 1]);
+    o.scale.fromArray(n.scale ?? [1, 1, 1]);
+    return o;
+  });
+  json.nodes.forEach((n, i) => (n.children ?? []).forEach((c) => objs[i].add(objs[c])));
+  const roots = objs.filter((o) => !o.parent), byName = Object.fromEntries(json.nodes.map((n, i) => [n.name, i]));
+  return {
+    objs, obj: (name) => objs[byName[name]], index: (name) => byName[name],
+    /** tracks as retargetClip returns them ({ node, path, values }), at key `k` */
+    pose(tracks, k) {
+      for (const t of tracks) t.path === 'rotation' ? objs[t.node].quaternion.fromArray(t.values, k * 4) : t.path === 'translation' && objs[t.node].position.fromArray(t.values, k * 3);
+      for (const o of roots) o.updateMatrixWorld(true);
+    },
+  };
+}
+
+const _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+/** Turn `bone` so that the way to its child `tip` points along the world direction `dir`. */
+function aim(bone, tip, dir) {
+  const from = tip.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(_p)).normalize();
+  const world = _q.setFromUnitVectors(from, dir).multiply(bone.getWorldQuaternion(_q2));
+  bone.quaternion.copy(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(world));
+  bone.updateMatrixWorld(true);
+}
+
+/**
+ * Sat on the floor for real. A sit retargeted from a shorter-legged rig lowers the hips as far as the source's do (scaled
+ * by leg length), which leaves the seat above the floor while the longer shins push the feet through it. So as the hips go
+ * down (`seated`: 0 at `stand` height, 1 at `seat`) they go `drop` further, and each leg bends (two-bone IK, the knee on
+ * the side the clip bends it) so that the ankle and the toes are never lower than standing (`ankle`, `ball`), and sat,
+ * the foot rests flat on the floor at those heights. In place, on the tracks of `r` (retargetClip's); heights are world
+ * units of `json`, the target.
+ */
+export function seatOnFloor(r, json, { stand, seat, drop, ankle, ball }) {
+  const sk = skeleton(json), pelvis = sk.obj('pelvis');
+  const track = (o, path) => r.tracks.find((t) => sk.objs[t.node] === o && t.path === path);
+  const legs = ['l', 'r'].map((s) => ['thigh', 'calf', 'foot', 'ball'].map((b) => sk.obj(`${b}_${s}`)));
+  const S = new THREE.Vector3(), E = new THREE.Vector3(), H = new THREE.Vector3(), B = new THREE.Vector3(), T = new THREE.Vector3(), u = new THREE.Vector3(), v = new THREE.Vector3();
+  for (let k = 0; k < r.times.length; k++) {
+    sk.pose(r.tracks, k);
+    const hips = pelvis.getWorldPosition(new THREE.Vector3());
+    const seated = THREE.MathUtils.clamp((stand - hips.y) / (stand - seat), 0, 1);
+    hips.y -= drop * seated;
+    pelvis.position.copy(pelvis.parent.worldToLocal(hips));
+    pelvis.updateMatrixWorld(true);
+    track(pelvis, 'translation').values.splice(k * 3, 3, ...pelvis.position.toArray());
+    const plant = (y, floor) => (y < floor ? floor : y + (floor - y) * seated); // never through the floor; sat, on it
+    for (const [thigh, calf, foot, toe] of legs) {
+      thigh.getWorldPosition(S);
+      calf.getWorldPosition(E);
+      foot.getWorldPosition(H);
+      const ay = plant(H.y, ankle);
+      if (Math.abs(ay - H.y) > 1e-5) {
+        T.set(H.x, ay, H.z);
+        const a = S.distanceTo(E), b = E.distanceTo(H);
+        u.subVectors(T, S);
+        const d = THREE.MathUtils.clamp(u.length(), Math.abs(a - b) + 1e-4, a + b - 1e-4);
+        u.normalize();
+        v.subVectors(E, S).addScaledVector(u, -E.clone().sub(S).dot(u)).normalize(); // the knee's side, as the clip has it
+        const cos = THREE.MathUtils.clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1);
+        const knee = S.clone().addScaledVector(u, cos * a).addScaledVector(v, Math.sqrt(1 - cos * cos) * a);
+        aim(thigh, calf, knee.clone().sub(S).normalize());
+        aim(calf, foot, T.clone().sub(knee).normalize());
+        foot.getWorldPosition(H);
+      }
+      toe.getWorldPosition(B);
+      const by = plant(B.y, ball);
+      if (Math.abs(by - B.y) > 1e-5) {
+        // the toes onto the floor, still pointing the way they did
+        const d = B.clone().sub(H), len = d.length(), dy = THREE.MathUtils.clamp(by - H.y, -len, len);
+        const flat = d.setY(0).normalize().multiplyScalar(Math.sqrt(len * len - dy * dy));
+        aim(foot, toe, flat.setY(dy).normalize());
+      }
+      for (const o of [thigh, calf, foot]) track(o, 'rotation').values.splice(k * 4, 4, ...o.quaternion.toArray());
+    }
+  }
+}

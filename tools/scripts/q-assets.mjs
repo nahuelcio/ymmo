@@ -1,7 +1,7 @@
 // Regenerates client/public/q from the Quaternius packs (all CC0):
 //   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library 1 and 2.
 // and retargets a few clips from KayKit Character Animations 1.1 (Kay Lousberg, CC0; kaylousberg.com) onto the same rig:
-// the bow, the stab, the kick and the dodge, which the Quaternius libraries lack (retarget.mjs).
+// the bow, the stab, the kick, the dodge and sitting on the floor, which the Quaternius libraries lack (retarget.mjs).
 // The heads come from heads.glb, built by art/blender/characters.py.
 // Usage: node scripts/q-assets.mjs <dir with the packs unzipped> [more dirs...] [--anims-only]
 //   --anims-only: rebuild just anims.gltf/.bin from the animation libraries (the other packs need not be there)
@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
-import { readAccessor, readGlb, retargetClip } from './retarget.mjs';
+import { readAccessor, readGlb, retargetClip, seatOnFloor, skeleton } from './retarget.mjs';
 
 const SRCS = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const ANIMS_ONLY = process.argv.includes('--anims-only');
@@ -31,7 +31,10 @@ const KAYKIT = [
   ['MovementAdvanced', 'Running_HoldingBow', 'KK_Bow_Run'], ['MovementAdvanced', 'Dodge_Backward', 'KK_Dodge_Back'],
   ['CombatMelee', 'Melee_1H_Attack_Stab', 'KK_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Stab', 'KK_Dual_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Slice', 'KK_Dual_Slice'],
   ['CombatMelee', 'Melee_Unarmed_Attack_Kick', 'KK_Kick'],
+  ['Simulation', 'Sit_Floor_Down', 'KK_Sit_Floor_Down'], ['Simulation', 'Sit_Floor_Idle', 'KK_Sit_Floor_Idle'], ['Simulation', 'Sit_Floor_StandUp', 'KK_Sit_Floor_StandUp'],
 ];
+/** How much further than the retarget brings them the hips go down sat on the floor, of their standing height (seatOnFloor). */
+const SEAT_DROP = 0.22;
 /** Rig_Medium's bones on ours (clavicles, the neck, spine_02 and the fingers have no counterpart: they hold their pose). */
 const KK_MAP = {
   hips: 'pelvis', spine: 'spine_01', chest: 'spine_03', head: 'Head',
@@ -173,10 +176,20 @@ if (kkDir) {
     fist[n] = new THREE.Quaternion(v[0], v[1], v[2], v[3]);
   }
   const libs = {};
-  for (const [lib, clip, name] of KAYKIT) {
-    const file = path.join(path.dirname(kkDir), `Rig_Medium_${lib}.glb`);
-    const src = (libs[lib] ??= readGlb(file));
-    const r = retargetClip(src, clip, g, KK_MAP, ['hips', 'pelvis'], fist, joints);
+  const kk = KAYKIT.map(([lib, clip, name]) => {
+    const src = (libs[lib] ??= readGlb(path.join(path.dirname(kkDir), `Rig_Medium_${lib}.glb`)));
+    return [name, retargetClip(src, clip, g, KK_MAP, ['hips', 'pelvis'], fist, joints)];
+  });
+  // the floor sit, sat on the floor: the seat down to it and the feet kept on it (seatOnFloor), measured against our own
+  // idle (the ankles and toes standing) and the clips' first frames (the hips standing, and sat)
+  const sk = skeleton(g), idle = g.animations.find((x) => x.name === 'Idle_Loop');
+  sk.pose(idle.channels.map((c) => ({ node: c.target.node, path: c.target.path, values: readAccessor({ json: g, bin }, idle.samplers[c.sampler].output) })), 0);
+  const y = (n) => sk.obj(n).getWorldPosition(new THREE.Vector3()).y, both = (n) => (y(`${n}_l`) + y(`${n}_r`)) / 2;
+  const [ankle, ball] = [both('foot'), both('ball')];
+  const hipsAt = (name) => (sk.pose(kk.find((c) => c[0] === name)[1].tracks, 0), y('pelvis'));
+  const [stand, seat] = [hipsAt('KK_Sit_Floor_Down'), hipsAt('KK_Sit_Floor_Idle')];
+  for (const [name, r] of kk) if (name.startsWith('KK_Sit_Floor')) seatOnFloor(r, g, { stand, seat, drop: SEAT_DROP * stand, ankle, ball });
+  for (const [name, r] of kk) {
     const times = Float32Array.from(r.times), input = addFloats(times, 'SCALAR', true);
     let one;
     const samplers = [], channels = [];

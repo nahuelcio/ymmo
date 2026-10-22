@@ -18,7 +18,7 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, SIT_GROUND_DROP, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, type WorldScene } from './render/scene';
 import { UI } from './ui';
@@ -952,6 +952,8 @@ export class Game {
     const c: CEnt = {
       id: r.id, rec: r, rig, root, model, hit, label: obj, labelEl: el, tag, snaps: [], pos: new THREE.Vector3(r.x, heightAt(r.x, r.z), r.z),
       size: model.scale.x, ry: r.ry, hp: r.hp, flags: r.f, atkAt: 0, hitAt: 0, hitDx: 0, hitDz: 0, hpFill: null, deadAt: r.f & F_DEAD ? performance.now() - 5000 : -1, height, radius,
+      // already seated when it comes into view: on a seat or on the floor, as it would have sat down
+      groundSit: r.f & F_SITTING ? !nodesNear(r.x, r.z, 0.6).some((n) => n.kind === 'seat') : undefined,
     };
     this.refreshLabel(c);
     this.refreshQuestMarker(c);
@@ -2138,15 +2140,10 @@ export class Game {
         c.ry += d * Math.min(1, dt * 14);
       }
       c.root.position.copy(c.pos);
-      // in deep water the body floats at the swimming line; sitting on the ground sinks the hips to it
+      // in deep water the body floats at the swimming line
       const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
       const sitting = (c.flags & F_SITTING) !== 0 && !isStanding(c);
       if (swimming) c.root.position.y = SWIM_BODY_Y + Math.sin(tSec * 2 + c.id) * 0.05;
-      else if (c.groundSit) {
-        // eased down while sitting, raised back up along with the get-up clip
-        const k = sitting ? Math.min(1, (now - (c.sitAt ?? 0)) / 900) : Math.max(0, 1 - (now - (c.standAt ?? 0)) / STAND_UP_MS);
-        if (k > 0) c.root.position.y -= SIT_GROUND_DROP * k;
-      }
       c.model.rotation.y = c.ry;
       if (c.rig) {
         const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;
@@ -2186,7 +2183,7 @@ export class Game {
       // hidden entities skip the per-frame matrix update of their whole tree (bones included)
       c.root.matrixWorldAutoUpdate = onScreen; // narrowed below, once we know whether it animates this frame
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming
-      if (sitting) c.tag.position.y -= 0.55; // the plate drops with the seated body
+      if (sitting) c.tag.position.y -= c.groundSit ? 0.75 : 0.55; // the plate drops with the seated body (lower on the floor)
       c.tag.visible = onScreen;
       // far away: simplified copies of its parts (same skeleton and animation, fewer triangles)
       if (onScreen && c !== self) applyLod(c.root, (c.lod ??= { level: 0, done: true }), dSelf);
