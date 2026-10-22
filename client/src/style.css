@@ -854,6 +854,19 @@ input { font: inherit; user-select: text; }
   #screens .screen-box.wide .char-cols { flex-wrap: wrap; }
   #screens .screen-box.wide .char-create { display: block; }
 }
+/* phones upright: one column, the characters and then the new one's form, the model full width above its options (a
+ * wrapping row kept the list at 220 px and squeezed the form into what was left beside it) */
+@media (max-width: 760px) {
+  #screens .screen-box.wide { padding: 30px 12px 16px; }
+  #screens .screen-box.wide .char-cols { flex-direction: column; gap: 14px; }
+  #screens .screen-box.wide .char-list, #screens .screen-box.wide .char-create { flex: 0 0 auto; width: 100%; }
+  #screens .char-create .char-preview { flex: 0 0 auto; height: 260px; }
+  #screens .screen:has(.screen-box.wide) .lang-pick { margin-bottom: 0; }
+}
+/* phones sideways: a smaller logo leaves the little height to the screen */
+@media (max-height: 500px) {
+  #screens .screen:has(.screen-box.wide) .logo-title { font-size: 28px; letter-spacing: 8px; }
+}
 
 /* ---------- in-game windows: the same carved frame and ribbon title ---------- */
 .win {
