@@ -156,7 +156,7 @@ function qMob(tplId: string): Rig | null {
 /** Quaternius farm and wild animals: Idle/Walk/Gallop/Eating/Death and a headbutt */
 const GAME = ['stag', 'horse', 'donkey', 'alpaca', 'bull', 'cow'] as const;
 const GRAZER: ClipSet = { idle: 'Eating', run: 'Gallop', attack: 'Attack_Headbutt', death: 'Death' };
-const CREATURES = ['spider', 'wyvern', 'cobra', 'drake', 'crab', 'limule', 'golem', 'raptor', 'werewolf', 'forest'] as const;
+const CREATURES = ['spider', 'wyvern', 'cobra', 'drake', 'crab', 'limule', 'golem', 'raptor', 'werewolf', 'yeti', 'forest'] as const;
 type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
 type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
 type ClipSet = Partial<Record<Role, string>>;
@@ -225,7 +225,8 @@ export const MOB_GLB: Record<string, GlbLook> = {
   coast_queen: { model: 'crab', height: 0.75, dye: 0xe8a8d0, kind: 'spider' },
   deep_lurker: { model: 'limule', height: 0.8, dye: 0xa0c0d0, kind: 'spider' },
   // beasts
-  werewolf: { model: 'werewolf', height: 1.9, clips: { run: 'Run' } },
+  // untextured: its fur, the front of its trunk and its claws are coloured here (tools/art/blender/creatures.py)
+  werewolf: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, tint: { Fur: 0x5a4c40, Belly: 0x8c7a66, Claws: 0x1c1816 } },
   hill_lizard: { model: 'raptor', height: 1.25, dye: 0xa8d0a8, clips: { run: 'Run' } },
   aberration: { model: 'forest', height: 2.1, dye: 0xd0a8d8 },
   sea_serpent: { model: 'cobra', height: 1.0, dye: 0x8ac0e0, wave: true },
@@ -248,10 +249,10 @@ export const MOB_GLB: Record<string, GlbLook> = {
   frost_wolf: { model: 'wolf', height: 1.3, tint: { Main: 0xe8eef4, Main_Light: 0xffffff } },
   frost_wraith: { model: 'skeleton_mage', height: 1.9, ghost: true, dye: 0xd0f0ff, glow: 0x3a8ac8, kind: 'humanoid' },
   ice_golem: { model: 'golem', height: 2.3, rock: 4, dye: 0xc8ecff, glow: 0x14405a, kind: 'humanoid' },
-  yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xf0f6ff },
-  yeti_cub: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfaf6f0 },
-  yeti_matriarch: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.2, dye: 0xfff4e8 },
-  primal_yeti: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, pale: 2.4, dye: 0xe0f0ff, glow: 0x081828 },
+  yeti: { model: 'yeti', height: 1.9, clips: { run: 'Run' } },
+  yeti_cub: { model: 'yeti', height: 1.9, clips: { run: 'Run' }, dye: 0xfff8f0 },
+  yeti_matriarch: { model: 'yeti', height: 1.9, clips: { run: 'Run' }, dye: 0xfff2e4 },
+  primal_yeti: { model: 'yeti', height: 1.9, clips: { run: 'Run' }, dye: 0xe4f0ff, glow: 0x081828 },
   // the Encrucijada Sangrienta's passive creatures: battle raptors, the fallen legion's bloodied bones, bronze relic golems
   battlefield_carrion: { model: 'raptor', height: 1.25, dye: 0xc8957a, clips: { run: 'Run' } },
   fallen_legionnaire: { model: 'skeleton_warrior', height: 1.9, right: 'Skeleton_Blade', left: 'Skeleton_Shield_Large_A', tint: { skeleton: 0xd8a89c }, glow: 0x2a0600 },
@@ -270,7 +271,7 @@ export const MOB_GLB: Record<string, GlbLook> = {
   corrupted_ent: { model: 'forest', height: 2.1, dye: 0x8a9a6a, glow: 0x14081a },
   elder_ent: { model: 'forest', height: 2.1, dye: 0x9a8aa0, glow: 0x24082c },
   ent_sapling: { model: 'forest', height: 2.1, dye: 0xb0d098 },
-  jungle_beast: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, dye: 0x9aa878 },
+  jungle_beast: { model: 'werewolf', height: 1.9, clips: { run: 'Run' }, tint: { Fur: 0x4a5630, Belly: 0x7a8650, Claws: 0x1a1c10 } },
   // the volcanic region
   lava_salamander: { model: 'raptor', height: 1.25, tint: { Brown: 0x8a2a0a, LightBrown: 0xd86a1a, Black: 0x1a0a04 }, glow: 0x3a0a00, clips: { run: 'Run' } },
   hellhound: { model: 'wolf', height: 1.3, tint: { Main: 0x1a1414, Main_Light: 0x5a1a10, Eyes_Black: 0xff4010 }, glow: 0x2a0600 },

@@ -8,11 +8,17 @@ crab.glb: Crab low poly animated 3D model by methodical pixel (opengameart.org/c
 limule.glb: Swamp Limule by Čestmír Dammer (CDmir) (opengameart.org/content/swamp-limule)
 golem.glb: Lava golem by gavlig (opengameart.org/content/lava-golem)
 raptor.glb: Velociraptor, Animated LowPoly Dinosaurs by Quaternius (quaternius.itch.io/animated-lowpoly-dinosaurs)
-werewolf.glb: Werewolf by br-n518 (opengameart.org/content/werewolf-0)
 forest.glb: Forest Monster by Čestmír Dammer (CDmir) (opengameart.org/content/forest-monster); its body only, without
   the tree on its back (that one used a CC BY-NC-SA texture)
 
 Not CC0 - Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/):
 cobra.glb: "Cobra" by Poly by Google (poly.pizza/m/40_5Xq467-U)
+
+Not CC0 - Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/):
+werewolf.glb: based on "werewolf" (sketchfab.com/3d-models/werewolf-2dd83cb880f047d3bb2085f13e1efc08) by silvercrow101
+  (sketchfab.com/silvercrow101): its body cut to ~10k triangles and split into three colours, and run, attack and death
+  clips added (retargeted from Quaternius' Universal Animation Library, CC0)
+yeti.glb: based on "Yeti" (sketchfab.com/3d-models/yeti-daa4e743128f44c7859c5c34588518a7) by orioltron
+  (sketchfab.com/orioltron): rigged onto the werewolf's skeleton, moving with its clips
 
 Regenerate with tools/scripts/m-assets.mjs.
