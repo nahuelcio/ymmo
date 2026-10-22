@@ -211,6 +211,9 @@ const list: ItemDef[] = [
   // dropped in the Grieta de las Brasas: their grade is the only gear they enchant (server-rs inventory.rs enchant)
   { id: 'scroll_enchant_weapon_c', name: 'Pergamino: Encantar Arma (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado C (solo grado C). Click derecho sobre el arma para usarlo.' },
   { id: 'scroll_enchant_armor_c', name: 'Pergamino: Encantar Armadura (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado C (solo grado C). Click derecho sobre la pieza para usarlo.' },
+  // dropped in the Hondonada de los Aullidos: they only enchant D-grade gear
+  { id: 'scroll_enchant_weapon_d', name: 'Pergamino: Encantar Arma (Grado D)', type: 'consumable', grade: 'D', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado D (solo grado D). Click derecho sobre el arma para usarlo.' },
+  { id: 'scroll_enchant_armor_d', name: 'Pergamino: Encantar Armadura (Grado D)', type: 'consumable', grade: 'D', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado D (solo grado D). Click derecho sobre la pieza para usarlo.' },
   // Materials (vendor trash)
   { id: 'animal_skin', name: 'Cuero de Animal', type: 'material', stack: true, price: 12, icon: '🟫', color: 0x8b6b4b },
   { id: 'animal_bone', name: 'Hueso de Animal', type: 'material', stack: true, price: 10, icon: '🦴', color: 0xeeeedd },

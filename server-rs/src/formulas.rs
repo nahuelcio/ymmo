@@ -316,13 +316,17 @@ mod tests {
         assert!((cast(&[]) / cast(&[&grace.mods]) - 1.15).abs() < 1e-9);
     }
 
-    /// The Grieta de las Brasas' scrolls only enchant their own grade, and a piece of it spends one before a plain scroll.
+    /// The PvP zones' scrolls (C from the Grieta de las Brasas, D from the Hondonada de los Aullidos) only enchant their
+    /// own grade, and a piece of it spends one before a plain scroll.
     #[test]
     fn graded_scrolls_enchant_their_grade() {
         use crate::inventory::pick_scroll;
         let it = |id: &str| d().item(id).unwrap();
         let (w, wc, a) = (it("scroll_enchant_weapon"), it("scroll_enchant_weapon_c"), it("scroll_enchant_armor"));
-        assert_eq!(wc.grade.as_deref(), Some("C"));
+        let wd = it("scroll_enchant_weapon_d");
+        assert_eq!((wc.grade.as_deref(), wd.grade.as_deref()), (Some("C"), Some("D")));
+        assert_eq!(pick_scroll([wc, wd, w].into_iter(), "weapon", Some("D")).unwrap().id, wd.id, "a D piece takes the D scroll");
+        assert_eq!(pick_scroll([wd].into_iter(), "weapon", Some("C")).err(), Some(Some("D")), "never a D scroll on C gear");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "its own grade's first");
         assert_eq!(pick_scroll([wc, w].into_iter(), "weapon", Some("C")).unwrap().id, wc.id, "whatever the bag's order");
         assert_eq!(pick_scroll([w, wc].into_iter(), "weapon", Some("D")).unwrap().id, w.id, "another grade takes the plain one");
@@ -345,9 +349,9 @@ mod tests {
         use crate::terrain::in_pvp_zone;
         assert!(in_pvp_zone(40.0, -800.0)); // the north crossroads
         for t in &d().towns { assert!(!in_pvp_zone(t.x, t.z), "{}", t.name); }
-        // the Encrucijada Sangrienta (76+) and the Grieta de las Brasas (40-48)
+        // the Encrucijada Sangrienta (76+), the Grieta de las Brasas (40-48) and the Hondonada de los Aullidos (22-30)
         let pvp: Vec<_> = d().zones.iter().filter(|z| z.pvp == Some(true)).collect();
-        assert_eq!(pvp.len(), 2);
+        assert_eq!(pvp.len(), 3);
         for zn in pvp {
             assert!(in_pvp_zone(zn.x, zn.z), "{}: its world raid stands in the middle", zn.name);
             let tp = d().teleports.iter().find(|t| t.name.starts_with(&zn.name)).unwrap();
@@ -486,61 +490,76 @@ mod tests {
         assert!((1.0..=1.3).contains(&(mended / auto)), "a divine heal on a wounded tank against one blow: {:.2}", mended / auto);
     }
 
-    /// The Grieta de las Brasas' world raid takes a full party of its levels as the Avatar takes one of 78: a tank, two
-    /// healers through the burns its blows leave, and damage to drop it before the enrage. Measured on level 45 players in
-    /// the dragon set (C) and a level 40 tank in the Ashforged one (D). `cargo test ignaroth -- --nocapture` prints it.
-    #[test]
-    fn ignaroth_needs_a_party() {
+    /// A PvP zone's world raid takes a full party of its levels, as the Avatar takes one of 78: a tank, two healers
+    /// through the damage over time its blows leave (`status`), and damage to drop it before the enrage. Measured on a
+    /// tank and a mage of `level` in the `set` set, and a tank of `weak` in the `weak_set` one; `add` is the add its
+    /// phases call. `cargo test needs_a_party -- --nocapture` prints the tables.
+    fn world_raid_needs_a_party(boss_id: &str, add: &str, status: &str, level: i64, set_id: &str, weak: i64, weak_set: &str) {
         let data = d();
         let gear = |ids: &[&str]| -> Vec<(&ItemDef, i64, bool)> { ids.iter().map(|k| (data.item(k).unwrap(), 0, false)).collect() };
         let set = |s: &str, ks: &[&str]| -> Vec<String> { ks.iter().map(|k| format!("{s}_{k}")).collect() };
         let plate = ["helm", "plate", "gauntlets", "greaves", "boots", "shield", "cape", "ring", "earring", "necklace", "blade"];
         let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
         let build = |cls: &str, lvl: i64, ids: Vec<String>| { let r: Vec<&str> = ids.iter().map(|s| s.as_str()).collect(); compute_stats("human", cls, lvl, &gear(&r), &[], "m") };
-        let tank = build("fighter", 45, set("dragon", &plate));
-        let mage = build("mystic", 45, set("dragon", &robe));
-        let tank40 = build("fighter", 40, set("ashforged", &plate));
-        let boss_def = data.mobs["ignaroth"].clone();
+        let tank = build("fighter", level, set(set_id, &plate));
+        let mage = build("mystic", level, set(set_id, &robe));
+        let tank40 = build("fighter", weak, set(weak_set, &plate));
+        let boss_def = data.mobs[boss_id].clone();
         let boss = mob_stats(&boss_def);
-        let whelp = mob_stats(&data.mobs["ember_whelp"]);
+        let whelp = mob_stats(&data.mobs[add]);
         let share = |p_atk: f64, t: &Stats, mult: f64| 70.0 * p_atk / t.p_def * mult / t.max_hp;
-        // every blow sets its target burning, a tick a second of dot times the blow: a blow and the burn until the next
+        // every blow leaves its damage over time, a tick a second of dot times the blow: a blow and its DoT until the next
         let oh = boss_def.on_hit.as_ref().unwrap();
-        assert_eq!((oh.id.as_str(), oh.chance.unwrap_or(1.0)), ("burn", 1.0), "every blow burns");
+        assert_eq!((oh.id.as_str(), oh.chance.unwrap_or(1.0)), (status, 1.0), "{boss_id}: every blow leaves its {status}");
         let burnt = 1.0 + oh.dot.unwrap() * boss_def.atk_interval / 1000.0;
         let special = boss_def.special.as_ref().unwrap().mult;
         let barrage = boss_def.barrage.as_ref().unwrap().mult;
         let ph50 = boss_def.phases.iter().flatten().find(|p| p.at == 50.0).unwrap();
         let (special50, barrage50) = (ph50.special.as_ref().unwrap().mult, ph50.barrage.as_ref().unwrap().mult);
         let enrage = boss_def.enrage.as_ref().unwrap();
-        println!("tank 45: P.Def {} HP {} | mage 45: P.Def {} HP {} | tank 40: P.Def {} HP {} | boss P.Atk {} HP {}", tank.p_def, tank.max_hp, mage.p_def, mage.max_hp, tank40.p_def, tank40.max_hp, boss.p_atk, boss.max_hp);
-        for (what, p_atk, mult) in [("auto + burn", boss.p_atk, burnt), ("special", boss.p_atk, special), ("special 50%", boss.p_atk, special50), ("barrage", boss.p_atk, barrage),
-                                    ("barrage 50%", boss.p_atk, barrage50), ("enraged auto", boss.p_atk * enrage.atk, 1.0), ("whelp", whelp.p_atk, 1.0)] {
-            println!("{what:>13}: tank {:3.0}%  mage {:3.0}%  tank 40 {:3.0}%", 100.0 * share(p_atk, &tank, mult), 100.0 * share(p_atk, &mage, mult), 100.0 * share(p_atk, &tank40, mult));
+        println!("{boss_id} | tank {level}: P.Def {} HP {} | mage {level}: P.Def {} HP {} | tank {weak}: P.Def {} HP {} | boss P.Atk {} HP {}", tank.p_def, tank.max_hp, mage.p_def, mage.max_hp, tank40.p_def, tank40.max_hp, boss.p_atk, boss.max_hp);
+        for (what, p_atk, mult) in [("auto + dot", boss.p_atk, burnt), ("special", boss.p_atk, special), ("special 50%", boss.p_atk, special50), ("barrage", boss.p_atk, barrage),
+                                    ("barrage 50%", boss.p_atk, barrage50), ("enraged auto", boss.p_atk * enrage.atk, 1.0), ("add", whelp.p_atk, 1.0)] {
+            println!("{what:>13}: tank {:3.0}%  mage {:3.0}%  weak tank {:3.0}%", 100.0 * share(p_atk, &tank, mult), 100.0 * share(p_atk, &mage, mult), 100.0 * share(p_atk, &tank40, mult));
         }
         let auto = share(boss.p_atk, &tank, burnt);
-        assert!((0.3..=0.45).contains(&auto), "a blow and its burn take a real bite of a tank: {auto:.2}");
-        assert!((0.5..=0.75).contains(&share(boss.p_atk, &mage, burnt)), "and a mage cannot take them");
-        assert!(share(boss.p_atk, &tank40, burnt) >= 0.3, "a level 40 tank in D grade feels them too");
-        for m in [special, special50] { assert!(share(boss.p_atk, &tank, m) < 0.8, "its breath hurts the tank, it does not kill it outright"); }
-        for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "a fireball on a mage nearly kills it"); }
-        assert!((0.1..=0.2).contains(&share(whelp.p_atk, &mage, 1.0)), "a pack of whelps kills a healer left alone");
-        assert!(share(boss.p_atk * enrage.atk, &tank, 1.0) >= 1.0, "enraged, it kills a tank in a blow");
-        // its blows land fast: a cleric healing the tank with both its heals on cooldown falls behind, two keep up
-        let heals: f64 = ["divine_heal", "restoration"].iter().map(|id| { let s = data.skill(id).unwrap(); heal_amount(s.power, mage.m_atk) / tank.max_hp / (s.cooldown / 1000.0) }).sum();
+        assert!((0.3..=0.45).contains(&auto), "{boss_id}: a blow and its {status} take a real bite of a tank: {auto:.2}");
+        assert!((0.5..=0.75).contains(&share(boss.p_atk, &mage, burnt)), "{boss_id}: and a mage cannot take them");
+        assert!(share(boss.p_atk, &tank40, burnt) >= 0.3, "{boss_id}: a level {weak} tank in {weak_set} feels them too");
+        for m in [special, special50] { assert!(share(boss.p_atk, &tank, m) < 0.8, "{boss_id}: its special hurts the tank, it does not kill it outright"); }
+        for m in [barrage, barrage50] { assert!((0.7..=0.95).contains(&share(boss.p_atk, &mage, m)), "{boss_id}: a circle on a mage nearly kills it"); }
+        assert!((0.1..=0.2).contains(&share(whelp.p_atk, &mage, 1.0)), "{boss_id}: a pack of its adds kills a healer left alone");
+        assert!(share(boss.p_atk * enrage.atk, &tank, 1.0) >= 1.0, "{boss_id}: enraged, it kills a tank in a blow");
+        // its blows land fast: a cleric healing the tank with its two strongest heals of that level on cooldown falls
+        // behind, two keep up
+        let mut cures: Vec<_> = data.skills.iter()
+            .filter(|s| s.kind == "heal" && s.target == "friend" && s.aoe.is_none() && s.level <= level
+                && (s.spec.as_deref() == Some("cleric") || (s.spec.is_none() && s.cls.as_deref() == Some("mystic"))))
+            .collect();
+        cures.sort_by(|a, b| b.power.partial_cmp(&a.power).unwrap());
+        let heals: f64 = cures.iter().take(2).map(|s| heal_amount(s.power, mage.m_atk) / tank.max_hp / (s.cooldown / 1000.0)).sum();
         let taken = auto / (boss_def.atk_interval / 1000.0);
         println!("one cleric heals {:.0}% of the tank a second, the boss takes {:.0}%", 100.0 * heals, 100.0 * taken);
-        assert!((0.6..=0.9).contains(&(heals / taken)), "one cleric against its blows and burns: {:.2}", heals / taken);
+        assert!((0.6..=0.9).contains(&(heals / taken)), "{boss_id}: one cleric against its blows and their {status}: {:.2}", heals / taken);
         // and it takes a party to drop it before the enrage: a fighter's blows and skills, about twice its auto-attack's
         // damage, crits counted; the tank swings too, the healers do not
         let dps = |s: &Stats, skills: f64| 70.0 * s.p_atk / boss.p_def * (1.0 + s.crit / 100.0) * skills / (s.atk_interval / 1000.0);
-        let dealer = build("fighter", 45, set("dragon", &["helm", "plate", "gauntlets", "greaves", "boots", "cape", "ring", "earring", "necklace", "blade"]));
+        let dealer = build("fighter", level, set(set_id, &["helm", "plate", "gauntlets", "greaves", "boots", "cape", "ring", "earring", "necklace", "blade"]));
         let secs = |dealers: f64| boss.max_hp / (dealers * dps(&dealer, 2.0) + dps(&tank, 1.0));
         let (full, four) = (secs(6.0), secs(2.0));
         println!("a party of 9 (6 dealers): {full:.0} s | of 4 (2 dealers): {four:.0} s | enrage at {} s", enrage.after / 1000.0);
-        assert!((300.0..=480.0).contains(&full), "a full party drops it in 5 to 8 minutes: {full:.0} s");
-        assert!(four > enrage.after / 1000.0, "four players meet the enrage first: {four:.0} s");
+        assert!((300.0..=480.0).contains(&full), "{boss_id}: a full party drops it in 5 to 8 minutes: {full:.0} s");
+        assert!(four > enrage.after / 1000.0, "{boss_id}: four players meet the enrage first: {four:.0} s");
     }
+
+    /// The Grieta de las Brasas' (40-48, C grade): level 45 players in the dragon set, a level 40 tank in the Ashforged one.
+    #[test]
+    fn ignaroth_needs_a_party() { world_raid_needs_a_party("ignaroth", "ember_whelp", "burn", 45, "dragon", 40, "ashforged"); }
+
+    /// The Hondonada de los Aullidos' (22-30, D grade): level 27 players in the Ashforged set, a level 22 tank in the
+    /// Abyssal one.
+    #[test]
+    fn lycan_king_needs_a_party() { world_raid_needs_a_party("lycan_king", "pack_lycan", "bleed", 27, "ashforged", 22, "abyssal"); }
 
     /// A same-level plain mob has to matter at every level, not only in the newbie zones: mob_stats' cubic P.Atk keeps up
     /// with a player's P.Def times HP. Measured on a human tank in its grade's plate and a mage in its robe, +0, at every

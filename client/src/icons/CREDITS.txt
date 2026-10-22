@@ -77,3 +77,6 @@ item: bow <- delapouite/bow-arrow, hood <- lorc/cowled, jerkin <- delapouite/sle
 Added for the Grieta de las Brasas (same source and licence), file <- original:
 item: scroll_enchant_weapon_c, scroll_enchant_armor_c <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
 status: burn <- lorc/burning-embers (the ember_shard drawing)
+
+Added for the Hondonada de los Aullidos (same source and licence), file <- original:
+item: scroll_enchant_weapon_d, scroll_enchant_armor_d <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)

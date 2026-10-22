@@ -47,6 +47,8 @@ const SKIES: Record<string, SkyPal> = {
   nest: { top: 0x3a2438, horizon: 0x9a6a6a, ground: 0x2a1c22, sun: 0xff9a70, sunI: 1.7, hemi: 1.0, cloud: 0x7a5058 },
   // the Grieta de las Brasas: smoke over the embers
   ember_rift: { top: 0x3a1c18, horizon: 0xb06a48, ground: 0x2e1a12, sun: 0xff8a50, sunI: 1.8, hemi: 1.1, cloud: 0x6a4038, near: 0.1 },
+  // the Hondonada de los Aullidos: a moonlit hollow
+  howling_hollow: { top: 0x1e2438, horizon: 0x6a7488, ground: 0x24282a, sun: 0xc8d4ff, sunI: 1.3, hemi: 1.0, cloud: 0x4a5266, near: 0.12 },
   // whole regions (biomeWeight), so their towns and the land between zones get the sky too
   dusk: { top: 0x3a7ad8, horizon: 0xe2ddd0, ground: 0x5a4a30, sun: 0xffe2b0, sunI: 2.5, hemi: 1.6, cloud: 0xfff4e8 },
   heart: { top: 0x3a84d0, horizon: 0xc4e0d0, ground: 0x3a5a30, sun: 0xfff4d0, sunI: 2.6, hemi: 1.7, cloud: 0xffffff, near: 0.3 },

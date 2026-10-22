@@ -58,6 +58,11 @@ export const ZONES: ZoneDef[] = [
   // share one random sequence, so the zones before it keep theirs
   { id: 'ember_rift', name: 'Grieta de las Brasas', x: 800, z: -280, r: 140, levels: '40-48', tint: [0.46, 0.24, 0.14], pvp: true,
     spawns: [{ mob: 'cinder_drakeling', count: 12 }, { mob: 'flame_zealot', count: 12 }, { mob: 'scorched_golem', count: 10 }, { mob: 'ignaroth', count: 1 }] },
+  // full PvP for the D grade, between the Bastión del Ocaso and the Ruinas Hundidas: passive creatures that drop the
+  // Ashforged set's materials and the D-grade scrolls, and the Lycan King's den in the middle. Last in the list, for the
+  // same reason as the rift
+  { id: 'howling_hollow', name: 'Hondonada de los Aullidos', x: -40, z: 300, r: 140, levels: '22-30', tint: [0.3, 0.32, 0.3], pvp: true,
+    spawns: [{ mob: 'dire_wolf', count: 12 }, { mob: 'moon_cultist', count: 12 }, { mob: 'ghoul', count: 10 }, { mob: 'lycan_king', count: 1 }] },
 ];
 
 /** Inside a full-PvP zone. */
@@ -133,6 +138,8 @@ export const TELEPORTS = [
   { id: 'wastes', name: 'Páramos Malditos (Nv 15-20)', ...drop('wastes'), cost: 2500 },
   { id: 'coast', name: 'Costa Abandonada (Nv 20-25)', ...drop('coast'), cost: 5000 },
   { id: 'ruins', name: 'Ruinas Hundidas (Nv 25-30)', ...drop('ruins'), cost: 8000 },
+  // just outside its edge, toward the Bastión del Ocaso: nobody lands flagged
+  { id: 'howling_hollow', name: 'Hondonada de los Aullidos (PvP, Nv 22+)', x: 33, z: 442, cost: 10000 },
   { id: 'steppes', name: 'Estepas Ardientes (Nv 30-35)', ...drop('steppes'), cost: 12000 },
   { id: 'citadel', name: 'Ciudadela Orca (Nv 35-40)', ...drop('citadel'), cost: 16000 },
   { id: 'valley', name: 'Valle del Dragón (Nv 40-45)', ...drop('valley'), cost: 22000 },
