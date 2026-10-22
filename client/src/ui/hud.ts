@@ -527,19 +527,7 @@ export class Hud {
       s.ondragover = (e) => e.preventDefault();
       s.ondrop = (e) => {
         e.preventDefault();
-        const d = this.drag, bars = this.st?.bars;
-        if (!d || !bars) return;
-        const here = bars[b][i];
-        if (d.from) [bars[d.from.b][d.from.i], bars[b][i]] = [here, bars[d.from.b][d.from.i]];
-        else if (d.slot) {
-          // already on a bar somewhere else: that slot takes what was here
-          for (const row of bars) {
-            const at = row.findIndex((x) => x?.id === d.slot!.id);
-            if (at >= 0) row[at] = here;
-          }
-          bars[b][i] = d.slot;
-        }
-        this.saveBar();
+        if (this.drag) this.placeOnBar(b, i, this.drag);
       };
       s.oncontextmenu = (e) => {
         e.preventDefault();
@@ -555,6 +543,33 @@ export class Hud {
       out.push(s);
     }
     return out;
+  }
+
+  /** Drop on slot i of bar b: another slot's content (the two swap), or a skill or item - already on a bar somewhere
+   * else, that slot takes what was here. The desktop's drag and drop and the touch drag (ui/bardrag.ts) both land here. */
+  placeOnBar(b: number, i: number, d: { from?: { b: number; i: number }; slot?: Slot }) {
+    const bars = this.st?.bars;
+    if (!bars) return;
+    const here = bars[b][i];
+    if (d.from) [bars[d.from.b][d.from.i], bars[b][i]] = [here, bars[d.from.b][d.from.i]];
+    else if (d.slot) {
+      for (const row of bars) {
+        const at = row.findIndex((x) => x?.id === d.slot!.id);
+        if (at >= 0) row[at] = here;
+      }
+      bars[b][i] = d.slot;
+    }
+    this.saveBar();
+  }
+
+  /** The bar slot on screen under a point (a phone shows one bar at a time: only its slots), for a touch drag ending there. */
+  slotUnder(x: number, y: number): { b: number; i: number; el: HTMLDivElement } | null {
+    const hit = document.elementFromPoint(x, y)?.closest('.slot');
+    for (let b = 0; b < this.slotEls.length; b++) {
+      const i = this.slotEls[b].indexOf(hit as HTMLDivElement);
+      if (i >= 0) return { b, i, el: this.slotEls[b][i] };
+    }
+    return null;
   }
 
   /** The layout the server kept; failing that, the one this browser used to keep (moved to the server); or none yet. */

@@ -606,6 +606,15 @@ input { font: inherit; user-select: text; }
 .touch .shortcuts[data-page='1'] .bar-row[data-bar='1'], .touch .shortcuts[data-page='2'] .bar-row[data-bar='2'] { display: contents !important; }
 .touch .bar-toggle, .touch .bar-num { display: none; }
 
+/* ---------- touch: dragging an item or a skill to the bar (ui/bardrag.ts): the windows fade out of its way and let the
+   finger reach the bar under them, the slots show where it can go, the picture rides just above the finger ---------- */
+/* (#ui > * turns pointer events on for every top-level block: this has to outrank it) */
+.touch.bar-dragging #ui > .win, .touch.bar-dragging .win, .touch.bar-dragging .ctx-menu { opacity: 0.12; pointer-events: none; transition: opacity 0.15s; }
+.touch.bar-dragging .shortcuts .slot { outline: 2px dashed rgba(232, 207, 138, 0.75); outline-offset: -2px; }
+.touch .shortcuts .slot.drop-target { outline: 2px solid var(--gold); box-shadow: 0 0 14px rgba(232, 207, 138, 0.9); }
+.bar-ghost { position: fixed; z-index: 2000; width: 54px; height: 54px; pointer-events: none; transform: translate(-50%, -115%); opacity: 0.92;
+  border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7); }
+
 /* ---------- folding (any screen; ui/hud.ts foldable): a tap on the title leaves just the title ---------- */
 .fold-head { cursor: pointer; }
 .quest-head.fold-head::after, .party-title::after { content: ' ▾'; font-size: 10px; opacity: 0.7; }
