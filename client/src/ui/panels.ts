@@ -12,6 +12,7 @@ import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
 import { isTouchDevice } from './touch';
+import { touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
@@ -211,6 +212,7 @@ export class InventoryPanel {
         cell.draggable = true;
         cell.ondragstart = () => (hideTip(), (g.ui.hud.drag = { slot: { type: 'item', id: it.i } }));
         cell.ondragend = () => (g.ui.hud.drag = null);
+        touchBarDrag(g, cell, () => ({ type: 'item', id: it.i }), () => itemIcon(it.i)); // phones: a long press and a drag
       }
       const slot = ITEMS[it.i].slot;
       if (slot) {
@@ -287,6 +289,7 @@ export class CharacterPanel {
         row.draggable = true;
         row.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
         row.ondragend = () => (this.g.ui.hud.drag = null);
+        touchBarDrag(this.g, row, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
       }
     }
     // what the spec awakens into at level 76, and how
