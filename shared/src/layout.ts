@@ -322,7 +322,8 @@ export function layoutZoneProps(): ZonePropsL {
 
 export interface CampL {
   camp: CampDef;
-  tents: { x: number; z: number; rot: number }[];
+  /** ry: the way the door faces, towards the fire (forward is (sin ry, cos ry)) */
+  tents: { x: number; z: number; rot: number; ry: number }[];
   walls: { x: number; z: number; rot: number }[];
   fire: { x: number; z: number };
   banner: { x: number; z: number };
@@ -336,7 +337,7 @@ export function layoutCamps(): CampL[] {
     const rng = mulberry32(camp.x * 31 + camp.z);
     const tents = [0, 1, 2].map((i) => {
       const a = (i / 3) * Math.PI * 2 + rng() * 0.5;
-      return { x: camp.x + Math.cos(a) * 9, z: camp.z + Math.sin(a) * 9, rot: -a };
+      return { x: camp.x + Math.cos(a) * 9, z: camp.z + Math.sin(a) * 9, rot: -a, ry: Math.atan2(-Math.cos(a), -Math.sin(a)) };
     });
     const walls: CampL['walls'] = [];
     for (let i = 0; i < 12; i++) {
