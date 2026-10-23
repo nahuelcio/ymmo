@@ -224,16 +224,20 @@ function avgColor(tex: THREE.Texture): THREE.Color {
   return new THREE.Color().setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
 }
 
+/** The joint that moves vertex `v` the most. */
+function strongest(geo: THREE.BufferGeometry, v: number): string {
+  const si = geo.getAttribute('skinIndex'), sw = geo.getAttribute('skinWeight');
+  let best = 0, bw = -1;
+  for (let k = 0; k < 4; k++) if (sw.getComponent(v, k) > bw) { bw = sw.getComponent(v, k); best = si.getComponent(v, k); }
+  return joints[best];
+}
+
 /** The outfits cover the body: keep only the triangles of the base mesh that follow the head and neck. */
 /** Keep only the triangles touching a vertex whose strongest joint `keep` accepts (or, with `all`, only those whose
  * every vertex it accepts). */
 function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean, all = false) {
-  const si = geo.getAttribute('skinIndex'), sw = geo.getAttribute('skinWeight'), idx = geo.index!;
-  const ok = (v: number) => {
-    let best = 0, bw = -1;
-    for (let k = 0; k < 4; k++) if (sw.getComponent(v, k) > bw) { bw = sw.getComponent(v, k); best = si.getComponent(v, k); }
-    return keep(joints[best]);
-  };
+  const idx = geo.index!;
+  const ok = (v: number) => keep(strongest(geo, v));
   const out: number[] = [];
   for (let i = 0; i < idx.count; i += 3) {
     const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
@@ -250,6 +254,87 @@ const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
   legs: (j) => /^(pelvis|thigh|calf)/.test(j),
   feet: (j) => /^(foot|ball)/.test(j),
 };
+const isNeckline = (j: string) => j === 'neck_01' || j === 'spine_03' || j === 'clavicle_l' || j === 'clavicle_r';
+/**
+ * The skin a tunic's open collar shows: the peasant tunic has a V there and no skin of its own (the kit expects the bare
+ * body under it), and the head piece stops at the neck. Keeps the triangles of the base body's chest that reach into
+ * the opening: in front of the neck, above its lower edge (the tunic's free edges, from its own mesh), with a centimetre
+ * to spare to each side and below, so the skin tucks under the cloth's edge. Not the chest the tunic covers, where it
+ * would show through. Both are measured at rest (their positions are quantized: the bones scale them into place).
+ */
+function neckline(body: THREE.SkinnedMesh, tunic: THREE.SkinnedMesh) {
+  const v = new THREE.Vector3(), bg = body.geometry, n = bg.getAttribute('position').count;
+  // the body's neck: its lowest point, and its middle front to back
+  let low = Infinity, z = 0, k = 0;
+  for (let i = 0; i < n; i++) {
+    if (strongest(bg, i) !== 'neck_01') continue;
+    body.getVertexPosition(i, v);
+    low = Math.min(low, v.y);
+    z += v.z;
+    k++;
+  }
+  z /= k;
+  // the tunic's free edges (welded first: the export splits its vertices at seams)
+  const tg = tunic.geometry, ti = tg.index!, at: THREE.Vector3[] = [], key: string[] = [];
+  for (let i = 0; i < tg.getAttribute('position').count; i++) {
+    const p = tunic.getVertexPosition(i, new THREE.Vector3());
+    at.push(p);
+    key.push(`${p.x.toFixed(4)},${p.y.toFixed(4)},${p.z.toFixed(4)}`);
+  }
+  const uses = new Map<string, [number, number, number]>();
+  for (let i = 0; i < ti.count; i += 3) for (let e = 0; e < 3; e++) {
+    const a = ti.getX(i + e), b = ti.getX(i + ((e + 1) % 3)), ek = key[a] < key[b] ? `${key[a]}|${key[b]}` : `${key[b]}|${key[a]}`;
+    const u = uses.get(ek);
+    if (u) u[2]++;
+    else uses.set(ek, [a, b, 1]);
+  }
+  // the collar's lowest edge in front, every 5 mm across
+  const BIN = 0.005, edgeY = new Map<number, number>();
+  let wide = 0;
+  for (const [a, b, c] of uses.values()) {
+    if (c !== 1) continue;
+    for (const p of [at[a], at[b]]) {
+      if (p.z <= z || p.y < low - 0.15 || Math.abs(p.x) > 0.15) continue;
+      const bin = Math.floor(Math.abs(p.x) / BIN);
+      edgeY.set(bin, Math.min(edgeY.get(bin) ?? Infinity, p.y));
+      wide = Math.max(wide, Math.abs(p.x));
+    }
+  }
+  const edgeAt = (ax: number) => {
+    for (let bin = Math.floor(ax / BIN); bin >= 0; bin--) if (edgeY.has(bin)) return edgeY.get(bin)!;
+    return Infinity;
+  };
+  /** how far (m) vertex i lies under the opening's edge, beside it: negative inside the opening */
+  const below = (i: number) => {
+    body.getVertexPosition(i, v);
+    const ax = Math.abs(v.x);
+    return v.z <= z || ax > wide + 0.02 ? Infinity : edgeAt(Math.max(0, ax - 0.01)) - v.y;
+  };
+  // every corner on the chest's joints and at most 2.5 cm under the edge, and one in the opening or within a centimetre
+  // of it (the V is narrower than a triangle at its point; the cloth lies close on the chest under it)
+  const idx = bg.index!, out: number[] = [];
+  for (let i = 0; i < idx.count; i += 3) {
+    const t = [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)];
+    if (!t.every((c) => isNeckline(strongest(bg, c)))) continue;
+    const d = t.map(below);
+    if (Math.max(...d) < 0.025 && Math.min(...d) < 0.01) out.push(...t);
+  }
+  bg.setIndex(out);
+  // sunk 6 mm under the skin's surface, along its normals: where a triangle reaches past the opening's edge, the cloth
+  // lying close over it would otherwise let it show through; in the opening, a few millimetres deeper looks the same.
+  // The positions are quantized, so first how many metres one of their units is (the bones scale them uniformly)
+  const pos = bg.getAttribute('position'), nor = bg.getAttribute('normal'), far = new THREE.Vector3(), r0 = new THREE.Vector3();
+  r0.fromBufferAttribute(pos, 0);
+  let fi = 0;
+  for (let i = 1; i < n; i++) if (far.fromBufferAttribute(pos, i).distanceToSquared(r0) > far.fromBufferAttribute(pos, fi).distanceToSquared(r0)) fi = i;
+  const metres = body.getVertexPosition(fi, new THREE.Vector3()).distanceTo(body.getVertexPosition(0, v)) / far.fromBufferAttribute(pos, fi).distanceTo(r0);
+  const sunk = new Float32Array(n * 3), dn = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    dn.fromBufferAttribute(nor, i).normalize().multiplyScalar(0.006 / metres);
+    v.fromBufferAttribute(pos, i).sub(dn).toArray(sunk, i * 3);
+  }
+  bg.setAttribute('position', new THREE.BufferAttribute(sunk, 3));
+}
 
 let gearLoader: GLTFLoader | null = null;
 const gearLoading = new Set<GearFile>();
@@ -384,6 +469,7 @@ export function loadQ(): Promise<void> {
         if (mat.map && !(avg instanceof THREE.Color)) mat.map.userData.avg = avg ? new THREE.Color().setRGB(avg[0], avg[1], avg[2], THREE.SRGBColorSpace) : avgColor(mat.map);
         return { geo: m.geometry, tex: mat.map, kind, fam, bind, morphs: m.morphTargetDictionary };
       }));
+    const tunics: Partial<Record<'m' | 'f', THREE.SkinnedMesh>> = {};
     FILES.forEach((file, i) => {
       const meshes: THREE.SkinnedMesh[] = [];
       gltfs[i].scene.traverse((o) => {
@@ -392,6 +478,7 @@ export function loadQ(): Promise<void> {
       if (!joints.length) joints = meshes[0].skeleton.bones.map((b) => b.name);
       collect(file, meshes);
       if (file.endsWith('Peasant_Body')) {
+        tunics[file.startsWith('Female') ? 'f' : 'm'] = meshes[0]; // its collar, for the skin it shows (neckline)
         for (const m of meshes) m.removeFromParent();
         armature[file.startsWith('Female') ? 'f' : 'm'] = gltfs[i].scene; // what is left is the bone hierarchy
       }
@@ -404,6 +491,9 @@ export function loadQ(): Promise<void> {
     if (clips.Punch_Jab) clips.Punch_Jab_M = mirrorClip(clips.Punch_Jab, armature.m!, 'Punch_Jab_M');
     if (clips.Spell_Simple_Idle_Loop) clips.Spell_Simple_Idle_Loop_M = mirrorClip(clips.Spell_Simple_Idle_Loop, armature.m!, 'Spell_Simple_Idle_Loop_M');
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
+    // the bones at rest, for measuring the body and the tunic's collar (neckline)
+    heads.scene.updateMatrixWorld(true);
+    armature.f!.updateMatrixWorld(true);
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
       for (const part of ['top', 'legs', 'feet'] as const) {
@@ -412,6 +502,11 @@ export function loadQ(): Promise<void> {
         trim(m.geometry, SUIT[part], true);
         collect(`Suit_${part}_${g}`, [m]);
       }
+      // the skin under an open collar, cut from the body before the head piece trims it to the neck
+      const b = get('body'), neck = new THREE.SkinnedMesh(b.geometry.clone(), b.material);
+      neck.bind(b.skeleton, b.bindMatrix);
+      neckline(neck, tunics[g]!);
+      collect(`Neck_${g}`, [neck]);
       collect(`Head_${g}`, [get('body'), get('eyes'), get('brows')], true);
       const t = (tusks[g] = get('tusks'));
       t.material = new THREE.MeshLambertMaterial({ color: 0xf0ecd8 });
@@ -1034,7 +1129,7 @@ export function qPlayer(o: QOpts): Rig {
       m.castShadow = true;
       m.frustumCulled = false; // the bounding sphere is the bind pose's; the game culls whole entities itself
       body.add(m);
-      if (!/^(Head_|Hair_)/.test(file)) worn.push(m);
+      if (!/^(Head_|Neck_|Hair_)/.test(file)) worn.push(m);
     }
   };
   const S = SEX[o.g];
@@ -1042,6 +1137,8 @@ export function qPlayer(o: QOpts): Rig {
     p.kind === 'skin' ? (hands !== undefined ? [new THREE.Color(hands).multiplyScalar(0.55).getHex(), 0, false] : [o.skin, 0, false]) : [z.dye, 0.85, !!z.glow];
   const kit = (z: QZone) => (z.ranger ? 'Ranger' : 'Peasant');
   add(`Head_${o.g}`, (p) => (p.kind === 'skin' ? [o.skin, 0, false] : p.kind === 'hair' ? [o.hair, 0.9, false] : [undefined, 0, false]));
+  // the skin in a tunic's V (any closed top hides it); not under a set's bare body, which already has that skin, dyed
+  if (!(o.suit !== undefined && o.noTop)) add(`Neck_${o.g}`, () => [o.skin, 0, false]);
   if (o.suit !== undefined) {
     const suit = (): [number, number, boolean] => [o.suit!, 0.9, false];
     if (o.noTop) add(`Suit_top_${o.g}`, suit);
