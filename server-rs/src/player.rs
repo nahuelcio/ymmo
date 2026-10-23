@@ -1,8 +1,19 @@
 //! Per-tick player update: regen, buffs, escape, casting, intents (port of server/src/systems/player.ts).
 use crate::ent::*;
 use crate::formulas::{BOW_RANGE, MELEE_RANGE};
-use crate::data::d;
+use crate::data::{d, NodeKind};
 use crate::world::World;
+
+/** HP and MP regen, times the base rate: slowed in combat (5 s since the last blow either way), faster sitting down,
+ * fastest resting in a tent (as in L2). `sitting` is the seat or tent node, 0 on the ground. */
+pub fn regen_mul(in_combat: bool, sitting: Option<u32>) -> f64 {
+    if in_combat { return 0.6; }
+    match sitting {
+        None => 1.5,
+        Some(s) if d().nodes.get(&s).map_or(false, |n| n.kind == NodeKind::Tent) => 1.5 * d().c.tent_regen,
+        Some(_) => 1.5 * d().c.sit_regen,
+    }
+}
 
 impl World {
     pub fn update_player(&mut self, pid: u32, dt: f64, now: f64) {
@@ -13,8 +24,7 @@ impl World {
         let (px, pz) = (e.c.x, e.c.z);
         let p = e.player_mut().unwrap();
         let s = p.stats.clone();
-        // sitting down out of combat recovers much faster (as in L2)
-        let regen = if now - p.last_combat < 5000.0 { 0.6 } else if p.sitting.is_some() { 1.5 * 2.5 } else { 1.5 };
+        let regen = regen_mul(now - p.last_combat < 5000.0, p.sitting);
         p.hp = (p.hp + s.hp_regen * dt * regen * wound).min(s.max_hp);
         p.mp = (p.mp + s.mp_regen * dt * regen).min(s.max_mp);
         p.cp = (p.cp + s.cp_regen * dt).min(s.max_cp);

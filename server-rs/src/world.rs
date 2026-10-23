@@ -117,7 +117,11 @@ impl World {
     pub fn remove(&mut self, id: u32) -> Option<Ent> {
         let e = self.ents.remove(&id)?;
         if let Some(c) = self.grid.get_mut(&e.c.cell) { c.retain(|&x| x != id); }
-        if matches!(e.k, Kind::Player(_)) { self.players.retain(|&x| x != id); }
+        if matches!(e.k, Kind::Player(_)) {
+            self.players.retain(|&x| x != id);
+            // a seat or tent they were in is free again (leaving the world never got them up)
+            self.seats.retain(|_, &mut p| p != id);
+        }
         Some(e)
     }
 

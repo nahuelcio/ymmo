@@ -602,6 +602,23 @@ mod tests {
         world_raid_needs_a_party("skeleton_king", "risen_skeleton", "bleed", 17, best, 12, starter);
     }
 
+    /// Resting out of combat: sitting down (on the ground or a bench) recovers 2.5 times faster than standing, a tent 4
+    /// times (1.6 times a seat); a fight slows it all. The travelers' tents are there to rest in.
+    #[test]
+    fn tents_rest_better_than_sitting() {
+        use crate::data::NodeKind;
+        use crate::player::regen_mul;
+        let data = d();
+        let of = |k: NodeKind| data.nodes.iter().filter(|(_, n)| n.kind == k).map(|(&id, _)| id).collect::<Vec<_>>();
+        let (tents, seats) = (of(NodeKind::Tent), of(NodeKind::Seat));
+        assert!(tents.len() >= 50, "tents to rest in by the roads: {}", tents.len());
+        let (fight, stand, ground, bench, rest) =
+            (regen_mul(true, Some(tents[0])), regen_mul(false, None), regen_mul(false, Some(0)), regen_mul(false, Some(seats[0])), regen_mul(false, Some(tents[0])));
+        assert!(fight < stand && stand < ground && ground == bench && bench < rest, "{fight} {stand} {ground} {bench} {rest}");
+        assert!((rest / bench - 1.6).abs() < 1e-9, "a tent is 1.6 seats: {}", rest / bench);
+        assert_eq!(rest / stand, 4.0);
+    }
+
     /// Ymirak's Congelación slows like a slow (and deals damage over time like a bleed, through tick_statuses).
     #[test]
     fn frostbite_slows() {

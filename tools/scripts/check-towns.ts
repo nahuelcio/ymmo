@@ -13,12 +13,20 @@ import { heightAt, landAt, PLAYABLE_HALF, regionAt, REGIONS, ROAD_SEGS, SWIM_Y, 
 import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
 import { RAIDS } from '../../shared/src/data/raids';
+import { layoutZoneProps } from '../../shared/src/layout';
+import { allNodes, NODE_BASE } from '../../shared/src/nodes';
 
 const dry = (x: number, z: number) => landAt(x, z) > 0.9 && heightAt(x, z) > WATER_LEVEL + 1;
 for (const p of [...TOWNS, ...ZONES]) assert.ok(dry(p.x, p.z), `${p.name} centre is not dry land`);
 for (const p of [...NPCS, ...CAMPS]) assert.ok(heightAt(p.x, p.z) > WATER_LEVEL, `${p.id} stands in water`);
 for (const t of TELEPORTS) assert.ok(heightAt(t.x, t.z) > SWIM_Y, `teleport ${t.id} drops into deep water`);
 for (const r of Object.values(RAIDS)) assert.ok(heightAt(r.entry.x, r.entry.z) > SWIM_Y, `raid ${r.id} entry in deep water`);
+// every travelers' (and orc barracks') tent can be rested in: its door is dry and clear of anything solid (nodes.ts)
+{
+  const tents = layoutZoneProps().tents, doors = new Set(allNodes().filter((n) => n.kind === 'tent').map((n) => n.id - NODE_BASE.tent));
+  const shut = tents.map((t, i) => (doors.has(i) ? null : `(${t.x.toFixed(0)}, ${t.z.toFixed(0)})`)).filter(Boolean);
+  assert.deepEqual(shut, [], `tents whose door is wet or blocked`);
+}
 for (const zn of ZONES) {
   let ok = 0, n = 0;
   for (let a = 0; a < 24; a++) for (const k of [0.3, 0.6, 0.9]) (n++, (ok += +dry(zn.x + Math.cos(a / 3.82) * zn.r * k, zn.z + Math.sin(a / 3.82) * zn.r * k)));
