@@ -1525,10 +1525,10 @@ function buildCamps(): { props: THREE.Group; flames: THREE.Group } {
   for (const c of layoutCamps()) {
     const y0 = (x: number, z: number) => heightAt(x, z);
     for (const t of c.tents) {
-      // the door where the old cone's flap was (-cos rot, sin rot); a little smaller, inside its 2.3 m obstacle
+      // the door towards the fire; a little smaller, inside its 2.3 m obstacle
       const tent = tentModel(CAMP_CANVAS, 0.88);
       tent.position.set(t.x, y0(t.x, t.z), t.z);
-      tent.rotation.y = Math.atan2(-Math.cos(t.rot), Math.sin(t.rot));
+      tent.rotation.y = t.ry;
       g.add(tent);
     }
     for (const w of c.walls) {
