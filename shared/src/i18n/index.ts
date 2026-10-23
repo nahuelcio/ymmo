@@ -8,7 +8,7 @@ import { NPCS, TELEPORTS, ZONES } from '../data/world';
 import { CLASSES, GENDERS, HAIR_STYLES, RACES, SPECS, type ClassType, type Gender, type Race, type Spec } from '../data/classes';
 import { CAMP_BY_ID } from '../data/camps';
 import { STATUSES, type StatusId } from '../status';
-import { DUSK, EMBER, FROST, REED, TOWN } from '../terrain';
+import { DUSK, EMBER, FROST, REED, SCALE, TOWN } from '../terrain';
 import { EN } from './en';
 
 export type Lang = 'es' | 'en';
@@ -65,6 +65,7 @@ export function zoneName(es: string, l: Lang): string {
   if (es === FROST.name) return en.zones.frost;
   if (es === REED.name) return en.zones.reed;
   if (es === EMBER.name) return en.zones.ember;
+  if (es === SCALE.name) return en.zones.scale;
   const raid = Object.values(RAIDS).find((r) => r.name === es);
   if (raid) return raid.nameEn;
   const z = ZONES.find((zz) => zz.name === es);

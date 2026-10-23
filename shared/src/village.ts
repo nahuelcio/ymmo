@@ -1,7 +1,7 @@
 // Quaternius Medieval Village pieces, snapped to a 2 m grid. Shared so the client
 // draws the same footprints the server collides with. Pieces are named glTF files
 // in client/public/v (scripts/v-assets.ts). Y is up; a wall is 2 m wide and 3 m tall.
-import { DUSK, EMBER, FROST, REED, roadLegs, TOWN } from './terrain';
+import { DUSK, EMBER, FROST, REED, roadLegs, SCALE, TOWN } from './terrain';
 
 export const CELL = 2;
 /** Wall top, where roofs and chimneys sit. */
@@ -699,8 +699,23 @@ const EMBER_FORT = ringFort({
   smith: 'ember_weapons', alchemist: 'ember_grocer',
 });
 
+/** Fuerte Escama (levels 40-50): warm ochre stone, plaster and dark crimson tile at the crossroads of the Dragon lands,
+ * a gate on each of its four roads (the Bastión, the north, the Valle and the Nido). */
+const SCALE_FORT = ringFort({
+  id: 'scale', town: SCALE, roads: roadLegs(SCALE),
+  stone: 0xa88a64, wall: 0xb89a74, roof: 0x7a2a1e,
+  tint: { wall: 0xd8c098, roof: 0x8a2e20, wood: 0x6a4a30 }, tintAlt: { wall: 0xc8b08a, roof: 0x6e2418, wood: 0x5a3e28 },
+  buildings: [
+    { id: 's-hall', w: 6, d: 8, kind: 'hall' }, { id: 's-smithy', w: 6, d: 4, kind: 'smithy' }, { id: 's-1', w: 4, d: 4, brick: false },
+    { id: 's-2', w: 6, d: 4 }, { id: 's-3', w: 4, d: 4, brick: false }, { id: 's-4', w: 4, d: 4 },
+    { id: 's-5', w: 6, d: 4, brick: false }, { id: 's-6', w: 4, d: 4 },
+  ],
+  folk: ['scale_weapons', 'scale_armor', 'scale_grocer', 'scale_gate', 'scale_clan', 'darian', 'lysandra', 'gorm'],
+  smith: 'scale_weapons', alchemist: 'scale_grocer',
+});
+
 /** The Bastión and the ring's forts. */
-export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT, REED_FORT, EMBER_FORT];
+export const FORTS: Fort[] = [DUSK_FORT, FROST_FORT, REED_FORT, EMBER_FORT, SCALE_FORT];
 export const fortById = (id: string) => FORTS.find((f) => f.id === id)!;
 /** A fort resident's spot and facing (shared/src/data/world.ts). */
 export function fortFolk(id: string): { x: number; z: number; ry: number } {
