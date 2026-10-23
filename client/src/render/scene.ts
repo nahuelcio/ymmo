@@ -9,7 +9,7 @@ import { buildVillage, vReady } from './village';
 import { buildNatureTown, dropNodeInstances, natureDetailCell, NATURE_DETAIL_DRAWS, natureReady, natureTile } from './nature';
 import { setCharAniso } from './quaternius';
 import { settings } from '../settings';
-import { ATMOS, rainAt, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
+import { ATMOS, cloudCover, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 import { WaterReflection } from './reflect';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
@@ -64,8 +64,8 @@ const SKIES: Record<string, SkyPal> = {
   ash: { top: 0x1e1210, horizon: 0x7a4a34, ground: 0x2a1810, sun: 0xff7a40, sunI: 1.5, hemi: 0.9, cloud: 0x4a3430, near: 0.06 },
 };
 
-/** the sky under a shower (rainAt), blended over the region's */
-const STORM: SkyPal = { top: 0x5a6470, horizon: 0x9aa4ac, ground: 0x3a3c38, sun: 0xc8ccd0, sunI: 0.9, hemi: 1.3, cloud: 0x8a9098, near: 0.08 };
+/** the sky under storm clouds (cloudCover, ahead of the rain), blended over the region's */
+const STORM: SkyPal = { top: 0x4a5058, horizon: 0x9aa4ac, ground: 0x3a3c38, sun: 0xc8ccd0, sunI: 0.9, hemi: 1.3, cloud: 0x8a9098, near: 0.08 };
 
 const SkyShader = {
   uniforms: {
@@ -354,9 +354,9 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       if (p) blend(p, w);
     }
     for (const id of ['frost', 'swamp', 'ash'] as const) blend(SKIES[id], biomeWeight(id, x, z));
-    // a shower greys the sky, dims the sun and pulls the fog in
-    const rain = rainAt(x, z);
-    if (rain > 0) blend(STORM, rain * 0.8);
+    // storm clouds grey the sky, dim the sun and pull the fog in, from before the first drop
+    const cover = cloudCover(x, z);
+    if (cover > 0) blend(STORM, cover * 0.9);
   };
   const sun = new THREE.DirectionalLight(0xfff0d0, 2.4);
   sun.castShadow = true;
@@ -447,8 +447,10 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       const el = A.sunDir.y;
       const day = (A.day = smoothstep(-0.14, 0.28, el));
       const dusk = (1 - smoothstep(0, 0.42, Math.abs(el))) * smoothstep(-0.3, 0, el); // low sun: warm light
-      A.top.copy(tmp.set(0x0a1230)).lerp(cur.top, day);
-      A.horizon.copy(tmp.set(0x223258)).lerp(cur.horizon, day).lerp(tmp.set(0xff9450), dusk * 0.55);
+      // under storm clouds the night sky is charcoal rather than deep blue, and the dusk glow is mostly hidden
+      const cover = cloudCover(camera.position.x, camera.position.z);
+      A.top.copy(tmp.set(0x0a1230)).lerp(tmp.set(0x14171c), cover * 0.8).lerp(cur.top, day);
+      A.horizon.copy(tmp.set(0x223258)).lerp(tmp.set(0x2a2e36), cover * 0.8).lerp(cur.horizon, day).lerp(tmp.set(0xff9450), dusk * 0.55 * (1 - 0.6 * cover));
       // a lightning strike (flashSky): two quick pulses of white over the sky, the fog and the sky light
       const fs = (performance.now() - flashAt) / 1000;
       const flash = fs < 0.5 ? flashPow * Math.max(0, 1 - Math.abs(fs - 0.04) / 0.07, 0.7 * (1 - Math.abs(fs - 0.24) / 0.09)) : 0;
@@ -461,7 +463,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       u.ground.value.copy(cur.ground).multiplyScalar(0.2 + 0.8 * day);
       u.sunColor.value.copy(cur.sun).lerp(tmp.set(0xff7a30), dusk * 0.8);
       u.sunDir.value.copy(A.sunDir);
-      u.night.value = 1 - day;
+      u.night.value = (1 - day) * (1 - 0.85 * cover); // the stars and the moon, mostly behind the storm
       (scene.fog as THREE.Fog).color.copy(A.horizon);
       (scene.background as THREE.Color).copy(A.horizon);
       // the sun lights the world while it is up, the moon (opposite) once it is down
@@ -490,9 +492,15 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       flames.children.forEach((f, i) => f.scale.set(1, 0.8 + Math.sin(ft * 13 + i * 1.7) * 0.15 + Math.sin(ft * 7.3 + i) * 0.1, 1));
       // clouds: white tops by day, gold at the ends of the day, slate blue in the moonlight; bellies take the sky's tint
       cloudLit.copy(cur.cloud).lerp(tmp.set(0xffb070), dusk * 0.8).multiplyScalar(0.2 + 0.58 * Math.max(day, dusk * 0.95)).lerp(tmp.set(0x3e4866), (1 - day) * (1 - dusk) * 0.75);
-      cloudShade.copy(cloudLit).multiplyScalar(0.5).lerp(A.top, 0.25);
+      // storm clouds: dark slate by day (the night's are dark already), deeper bellies; a strike lights them from inside
+      cloudLit.lerp(tmp.set(0x3c4249), 0.7 * cover * Math.max(day, dusk));
+      cloudShade.copy(cloudLit).multiplyScalar(0.5 - 0.1 * cover).lerp(A.top, 0.25);
+      if (flash > 0) {
+        cloudLit.lerp(tmp.set(0xdfe8ff), flash * 0.6);
+        cloudShade.lerp(tmp.set(0xdfe8ff), flash * 0.6);
+      }
       cloudRim.copy(up ? u.sunColor.value : tmp.set(0x8fa6e8)).multiplyScalar(up ? 1 : 0.35);
-      clouds.update(camera.position, A.lightDir, cloudLit, cloudShade, cloudRim, A.horizon, day);
+      clouds.update(camera.position, A.lightDir, cloudLit, cloudShade, cloudRim, A.horizon, day, cover);
       // the IBL trails the visible sky: first frame bakes (lastBake starts at -inf), then only on real drift (never a flash)
       if (pmrem && !flash && performance.now() - lastBake > ENV_MIN_MS && skyDrift() > ENV_EPS) bakeEnv();
     },

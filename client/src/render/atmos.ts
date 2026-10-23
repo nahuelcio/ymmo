@@ -233,11 +233,29 @@ const RAIN_SHARE: Record<string, number> = { dawn: 0.08, dusk: 0.1, heart: 0.14,
 export function rainAt(x: number, z: number, now = Date.now()): number {
   const forced = (globalThis as { __rain?: number }).__rain; // a fixed shower for dev views and tests
   if (forced !== undefined) return forced;
+  const wet = wetness(x, z, now);
+  return wet === null ? 0 : Math.min(1, Math.max(0, wet / 0.12));
+}
+
+/**
+ * How overcast the sky is at (x, z) now, 0..1: the clouds gather off the same wave as the rain, but sooner, so
+ * the sky closes in a few minutes before the first drop (about 0.4 by then) and breaks up as long after the last.
+ */
+export function cloudCover(x: number, z: number, now = Date.now()): number {
+  const g = globalThis as { __rain?: number; __cover?: number }; // dev views: a fixed cover, or the one a forced shower has
+  if (g.__cover !== undefined) return g.__cover;
+  if (g.__rain !== undefined) return g.__rain > 0 ? 0.45 + 0.55 * g.__rain : 0;
+  const wet = wetness(x, z, now);
+  return wet === null ? 0 : Math.min(1, Math.max(0, (wet + 0.08) / 0.2));
+}
+
+/** The region's weather wave over its rain threshold (it rains above 0), or null where it never rains. */
+function wetness(x: number, z: number, now: number): number | null {
   const r = regionAt(x, z) ?? 'dawn', share = RAIN_SHARE[r] ?? 0;
-  if (!share) return 0;
+  if (!share) return null;
   const k = r.length * 1.7 + r.charCodeAt(0) * 0.13, t = now / 420000; // a 7-minute beat
   const w = 0.5 + 0.35 * Math.sin(t + k) + 0.15 * Math.sin(t * 2.3 + k * 3.1);
-  return Math.min(1, Math.max(0, (w - (1 - share)) / 0.12));
+  return w - (1 - share);
 }
 
 /** Lightning falls only in a downpour: rainAt above this. */
