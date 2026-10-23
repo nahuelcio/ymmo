@@ -1,4 +1,4 @@
-//! World nodes: felling trees, mining rocks, picking berries and sitting (shared/src/nodes.ts).
+//! World nodes: felling trees, mining rocks, picking berries, sitting and resting in tents (shared/src/nodes.ts).
 //! Node ids, places and rules come from game.json; which nodes are spent lives here, per world.
 use crate::collision::approach_point;
 use crate::data::{d, NodeKind};
@@ -21,8 +21,8 @@ impl World {
         if self.nodes_gone.get(&node).map_or(false, |&u| u > now) {
             return self.sys(pid, "Acá no queda nada por ahora.", "There is nothing left here for now.");
         }
-        if n.kind == NodeKind::Seat {
-            if self.seats.get(&node).map_or(false, |&o| o != pid) { return self.sys(pid, "Ese lugar está ocupado.", "That seat is taken."); }
+        if n.kind.is_rest() {
+            if self.seats.get(&node).map_or(false, |&o| o != pid) { return self.taken(pid, n.kind); }
         } else if let Err((es, en)) = self.tool_ok(pid, n.kind) {
             return self.sys(pid, es, en);
         }
@@ -51,9 +51,9 @@ impl World {
             self.pl_mut(pid).unwrap().intent = None;
             return;
         };
-        let reach = if n.kind == NodeKind::Seat { 0.3 } else { n.r + NODE_REACH };
+        let reach = if n.kind.is_rest() { 0.3 } else { n.r + NODE_REACH };
         let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
-        let arrived = if n.kind == NodeKind::Seat {
+        let arrived = if n.kind.is_rest() {
             self.step_toward(pid, n.x, n.z, speed, dt, reach)
         } else if (px - n.x).hypot(pz - n.z) <= reach {
             self.step_toward(pid, px, pz, speed, dt, 0.0) // already there: stop
@@ -71,7 +71,7 @@ impl World {
             // step_toward stops walking (moving = false) when it can't get any closer: near enough counts, else give up
             let c = &self.ents[&pid].c;
             if c.moving { return; }
-            if n.kind == NodeKind::Seat || (c.x - n.x).hypot(c.z - n.z) > reach + STALL_SLACK {
+            if n.kind.is_rest() || (c.x - n.x).hypot(c.z - n.z) > reach + STALL_SLACK {
                 self.pl_mut(pid).unwrap().intent = None;
                 return self.sys(pid, "No llegás hasta ahí.", "You can't get there.");
             }
@@ -79,7 +79,7 @@ impl World {
         self.pl_mut(pid).unwrap().intent = None;
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         if d().is_deep(x, z) { return self.sys(pid, "No podés hacer eso nadando.", "You cannot do that while swimming."); }
-        if n.kind == NodeKind::Seat { self.sit(pid, Some(node)) } else { self.start_gather(pid, node, now) }
+        if n.kind.is_rest() { self.sit(pid, Some(node)) } else { self.start_gather(pid, node, now) }
     }
 
     fn start_gather(&mut self, pid: u32, node: u32, now: f64) {
@@ -151,17 +151,24 @@ impl World {
         self.send(pid, json!({ "t": "nodes", "gone": gone }));
     }
 
-    /** Sit on a seat node, or on the ground (None). */
+    fn taken(&mut self, pid: u32, kind: NodeKind) {
+        if kind == NodeKind::Tent { self.sys(pid, "Esa carpa está ocupada.", "That tent is taken.") } else { self.sys(pid, "Ese lugar está ocupado.", "That seat is taken.") }
+    }
+
+    /** Sit on a seat node, rest in a tent (at its door, inside as the clients draw it), or sit on the ground (None). */
     pub fn sit(&mut self, pid: u32, seat: Option<u32>) {
         let e = &self.ents[&pid];
         if e.c.dead || e.player().map_or(true, |p| p.sitting.is_some()) { return; }
         if d().is_deep(e.c.x, e.c.z) { return self.sys(pid, "No podés sentarte en el agua.", "You cannot sit in the water."); }
         if let Some(s) = seat {
-            if self.seats.get(&s).map_or(false, |&o| o != pid) { return self.sys(pid, "Ese lugar está ocupado.", "That seat is taken."); }
             let n = &d().nodes[&s];
+            if self.seats.get(&s).map_or(false, |&o| o != pid) { return self.taken(pid, n.kind); }
             self.set_pos(pid, n.x, n.z);
             self.ents.get_mut(&pid).unwrap().c.ry = n.ry;
             self.seats.insert(s, pid);
+            if n.kind == NodeKind::Tent {
+                self.sys(pid, "Descansás en la carpa: recuperás vida y maná más rápido.", "You rest in the tent: health and mana come back faster.");
+            }
         }
         // sitting down cancels a cast: it costs what Esc does
         let now = self.now;

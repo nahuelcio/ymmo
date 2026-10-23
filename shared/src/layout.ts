@@ -45,7 +45,8 @@ export interface WallL { x: number; z: number; rot: number; tower: boolean; out?
 export interface PillarL { x: number; z: number; rot: number; out?: boolean }
 export interface TownL { houses: HouseL[]; stalls: StallL[]; walls: WallL[]; gates: PillarL[] }
 export interface ZonePropsL {
-  tents: { x: number; z: number }[];
+  /** ry: the way the door faces (forward is (sin ry, cos ry)) */
+  tents: { x: number; z: number; ry: number }[];
   totems: { x: number; z: number }[];
   ruins: { x: number; z: number; h: number; tilt: number }[];
   graves: { x: number; z: number; rot: number }[];
@@ -273,7 +274,11 @@ export function layoutZoneProps(): ZonePropsL {
   };
   for (const zn of ZONES) {
     if (zn.id === 'barracks') {
-      for (let i = 0; i < 10; i++) zp.tents.push(at(zn, zn.r * 0.7, 15));
+      // the doors face the middle of the barracks
+      for (let i = 0; i < 10; i++) {
+        const p = at(zn, zn.r * 0.7, 15);
+        zp.tents.push({ ...p, ry: Math.atan2(zn.x - p.x, zn.z - p.z) });
+      }
       for (let i = 0; i < 8; i++) zp.totems.push(at(zn, zn.r * 0.8));
     }
     if (zn.id === 'wastes') {
@@ -299,7 +304,9 @@ export function layoutZoneProps(): ZonePropsL {
       const kind = wr();
       if (inTown(x, z) || heightAt(x, z) < WATER_LEVEL + 1 || roadDist(x, z) < 9) continue;
       if (kind < 0.4) {
-        zp.tents.push({ x, z }, { x: x + nx * 6 * side + (bx - ax) / len * 4, z: z + nz * 6 * side + (bz - az) / len * 4 });
+        // both doors face the road
+        const ry = Math.atan2(-nx * side, -nz * side);
+        zp.tents.push({ x, z, ry }, { x: x + nx * 6 * side + (bx - ax) / len * 4, z: z + nz * 6 * side + (bz - az) / len * 4, ry });
       } else if (kind < 0.7) zp.huts.push({ x, z });
       else for (let k = 0; k < 7; k++) {
         if (wr() < 0.25) continue; // a fallen one here and there

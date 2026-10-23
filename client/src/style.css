@@ -538,6 +538,12 @@ input { font: inherit; user-select: text; }
 .qm-available, .qm-ready { color: #ffd200; text-shadow: 0 0 10px rgba(255, 200, 0, 0.75), 0 2px 2px #000; }
 .qm-soon, .qm-active { color: #a8a8a8; -webkit-text-stroke-color: #222; font-size: 26px; }
 @keyframes qmBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+/* someone resting in a tent: z's drifting up off it, one after another */
+.rest-zzz { position: relative; width: 34px; height: 44px; pointer-events: none; font: 700 15px Georgia, serif; color: #e8e8ff; text-shadow: 0 0 4px #000, 0 1px 2px #000; }
+.rest-zzz span { position: absolute; left: 4px; bottom: 0; opacity: 0; animation: restZ 3s linear infinite; }
+.rest-zzz span:nth-child(2) { animation-delay: 1s; font-size: 18px; }
+.rest-zzz span:nth-child(3) { animation-delay: 2s; font-size: 22px; }
+@keyframes restZ { 0% { transform: translate(0, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(20px, -40px); opacity: 0; } }
 
 /* collapsible chat */
 .chat-tabs { align-items: center; }

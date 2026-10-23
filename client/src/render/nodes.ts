@@ -3,7 +3,7 @@
 // nature chunks' instances (render/nature.ts nodeInstances): nothing runs per frame except a fall in progress.
 import * as THREE from 'three';
 import { layoutBushes, layoutTrees } from '../../../shared/src/layout';
-import { allNodes, nodeById, nodeIndex, type NodeDef } from '../../../shared/src/nodes';
+import { allNodes, isRest, nodeById, nodeIndex, type NodeDef } from '../../../shared/src/nodes';
 import { heightAt } from '../../../shared/src/terrain';
 import { natureReady, nodeHooks, nodeInstances } from './nature';
 
@@ -71,7 +71,7 @@ export class NodeVisuals {
   setGone(id: number, gone: boolean, animate = false) {
     if (this.gone.has(id) === gone) return;
     const n = nodeById(id);
-    if (!n || n.kind === 'seat') return;
+    if (!n || isRest(n.kind)) return;
     if (gone) this.gone.add(id);
     else this.gone.delete(id);
     if (n.kind === 'bush') return this.setBerries(n, !gone);

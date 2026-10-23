@@ -256,6 +256,8 @@ impl World {
         let t = self.pl_mut(tid).unwrap();
         t.last_combat = now;
         t.gather = None; // a hit breaks off felling / mining / picking
+        // and drives a resting player out of their tent
+        let in_tent = t.sitting.and_then(|s| d().nodes.get(&s)).map_or(false, |n| n.kind == crate::data::NodeKind::Tent);
         let t_karma = t.karma;
         if src_is_player {
             let absorbed = t.cp.min(dmg);
@@ -266,6 +268,7 @@ impl World {
         }
         let dead = t.hp <= 0.0;
         if src_is_player && t_karma == 0 { if let Some(p) = self.pl_mut(src) { p.pvp_until = now + PVP_FLAG_MS; } }
+        if in_tent && !dead { self.stand_up(tid); }
         if dead { self.kill_player(tid, src, now); }
     }
 

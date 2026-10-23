@@ -155,6 +155,8 @@ export function navGrid(): Uint8Array {
 }
 
 const blockedCell = (cx: number, cz: number) => cx < 0 || cz < 0 || cx >= N || cz >= N || navGrid()[cz * N + cx] === 1;
+/** A walker can stand at (x, z) by the walk grid (paths and straight walks end only on such cells). */
+export const walkable = (x: number, z: number) => !blockedCell(toCell(x), toCell(z));
 
 /** True when a walker can go in a straight line from a to b. */
 export function lineClear(ax: number, az: number, bx: number, bz: number): boolean {

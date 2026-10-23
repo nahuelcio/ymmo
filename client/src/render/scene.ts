@@ -1525,16 +1525,11 @@ function buildCamps(): { props: THREE.Group; flames: THREE.Group } {
   for (const c of layoutCamps()) {
     const y0 = (x: number, z: number) => heightAt(x, z);
     for (const t of c.tents) {
-      const tent = new THREE.Mesh(new THREE.ConeGeometry(2.4, 3, 5), mat(0x7a6040));
-      tent.position.set(t.x, y0(t.x, t.z) + 1.5, t.z);
-      tent.rotation.y = t.rot;
-      tent.castShadow = true;
+      // the door where the old cone's flap was (-cos rot, sin rot); a little smaller, inside its 2.3 m obstacle
+      const tent = tentModel(CAMP_CANVAS, 0.88);
+      tent.position.set(t.x, y0(t.x, t.z), t.z);
+      tent.rotation.y = Math.atan2(-Math.cos(t.rot), Math.sin(t.rot));
       g.add(tent);
-      const flap = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.6, 3), mat(0x2a1a10));
-      flap.position.set(t.x - Math.cos(-t.rot) * 1.7, y0(t.x, t.z) + 0.8, t.z - Math.sin(-t.rot) * 1.7);
-      g.add(flap);
-      const pole = box(0.08, 0.8, 0.08, 0x4a3020, t.x, y0(t.x, t.z) + 3.2, t.z);
-      g.add(pole);
     }
     for (const w of c.walls) {
       const wy = y0(w.x, w.z);
@@ -1577,13 +1572,86 @@ function buildCamps(): { props: THREE.Group; flames: THREE.Group } {
   return { props: g, flames };
 }
 
+// ---------------------------------------------------------------- tents
+/** An A-frame tent's size (the door faces +z): long and wide enough to lie in, inside a 2.6 m obstacle. */
+const TENT_L = 4, TENT_W = 3.2, TENT_H = 2.4;
+/** Canvas: cream on the roads' travelers' camps, dark hide in the orc barracks, brown in the hostile camps. */
+const TRAVEL_CANVAS = 0xd2c09a, ORC_CANVAS = 0x5e4430, CAMP_CANVAS = 0x7a6040;
+export const tentCanvas = (t: { x: number; z: number }) => (zoneOf(t.x, t.z)?.id === 'barracks' ? ORC_CANVAS : TRAVEL_CANVAS);
+const darker = (c: number, k: number) => new THREE.Color(c).multiplyScalar(k).getHex();
+/** A triangle `w` to each side of the middle and `h` tall, standing on y = 0: a tent's end, its door. */
+const doorShape = (w: number, h: number) => new THREE.Shape([new THREE.Vector2(-w, 0), new THREE.Vector2(w, 0), new THREE.Vector2(0, h)]);
+
+/** A rope or pole from a to b (a thin cylinder). */
+function strut(a: THREE.Vector3, b: THREE.Vector3, r: number, color: number): THREE.Mesh {
+  const len = a.distanceTo(b);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 5), mat(color, 'none'));
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  m.castShadow = true;
+  return m;
+}
+
+/**
+ * A ridge tent on the ground at its origin, door towards +z: two canvas slopes and a closed back, the open door dark
+ * inside with its flaps rolled up at the sides, a mud-stained hem, the ridge pole out of both ends on two uprights,
+ * and guy ropes to pegs off the corners (clear of the door, where a resting character goes in).
+ */
+function tentModel(canvas: number, scale = 1): THREE.Group {
+  const g = new THREE.Group(), L = TENT_L, hw = TENT_W / 2, H = TENT_H;
+  const body = new THREE.Mesh(new THREE.ExtrudeGeometry(doorShape(hw, H), { depth: L, bevelEnabled: false }).translate(0, 0, -L / 2), mat(canvas, 'none'));
+  body.castShadow = true;
+  body.receiveShadow = true;
+  g.add(body);
+  // the open door: the dark inside, the rolled flaps along its edges
+  const door = new THREE.Mesh(new THREE.ShapeGeometry(doorShape(0.75, 1.8)), mat(0x1a120c, 'none'));
+  door.position.z = L / 2 + 0.01;
+  g.add(door);
+  const roll = darker(canvas, 0.85);
+  for (const sx of [-1, 1]) g.add(strut(new THREE.Vector3(sx * 0.8, 0.05, L / 2 + 0.06), new THREE.Vector3(sx * 0.08, 1.85, L / 2 + 0.06), 0.08, roll));
+  // the hem: a darker band along the foot of each slope
+  const slope = Math.atan2(hw, H), up = new THREE.Vector2(-Math.sin(slope), Math.cos(slope));
+  for (const sx of [-1, 1]) {
+    const hem = box(0.04, 0.34, L + 0.02, darker(canvas, 0.6), sx * (hw + up.x * 0.17 + Math.cos(slope) * 0.02), up.y * 0.17 + Math.sin(slope) * 0.02, 0, 'none');
+    hem.rotation.z = sx * slope;
+    g.add(hem);
+  }
+  // poles: the ridge, out a little at both ends, on an upright at each end
+  const POLE = 0x4a3020, top = H + 0.04;
+  g.add(strut(new THREE.Vector3(0, top, -L / 2 - 0.25), new THREE.Vector3(0, top, L / 2 + 0.25), 0.05, POLE));
+  for (const sz of [-1, 1]) g.add(strut(new THREE.Vector3(0, 0, sz * (L / 2 + 0.08)), new THREE.Vector3(0, H + 0.25, sz * (L / 2 + 0.08)), 0.05, POLE));
+  // guy ropes from the ridge ends out to the corners, and their pegs
+  for (const sz of [-1, 1]) for (const sx of [-1, 1]) {
+    const peg = new THREE.Vector3(sx * (hw + 0.7), 0.05, sz * (L / 2 + 0.6));
+    g.add(strut(new THREE.Vector3(0, top, sz * (L / 2 + 0.2)), peg, 0.015, 0xb8a888));
+    g.add(box(0.07, 0.2, 0.07, 0x3a2414, peg.x, 0.06, peg.z, 'none'));
+  }
+  g.scale.setScalar(scale);
+  return g;
+}
+
+/** The flaps let down over a tent's door while someone rests inside (game.ts adds and drops it). */
+export function tentDoorClosed(t: { x: number; z: number; ry: number }): THREE.Group {
+  const g = new THREE.Group(), canvas = tentCanvas(t);
+  for (const sx of [-1, 1]) {
+    // each flap a half of the doorway, a sliver apart in the middle
+    const half = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(sx * 0.8, 0), new THREE.Vector2(0, 1.9)]);
+    const flap = new THREE.Mesh(new THREE.ShapeGeometry(half), mat(darker(canvas, 0.92), 'none'));
+    flap.position.set(sx * 0.02, 0, TENT_L / 2 + 0.03);
+    g.add(flap);
+  }
+  g.position.set(t.x, heightAt(t.x, t.z), t.z);
+  g.rotation.y = t.ry;
+  return g;
+}
+
 function buildZoneProps(): THREE.Group {
   const g = new THREE.Group();
   const zp = layoutZoneProps();
-  for (const { x, z } of zp.tents) {
-    const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 5), mat(0x7a5a3a, 'none')); // leather, not planks
-    tent.position.set(x, heightAt(x, z) + 2, z);
-    tent.castShadow = true;
+  for (const t of zp.tents) {
+    const tent = tentModel(tentCanvas(t));
+    tent.position.set(t.x, heightAt(t.x, t.z), t.z);
+    tent.rotation.y = t.ry;
     g.add(tent);
   }
   for (const { x, z } of zp.totems) {
