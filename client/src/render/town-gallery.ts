@@ -53,7 +53,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   };
   resize();
   addEventListener('resize', resize);
-  (window as unknown as { townFx: FxManager }).townFx = fx;
+  Object.assign(window, { townFx: fx, townWorld: world }); // dev hooks: effects, and the sky (townWorld.flashSky)
 
   let last = performance.now();
   renderer.setAnimationLoop((now) => {
