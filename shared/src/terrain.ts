@@ -13,8 +13,10 @@ export const FROST = { x: -520, z: -900, r: 34, name: 'Fuerte de Escarcha' };
 export const REED = { x: 680, z: -880, r: 34, name: 'Juncoverde' };
 /** ...and Brasaoscura for 70-78, the last wall before the Abyss (far north). */
 export const EMBER = { x: 40, z: -1420, r: 34, name: 'Brasaoscura' };
+/** Fuerte Escama, for levels 40-50, at the crossroads of the Dragon lands: the Dragon set (grade C) is sold here. */
+export const SCALE = { x: 40, z: -450, r: 34, name: 'Fuerte Escama' };
 /** Peace zones on flattened ground. TOWN is the starting village. */
-export const TOWNS = [TOWN, DUSK, FROST, REED, EMBER];
+export const TOWNS = [TOWN, DUSK, FROST, REED, EMBER, SCALE];
 
 type Pt = [number, number];
 type Seg = [number, number, number, number];
@@ -27,8 +29,10 @@ type Seg = [number, number, number, number];
 export const ROAD_LINES: Pt[][] = [
   // Alba -> range A -> Bastión
   [[0, 1360], [60, 1150], [100, 1000], [135, 775], [180, 730]],
-  // Bastión -> range B -> the Heart -> range C -> the Dragon lands -> range D -> the north crossroads
-  [[180, 730], [240, 670], [220, 450], [150, 200], [60, -200], [40, -450], [20, -700], [40, -800]],
+  // Bastión -> range B -> the Heart -> range C -> Fuerte Escama, in the Dragon lands -> range D -> the north crossroads
+  // (two lines meeting at the fort, so each road out of it gets a gate)
+  [[180, 730], [240, 670], [220, 450], [150, 200], [60, -200], [40, -450]],
+  [[40, -450], [20, -700], [40, -800]],
   // crossroads -> Fuerte de Escarcha; crossroads -> range E -> Juncoverde
   [[40, -800], [-200, -860], [-520, -900]],
   [[40, -800], [180, -820], [400, -860], [680, -880]],

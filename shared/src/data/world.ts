@@ -1,4 +1,4 @@
-import { DUSK, EMBER, FROST, REED, ROAD_SEGS, TOWN, TOWNS } from '../terrain';
+import { DUSK, EMBER, FROST, REED, ROAD_SEGS, SCALE, TOWN, TOWNS } from '../terrain';
 import { ALBA_FOLK, fortFolk } from '../village';
 
 export interface ZoneDef {
@@ -158,6 +158,7 @@ export const TELEPORTS = [
   { id: 'howling_hollow', name: 'Hondonada de los Aullidos (PvP, Nv 22+)', x: 33, z: 442, cost: 10000 },
   { id: 'steppes', name: 'Estepas Ardientes (Nv 30-35)', ...drop('steppes'), cost: 12000 },
   { id: 'citadel', name: 'Ciudadela Orca (Nv 35-40)', ...drop('citadel'), cost: 16000 },
+  { id: 'scale', name: 'Fuerte Escama', x: SCALE.x, z: SCALE.z + 6, cost: 20000 },
   { id: 'valley', name: 'Valle del Dragón (Nv 40-45)', ...drop('valley'), cost: 22000 },
   { id: 'nest', name: 'Nido del Dragón (Nv 45-50)', ...drop('nest'), cost: 30000 },
   // between the Citadel and its south edge: nobody lands flagged
@@ -245,13 +246,14 @@ export const NPCS: NpcDef[] = [
   { id: 'mael', name: 'Mael', title: 'Hermana', ...drop('wastes', -15, -15), ry: Math.atan2(15, 15), kind: 'quest', color: 0x5a3a6a,
     greeting: 'No podemos dejar que Kaim Vanul se levante.' },
   // Bastión del Ocaso (terrain.ts DUSK): the Abyssal set over the counter, Ashforged and Dragon made to order from what the 30-50 zones drop
+  // (Fuerte Escama sells the Dragon set ready-made; a master's own, made here, may come out a Masterwork)
   { id: 'dusk_weapons', name: 'Varek', title: 'Maestro Armero', x: DUSK.x + 8, z: DUSK.z + 8, ry: Math.atan2(-8, -8), kind: 'shop', color: 0x7a2a2a,
     shop: ['abyssal_blade', 'abyssal_bow', 'abyssal_dagger', 'abyssal_staff', 'abyssal_spellblade'], craft: ['abyssal_duals', 'ashforged_duals', 'dragon_duals', 'ashforged_blade', 'ashforged_bow', 'ashforged_dagger', 'ashforged_staff', 'ashforged_spellblade', 'dragon_blade', 'dragon_bow', 'dragon_dagger', 'dragon_staff', 'dragon_spellblade'],
     greeting: 'El acero bueno no se compra hecho. Traeme con qué forjarlo.' },
   { id: 'dusk_armor', name: 'Isolda', title: 'Maestra Armadurera', x: DUSK.x + -8, z: DUSK.z + -8, ry: Math.atan2(8, 8), kind: 'shop', color: 0x2a4a7a,
     shop: ['abyssal_helm', 'abyssal_hood', 'abyssal_circlet', 'abyssal_shield', 'abyssal_cape', 'abyssal_plate', 'abyssal_jerkin', 'abyssal_robe', 'abyssal_greaves', 'abyssal_leggings', 'abyssal_gauntlets', 'abyssal_bracers', 'abyssal_gloves', 'abyssal_boots', 'abyssal_treads', 'abyssal_shoes', 'abyssal_ring', 'abyssal_earring', 'abyssal_necklace'],
     craft: ['ashforged', 'dragon'].flatMap((p) => ['helm', 'circlet', 'hood', 'shield', 'cape', 'plate', 'robe', 'jerkin', 'greaves', 'leggings', 'gauntlets', 'gloves', 'bracers', 'boots', 'shoes', 'treads', 'ring', 'earring', 'necklace'].map((k) => `${p}_${k}`)),
-    greeting: 'Lo de la aldea es para cazar lobos. Acá vestimos a los que van al Nido.' },
+    greeting: 'El Dragón hecho lo vende Fuerte Escama. Acá te lo forjo a medida, y a veces sale mejor.' },
   { id: 'dusk_grocer', name: 'Mirta', title: 'Alquimista', x: DUSK.x + 11, z: DUSK.z + -2, ry: Math.atan2(-11, 2), kind: 'shop', color: 0x3a7a5a,
     shop: ['healing_potion', 'greater_healing_potion', 'mana_potion', 'greater_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
     greeting: 'Pociones de las fuertes. Las otras te las venden en la aldea.' },
@@ -272,6 +274,25 @@ export const NPCS: NpcDef[] = [
     greeting: 'Todo lo que camina en este valle tiene escamas.' },
   { id: 'sibila', name: 'Sibila', title: 'Vidente', ...drop('nest', 5, -5), ry: Math.atan2(1, -0.4), kind: 'quest', color: 0x6a3a7a,
     greeting: 'El nido está despierto. Lo siento en los huesos.' },
+  // Fuerte Escama (levels 40-50, terrain.ts SCALE): the Dragon set over the counter (shared/src/village.ts lays out where they stand)
+  { id: 'scale_weapons', name: 'Hadrian', title: 'Maestro Armero', ...fort('scale_weapons'), kind: 'shop', color: 0x8a3a2a,
+    shop: ['dragon_blade', 'dragon_bow', 'dragon_dagger', 'dragon_staff', 'dragon_spellblade'], greeting: 'Hojas templadas en fuego de dragón. Del de verdad.' },
+  { id: 'scale_armor', name: 'Brianna', title: 'Maestra Armadurera', ...fort('scale_armor'), kind: 'shop', color: 0x6a3a2a,
+    shop: ['helm', 'circlet', 'hood', 'shield', 'cape', 'plate', 'robe', 'jerkin', 'greaves', 'leggings', 'gauntlets', 'gloves', 'bracers', 'boots', 'shoes', 'treads', 'ring', 'earring', 'necklace'].map((k) => `dragon_${k}`),
+    greeting: 'Escama sobre escama. Lo único que aguanta lo que escupen allá afuera.' },
+  { id: 'scale_grocer', name: 'Nerea', title: 'Alquimista', ...fort('scale_grocer'), kind: 'shop', color: 0x3a7a5a,
+    shop: ['healing_potion', 'greater_healing_potion', 'mana_potion', 'greater_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
+    greeting: 'Para las quemaduras no tengo nada. Para lo demás, sí.' },
+  { id: 'scale_gate', name: 'Cassian', title: 'Guardián del Portal', ...fort('scale_gate'), kind: 'gatekeeper', color: 0x6a3a8a,
+    greeting: 'Cuatro caminos salen de acá. El portal te ahorra los cuatro.' },
+  { id: 'scale_clan', name: 'Vesna', title: 'Maestra de Clanes', ...fort('scale_clan'), kind: 'clan', color: 0x5a2a3a,
+    greeting: 'Al Nido no se entra solo. Juntá a tu gente.' },
+  { id: 'darian', name: 'Darian', title: 'Capitán de la Atalaya', ...fort('darian'), kind: 'quest', color: 0x7a5a3a,
+    greeting: 'Desde la muralla se ve todo el valle. Y lo que se mueve en él.' },
+  { id: 'lysandra', name: 'Lysandra', title: 'Cazadora de Cultistas', ...fort('lysandra'), kind: 'quest', color: 0x5a3a5a,
+    greeting: 'Le rezan a algo que duerme en el Nido. Prefiero que no se despierte.' },
+  { id: 'gorm', name: 'Gorm', title: 'Forjador de Escamas', ...fort('gorm'), kind: 'quest', color: 0x8a5a3a,
+    greeting: 'Una escama sola no frena nada. Mil, bien puestas, frenan un dragón.' },
   // Fuerte de Escarcha (levels 50-60): the Glacial set over the counter (shared/src/village.ts lays out where they stand)
   { id: 'frost_weapons', name: 'Bjorn', title: 'Maestro Armero', ...fort('frost_weapons'), kind: 'shop', color: 0x5a6a8a,
     shop: ['glacial_blade', 'glacial_bow', 'glacial_dagger', 'glacial_staff', 'glacial_spellblade'], greeting: 'Acero templado en la nieve. No se quiebra con el frío.' },

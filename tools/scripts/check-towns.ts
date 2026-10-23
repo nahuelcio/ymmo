@@ -54,8 +54,8 @@ for (let grew = true; grew; ) {
 }
 assert.equal(seen.size, ROAD_SEGS.length, 'a road is cut off from the rest');
 for (const t of TOWNS) assert.ok(ROAD_SEGS.some((s) => onSeg(t.x, t.z, s)), `${t.name} has no road`);
-// south to north: each town in its own region, the regions' levels rising northward
-assert.deepEqual(TOWNS.map((t) => regionAt(t.x, t.z)), ['dawn', 'dusk', 'frost', 'swamp', 'ash']);
+// each town in its own region (Fuerte Escama, last in the list, in the Dragon lands between the Bastión and the forts)
+assert.deepEqual(TOWNS.map((t) => regionAt(t.x, t.z)), ['dawn', 'dusk', 'frost', 'swamp', 'ash', 'dragon']);
 assert.deepEqual(REGIONS.map((r) => regionAt(r.x, r.z)), REGIONS.map((r) => r.id));
 const t0 = performance.now();
 let sum = 0;
