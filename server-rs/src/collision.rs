@@ -132,12 +132,93 @@ fn blocked(cx: i64, cz: i64) -> bool {
     cx < 0 || cz < 0 || cx >= g.n || cz >= g.n || g.nav[(cz * g.n + cx) as usize] == 1
 }
 
-pub fn line_clear(ax: f64, az: f64, bx: f64, bz: f64) -> bool {
+/** How far a circle at (x, z) of radius r sinks into an obstacle (> 0: they overlap). */
+fn overlap(o: &ObstacleDef, x: f64, z: f64, r: f64) -> f64 {
+    match *o {
+        ObstacleDef::Circle { x: ox, z: oz, r: or } => or + r - (x - ox).hypot(z - oz),
+        ObstacleDef::Box { x: ox, z: oz, hw, hd, cos, sin } => {
+            let (dx, dz) = (x - ox, z - oz);
+            let ex = (dx * cos - dz * sin).abs() - hw;
+            let ez = (dx * sin + dz * cos).abs() - hd;
+            r - if ex > 0.0 || ez > 0.0 { ex.max(0.0).hypot(ez.max(0.0)) } else { ex.max(ez) }
+        }
+    }
+}
+
+/** A walker fits at (x, z): its circle overlaps no obstacle, by their real shapes (same as the client's pointFree). */
+pub fn point_free(x: f64, z: f64, r: f64) -> bool {
+    let g = geo();
+    if x.abs() > g.half || z.abs() > g.half { return false; }
+    let obs = &d().obstacles;
+    g.hash.get(&((x / CELL).floor() as i64, (z / CELL).floor() as i64)).map_or(true, |l| l.iter().all(|&i| overlap(&obs[i], x, z, r) <= 0.0))
+}
+
+fn seg_dist(px: f64, pz: f64, ax: f64, az: f64, bx: f64, bz: f64) -> f64 {
+    let (ex, ez) = (bx - ax, bz - az);
+    let l2 = ex * ex + ez * ez;
+    let t = if l2 > 0.0 { (((px - ax) * ex + (pz - az) * ez) / l2).clamp(0.0, 1.0) } else { 0.0 };
+    (px - (ax + ex * t)).hypot(pz - (az + ez * t))
+}
+/** Distance from the segment a-b to the rectangle |x| <= hw, |z| <= hd (0 when they touch). */
+fn seg_rect_dist(ax: f64, az: f64, bx: f64, bz: f64, hw: f64, hd: f64) -> f64 {
+    let (ex, ez) = (bx - ax, bz - az);
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    let mut clip = |p: f64, q: f64| -> bool {
+        if p == 0.0 { return q >= 0.0; }
+        let t = q / p;
+        if p < 0.0 { if t > t1 { return false; } if t > t0 { t0 = t; } } else { if t < t0 { return false; } if t < t1 { t1 = t; } }
+        true
+    };
+    if clip(-ex, ax + hw) && clip(ex, hw - ax) && clip(-ez, az + hd) && clip(ez, hd - az) { return 0.0; }
+    let to_rect = |x: f64, z: f64| (x.abs() - hw).max(0.0).hypot((z.abs() - hd).max(0.0));
+    let mut dd = to_rect(ax, az).min(to_rect(bx, bz));
+    for (cx, cz) in [(hw, hd), (-hw, hd), (hw, -hd), (-hw, -hd)] { dd = dd.min(seg_dist(cx, cz, ax, az, bx, bz)); }
+    dd
+}
+
+/** The walk grid's cells along the line are all free: the quick test the mobs' every-tick steering uses (line_clear is
+ * exact, and too dear to run for every mob on every tick). */
+pub fn line_clear_grid(ax: f64, az: f64, bx: f64, bz: f64) -> bool {
     let dist = (bx - ax).hypot(bz - az);
     let steps = (dist / (RES * 0.5)).ceil() as i64;
     for i in 1..=steps {
         let t = i as f64 / steps as f64;
         if blocked(to_cell(ax + (bx - ax) * t), to_cell(az + (bz - az) * t)) { return false; }
+    }
+    true
+}
+
+/**
+ * True when a walker can go in a straight line from a to b: its circle swept along the segment touches no obstacle,
+ * by their real shapes (same as the client's lineClear, a hair under the walk radius).
+ */
+pub fn line_clear(ax: f64, az: f64, bx: f64, bz: f64) -> bool {
+    let g = geo();
+    if bx.abs() > g.half || bz.abs() > g.half { return false; }
+    let r = d().c.walk_radius - 0.02;
+    let obs = &d().obstacles;
+    let steps = (((bx - ax).hypot(bz - az)) / 0.5).ceil().max(1.0) as i64;
+    let mut seen: Vec<usize> = Vec::new();
+    let mut last: Option<(i64, i64)> = None;
+    for i in 0..=steps {
+        let t = i as f64 / steps as f64;
+        let k = (((ax + (bx - ax) * t) / CELL).floor() as i64, ((az + (bz - az) * t) / CELL).floor() as i64);
+        if last == Some(k) { continue; }
+        last = Some(k);
+        if let Some(l) = g.hash.get(&k) { seen.extend_from_slice(l); }
+    }
+    seen.sort_unstable();
+    seen.dedup();
+    for &i in &seen {
+        let hit = match obs[i] {
+            ObstacleDef::Circle { x, z, r: or } => seg_dist(x, z, ax, az, bx, bz) < or + r,
+            ObstacleDef::Box { x, z, hw, hd, cos, sin } => {
+                let tl = |px: f64, pz: f64| ((px - x) * cos - (pz - z) * sin, (px - x) * sin + (pz - z) * cos);
+                let ((lax, laz), (lbx, lbz)) = (tl(ax, az), tl(bx, bz));
+                seg_rect_dist(lax, laz, lbx, lbz, hw, hd) < r
+            }
+        };
+        if hit { return false; }
     }
     true
 }
@@ -160,17 +241,36 @@ pub fn approach_point(tx: f64, tz: f64, reach: f64, fx: f64, fz: f64) -> Option<
     best.map(|(_, p)| p)
 }
 
-fn nearest_free(cx: i64, cz: i64) -> Option<(i64, i64)> {
+/** The free grid cell nearest (x, z) within 12 cells (ties: nearest (px, pz)); same as the client's nearestFree. */
+fn nearest_free(x: f64, z: f64, px: f64, pz: f64) -> Option<(i64, i64)> {
+    let (cx, cz) = (to_cell(x), to_cell(z));
     if !blocked(cx, cz) { return Some((cx, cz)); }
+    let mut best: Option<((i64, i64), f64)> = None;
     for rad in 1..=12i64 {
         for dx in -rad..=rad {
-            for dz in [-rad, rad] {
-                if !blocked(cx + dx, cz + dz) { return Some((cx + dx, cz + dz)); }
-                if !blocked(cx + dz, cz + dx) { return Some((cx + dz, cz + dx)); }
+            for dz in -rad..=rad {
+                if dx.abs().max(dz.abs()) != rad || blocked(cx + dx, cz + dz) { continue; }
+                let (wx, wz) = (to_world(cx + dx), to_world(cz + dz));
+                let dd = (wx - x).hypot(wz - z) + (wx - px).hypot(wz - pz) * 1e-3;
+                if best.map_or(true, |(_, bd)| dd < bd) { best = Some(((cx + dx, cz + dz), dd)); }
             }
         }
+        if let Some((_, bd)) = best { if bd <= (rad as f64 + 0.5) * RES { break; } }
     }
-    None
+    best.map(|(c, _)| c)
+}
+
+/** From the free point a toward b: b when a walker fits there and goes straight to it, else as far as it can. */
+fn toward_free(ax: f64, az: f64, bx: f64, bz: f64) -> P {
+    let r = d().c.walk_radius;
+    let ok = |x: f64, z: f64| point_free(x, z, r) && line_clear(ax, az, x, z);
+    if ok(bx, bz) { return P { x: bx, z: bz }; }
+    let (mut lo, mut hi) = (0.0, 1.0);
+    for _ in 0..10 {
+        let m = (lo + hi) / 2.0;
+        if ok(ax + (bx - ax) * m, az + (bz - az) * m) { lo = m; } else { hi = m; }
+    }
+    P { x: ax + (bx - ax) * lo, z: az + (bz - az) * lo }
 }
 
 #[derive(PartialEq)]
@@ -191,11 +291,11 @@ thread_local! {
 /** Waypoints from (sx,sz) to (tx,tz) around static obstacles (start excluded). */
 pub fn find_path(sx: f64, sz: f64, tx: f64, tz: f64) -> Vec<P> {
     if line_clear(sx, sz, tx, tz) { return vec![P { x: tx, z: tz }]; }
-    let (Some(s), Some(gc)) = (nearest_free(to_cell(sx), to_cell(sz)), nearest_free(to_cell(tx), to_cell(tz))) else {
+    let (Some(s), Some(gc)) = (nearest_free(sx, sz, sx, sz), nearest_free(tx, tz, sx, sz)) else {
         return vec![P { x: tx, z: tz }];
     };
-    let goal_free = gc.0 == to_cell(tx) && gc.1 == to_cell(tz);
-    let end = if goal_free { P { x: tx, z: tz } } else { P { x: to_world(gc.0), z: to_world(gc.1) } };
+    // the target itself wherever a walker fits there, else the nearest reachable spot beside it
+    let end = toward_free(to_world(gc.0), to_world(gc.1), tx, tz);
     if line_clear(sx, sz, end.x, end.z) { return vec![end]; }
     let n = geo().n;
     let start = (s.1 * n + s.0) as u32;
@@ -259,7 +359,8 @@ pub fn find_path(sx: f64, sz: f64, tx: f64, tz: f64) -> Vec<P> {
             c = sc.came[c as usize];
         }
         cells.reverse();
-        if found { if let Some(last) = cells.last_mut() { *last = end; } }
+        // the goal cell, then on to the end beside it (the string pulling drops the cell when the end is in sight)
+        if found { if let Some(last) = cells.last() { if last.x != end.x || last.z != end.z { cells.push(end); } } }
         if cells.is_empty() { return vec![end]; }
         // string pulling
         let mut out: Vec<P> = Vec::new();
@@ -294,4 +395,60 @@ pub fn dash_end(mut x: f64, mut z: f64, dx: f64, dz: f64, r: f64) -> P {
         z = np.z;
     }
     P { x, z }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /** A lone tree: a circle obstacle with nothing else within 6 m of it. */
+    fn lone_tree() -> (f64, f64, f64) {
+        let obs = &d().obstacles;
+        obs.iter().find_map(|o| match *o {
+            ObstacleDef::Circle { x, z, r } if r < 0.6 && obs.iter().filter(|p| { let (px, pz) = pos(p); (px - x).hypot(pz - z) < 6.0 + bound(p) }).count() == 1 => Some((x, z, r)),
+            _ => None,
+        }).expect("a lone tree")
+    }
+
+    #[test]
+    fn point_free_and_line_clear_follow_the_real_trunk() {
+        let (x, z, r) = lone_tree();
+        let w = d().c.walk_radius;
+        assert!(point_free(x + r + w + 0.05, z, w), "just clear of the trunk");
+        assert!(!point_free(x + r + w - 0.05, z, w), "touching the trunk");
+        // a line passing the trunk a little closer than the body is blocked, a little farther is clear
+        let near = r + w - 0.1;
+        assert!(!line_clear(x - 3.0, z + near, x + 3.0, z + near));
+        assert!(line_clear(x - 3.0, z + r + w + 0.05, x + 3.0, z + r + w + 0.05));
+    }
+
+    #[test]
+    fn a_free_click_beside_a_trunk_is_the_path_end() {
+        let (x, z, r) = lone_tree();
+        let w = d().c.walk_radius;
+        // free, but within a metre of the trunk (its grid cell may well be blocked): the path ends exactly on it
+        let (tx, tz) = (x + r + w + 0.08, z + 0.1);
+        let p = find_path(x - 4.0, z, tx, tz);
+        let e = p.last().unwrap();
+        assert!((e.x - tx).abs() < 1e-9 && (e.z - tz).abs() < 1e-9, "path ended at ({}, {}), not the click", e.x, e.z);
+    }
+
+    #[test]
+    fn a_click_inside_a_house_ends_at_its_near_edge() {
+        let obs = &d().obstacles;
+        let (hx, hz, hw, hd, cos, sin) = obs.iter().find_map(|o| match *o {
+            ObstacleDef::Box { x, z, hw, hd, cos, sin } if hw > 2.5 && hd > 2.5 => Some((x, z, hw, hd, cos, sin)),
+            _ => None,
+        }).expect("a house");
+        // from a point well outside it, along the box's local +x
+        let (fx, fz) = (hx + (hw + 8.0) * cos, hz + (hw + 8.0) * sin);
+        let p = find_path(fx, fz, hx, hz);
+        let e = p.last().unwrap();
+        let w = d().c.walk_radius;
+        assert!(point_free(e.x, e.z, w), "the end is somewhere a walker fits");
+        // it stops at the house, not metres off at a corner: within a step of the nearest a walker gets to the click
+        let ideal = hw.min(hd) + w;
+        let got = (e.x - hx).hypot(e.z - hz);
+        assert!(got < ideal + 1.6, "ended {got:.2} m from the click, the house edge is {ideal:.2} m away");
+    }
 }

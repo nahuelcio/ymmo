@@ -50,6 +50,8 @@ export interface AnimState {
    * time between swings, which sets how fast each plays */
   atkStep?: number;
   atkInterval?: number;
+  /** how fast it goes over the ground (m/s): the run's pace */
+  speed?: number;
   casting: boolean;
   /** what the cast does with the weapon (game.ts castMove): readies it for a blow, raises it (a fighter's buff or taunt,
    * a song), or dances (a bladedancer's dance); none for a spell, cast with the free hand. castAge: ms since the cast began */

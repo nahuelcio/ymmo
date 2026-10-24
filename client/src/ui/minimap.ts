@@ -6,7 +6,7 @@ import { CAMPS } from '../../../shared/src/data/camps';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { F_DEAD } from '../../../shared/src/protocol';
 import * as terrain from '../../../shared/src/terrain';
-import { heightAt, TOWN, TOWNS, valueNoise, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
+import { heightAt, PLAYABLE_HALF, TOWN, TOWNS, valueNoise, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees, layoutZoneProps } from '../../../shared/src/layout';
 import { allNodes, tentCentre } from '../../../shared/src/nodes';
 import { F_RED, type Game } from '../game';
@@ -60,9 +60,10 @@ function* paintTerrain(x0: number, z0: number, span: number, res: number): Gener
   // heights one sample past each edge so the slope at the border is real, not clamped
   const W = res + 2;
   const hs = new Float32Array(W * W), ls = new Float32Array(W * W);
+  // each pixel samples its centre: its corner drew the land half a pixel off where a click on it travels to
   for (let j = 0; j < W; j++) {
     for (let i = 0; i < W; i++) {
-      const x = x0 + (i - 1) * step, z = z0 + (j - 1) * step;
+      const x = x0 + (i - 0.5) * step, z = z0 + (j - 0.5) * step;
       hs[j * W + i] = heightAt(x, z);
       ls[j * W + i] = landAt(x, z);
     }
@@ -73,7 +74,7 @@ function* paintTerrain(x0: number, z0: number, span: number, res: number): Gener
   for (let j = 0; j < res; j++) {
     for (let i = 0; i < res; i++) {
       const k = (j + 1) * W + i + 1, h = hs[k];
-      const x = x0 + i * step, z = z0 + j * step;
+      const x = x0 + (i + 0.5) * step, z = z0 + (j + 0.5) * step;
       const land = ls[k];
       // paper stains: two octaves of noise in world space, so they don't swim while panning
       const stain = 0.93 + 0.07 * valueNoise(x * 0.004, z * 0.004) + 0.03 * valueNoise(x * 0.03, z * 0.03);
@@ -347,7 +348,8 @@ export class Minimap {
       this.mapDrag = null;
       if (d?.moved) this.drawBig();
       if (!d || d.moved || e.button !== 0) return;
-      const [x, z] = this.worldAt(e.offsetX, e.offsetY);
+      // the map shows a little past the edge of the world: a click out there goes to its edge
+      const [x, z] = this.worldAt(e.offsetX, e.offsetY).map((v) => Math.max(-PLAYABLE_HALF, Math.min(PLAYABLE_HALF, v)));
       g.travel(x, z, e.ctrlKey || e.metaKey);
       this.routeAt = 0;
     });

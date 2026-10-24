@@ -252,6 +252,8 @@ export function mat(color: number, surface?: Surface | 'none'): THREE.MeshLamber
 export interface WorldScene {
   scene: THREE.Scene;
   terrain: THREE.Group;
+  /** what stands on the ground and stops the eye (houses, walls, stalls, tents, camp props): a click to walk stops at it */
+  solids: THREE.Object3D[];
   sun: THREE.DirectionalLight;
   /** grass & flowers (toggle with the foliage setting) */
   detail: THREE.Group;
@@ -383,12 +385,12 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   const grass = natureReady() ? lazyDetail(natureDetailCell, NATURE_DETAIL_DRAWS) : lazyDetail(makeDetailCell(), DETAIL_PER_CELL * 5);
   const detail = grass.group;
   scene.add(detail);
-  scene.add(mergeStatic(buildTown()));
+  const solids = [mergeStatic(buildTown()), buildVillage(), mergeStatic(buildZoneProps())];
+  scene.add(...solids);
   if (natureReady()) scene.add(buildNatureTown());
-  scene.add(buildVillage());
-  scene.add(mergeStatic(buildZoneProps()));
   const { props: campProps, flames } = buildCamps();
-  scene.add(mergeStatic(campProps), flames);
+  solids.push(mergeStatic(campProps));
+  scene.add(solids[solids.length - 1], flames);
   // Static world: bake every local matrix once so the per-frame scene traversal (render + labels) skips recomposing them.
   for (const o of scene.children) if (o !== sky && o !== clouds.mesh && o !== flames && o !== sun && o !== sun.target && o !== hemi) freeze(o);
 
@@ -400,7 +402,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   if (aniso > 0) console.debug(`[tex] aniso ${settings.s.textureAniso}x: ${aniso} maps sharpened`);
 
   return {
-    scene, terrain, sun,
+    scene, terrain, solids, sun,
     detail,
     sky,
     renderReflection(on, renderer, camera) {

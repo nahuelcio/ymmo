@@ -1,4 +1,5 @@
 //! Client messages inside a world (port of World.handle / handleMsg).
+use crate::collision::P;
 use crate::ent::*;
 use crate::data::d;
 use crate::world::{now_ms, World};
@@ -39,6 +40,11 @@ impl World {
                 let p = self.pl_mut(pid).unwrap();
                 p.talking_to = None;
                 p.intent = Some(Intent::Move { x, z });
+                // the route the client walks (it predicts along it): followed when sound, so both go the same way
+                let pts: Vec<P> = m["path"].as_array().map_or(Vec::new(), |a| a.iter().take(64)
+                    .filter_map(|w| Some(P { x: w.get(0)?.as_f64()?, z: w.get(1)?.as_f64()? }))
+                    .filter(|w| w.x.is_finite() && w.z.is_finite()).collect());
+                if pts.is_empty() { if let Some(e) = self.ents.get_mut(&pid) { e.c.nav = None; } } else { self.client_path(pid, x, z, pts); }
             }
             "pong" => {
                 let rtt = now - num(m, "s");

@@ -55,6 +55,44 @@ const MODE: Record<Mode, { sway: number; side: THREE.Side; cutout: boolean }> = 
   rock: { sway: 0, side: THREE.FrontSide, cutout: false },
 };
 
+/**
+ * The crowns between the camera and the player are seen through: from this low camera they hid the player all the way
+ * through a forest. Leaves inside a capsule from the camera to the player's chest (wider toward the camera) are thinned
+ * out by an ordered dither (no sorting: the leaves stay opaque cut-outs), up to most of them at its axis. Shadows don't
+ * change (they render with their own depth material). game.ts sets the ends every frame.
+ */
+const SEE = { uSeeCam: { value: new THREE.Vector3() }, uSeeFocus: { value: new THREE.Vector3() }, uSeeOn: { value: 0 } };
+export function setSeeThrough(cam: THREE.Vector3, focus: THREE.Vector3 | null) {
+  SEE.uSeeOn.value = focus ? 1 : 0;
+  SEE.uSeeCam.value.copy(cam);
+  if (focus) SEE.uSeeFocus.value.copy(focus);
+}
+function seeThrough(m: THREE.Material) {
+  const base = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    base.call(m, sh, r);
+    Object.assign(sh.uniforms, SEE);
+    sh.vertexShader = `varying vec3 vSeeW;\n${sh.vertexShader}`.replace('#include <project_vertex>', /* glsl */ `#include <project_vertex>
+      #ifdef USE_INSTANCING
+        vSeeW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+      #else
+        vSeeW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+      #endif`);
+    sh.fragmentShader = `uniform vec3 uSeeCam, uSeeFocus;\nuniform float uSeeOn;\nvarying vec3 vSeeW;\n${sh.fragmentShader}`.replace('#include <alphatest_fragment>', /* glsl */ `#include <alphatest_fragment>
+      if (uSeeOn > 0.5) {
+        vec3 ab = uSeeFocus - uSeeCam;
+        float t = dot(vSeeW - uSeeCam, ab) / max(dot(ab, ab), 1e-4);
+        if (t > 0.0 && t < 1.0) {
+          float rad = mix(2.6, 1.2, t), d = length(vSeeW - (uSeeCam + ab * t));
+          float thin = (1.0 - smoothstep(rad * 0.45, rad, d)) * 0.85;
+          const float B[16] = float[16](0., 8., 2., 10., 12., 4., 14., 6., 3., 11., 1., 9., 15., 7., 13., 5.);
+          ivec2 px = ivec2(mod(gl_FragCoord.xy, 4.0));
+          if (thin > (B[px.x + px.y * 4] + 0.5) / 16.0) discard;
+        }
+      }`);
+  };
+}
+
 interface Prim { geo: THREE.BufferGeometry; mat: THREE.MeshLambertMaterial }
 const prims = new Map<string, Prim[]>();
 const mats = new Map<string, THREE.MeshLambertMaterial>();
@@ -164,6 +202,7 @@ function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial {
     depthWrite: true,
   });
   if (def.sway) sway(m, def.sway);
+  if (mode === 'leaves') seeThrough(m);
   if (mode === 'flower') {
     // the pack's petals are all one teal: grey them out and let the instance colour paint them, stems keep their green
     const base = m.onBeforeCompile;

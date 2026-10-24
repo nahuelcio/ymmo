@@ -1654,6 +1654,12 @@ export function animateQ(q: QAnim, s: AnimState): number {
     q.acts[n].setEffectiveWeight((q.w[n] = w));
   }
   const jog = q.acts.Jog_Fwd_Loop, jog0 = jog?.time ?? 0;
+  // the run at the pace it really goes over the ground (a walk is 6 m/s): slower sliding along a trunk, quicker hasted
+  if (jog && s.speed !== undefined) {
+    const pace = THREE.MathUtils.clamp(s.speed / 6, 0.6, 1.25);
+    jog.timeScale = pace;
+    if (q.acts[JOG_LEGS]) q.acts[JOG_LEGS].timeScale = pace;
+  }
   for (const b of q.heldNow) b.quaternion.copy(q.held.get(b)!);
   q.heldNow.length = 0;
   q.mixer.update(dt);
