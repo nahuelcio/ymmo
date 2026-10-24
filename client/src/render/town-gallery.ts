@@ -56,6 +56,7 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
   Object.assign(window, { townFx: fx, townWorld: world }); // dev hooks: effects, and the sky (townWorld.flashSky)
 
   let last = performance.now();
+  const sunScreen = new THREE.Vector3();
   renderer.setAnimationLoop((now) => {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -63,6 +64,10 @@ export async function mountTownGallery(host: HTMLElement): Promise<() => void> {
     cam.position.set(target.x + Math.sin(a) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(a) * Math.cos(pitch) * dist);
     cam.lookAt(target);
     world.updateSky(cam, cam.far, dt);
+    // the sun's light shafts, as the game sets them (game.ts frame)
+    const sv = sunScreen.copy(cam.position).addScaledVector(ATMOS.sunDir, 500).project(cam);
+    const off = Math.max(Math.abs(sv.x), Math.abs(sv.y));
+    post.setSun(sv.x * 0.5 + 0.5, sv.y * 0.5 + 0.5, sv.z < 1 ? (1 - Math.min(1, Math.max(0, (off - 1) / 1.4))) * Math.min(1, Math.max(0, ATMOS.sunDir.y * 6)) * 0.9 : 0);
     world.follow(target);
     lights.update(target, now / 1000);
     motes.update(target, dt, now / 1000);

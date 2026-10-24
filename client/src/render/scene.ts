@@ -93,7 +93,9 @@ const SkyShader = {
         float m = max(dot(d, -sunDir), 0.0); // the moon rides opposite the sun
         c += vec3(0.78, 0.85, 1.0) * (smoothstep(0.9993, 0.9996, m) + pow(m, 60.0) * 0.1) * night;
       }
-      gl_FragColor = vec4(c, 1.0);
+      // alpha 0: the sky (whatever is drawn over it writes its own), which the sun's light shafts take their light from
+      // (atmos.ts GodRaysShader); the canvas is opaque, so it shows nowhere
+      gl_FragColor = vec4(c, 0.0);
     }`,
 };
 

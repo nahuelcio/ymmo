@@ -108,6 +108,12 @@ export class PostFX {
     const c = new EffectComposer(this.renderer, target);
     c.addPass(new RenderPass(this.scene, this.camera));
     if (vol) c.addPass(new VolumetricPass(this.camera as THREE.PerspectiveCamera, this.sun!));
+    if (s.godRays) {
+      // on the HDR image, before tone mapping, so only what is truly bright streaks; and straight after the scene (the
+      // volumetric light keeps its alpha), before the AO and the bloom touch the alpha that tells the sky apart
+      this.rays = new ShaderPass(GodRaysShader);
+      c.addPass(this.rays);
+    }
     if (s.ao) {
       const ao = new GTAO(this.scene, this.camera, size.x, size.y);
       ao.blendIntensity = 0.8;
@@ -116,11 +122,6 @@ export class PostFX {
     if (s.bloom) {
       this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), s.bloomStrength, 0.4, 0.82);
       c.addPass(this.bloom);
-    }
-    if (s.godRays) {
-      // on the HDR image, before tone mapping, so only what is truly bright streaks
-      this.rays = new ShaderPass(GodRaysShader);
-      c.addPass(this.rays);
     }
     c.addPass(new OutputPass());
     if (s.colorGrade) {
