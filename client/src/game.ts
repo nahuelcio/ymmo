@@ -18,7 +18,8 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, STRIKE_LEAD, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, type Rig } from './render/models';
+import { CHAIN_MS, swingOf, swingTiming, windup } from './render/swings';
 import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
@@ -63,6 +64,11 @@ export interface CEnt {
   /** the swing under way is a dagger skill's stab, or a skill's own blow (render/quaternius.ts animateQ, SKILL_ANIM) */
   atkStab?: boolean;
   atkAnim?: string;
+  /** which blow of its weapon's chain the swing is, the time between its last two swings (render/swings.ts), and whom
+   * it is at */
+  atkStep?: number;
+  atkInterval?: number;
+  atkTarget?: number;
   /** the skill being cast and when it began: what the body does with its weapon meanwhile (castMove) */
   castSkill?: string;
   castAt?: number;
@@ -588,7 +594,7 @@ export class Game {
       if (!s) return;
       // our first swing was already played on the click (prediction)
       if (m.s === this.me.id && performance.now() - this.predictedSwing < 350) this.predictedSwing = 0;
-      else (s.atkAt = performance.now()), (s.atkStab = undefined), (s.atkAnim = undefined);
+      else this.startSwing(s, performance.now(), m.tg);
       const ranged = !!t && s.pos.distanceTo(t.pos) > 5;
       if (ranged) play('miss', this.near(s) * 0.5);
       // an archer looses an arrow as the drawn string goes (quaternius.ts aimBow: a little over half the shot)
@@ -612,9 +618,13 @@ export class Game {
     onSync('fx', (m) => m.s, (m) => this.onFx(m.s, m.tg, m.skill));
     n.on('cd', (m) => this.cooldowns.set(m.key, { end: performance.now() + m.ms, dur: m.ms }));
     onSync('died', (m) => m.id, (m) => {
-      const e = this.ents.get(m.id);
-      if (e) e.deadAt = performance.now();
-      if (e) play('death', this.near(e) * (m.id === this.me.id ? 1.3 : 0.6));
+      const e = this.ents.get(m.id), now = performance.now();
+      if (e) {
+        // the fall and its cry as the killing blow lands (deadAge stays below 0 until then)
+        e.deadAt = this.deathAt(e, now);
+        const vol = this.near(e) * (m.id === this.me.id ? 1.3 : 0.6);
+        setTimeout(() => play('death', vol), e.deadAt - now);
+      }
       if (m.id === this.me.id) {
         this.castBar = null;
         this.ui.dialogs.death();
@@ -1074,15 +1084,15 @@ export class Game {
     for (const r of add) {
       const old = this.ents.get(r.id);
       let snaps: Snap[] = [];
-      let atkAt = 0;
+      let atkAt = 0, atkStep: number | undefined, atkInterval: number | undefined, atkTarget: number | undefined;
       if (old) {
         snaps = old.snaps;
-        atkAt = old.atkAt;
+        ({ atkAt, atkStep, atkInterval, atkTarget } = old);
         this.removeEnt(r.id);
       }
       const c = this.buildEnt(r);
       c.snaps = snaps;
-      c.atkAt = atkAt;
+      Object.assign(c, { atkAt, atkStep, atkInterval, atkTarget });
       if (old) c.pos.copy(old.pos);
       this.ents.set(r.id, c);
       this.entLayer.add(c.root);
@@ -1122,7 +1132,7 @@ export class Game {
       c.rec.hp = hp;
       if (hpChanged || wasDead !== ((f & F_DEAD) !== 0)) this.updateHpBar(c);
       if (wasDead && !(f & F_DEAD)) c.deadAt = -1;
-      if (!wasDead && f & F_DEAD && c.deadAt < 0) c.deadAt = performance.now();
+      if (!wasDead && f & F_DEAD && c.deadAt < 0) c.deadAt = this.deathAt(c);
       if (colorChanged) this.refreshLabel(c);
       this.pushSnap(c, x, z, ry, t);
     }
@@ -1267,6 +1277,14 @@ export class Game {
   }
 
   private onDmg(m: Extract<S2C, { t: 'dmg' }>) {
+    // a player's melee blow is shown as it lands (render/swings.ts impact), not as the swing starts: the server sends the
+    // swing and its damage in the same tick
+    const src = this.ents.get(m.s), sw = src && !src.atkAnim && !m.dot && !m.heal ? this.swingNow(src) : undefined;
+    const wait = sw ? sw.impactMs - (performance.now() - src!.atkAt) : 0;
+    if (wait > 15 && wait < 1500) return void setTimeout(() => this.showDmg(m), wait);
+    this.showDmg(m);
+  }
+  private showDmg(m: Extract<S2C, { t: 'dmg' }>) {
     const t = this.ents.get(m.tg);
     if (!t) return;
     const mine = m.tg === this.me.id, byMe = m.s === this.me.id;
@@ -1339,6 +1357,35 @@ export class Game {
     const wt = c.rec.k === 'p' && c.rec.w ? ITEMS[c.rec.w]?.weaponType : undefined;
     return wt && wt !== 'bow' && wt !== 'staff' ? wt : undefined;
   }
+  /** The blow a player's body is swinging (render/swings.ts) and its timing; none for a bow, a mob or a plain rig. */
+  private swingNow(c: CEnt) {
+    const kind = c.rig?.q?.swing;
+    if (!kind) return undefined;
+    return swingTiming(swingOf(kind, c.atkStep ?? 0, c.atkStab), c.atkInterval);
+  }
+  /** A basic attack's swing begins: the next blow of the chain if it follows the last closely, else the first; the
+   * swish of the blade just before it lands. */
+  private startSwing(c: CEnt, now = performance.now(), target?: number) {
+    const gap = now - c.atkAt;
+    c.atkTarget = target;
+    c.atkStep = gap < CHAIN_MS ? (c.atkStep ?? -1) + 1 : 0;
+    if (c === this.self) c.atkInterval = 60000 / Math.max(1, this.me.atkSpd);
+    else if (gap > 250 && gap < 2500) c.atkInterval = gap;
+    c.atkAt = now;
+    c.atkStab = undefined;
+    c.atkAnim = undefined;
+    const t = this.swingNow(c), vol = this.near(c) * (c === this.self ? 0.22 : 0.16);
+    if (t && vol > 0.01) setTimeout(() => play('miss', vol), Math.max(0, t.impactMs - 60));
+  }
+  /** When a body's death shows: now, or as the blow that killed it lands (a melee swing at it still on its way). */
+  private deathAt(e: CEnt, now = performance.now()) {
+    for (const c of this.ents.values()) {
+      if (c.atkTarget !== e.id || c.atkAnim) continue;
+      const sw = this.swingNow(c), land = sw ? c.atkAt + sw.impactMs : 0;
+      if (land > now && land - now < 1500) return land;
+    }
+    return now;
+  }
   /** What a body does with its weapon while it casts (render/quaternius.ts animateQ): a melee fighter readies it for a
    * physical skill's blow, and raises it for a fighter's buff or taunt; anything else (a spell) is cast with the free hand. */
   private castMove(c: CEnt): 'strike' | 'raise' | 'dance' | undefined {
@@ -1386,9 +1433,13 @@ export class Game {
     const anim = def ? this.skillAnim(skill) : undefined;
     if (anim && skillStrikes(anim)) (s.atkAnim = anim), (s.atkStab = undefined), (s.atkAt = performance.now());
     else if (def && def.kind === 'phys' && this.meleeWeapon(s)) {
+      // the weapon's first blow, on from the wind-up the cast held it at (render/quaternius.ts), so it lands now
       s.atkStab = this.meleeWeapon(s) === 'dagger';
       s.atkAnim = undefined;
-      s.atkAt = performance.now() - STRIKE_LEAD[s.atkStab ? 'stab' : 'slash'];
+      s.atkStep = 0;
+      s.atkTarget = t?.id;
+      const kind = s.rig?.q?.swing, sw = kind ? swingOf(kind, 0, true) : undefined;
+      s.atkAt = performance.now() - (sw ? (windup(sw) / swingTiming(sw, s.atkInterval).speed) * 1000 : 140);
     }
     if (!def || !t) return;
     // the archer's skills: arrows, loosed as the shot goes (the draw was held through the cast)
@@ -1620,11 +1671,9 @@ export class Game {
     const self = this.self, now = performance.now();
     const interval = 60000 / Math.max(1, this.me.atkSpd);
     if (self && !(self.flags & (F_DEAD | F_CASTING)) && now - self.atkAt > interval && self.pos.distanceTo(c.pos) <= this.reach() + c.radius - 0.2 && (this.isHostile(c) || this.ctrl)) {
-      self.atkAt = now;
+      // the swing starts on the click; the hit (its sound and number) comes with the server's 'dmg', as the blow lands
+      this.startSwing(self, now, c.id);
       this.predictedSwing = now;
-      // instant local cue; the real hit sound and number still come from the server's 'dmg'
-      play('hit', 0.3);
-      this.fx.burst(c.pos.clone().setY(c.pos.y + c.height * 0.55), 0xffffff, 0.22, 140);
       const dx = c.pos.x - self.pos.x, dz = c.pos.z - self.pos.z;
       self.ry = Math.atan2(dx, dz);
     }
@@ -2277,6 +2326,8 @@ export class Game {
           atkAnim: c.atkAnim,
           castAge: c.castAt ? now - c.castAt : Infinity,
           atkStab: c.atkStab,
+          atkStep: c.atkStep,
+          atkInterval: c.atkInterval,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
           swimming,

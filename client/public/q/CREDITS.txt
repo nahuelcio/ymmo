@@ -2,8 +2,8 @@ Character models and animations, CC0 1.0 (public domain): https://creativecommon
 Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library 1 and 2
   by Quaternius (quaternius.com)
 anims.gltf also carries clips retargeted onto the same rig from KayKit Character Animations 1.1 by Kay Lousberg
-  (kaylousberg.com): the bow's draw, aim and release, the stab, the dual stab and slice, the kick, the dodge and sitting
-  down on the floor, sat and getting up (KK_*)
+  (kaylousberg.com): the bow's draw, aim and release, the dual stab, slice and chop, the one-handed chop, the
+  two-handed chop, slice, stab and guard, the kick, the dodge and sitting down on the floor, sat and getting up (KK_*)
 heads.glb: made for this game (tools/art/blender/characters.py), on the Quaternius rig
 gear/*.glb: made for this game (tools/art/blender/gear.py)
 

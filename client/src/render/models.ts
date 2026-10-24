@@ -10,7 +10,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, armorPiece, capePiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
-export { STRIKE_LEAD, skillAnimOf, skillStrikes } from './quaternius';
+export { skillAnimOf, skillStrikes } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
@@ -46,6 +46,10 @@ export interface AnimState {
   atkAge: number; // ms since last attack started (Infinity if none)
   /** this swing is a stab (a dagger's skill): a dagger otherwise cuts and stabs in turn */
   atkStab?: boolean;
+  /** which blow of the chain this swing is (render/swings.ts: they count up while the swings follow closely), and the
+   * time between swings, which sets how fast each plays */
+  atkStep?: number;
+  atkInterval?: number;
   casting: boolean;
   /** what the cast does with the weapon (game.ts castMove): readies it for a blow, raises it (a fighter's buff or taunt,
    * a song), or dances (a bladedancer's dance); none for a spell, cast with the free hand. castAge: ms since the cast began */
@@ -62,8 +66,9 @@ export interface AnimState {
   swimming?: boolean;
   /** sitting on the ground rather than a seat (straightens the legs) */
   floorSit?: boolean;
-  /** the gallery's ?clip=: this clip, on a loop, over everything else */
+  /** the gallery's ?clip=: this clip, on a loop, over everything else (held at clipAt seconds, when given) */
   clip?: string;
+  clipAt?: number;
   /** a skill's own animation (quaternius.ts SKILL_ANIM, skillAnimOf): the one being cast (with castAge), and the one whose
    * blow is playing (with atkAge) */
   castAnim?: string;
@@ -714,6 +719,7 @@ export function playerModel(race: Race, cls: ClassType, weapon: string | null, c
       inHand: held(),
       bow: !!weapon && ITEMS[weapon]?.weaponType === 'bow',
       dagger: !!weapon && ITEMS[weapon]?.weaponType === 'dagger',
+      weaponType: weapon && /wand/.test(weapon) ? 'wand' : weapon ? ITEMS[weapon]?.weaponType : undefined, shield: !!shield,
       offHand: pair ? held() : null,
     });
   }

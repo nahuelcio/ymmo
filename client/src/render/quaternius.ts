@@ -4,6 +4,8 @@ import { basis } from '../assets';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { animate, playerModel, type AnimState, type Rig } from './models';
 import { contactPhases, crossed } from './footfalls';
+import { COMBAT_MS, DEFAULT_INTERVAL, HOLD_MS, SWINGS, swingKind, swingOf, swingTiming, windup, type SwingKind } from './swings';
+import { WeaponTrail } from './trail';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 import { STAND_UP_MS } from '../../../shared/src/nodes';
 
@@ -485,11 +487,18 @@ export function loadQ(): Promise<void> {
     });
     armature.m!.updateMatrixWorld(true);
     restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
-    // a pair of swords swings with each hand in turn: the same slash with the left
-    if (clips.Sword_Attack) clips.Sword_Attack_M = mirrorClip(clips.Sword_Attack, armature.m!, 'Sword_Attack_M');
-    // the jab with the right hand, the dagger's: a stab; and the spell gesture made with the weapon hand (a fighter's buff)
+    // the jab with the right hand, the dagger's (its stab skill); and the spell gesture made with the weapon hand (a
+    // fighter's buff)
     if (clips.Punch_Jab) clips.Punch_Jab_M = mirrorClip(clips.Punch_Jab, armature.m!, 'Punch_Jab_M');
     if (clips.Spell_Simple_Idle_Loop) clips.Spell_Simple_Idle_Loop_M = mirrorClip(clips.Spell_Simple_Idle_Loop, armature.m!, 'Spell_Simple_Idle_Loop_M');
+    // attacking on the run: each blow's upper body (spine_01 up) over the jog's hips and legs (animateQ). The halves
+    // share the clips' tracks, so they cost no memory
+    const upper = new Set<string>();
+    armature.m!.getObjectByName('spine_01')?.traverse((b) => upper.add(b.name));
+    const half = (clip: THREE.AnimationClip, name: string, top: boolean) =>
+      new THREE.AnimationClip(name, clip.duration, clip.tracks.filter((t) => upper.has(THREE.PropertyBinding.parseTrackName(t.name).nodeName) === top));
+    for (const n of SWING_CLIPS) if (clips[n]) clips[n + UPPER] = half(clips[n], n + UPPER, true);
+    if (clips.Jog_Fwd_Loop) clips[JOG_LEGS] = half(clips.Jog_Fwd_Loop, JOG_LEGS, false);
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     // the bones at rest, for measuring the body and the tunic's collar (neckline)
     heads.scene.updateMatrixWorld(true);
@@ -603,10 +612,13 @@ export interface QOpts {
   inHand?: THREE.Object3D | null;
   /** inHand is a bow: held upright in the left hand, and drawn and loosed as it shoots (aimBow) */
   bow?: boolean;
-  /** a second weapon, in the left hand (a pair of swords): the attacks then swing with each hand in turn */
+  /** a second weapon, in the left hand (a pair of swords) */
   offHand?: THREE.Object3D | null;
-  /** inHand is a dagger: it cuts and stabs in turn, and its skills stab */
+  /** inHand is a dagger: its stab turns the blade along the forearm, and its skills stab */
   dagger?: boolean;
+  /** the held weapon's type (items.ts weaponType) and whether a shield is worn: which blows it swings (swings.ts) */
+  weaponType?: string;
+  shield?: boolean;
 }
 
 export interface QAnim {
@@ -619,11 +631,11 @@ export interface QAnim {
   cape?: QCape;
   /** a bow's arms, as aimBow poses them */
   bow?: BowArms;
-  /** a pair of swords: whether the swing under way is the left hand's, and how far into it the last frame was */
-  dual?: { left: boolean; age: number };
-  /** a dagger: whether the swing under way is a stab, how far into it the last frame was, and the dagger's anchor (turned
-   * to point the blade along the forearm as it stabs) with its rest pose and the forearm */
-  dagger?: { stab: boolean; age: number; grip?: THREE.Object3D; rest: THREE.Quaternion; la: THREE.Object3D; hand: THREE.Object3D };
+  /** a dagger: its anchor (turned to point the blade along the forearm as it stabs), with its rest pose and the forearm */
+  dagger?: { grip?: THREE.Object3D; rest: THREE.Quaternion; la: THREE.Object3D; hand: THREE.Object3D };
+  /** the blows its basic attack swings (swings.ts; none for a bow), and the streaks behind its blades as they do */
+  swing: SwingKind | null;
+  trails: WeaponTrail[];
 }
 
 /** The bones a bow is drawn with, and how far into the archer's stance the arms are (0..1). */
@@ -710,12 +722,9 @@ function hold(q: QAnim, bones: THREE.Object3D[]) {
 }
 
 /**
- * A dagger held for the stab: a fist leaves the blade across, so as the jab plays (`w`, its weight) the anchor turns to
+ * A dagger held for the stab: a fist leaves the blade across, so as the stab plays (`w`, its weight) the anchor turns to
  * point the blade along the forearm, the way it goes in. Otherwise it rests as attached.
  */
-/** A dagger's stab: KayKit's (retargeted), or the jab mirrored to the right hand when an old animation file lacks it. */
-const STAB_CLIP = (q: QAnim) => (q.acts.KK_Stab ? 'KK_Stab' : 'Punch_Jab_M');
-
 function stabGrip(d: NonNullable<QAnim['dagger']>, w: number) {
   const g = d.grip;
   if (!g) return;
@@ -1363,18 +1372,25 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Sword_Attack_M', 'Punch_Jab', 'Punch_Jab_M', 'Death01', 'Sitting_Enter', 'Sitting_Exit', 'KK_Sit_Floor_Down', 'KK_Sit_Floor_StandUp', ...DRIVEN_SKILL_CLIPS]) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit', 'KK_Sit_Floor_Down', 'KK_Sit_Floor_StandUp', ...DRIVEN_SKILL_CLIPS, ...SWING_CLIPS, ...SWING_CLIPS.map((n) => n + UPPER)]) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
+  // a streak behind each blade as it swings (not a bow's)
+  const trails = o.bow ? [] : [o.inHand, o.offHand].filter((h): h is THREE.Object3D => !!h).map((h) => new WeaponTrail(h, root));
+  for (const t of trails) root.add(t.mesh);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, held: new Map(), heldNow: [], cape, dual: o.offHand ? { left: true, age: Infinity } : undefined,
-      dagger: o.dagger && o.inHand ? { stab: false, age: Infinity, grip: o.inHand.parent ?? undefined, rest: o.inHand.parent?.quaternion.clone() ?? new THREE.Quaternion(),
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, held: new Map(), heldNow: [], cape, trails,
+      swing: o.bow ? null : swingKind(o.weaponType, !!o.inHand, o.shield),
+      dagger: o.dagger && o.inHand ? { grip: o.inHand.parent ?? undefined, rest: o.inHand.parent?.quaternion.clone() ?? new THREE.Quaternion(),
         la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
       bow: o.bow ? { root, head: byName.Head, spine: ['spine_01', 'spine_02', 'spine_03'].map((n) => byName[n]), neck: byName.neck_01,
         string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
         gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, up: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined },
-    dispose: () => skeletons.forEach((s) => s.dispose()),
+    dispose: () => {
+      skeletons.forEach((s) => s.dispose());
+      trails.forEach((t) => t.dispose());
+    },
   };
 }
 
@@ -1386,7 +1402,11 @@ const ATK_MS = 700;
  * each clip's blow lands (its arm's fastest turn).
  */
 interface SkillAnim { cast?: string; start?: number; hold?: number; loop?: string | true; speed?: number; strike?: string; from?: number }
-const STAB: SkillAnim = { cast: 'KK_Stab', hold: 0.28, strike: 'KK_Stab', from: 0.28, speed: 1.6 };
+// the dagger's stabs: a quick jab with the blade (the weapon hand's: Punch_Jab_M), a low lunge in from behind, and the
+// wide spinning finisher for the mark
+const STAB: SkillAnim = { cast: 'Punch_Jab_M', hold: 0.06, strike: 'Punch_Jab_M', from: 0.06 };
+const LUNGE: SkillAnim = { cast: 'Sword_Dash', hold: 0.2, strike: 'Sword_Dash', from: 0.2 };
+const MARK: SkillAnim = { cast: 'Sword_Regular_C', hold: 0.4, strike: 'Sword_Regular_C', from: 0.4 };
 const DUAL_STAB: SkillAnim = { cast: 'KK_Dual_Stab', hold: 0.22, strike: 'KK_Dual_Stab', from: 0.22, speed: 1.6 };
 const CUT_A: SkillAnim = { cast: 'Sword_Regular_A', hold: 0.12, strike: 'Sword_Regular_A', from: 0.12 };
 const CUT_B: SkillAnim = { cast: 'Sword_Regular_B', hold: 0.1, strike: 'Sword_Regular_B', from: 0.1 };
@@ -1403,7 +1423,7 @@ const BOW: SkillAnim = { cast: 'KK_Bow_Draw', start: BOW_NOCK, speed: 1.5, loop:
 const BOW_UP: SkillAnim = { cast: 'KK_Bow_Draw_Up', start: BOW_NOCK, speed: 1.5, hold: 1.25, strike: 'KK_Bow_Release_Up', from: 0 };
 const SKILL_ANIM: Record<string, SkillAnim> = {
   // the dagger's: stabs, quick cuts, a hook, a throw, a kick and a dodge back
-  stab: STAB, backstab: STAB, death_mark: STAB, assassinate: DUAL_STAB, silent_execution: DUAL_STAB,
+  stab: STAB, backstab: LUNGE, death_mark: MARK, assassinate: DUAL_STAB, silent_execution: DUAL_STAB,
   venom_blade: CUT_A, hemorrhage: CUT_A, eviscerate: CUT_B, shadow_dance: HOOK, fan_of_knives: THROW, low_blow: KICK,
   evasion: { cast: 'KK_Dodge_Back', hold: 0.38 },
   // the shield's: the bash, the charge behind it, and the guard while a defence is cast
@@ -1413,7 +1433,12 @@ const SKILL_ANIM: Record<string, SkillAnim> = {
 };
 /** The clips the entity's clock drives (set to a time each frame), and the bow's string as each one leaves it. */
 const DRIVEN_SKILL_CLIPS = new Set(Object.values(SKILL_ANIM).flatMap((a) => [a.loop === true ? '' : a.cast ?? '', a.strike ?? '']).filter(Boolean));
-DRIVEN_SKILL_CLIPS.add('KK_Stab');
+/** The basic attack's blows and their ways back (swings.ts), driven the same way; the guards between them loop. */
+const SWING_CLIPS = Object.values(SWINGS).flatMap((set) => set.swings.flatMap((s) => (s.rec ? [s.clip, s.rec] : [s.clip])));
+/** A blow's upper body alone (its name + UPPER), and the jog's hips and legs alone: a blow struck on the run (loadQ). */
+const UPPER = '_Upper', JOG_LEGS = 'Jog_Fwd_Loop_Legs';
+/** The clips a dagger thrusts with: its blade turns along the forearm while they play (stabGrip). */
+const DAGGER_THRUSTS = ['Punch_Cross', `Punch_Cross${UPPER}`, 'Punch_Jab_M', 'KK_Dual_Stab'];
 /** The animation a skill plays (a key of SKILL_ANIM): its own, or the bow's for a bow skill; none for the rest. */
 /** Whether a skill's animation has a blow to play as it goes off (a buff's, a dodge's or a guard's has only its cast). */
 export const skillStrikes = (key: string | undefined) => !!(key && SKILL_ANIM[key]?.strike);
@@ -1440,20 +1465,51 @@ function bowDrawn(clip: string, t: number): number | null {
 /** The bow's auto-attack: drawn (from the nock) over the first 380 ms - game.ts looses the arrow then - and the release
  * after it at BOW_REL_SPEED, so its follow-through reaches where the next draw starts as the next shot comes. */
 const BOW_LOOSE_MS = 380, BOW_REL_SPEED = 1.35;
-/** Where a skill's blow is held while it is cast (clip seconds): the jab's guard, the dagger drawn back; the top of the
- * sword swing's wind-up, the arm raised. */
-const STAB_GUARD = 0.12, SLASH_WINDUP = 0.3;
-/** How far into the 700 ms attack those are: game.ts starts a skill's blow there (it was wound up by the cast), so it
- * lands as the skill does (Punch_Jab_M is 0.87 s, Sword_Attack 1.53 s, both played over ATK_MS). */
-export const STRIKE_LEAD = { stab: 100, slash: 140 };
 /** How far an archer turns side-on at full draw (radians: ~65°), the chest away from the mark. */
 const BOW_TURN = 1.13;
+/** What basicSwing picked: the clip (its time already set) and whether the blade is mid-blow. */
+const _swing = { clip: '', blow: false };
+/**
+ * The basic attack at s.atkAge into it (swings.ts): the blow at its pace, its end held ready for the next, then the way
+ * back from a crouched cut (rec) or the weapon's guard until the fight has been quiet a while. On the run the blow plays
+ * out (over the jog's legs: animateQ) and then hands the arms back to the jog. False when none of it is playing (the
+ * plain idle or the jog instead).
+ */
+function basicSwing(q: QAnim, s: AnimState): boolean {
+  const kind = q.swing!, age = s.atkAge, interval = s.atkInterval ?? DEFAULT_INTERVAL;
+  const sw = swingOf(kind, s.atkStep ?? 0, s.atkStab), { speed, doneMs } = swingTiming(sw, interval);
+  const act = q.acts[sw.clip], len = clips[sw.clip]?.duration;
+  if (!act || !len) return false;
+  const endMs = (len / speed) * 1000, hold = Math.max(HOLD_MS, interval - endMs + 150);
+  if (age < (s.moving ? Math.min(endMs, doneMs + 250) : endMs + hold)) {
+    act.time = Math.min((age / 1000) * speed, len - 0.02);
+    _swing.clip = sw.clip;
+    _swing.blow = act.time > sw.impact - 0.2 && act.time < sw.impact + 0.08;
+    return true;
+  }
+  _swing.blow = false;
+  if (s.moving) return false;
+  const rec = sw.rec && q.acts[sw.rec] ? sw.rec : undefined, recAge = age - endMs - hold;
+  if (rec && recAge < clips[rec].duration * 1000) {
+    q.acts[rec].time = Math.min(recAge / 1000, clips[rec].duration - 0.02);
+    _swing.clip = rec;
+    return true;
+  }
+  const stance = SWINGS[kind].stance;
+  if (!stance || !q.acts[stance]) return false;
+  _swing.clip = stance; // a guard on a loop, at its own pace
+  return true;
+}
+
 /** Pose the character for this frame. Returns how many feet landed in it (footsteps). */
 export function animateQ(q: QAnim, s: AnimState): number {
   const dt = Math.min(0.1, Math.max(0, s.t - q.t));
   q.t = s.t;
-  const atk = q.armed ? 'Sword_Attack' : 'Punch_Jab';
   let cur = 'Idle_Loop';
+  /** a second clip at full weight with it: the jog's legs under a blow struck on the run */
+  let cur2 = '';
+  /** the blade is mid-blow (its streak is drawn) */
+  let blow = false;
   /** play a one-shot clip at ms into it, held on its last frame */
   const at = (name: string, ms: number) => {
     if (!q.acts[name]) return false;
@@ -1497,9 +1553,9 @@ export function animateQ(q: QAnim, s: AnimState): number {
     // a melee skill readies the weapon for its blow while it is cast (a dagger drawn back for the stab, a blade raised
     // for the cut, a pair's next hand), a fighter's buff or taunt raises the weapon hand, a spell uses the free hand
     if (s.castMove === 'dance' && q.acts.Dance_Loop) cur = 'Dance_Loop'; // a bladedancer's dance is danced
-    else if (s.castMove === 'strike' && q.armed) {
-      const next = q.dagger ? STAB_CLIP(q) : q.dual && !q.dual.left ? 'Sword_Attack_M' : 'Sword_Attack';
-      const hold = next === 'KK_Stab' ? 0.28 : next === 'Punch_Jab_M' ? STAB_GUARD : SLASH_WINDUP;
+    else if (s.castMove === 'strike' && q.armed && q.swing) {
+      // the weapon's first blow (a dagger's stab), wound up over a quarter of a second and held: game.ts onFx plays it on
+      const next = swingOf(q.swing, 0, true).clip, hold = windup(swingOf(q.swing, 0, true));
       cur = q.acts[next] ? next : 'Spell_Simple_Idle_Loop';
       if (cur === next) q.acts[cur].time = Math.min(hold, ((s.castAge ?? Infinity) / 250) * hold);
     } else cur = s.castMove === 'raise' && q.acts.Spell_Simple_Idle_Loop_M ? 'Spell_Simple_Idle_Loop_M' : 'Spell_Simple_Idle_Loop';
@@ -1510,6 +1566,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
     cur = a.strike!;
     q.acts[cur].time = Math.min((a.from ?? 0) + (s.atkAge / 1000) * (a.speed ?? 1), clips[cur].duration - 0.02);
     bowAt = bowDrawn(cur, q.acts[cur].time);
+    blow = q.acts[cur].time - (a.from ?? 0) < 0.3; // the blow goes from where the cast held it
   } else if (q.bow && !s.atkAnim && q.acts.KK_Bow_Draw && q.acts.KK_Bow_Release
       && s.atkAge < BOW_LOOSE_MS + (clips.KK_Bow_Release.duration / BOW_REL_SPEED) * 1000) {
     // the bow's auto-attack: draw from the nock, loose as the arrow goes, the release playing out
@@ -1517,23 +1574,24 @@ export function animateQ(q: QAnim, s: AnimState): number {
     q.acts[cur].time = s.atkAge < BOW_LOOSE_MS ? BOW_NOCK + (s.atkAge / BOW_LOOSE_MS) * (1.0 - BOW_NOCK)
       : Math.min(((s.atkAge - BOW_LOOSE_MS) / 1000) * BOW_REL_SPEED, clips.KK_Bow_Release.duration - 0.02);
     bowAt = bowDrawn(cur, q.acts[cur].time);
-  } else if (s.atkAge < ATK_MS && !q.bow && !s.atkAnim) {
+  } else if (q.swing && !s.atkAnim && s.atkAge < COMBAT_MS && basicSwing(q, s)) {
+    // the basic attack (swings.ts): basicSwing set the clip and its time
     // (a skill with its own animation and no blow - a buff, a dodge, a guard - swings nothing as it goes off)
-    // a pair of swords: every new swing (its age starts over) with the other hand
-    if (q.dual) {
-      if (s.atkAge < q.dual.age) q.dual.left = !q.dual.left;
-      q.dual.age = s.atkAge;
+    cur = _swing.clip;
+    blow = _swing.blow;
+    // on the run: the blow's upper body, the legs running on under it
+    if (s.moving && q.acts[cur + UPPER] && q.acts[JOG_LEGS]) {
+      q.acts[cur + UPPER].time = q.acts[cur].time;
+      cur += UPPER;
+      cur2 = JOG_LEGS;
     }
-    // a dagger cuts and stabs in turn; its skills stab
-    if (q.dagger) {
-      if (s.atkAge < q.dagger.age) q.dagger.stab = s.atkStab ?? !q.dagger.stab;
-      q.dagger.age = s.atkAge;
-    }
-    cur = q.dagger?.stab && q.acts[STAB_CLIP(q)] ? STAB_CLIP(q) : q.dual?.left && q.acts.Sword_Attack_M ? 'Sword_Attack_M' : atk;
-    q.acts[cur].time = (s.atkAge / ATK_MS) * (clips[cur].duration - 0.02);
   } else if (s.moving) cur = 'Jog_Fwd_Loop';
   else if (s.dancing) cur = 'Dance_Loop';
-  if (s.clip && q.acts[s.clip]) cur = s.clip; // the gallery's ?clip=
+  if (s.clip && q.acts[s.clip]) {
+    cur = s.clip; // the gallery's ?clip= (&clipAt: held there)
+    cur2 = '';
+    if (s.clipAt !== undefined) q.acts[cur].time = Math.min(s.clipAt, clips[cur].duration - 0.02);
+  }
   // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
   if (!q.acts[cur]) cur = s.moving && !s.swimming ? 'Jog_Fwd_Loop' : 'Idle_Loop';
   // an archer standing still keeps KayKit's bow stance: its release ends in it, so a shot settles back without a snap
@@ -1542,7 +1600,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   for (const n in q.acts) {
     // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
     // where an asymptotic fade kept all of them sampled for most of a minute after every switch
-    let w = q.w[n] + ((n === cur ? 1 : 0) - q.w[n]) * k;
+    let w = q.w[n] + ((n === cur || n === cur2 ? 1 : 0) - q.w[n]) * k;
     if (w < 0.003) w = 0;
     else if (w > 0.997) w = 1;
     q.acts[n].setEffectiveWeight((q.w[n] = w));
@@ -1552,8 +1610,11 @@ export function animateQ(q: QAnim, s: AnimState): number {
   q.heldNow.length = 0;
   q.mixer.update(dt);
   // the jog's clock runs at any weight: a foot lands when it passes one of the clip's landing moments
-  const steps = jog && cur === 'Jog_Fwd_Loop' && q.w.Jog_Fwd_Loop > 0.5 ? crossed(jog0 / jog.getClip().duration, jog.time / jog.getClip().duration, jogSteps) : 0;
-  if (q.dagger) stabGrip(q.dagger, Math.max(q.w.Punch_Jab_M ?? 0, q.w.KK_Stab ?? 0, q.w.KK_Dual_Stab ?? 0));
+  // (its legs alone under a blow struck on the run keep the same clock: both started together and run at the same pace)
+  const legs = cur === 'Jog_Fwd_Loop' ? q.w.Jog_Fwd_Loop : cur2 === JOG_LEGS ? q.w[JOG_LEGS] : 0;
+  const steps = jog && legs > 0.5 ? crossed(jog0 / jog.getClip().duration, jog.time / jog.getClip().duration, jogSteps) : 0;
+  if (q.dagger) stabGrip(q.dagger, Math.max(...DAGGER_THRUSTS.map((n) => q.w[n] ?? 0)));
+  for (const t of q.trails) t.update(blow, dt);
   if (q.bow) aimBow(q, q.bow, s, dt, bowAt === null ? null : { drawn: bowAt, up: bowUp(cur, q.acts[cur]?.time ?? 0) });
   if (q.cape) capeCloth(q.cape, s, dt);
   return steps;
@@ -1661,8 +1722,6 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
         const rig = playerModel(race, 'fighter', w, set ? `${set}_plate` : 'brigandine_tunic', { g, hs: i % 3, hc: 0 },
           set ? [`${set}_helm`, `${set}_gauntlets`, `${set}_greaves`, `${set}_boots`, null] : ['brigandine_helm', 'reinforced_gloves', 'brigandine_gaiters', 'reinforced_boots', null]);
         rig.root.position.set((i - (list.length - 1) / 2) * 1.1, 0, 0);
-        // a still swing (?atk=) is the right hand's; ?left holds it on the left one's
-        if (p.has('left') && rig.q?.dual) rig.q.dual = { left: true, age: -Infinity };
         scene.add(rig.root);
         return rig;
       });
@@ -1762,8 +1821,10 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   // ?walk=6: running, the rigs go forward at that speed (m/s) for real, the camera with them, as in the game (a cape
   // trails in still air, not in the wind it gets running in place)
   const walk = Number(p.get('walk')) || 0, walked = new THREE.Vector3();
-  // ?atk=350: the attack held at that moment (ms into it), to see a pose frame by frame (an archer's draw)
-  const atkAt = p.has('atk') ? Number(p.get('atk')) : undefined;
+  // ?atk=350: the attack held at that moment (ms into it), to see a pose frame by frame (an archer's draw); &step=N: which
+  // blow of the weapon's chain (swings.ts). Else the swings come every &interval= ms (900), chained as in a fight
+  const atkAt = p.has('atk') ? Number(p.get('atk')) : undefined, interval = Number(p.get('interval')) || 900;
+  const fixedStep = Number(p.get('step')) || 0;
   since = clock();
   let last = clock();
   renderer.setAnimationLoop(() => {
@@ -1781,9 +1842,15 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       rig.root.rotation.y = spin ? now / 2500 : ry;
       animate(rig, {
         moving: false, casting: false, t: now / 1000 + i,
-        atkAge: state === 'Atacar' ? (atkAt ?? age % 1100) : Infinity, deadAge: state === 'Morir' ? age : -1, ...STATES[state],
+        // (&atk with &clipStep: each rig of the row that much further into the swing, a strip of it)
+        atkAge: state === 'Atacar' ? (atkAt !== undefined ? atkAt + i * (Number(p.get('clipStep')) || 0) * 1000 : age % interval) : Infinity,
+        deadAge: state === 'Morir' ? age : -1, ...STATES[state],
+        atkStep: atkAt !== undefined ? fixedStep : Math.floor(age / interval), atkInterval: interval,
+        ...(p.has('moving') && { moving: true }), // &moving: attacking on the run (the legs take over once a blow lands)
         atkStab: p.has('stab') || undefined, // ?stab: a dagger's swing is always the stab (else cut and stab in turn)
         clip: p.get('clip') ?? undefined, // ?clip=<name>: that clip on a loop (the libraries' clips, to look at them)
+        // &clipAt=<s>: held there; &clipStep=<s>: each rig of the row that much further on, a strip of the clip's frames
+        clipAt: p.has('clipAt') ? Number(p.get('clipAt')) + i * (Number(p.get('clipStep')) || 0) : undefined,
         // ?skill=<id>: that skill cast for a second, then its blow, over and over (the bow's for a bow skill: &weapon=bow)
         ...(p.has('skill') && (() => {
           const key = skillAnimOf(p.get('skill')!, p.get('weapon') ?? undefined), t = p.has('skillAt') ? Number(p.get('skillAt')) : age % 2400; // &skillAt: frozen there

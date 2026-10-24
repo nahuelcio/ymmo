@@ -1,7 +1,8 @@
 // Regenerates client/public/q from the Quaternius packs (all CC0):
 //   Modular Character Outfits - Fantasy, Universal Base Characters (hairstyles), Universal Animation Library 1 and 2.
 // and retargets a few clips from KayKit Character Animations 1.1 (Kay Lousberg, CC0; kaylousberg.com) onto the same rig:
-// the bow, the stab, the kick, the dodge and sitting on the floor, which the Quaternius libraries lack (retarget.mjs).
+// the bow, the two-handed and dual-wielded blows, the kick, the dodge and sitting on the floor, which the Quaternius
+// libraries lack (retarget.mjs).
 // The heads come from heads.glb, built by art/blender/characters.py.
 // Usage: node scripts/q-assets.mjs <dir with the packs unzipped> [more dirs...] [--anims-only]
 //   --anims-only: rebuild just anims.gltf/.bin from the animation libraries (the other packs need not be there)
@@ -19,18 +20,29 @@ if (!SRCS.length || !SRCS.every((d) => fs.existsSync(d))) throw new Error('usage
 const OUT = path.resolve('client/public/q');
 const CLIPS = [
   'Idle_Loop', 'Jog_Fwd_Loop', 'Sword_Attack', 'Punch_Jab', 'Spell_Simple_Idle_Loop', 'Death01', 'Dance_Loop',
+  // the fists' second blow (render/swings.ts)
+  'Punch_Cross',
   // world interactions (shared/src/nodes.ts): sitting, swimming, picking
   'Sitting_Enter', 'Sitting_Idle_Loop', 'Sitting_Exit', 'Swim_Idle_Loop', 'Swim_Fwd_Loop', 'Fixing_Kneeling',
 ];
 /** From Universal Animation Library 2 (the same rig): the shield's blows and guard, quick cuts, a hook, a throw, a dash. */
-const CLIPS2 = ['Shield_OneShot', 'Shield_Dash', 'Idle_Shield_Loop', 'Sword_Regular_A', 'Sword_Regular_B', 'Melee_Hook', 'OverhandThrow', 'Sword_Dash'];
+const CLIPS2 = [
+  'Shield_OneShot', 'Shield_Dash', 'Idle_Shield_Loop', 'Sword_Regular_A', 'Sword_Regular_B', 'Melee_Hook', 'OverhandThrow', 'Sword_Dash',
+  // the sword's chain of blows and the way back from each (render/swings.ts)
+  'Sword_Regular_C', 'Sword_Regular_A_Rec', 'Sword_Regular_B_Rec',
+];
 /** From KayKit Character Animations 1.1 (Rig_Medium), retargeted: [library, clip, name in the game]. */
 const KAYKIT = [
   ['CombatRanged', 'Ranged_Bow_Idle', 'KK_Bow_Idle'], ['CombatRanged', 'Ranged_Bow_Draw', 'KK_Bow_Draw'], ['CombatRanged', 'Ranged_Bow_Aiming_Idle', 'KK_Bow_Aim'],
   ['CombatRanged', 'Ranged_Bow_Release', 'KK_Bow_Release'], ['CombatRanged', 'Ranged_Bow_Draw_Up', 'KK_Bow_Draw_Up'], ['CombatRanged', 'Ranged_Bow_Release_Up', 'KK_Bow_Release_Up'],
   ['MovementAdvanced', 'Running_HoldingBow', 'KK_Bow_Run'], ['MovementAdvanced', 'Dodge_Backward', 'KK_Dodge_Back'],
-  ['CombatMelee', 'Melee_1H_Attack_Stab', 'KK_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Stab', 'KK_Dual_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Slice', 'KK_Dual_Slice'],
+  ['CombatMelee', 'Melee_Dualwield_Attack_Stab', 'KK_Dual_Stab'], ['CombatMelee', 'Melee_Dualwield_Attack_Slice', 'KK_Dual_Slice'],
   ['CombatMelee', 'Melee_Unarmed_Attack_Kick', 'KK_Kick'],
+  // the blows of each weapon (render/swings.ts): the one-handed chop, the two-handed ones (spear, staff) and their guard,
+  // a pair's
+  ['CombatMelee', 'Melee_1H_Attack_Chop', 'KK_1H_Chop'],
+  ['CombatMelee', 'Melee_2H_Attack_Chop', 'KK_2H_Chop'], ['CombatMelee', 'Melee_2H_Attack_Slice', 'KK_2H_Slice'], ['CombatMelee', 'Melee_2H_Attack_Stab', 'KK_2H_Stab'],
+  ['CombatMelee', 'Melee_2H_Idle', 'KK_2H_Idle'], ['CombatMelee', 'Melee_Dualwield_Attack_Chop', 'KK_Dual_Chop'],
   ['Simulation', 'Sit_Floor_Down', 'KK_Sit_Floor_Down'], ['Simulation', 'Sit_Floor_Idle', 'KK_Sit_Floor_Idle'], ['Simulation', 'Sit_Floor_StandUp', 'KK_Sit_Floor_StandUp'],
 ];
 /** How much further than the retarget brings them the hips go down sat on the floor, of their standing height (seatOnFloor). */
