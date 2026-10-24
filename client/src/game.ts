@@ -18,7 +18,7 @@ import type { Net } from './net';
 import { CameraController } from './render/camera';
 import { FxManager } from './render/fx';
 import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
-import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillStrikes, type Rig } from './render/models';
+import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillImpactMs, skillStrikes, type Rig } from './render/models';
 import { CHAIN_MS, swingOf, swingTiming, windup } from './render/swings';
 import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
@@ -69,9 +69,11 @@ export interface CEnt {
   atkStep?: number;
   atkInterval?: number;
   atkTarget?: number;
-  /** the skill being cast and when it began: what the body does with its weapon meanwhile (castMove) */
+  /** the skill being cast and when it began: what the body does with its weapon meanwhile (castMove); and when the
+   * casting flag last went off (its 'fx' may still be on the way) */
   castSkill?: string;
   castAt?: number;
+  castEndAt?: number;
   deadAt: number;
   height: number;
   radius: number;
@@ -1128,6 +1130,7 @@ export class Game {
       }
       const hpChanged = c.hp !== hp;
       c.hp = hp;
+      if (c.flags & F_CASTING && !(f & F_CASTING)) c.castEndAt = performance.now();
       c.flags = f;
       c.rec.hp = hp;
       if (hpChanged || wasDead !== ((f & F_DEAD) !== 0)) this.updateHpBar(c);
@@ -1277,10 +1280,10 @@ export class Game {
   }
 
   private onDmg(m: Extract<S2C, { t: 'dmg' }>) {
-    // a player's melee blow is shown as it lands (render/swings.ts impact), not as the swing starts: the server sends the
-    // swing and its damage in the same tick
-    const src = this.ents.get(m.s), sw = src && !src.atkAnim && !m.dot && !m.heal ? this.swingNow(src) : undefined;
-    const wait = sw ? sw.impactMs - (performance.now() - src!.atkAt) : 0;
+    // a player's melee blow (the basic attack's or a skill's) is shown as it lands, not as the swing starts: the server
+    // sends the swing and its damage in the same tick
+    const src = this.ents.get(m.s), ms = src && !m.dot && !m.heal ? this.impactMs(src) : undefined;
+    const wait = ms !== undefined ? ms - (performance.now() - src!.atkAt) : 0;
     if (wait > 15 && wait < 1500) return void setTimeout(() => this.showDmg(m), wait);
     this.showDmg(m);
   }
@@ -1363,6 +1366,10 @@ export class Game {
     if (!kind) return undefined;
     return swingTiming(swingOf(kind, c.atkStep ?? 0, c.atkStab), c.atkInterval);
   }
+  /** How long after c.atkAt its blow lands (ms): a skill's own blow, or the basic attack's; none for a spell or a shot. */
+  private impactMs(c: CEnt) {
+    return c.atkAnim ? skillImpactMs(c.atkAnim) : this.swingNow(c)?.impactMs;
+  }
   /** A basic attack's swing begins: the next blow of the chain if it follows the last closely, else the first; the
    * swish of the blade just before it lands. */
   private startSwing(c: CEnt, now = performance.now(), target?: number) {
@@ -1380,8 +1387,8 @@ export class Game {
   /** When a body's death shows: now, or as the blow that killed it lands (a melee swing at it still on its way). */
   private deathAt(e: CEnt, now = performance.now()) {
     for (const c of this.ents.values()) {
-      if (c.atkTarget !== e.id || c.atkAnim) continue;
-      const sw = this.swingNow(c), land = sw ? c.atkAt + sw.impactMs : 0;
+      if (c.atkTarget !== e.id) continue;
+      const ms = this.impactMs(c), land = ms !== undefined ? c.atkAt + ms : 0;
       if (land > now && land - now < 1500) return land;
     }
     return now;
@@ -2315,14 +2322,19 @@ export class Game {
       }
       if (animNow && c.rig) {
         c.posed = true;
+        // another player's cast shows once its 'cast' says what it is (the flag comes a little ahead of it), and stays
+        // over the moment between the flag going off and its 'fx' arriving, so the pose neither guesses nor drops and
+        // pops back
+        const casting = c.flags & F_CASTING ? c === self || c.rec.k !== 'p' || c.castSkill !== undefined
+          : !!c.castSkill && now - (c.castEndAt ?? -Infinity) < this.interpDelay + 120;
         // the pose says when a foot lands: the footstep sounds then
         if (now >= (c.hitStop ?? 0)) this.footfall(c, c === self, now, animate(c.rig, {
           dancing: !!c.danceUntil,
           moving,
           atkAge: now - c.atkAt,
-          casting: (c.flags & F_CASTING) !== 0,
-          castMove: c.flags & F_CASTING ? this.castMove(c) : undefined,
-          castAnim: c.flags & F_CASTING ? this.skillAnim(c.castSkill) : undefined,
+          casting,
+          castMove: casting ? this.castMove(c) : undefined,
+          castAnim: casting ? this.skillAnim(c.castSkill) : undefined,
           atkAnim: c.atkAnim,
           castAge: c.castAt ? now - c.castAt : Infinity,
           atkStab: c.atkStab,

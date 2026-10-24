@@ -22,6 +22,8 @@ const CLIPS = [
   'Idle_Loop', 'Jog_Fwd_Loop', 'Sword_Attack', 'Punch_Jab', 'Spell_Simple_Idle_Loop', 'Death01', 'Dance_Loop',
   // the fists' second blow (render/swings.ts)
   'Punch_Cross',
+  // a spell: raising it, and loosing it as it goes off (quaternius.ts SKILL_ANIM)
+  'Spell_Simple_Enter', 'Spell_Simple_Shoot',
   // world interactions (shared/src/nodes.ts): sitting, swimming, picking
   'Sitting_Enter', 'Sitting_Idle_Loop', 'Sitting_Exit', 'Swim_Idle_Loop', 'Swim_Fwd_Loop', 'Fixing_Kneeling',
 ];
@@ -30,6 +32,8 @@ const CLIPS2 = [
   'Shield_OneShot', 'Shield_Dash', 'Idle_Shield_Loop', 'Sword_Regular_A', 'Sword_Regular_B', 'Melee_Hook', 'OverhandThrow', 'Sword_Dash',
   // the sword's chain of blows and the way back from each (render/swings.ts)
   'Sword_Regular_C', 'Sword_Regular_A_Rec', 'Sword_Regular_B_Rec',
+  // the melee skills' blows, cut out of UAL2's combos (quaternius.ts SKILL_ANIM)
+  'Sword_Regular_Combo', 'Sword_Heavy_Combo',
 ];
 /** From KayKit Character Animations 1.1 (Rig_Medium), retargeted: [library, clip, name in the game]. */
 const KAYKIT = [
@@ -43,6 +47,11 @@ const KAYKIT = [
   ['CombatMelee', 'Melee_1H_Attack_Chop', 'KK_1H_Chop'],
   ['CombatMelee', 'Melee_2H_Attack_Chop', 'KK_2H_Chop'], ['CombatMelee', 'Melee_2H_Attack_Slice', 'KK_2H_Slice'], ['CombatMelee', 'Melee_2H_Attack_Stab', 'KK_2H_Stab'],
   ['CombatMelee', 'Melee_2H_Idle', 'KK_2H_Idle'], ['CombatMelee', 'Melee_Dualwield_Attack_Chop', 'KK_Dual_Chop'],
+  // the skills' (quaternius.ts SKILL_ANIM): a leap and a chop, the spins, and the spells' raising, channelling and loosing
+  ['CombatMelee', 'Melee_1H_Attack_Jump_Chop', 'KK_Jump_Chop'], ['CombatMelee', 'Melee_2H_Attack_Spin', 'KK_Spin'],
+  ['CombatMelee', 'Melee_2H_Attack_Spinning', 'KK_Spinning'], ['CombatMelee', 'Melee_1H_Attack_Slice_Diagonal', 'KK_1H_Slice_Diagonal'],
+  ['CombatRanged', 'Ranged_Magic_Raise', 'KK_Magic_Raise'], ['CombatRanged', 'Ranged_Magic_Shoot', 'KK_Magic_Shoot'],
+  ['CombatRanged', 'Ranged_Magic_Spellcasting_Long', 'KK_Magic_Channel'], ['CombatRanged', 'Ranged_Magic_Summon', 'KK_Magic_Summon'],
   ['Simulation', 'Sit_Floor_Down', 'KK_Sit_Floor_Down'], ['Simulation', 'Sit_Floor_Idle', 'KK_Sit_Floor_Idle'], ['Simulation', 'Sit_Floor_StandUp', 'KK_Sit_Floor_StandUp'],
 ];
 /** How much further than the retarget brings them the hips go down sat on the floor, of their standing height (seatOnFloor). */

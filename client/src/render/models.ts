@@ -10,7 +10,7 @@ import { NPCS } from '../../../shared/src/data/world';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mat as sceneMat } from './scene';
 import { animateQ, armorPiece, capePiece, HEADGEAR, qPlayer, qReady, qWeapon, shieldPiece, type Helm, type QAnim, type QZone } from './quaternius';
-export { skillAnimOf, skillStrikes } from './quaternius';
+export { skillAnimOf, skillImpactMs, skillStrikes } from './quaternius';
 import { crossed } from './footfalls';
 import { realMob } from './mobs';
 
