@@ -65,6 +65,10 @@ export interface CEnt {
   /** the swing under way is a dagger skill's stab, or a skill's own blow (render/quaternius.ts animateQ, SKILL_ANIM) */
   atkStab?: boolean;
   atkAnim?: string;
+  /** vanished until then (the assassin's Vanish): our own body drawn faded meanwhile (others don't get it at all from
+   * the server), and the faded materials in place of its own while it is (Game.ghost) */
+  invisUntil?: number;
+  ghost?: Map<THREE.Mesh, THREE.Material | THREE.Material[]>;
   /** where it stood last frame and how fast it goes over the ground (smoothed), and since when a player walking is
    * held in place (pressed against a trunk): the run plays at that pace, or stops */
   groundX?: number;
@@ -1032,9 +1036,37 @@ export class Game {
     c.hit.scale.set(1, 1, 1);
   }
 
+  /** A body drawn faded (vanished) or as itself again: its own materials swapped for see-through copies, then back. */
+  private ghost(c: CEnt, on: boolean) {
+    if (!!c.ghost === on) return;
+    if (on) {
+      const own = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+      const fade = (m: THREE.Material) => {
+        const f = m.clone();
+        f.transparent = true;
+        f.opacity = 0.28 * m.opacity;
+        f.depthWrite = false;
+        return f;
+      };
+      c.model.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return;
+        own.set(o, o.material);
+        o.material = Array.isArray(o.material) ? o.material.map(fade) : fade(o.material);
+      });
+      c.ghost = own;
+    } else {
+      for (const [o, m] of c.ghost!) {
+        for (const f of Array.isArray(o.material) ? o.material : [o.material]) f.dispose();
+        o.material = m;
+      }
+      c.ghost = undefined;
+    }
+  }
+
   private removeEnt(id: number) {
     const c = this.ents.get(id);
     if (!c) return;
+    this.ghost(c, false);
     this.leaveTent(c);
     this.entLayer.remove(c.root);
     this.labelLayer.remove(c.tag);
@@ -1098,15 +1130,15 @@ export class Game {
     for (const r of add) {
       const old = this.ents.get(r.id);
       let snaps: Snap[] = [];
-      let atkAt = 0, atkStep: number | undefined, atkInterval: number | undefined, atkTarget: number | undefined;
+      let atkAt = 0, atkStep: number | undefined, atkInterval: number | undefined, atkTarget: number | undefined, invisUntil: number | undefined;
       if (old) {
         snaps = old.snaps;
-        ({ atkAt, atkStep, atkInterval, atkTarget } = old);
+        ({ atkAt, atkStep, atkInterval, atkTarget, invisUntil } = old);
         this.removeEnt(r.id);
       }
       const c = this.buildEnt(r);
       c.snaps = snaps;
-      Object.assign(c, { atkAt, atkStep, atkInterval, atkTarget });
+      Object.assign(c, { atkAt, atkStep, atkInterval, atkTarget, invisUntil });
       if (old) c.pos.copy(old.pos);
       this.ents.set(r.id, c);
       this.entLayer.add(c.root);
@@ -1393,6 +1425,7 @@ export class Game {
     c.atkAt = now;
     c.atkStab = undefined;
     c.atkAnim = undefined;
+    c.invisUntil = 0; // a blow ends a Vanish (the server's 'reveal' says so too)
     const t = this.swingNow(c), vol = this.near(c) * (c === this.self ? 0.22 : 0.16);
     if (t && vol > 0.01) setTimeout(() => play('miss', vol), Math.max(0, t.impactMs - 60));
   }
@@ -1428,6 +1461,9 @@ export class Game {
     const s = this.ents.get(sId), t = this.ents.get(tId);
     if (!s) return;
     const chest = (e: CEnt) => e.pos.clone().setY(e.pos.y + e.height * 0.6);
+    // out of a Vanish (it attacked or cast): seen again (others get it back with the next snapshot)
+    if (skill === 'reveal') return void (s.invisUntil = 0);
+    if (skill === 'vanish') s.invisUntil = performance.now() + (SKILLS.vanish?.buff?.dur ?? 8000);
     if (skill === 'potion') return this.vfx('potion', s);
     if (skill === 'chest') {
       play('coin');
@@ -2301,6 +2337,7 @@ export class Game {
       const sitting = (c.flags & F_SITTING) !== 0 && !isStanding(c);
       if (swimming) c.root.position.y = SWIM_BODY_Y + Math.sin(tSec * 2 + c.id) * 0.05;
       c.model.rotation.y = c.ry;
+      if (c.invisUntil || c.ghost) this.ghost(c, (c.invisUntil ?? 0) > now);
       if (c.rig) {
         const hk = c.hitAt ? 1 - (now - c.hitAt) / 180 : 0;
         if (hk > 0) {

@@ -438,7 +438,7 @@ export const EN = {
   "evasion": { "name": "Evasion", "desc": "Evasion +25 for 20s." },
   "fan_of_knives": { "name": "Fan of Knives", "desc": "Knives all around you: 220% damage and poison for 6s." },
   "eviscerate": { "name": "Eviscerate", "desc": "A blow to end the fight. 550% damage." },
-  "vanish": { "name": "Vanish", "desc": "You vanish: enemies lose your trail and you move 30% faster for 8s." },
+  "vanish": { "name": "Vanish", "desc": "You turn invisible for 8s: nobody sees you or can attack you, and enemies lose your trail. Attacking or using a skill reveals you. You move 30% faster for 8s." },
   "killer_instinct": { "name": "Killer Instinct", "desc": "P.Atk +30% and Critical +20 for 40s." },
   "hemorrhage": { "name": "Hemorrhage", "desc": "380% damage and a heavy bleed for 8s." },
   "shadow_dance": { "name": "Shadow Dance", "desc": "340% damage to everything around you and a 4s slow." },

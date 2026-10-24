@@ -25,7 +25,7 @@ impl World {
         let (x, z) = if at.is_none() && (d().is_deep(x, z) || x.abs() > half || z.abs() > half) { let p = crate::world::town_near(Some((x, z))); (p.x, p.z) } else { (x, z) };
         let mut p = Player {
             sid: m.sid, god: false, out: m.out, lang: m.lang, stats: Stats::default(), buffs: vec![], target: None, intent: None, next_attack: 0.0, casting: None, queued: None,
-            cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, in_pvp: false, charges: 0, auto_loot: false, dodge_until: 0.0, rtt: 80.0,
+            cooldowns: HashMap::new(), pvp_until: 0.0, pvp_on: false, in_pvp: false, charges: 0, auto_loot: false, dodge_until: 0.0, invis_until: 0.0, rtt: 80.0,
             saved_at: crate::world::now_ms() - rnd() * 60000.0, look: row.look, last_combat: 0.0, escape_at: 0.0, party: None, pending_invite: None, trade: None, pending_trade: None, pending_clan: None, pending_ally: None, clan_look: None, clan_mods: ClanMods::default(),
             talking_to: None, sitting: None, stand_until: 0.0, gather: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(), hotbar: row.hotbar,
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,

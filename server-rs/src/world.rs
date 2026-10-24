@@ -162,6 +162,17 @@ impl World {
         self.near(x, z, r).into_iter().filter(|id| matches!(self.ents[id].k, Kind::Player(_))).collect()
     }
 
+    /** A vanished player (the assassin's Vanish): nobody else sees it, picks it out or attacks it. */
+    pub fn unseen(&self, id: u32) -> bool { self.pl(id).is_some_and(|p| p.invis_until > self.now) }
+
+    /** Out of hiding (it attacked or cast): seen again from the next snapshot; its own client stops drawing it faded. */
+    pub fn reveal(&mut self, pid: u32) {
+        if !self.unseen(pid) { return; }
+        self.pl_mut(pid).unwrap().invis_until = 0.0;
+        let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        self.send_near(x, z, json!({ "t": "fx", "s": pid, "tg": pid, "skill": "reveal" }));
+    }
+
     pub fn pl(&self, id: u32) -> Option<&Player> { self.ents.get(&id).and_then(|e| e.player()) }
     pub fn pl_mut(&mut self, id: u32) -> Option<&mut Player> { self.ents.get_mut(&id).and_then(|e| e.player_mut()) }
     pub fn c(&self, id: u32) -> Option<&Common> { self.ents.get(&id).map(|e| &e.c) }
@@ -561,6 +572,8 @@ impl World {
         {
             let p = self.ents[&pid].player().unwrap();
             for &id in &ids {
+                // a vanished player is out of everyone else's sight: gone for them until it shows itself again
+                if id != pid && self.unseen(id) { continue; }
                 seen.insert(id);
                 let e = &self.ents[&id];
                 // interest management: far things (>50 m) only every other tick (10 Hz)

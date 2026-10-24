@@ -155,6 +155,8 @@ pub struct Player {
     pub charges: u32,
     pub auto_loot: bool,
     pub dodge_until: f64,
+    /** vanished (the assassin's Vanish) until then: nobody else sees it or can pick it out, attacking or casting ends it */
+    pub invis_until: f64,
     pub rtt: f64,
     pub saved_at: f64,
     pub look: Look,

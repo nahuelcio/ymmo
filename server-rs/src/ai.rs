@@ -12,7 +12,8 @@ const AGGRO_RANGE: f64 = 9.0;
 impl World {
     fn valid_enemy(&self, pid: u32, hx: f64, hz: f64) -> bool {
         match self.ents.get(&pid) {
-            Some(e) if e.player().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH,
+            // (a vanished player is lost to it: it turns on someone else or goes home)
+            Some(e) if e.player().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH && !self.unseen(pid),
             _ => false,
         }
     }
@@ -120,7 +121,7 @@ impl World {
         if tpl.aggressive {
             for pid in self.near_players(mx, mz, AGGRO_RANGE) {
                 let pe = &self.ents[&pid];
-                if !pe.c.dead && !in_town(pe.c.x, pe.c.z) && pe.player().unwrap().level < tpl.level + 8 {
+                if !pe.c.dead && !in_town(pe.c.x, pe.c.z) && pe.player().unwrap().level < tpl.level + 8 && !self.unseen(pid) {
                     let m = self.ents.get_mut(&mid).unwrap().mob_mut().unwrap();
                     m.target = Some(pid);
                     map_set(&mut m.hate, pid, 1.0);
@@ -323,7 +324,7 @@ impl World {
     fn barrage(&mut self, mid: u32, b: &Barrage, now: f64) {
         let (mx, mz, p_atk) = { let e = &self.ents[&mid]; (e.c.x, e.c.z, e.mob().unwrap().stats.p_atk) };
         let mut picks: Vec<(f64, u32)> = self.near_players(mx, mz, b.range).into_iter()
-            .filter(|id| { let c = &self.ents[id].c; !c.dead && !in_town(c.x, c.z) })
+            .filter(|id| { let c = &self.ents[id].c; !c.dead && !in_town(c.x, c.z) && !self.unseen(*id) })
             .map(|id| (rnd(), id)).collect();
         picks.sort_by(|a, c| a.0.partial_cmp(&c.0).unwrap_or(std::cmp::Ordering::Equal));
         for (k, (_, pid)) in picks.into_iter().take(b.count as usize).enumerate() {

@@ -38,6 +38,7 @@ impl World {
         if te.mob().is_some() { return None; }
         let Some(t) = te.player() else { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()) };
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
+        if self.unseen(tid) { return Some(tr(l, "Tu objetivo desapareció.", "Your target has vanished.").into()); }
         if in_town(pc.x, pc.z) || in_town(te.c.x, te.c.z) { return Some(tr(l, "No se puede atacar en una zona de paz.", "You cannot attack in a peace zone.").into()); }
         if p.party.is_some() && p.party == t.party { return Some(tr(l, "No podés atacar a alguien de tu party.", "You cannot attack a party member.").into()); }
         match crate::clans::relation(p.char_id, t.char_id) {
@@ -69,6 +70,7 @@ impl World {
     }
 
     pub fn auto_attack(&mut self, pid: u32, tid: u32, now: f64) {
+        self.reveal(pid); // a blow shows where it came from
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(x, z, json!({ "t": "atk", "s": pid, "tg": tid }));
         let (p_def, _, eva) = self.def_stats(tid);
@@ -336,8 +338,11 @@ impl World {
         }
     }
 
-    /** The mobs fighting `pid` round it lose its trail: they turn on whoever else they hate, or go home. */
-    fn vanish(&mut self, pid: u32) {
+    /** `pid` vanishes for `ms`: nobody else sees it or can pick it out (World::unseen) until it attacks or casts, and the
+     * mobs fighting it round it lose its trail: they turn on whoever else they hate, or go home. */
+    fn vanish(&mut self, pid: u32, ms: f64) {
+        let now = self.now;
+        if let Some(p) = self.pl_mut(pid) { p.invis_until = now + ms; }
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         for id in self.near(x, z, 25.0) {
             let Some(m) = self.ents.get_mut(&id).and_then(|e| e.mob_mut()) else { continue };
@@ -444,6 +449,7 @@ impl World {
             t.hp = 0.0;
             t.intent = None;
             t.escape_at = 0.0;
+            t.invis_until = 0.0;
             t.buffs.clear();
             t.charges = 0;
             t.recalc();
@@ -564,6 +570,8 @@ impl World {
         p.casting = Some((def.id.clone(), target, now + dur));
         // A skill is one action. Leaving an attack intent here made fighters keep swinging after it.
         p.intent = None;
+        // casting shows a vanished caster (but Vanish itself)
+        if !def.vanish.unwrap_or(false) { self.reveal(pid); }
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(x, z, json!({ "t": "cast", "s": pid, "tg": target, "skill": def.id, "dur": dur }));
     }
@@ -594,6 +602,10 @@ impl World {
             p.send(json!({ "t": "cd", "key": def.id, "ms": cd }));
         }
         match self.ents.get(&target) { Some(t) if !t.c.dead && t.is_fighter() => {}, _ => return }
+        // the target vanished while this was cast at it: nothing to land on
+        if def.target == "enemy" && target != pid && self.unseen(target) {
+            return self.sys(pid, "Tu objetivo desapareció.", "Your target has vanished.");
+        }
         let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(px, pz, json!({ "t": "fx", "s": pid, "tg": target, "skill": def.id }));
         match def.kind.as_str() {
@@ -664,7 +676,7 @@ impl World {
                 }
             }
             "buff" => {
-                if def.vanish.unwrap_or(false) { self.vanish(pid); }
+                if def.vanish.unwrap_or(false) { self.vanish(pid, def.buff.as_ref().map_or(8000.0, |b| b.dur)); }
                 let Some(buff) = &def.buff else { return };
                 for tg in std::iter::once(target).chain(self.party_around(pid, target, def.aoe)) {
                     let Some(t) = self.pl_mut(tg) else { continue };
