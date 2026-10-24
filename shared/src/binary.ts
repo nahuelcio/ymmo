@@ -67,6 +67,7 @@ export function decodeSnap(buf: ArrayBuffer): { upd: EntUpd[]; gone: number[]; s
 /**
  * The frequent client messages as binary (server-rs/src/binary.rs decode_c2s turns them back into JSON):
  *   move: u8 16, f64 x, f64 z · attack: u8 17, u32 id, u8 force · dash: u8 18, f64 x, z, dx, dz · pong: u8 19, f64 s · stop: u8 20
+ *   move with its route: u8 21, f64 x, f64 z, u8 n, n × (f32 x, f32 z)
  * Anything else returns null and goes as JSON.
  */
 export function encodeC2S(m: C2S): ArrayBuffer | null {
@@ -77,7 +78,17 @@ export function encodeC2S(m: C2S): ArrayBuffer | null {
     return d.buffer;
   };
   switch (m.t) {
-    case 'move': return f64s(16, m.x, m.z);
+    case 'move': {
+      const p = m.path;
+      if (!p?.length || p.length > 255) return f64s(16, m.x, m.z);
+      const d = new DataView(new ArrayBuffer(18 + p.length * 8));
+      d.setUint8(0, 21);
+      d.setFloat64(1, m.x, true);
+      d.setFloat64(9, m.z, true);
+      d.setUint8(17, p.length);
+      p.forEach((w, i) => (d.setFloat32(18 + i * 8, w.x, true), d.setFloat32(22 + i * 8, w.z, true)));
+      return d.buffer;
+    }
     case 'dash': return f64s(18, m.x, m.z, m.dx, m.dz);
     case 'pong': return f64s(19, m.s);
     case 'stop': return new Uint8Array([20]).buffer;

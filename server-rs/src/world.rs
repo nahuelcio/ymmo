@@ -1,7 +1,7 @@
 //! The authoritative world: entities, spatial grid, movement, snapshots and the 20 Hz tick
 //! (port of server/src/world/World.ts). Systems live in their own files as more `impl World` blocks.
 use crate::binary::{encode_snap, q_pos, q_rot, wire_time};
-use crate::collision::{dash_end, find_path, line_clear, push_out, P};
+use crate::collision::{dash_end, find_path, line_clear, line_clear_grid, push_out, P};
 use crate::data::{d, RaidDef};
 use crate::db::Db;
 use crate::ent::*;
@@ -225,8 +225,39 @@ impl World {
     pub fn later(&mut self, at: f64, f: impl FnOnce(&mut World, f64) + Send + 'static) { self.deferred.push((at, Box::new(f))); }
 
     /**
+     * A walk's route as the client planned it (it predicts the walk along it), taken when every leg of it is clear and
+     * it is no wild detour: both then walk the same way round the trees (step_toward). From where the server has the
+     * walker - a step or two behind the client - to the route's first point it plans that bit itself if it must.
+     * Anything off about it and the server plans the whole walk, as before.
+     */
+    pub fn client_path(&mut self, id: u32, tx: f64, tz: f64, pts: Vec<P>) {
+        let now = self.now;
+        let Some(e) = self.ents.get_mut(&id) else { return };
+        let (sx, sz) = (e.c.x, e.c.z);
+        let mut len = 0.0;
+        let (mut px, mut pz) = (sx, sz);
+        for p in &pts {
+            len += (p.x - px).hypot(p.z - pz);
+            (px, pz) = (p.x, p.z);
+        }
+        let sound = !pts.is_empty() && len <= (tx - sx).hypot(tz - sz) * 3.0 + 30.0
+            && pts.windows(2).all(|w| line_clear(w[0].x, w[0].z, w[1].x, w[1].z));
+        if !sound {
+            e.c.nav = None;
+            return;
+        }
+        let mut path = if line_clear(sx, sz, pts[0].x, pts[0].z) { Vec::new() } else {
+            let mut lead = find_path(sx, sz, pts[0].x, pts[0].z);
+            lead.pop(); // its end is the route's first point
+            lead
+        };
+        path.extend(pts);
+        e.c.nav = Some(Nav { gx: tx, gz: tz, at: now, path, fixed: true });
+    }
+
+    /**
      * Move e toward (tx,tz) around static obstacles. Returns true when within stop.
-     * Straight line when clear, otherwise follows a cached A* path.
+     * The client's own route when it sent one (client_path), else straight when clear, else a cached A* path.
      */
     pub fn step_toward(&mut self, id: u32, tx: f64, tz: f64, speed: f64, dt: f64, stop: f64) -> bool {
         let now = self.now;
@@ -241,9 +272,14 @@ impl World {
         // swimming is slower (deep water, shared/src/terrain.ts isDeep)
         let swim = if d().is_deep(e.c.x, e.c.z) { d().c.swim_speed } else { 1.0 };
         let mut budget = speed * swim * e.c.speed_mul(now) * dt;
-        if !line_clear(e.c.x, e.c.z, tx, tz) {
-            let stale = match &e.c.nav { None => true, Some(n) => n.path.is_empty() || (n.gx - tx).hypot(n.gz - tz) > 1.5 || now - n.at > 1500.0 };
-            if stale { e.c.nav = Some(Nav { gx: tx, gz: tz, at: now, path: find_path(e.c.x, e.c.z, tx, tz) }); }
+        // The client's route, walked as it is: re-planning from here (a step or two behind the client) went round
+        // the other side of a tree now and then, and the two then pulled each other about among the trunks.
+        let fixed = matches!(&e.c.nav, Some(n) if n.fixed && n.gx == tx && n.gz == tz && !n.path.is_empty());
+        // (a player's way is checked exactly, a mob's on the walk grid: quick enough for every mob on every tick)
+        let clear = !fixed && if e.player().is_some() { line_clear(e.c.x, e.c.z, tx, tz) } else { line_clear_grid(e.c.x, e.c.z, tx, tz) };
+        if !clear {
+            let stale = !fixed && match &e.c.nav { None => true, Some(n) => n.path.is_empty() || (n.gx - tx).hypot(n.gz - tz) > 1.5 || now - n.at > 1500.0 };
+            if stale { e.c.nav = Some(Nav { gx: tx, gz: tz, at: now, path: find_path(e.c.x, e.c.z, tx, tz), fixed: false }); }
             let (mut ex, mut ez) = (e.c.x, e.c.z);
             let path = &mut e.c.nav.as_mut().unwrap().path;
             while path.len() > 1 && (path[0].x - ex).hypot(path[0].z - ez) < 0.15 { path.remove(0); }
@@ -274,11 +310,14 @@ impl World {
         let (dx, dz) = (wx - e.c.x, wz - e.c.z);
         let wd = { let h = dx.hypot(dz); if h == 0.0 { 1e-4 } else { h } };
         let step = budget.min((wd - wstop).max(0.0));
-        e.c.ry = dx.atan2(dz);
         // players walk with the walk grid's radius, like the client's prediction: with their own (0.5 against 0.45)
         // a gap the paths go through held the server back while the client walked on
         let r = if e.player().is_some() { d().c.walk_radius } else { e.c.radius };
         let np = push_out(e.c.x + (dx / wd) * step, e.c.z + (dz / wd) * step, r);
+        // facing where it actually goes (sliding along a trunk, along it): facing the waypoint showed it walking
+        // sideways into the tree
+        let (mx, mz) = (np.x - e.c.x, np.z - e.c.z);
+        e.c.ry = if mx.hypot(mz) > step * 0.3 && mx.hypot(mz) > 1e-4 { mx.atan2(mz) } else { dx.atan2(dz) };
         // Held where it is on the last stretch: the point lies closer to an obstacle than the walker's radius, so
         // this is as close as it gets. Walking on was walking in place until the next click (the client the same).
         if wx == tx && wz == tz && dd < 1.0 && step > 1e-4 && (np.x - e.c.x).hypot(np.z - e.c.z) < step * 0.1 {
@@ -446,7 +485,8 @@ impl World {
             if e.c.has("stun", now) { return self.sys(pid, "Estás aturdido.", "You are stunned."); }
             if e.player().unwrap().cooldowns.get("dash").copied().unwrap_or(0.0) > now { return; }
         }
-        let (px, pz, radius) = { let c = &self.ents[&pid].c; (c.x, c.z, c.radius) };
+        // the walk grid's radius, like walking and the client's dashEnd (its own 0.5 ended the roll elsewhere among trees)
+        let (px, pz, radius) = { let c = &self.ents[&pid].c; (c.x, c.z, d().c.walk_radius) };
         // the client predicts the roll from where it sees itself: accept that start if it's close to ours
         if x.is_finite() && z.is_finite() && (x - px).hypot(z - pz) < 4.0 {
             let s = push_out(x, z, radius);
@@ -469,6 +509,8 @@ impl World {
         self.set_pos(pid, end.x, end.z);
         let keep_move = self.pl(pid).unwrap().intent.is_some();
         let e = self.ents.get_mut(&pid).unwrap();
+        // rolled off the client's route: plan the rest from here
+        if let Some(n) = e.c.nav.as_mut() { n.fixed = false; }
         e.c.ry = dx.atan2(dz);
         if !keep_move { e.c.moving = false; }
         let p = e.player_mut().unwrap();

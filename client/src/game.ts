@@ -12,6 +12,7 @@ import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATE
 import { GATHER, isRest, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, tentCentre, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees, layoutZoneProps } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
+import { setSeeThrough } from './render/nature';
 import { BOW_RANGE, MELEE_RANGE } from '../../shared/src/formulas';
 import { dashEnd, findPath, navGrid, pushOut, tripLegs } from '../../shared/src/collision';
 import type { Net } from './net';
@@ -64,6 +65,12 @@ export interface CEnt {
   /** the swing under way is a dagger skill's stab, or a skill's own blow (render/quaternius.ts animateQ, SKILL_ANIM) */
   atkStab?: boolean;
   atkAnim?: string;
+  /** where it stood last frame and how fast it goes over the ground (smoothed), and since when a player walking is
+   * held in place (pressed against a trunk): the run plays at that pace, or stops */
+  groundX?: number;
+  groundZ?: number;
+  groundSpeed?: number;
+  heldSince?: number;
   /** which blow of its weapon's chain the swing is, the time between its last two swings (render/swings.ts), and whom
    * it is at */
   atkStep?: number;
@@ -158,6 +165,8 @@ const PREDICT_SETTLE_MS = 600;
 const PREDICT_MAX_ERR = 12;
 /** Beyond this, the prediction is eased toward the server each frame instead of snapping. */
 const PREDICT_SOFT_ERR = 1;
+/** Under this over the ground (m/s; a walk is 6) a player trying to walk is held in place: it stops running. */
+const HELD_SPEED = 1.5;
 /** Dodge roll animation length. */
 const ROLL_MS = 280;
 
@@ -312,8 +321,10 @@ export class Game {
   /** Client-side predicted move destination for our own character. */
   /** best / progressAt: the closest it has got to (x, z) and when (no headway for a while ends the prediction) */
   private predict: { x: number; z: number; arrivedAt: number; path: { x: number; z: number }[]; chase?: { id: number; range: number; repathAt: number }; best?: number; progressAt?: number } | null = null;
-  private holdMove = false;
-  private lastHoldSend = 0;
+  /** where the camera looks through the crowns to (our chest) */
+  private seeFocus = new THREE.Vector3();
+  /** our own positions over the last moments (updateSelf): each server snapshot is set against where we were then */
+  private selfHist: { t: number; x: number; z: number }[] = [];
   private teleportPending = true;
   private last = performance.now();
   private down: { x: number; y: number } | null = null;
@@ -1069,6 +1080,7 @@ export class Game {
       if (isSelf) {
         this.teleportPending = false;
         this.predict = null;
+        this.selfHist.length = 0;
         c.pos.set(x, heightAt(x, z), z);
         this.cam.snap(c.pos);
       }
@@ -1536,7 +1548,9 @@ export class Game {
       // a tent is picked by its body, not its door
       const at = n.kind === 'tent' ? tentCentre(n) : n, y = heightAt(at.x, at.z);
       a.set(at.x, y, at.z);
-      b.set(at.x, y + nodeHeight(n), at.z);
+      // a tree by its trunk: this low camera's rays cross the crowns on their way to the ground behind them, and a
+      // click there means walking there, not felling the tree
+      b.set(at.x, y + nodeHeight(n) * (n.kind === 'tree' ? 0.45 : 1), at.z);
       const r = n.kind === 'tree' ? Math.max(0.6, n.r + 0.35) : n.kind === 'rock' ? n.r + 0.25 : n.kind === 'tent' ? 2.2 : 0.65;
       if (ray.distanceSqToSegment(a, b, onRay) > r * r) continue;
       const t = onRay.distanceTo(ray.origin);
@@ -1550,7 +1564,6 @@ export class Game {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
     this.route.length = 0;
-    this.holdMove = false;
     this.dropPredictedCooldowns();
     this.net.send({ t: 'interact', node: n.id });
     const reach = reachOf(n), dx = self.pos.x - n.x, dz = self.pos.z - n.z, d = Math.hypot(dx, dz) || 1;
@@ -1590,7 +1603,6 @@ export class Game {
       const def = SKILLS[m.skill], t = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
       if (def && t && def.target === 'enemy' && this.isHostile(t)) this.predictChase(t, Math.max(0.5, def.range + t.radius - 0.4));
     }
-    this.holdMove = false;
     this.net.send(m);
   }
 
@@ -1627,15 +1639,20 @@ export class Game {
     const self = this.self;
     if (!self || self.flags & F_DEAD) return;
     if (!route) this.route.length = 0; // any other move replaces the map route
-    // a cast goes on (the server walks there once it ends): no walking ahead of it here, nor dropping its bar
-    if (this.castBar?.skill) return void this.net.send({ t: 'move', x: p.x, z: p.z });
-    this.dropPredictedCooldowns();
-    this.net.send({ t: 'move', x: p.x, z: p.z });
+    // the route goes with the move: the server walks the same one (server-rs World::client_path), instead of planning
+    // its own from a step or two behind and going round the other side of a tree
     const path = findPath(self.pos.x, self.pos.z, p.x, p.z);
+    const send = () => this.net.send({ t: 'move', x: p.x, z: p.z, ...(path.length <= 64 && { path }) });
+    // a cast goes on (the server walks there once it ends): no walking ahead of it here, nor dropping its bar
+    if (this.castBar?.skill) return void send();
+    this.dropPredictedCooldowns();
+    send();
     const end = path[path.length - 1];
     this.predict = { x: end.x, z: end.z, arrivedAt: 0, path };
     if (marker) {
-      this.clickMarker.position.set(p.x, p.y + 0.08, p.z);
+      // where the walk really ends: the click, or the spot beside what is in the way (a house, a rock) it stops at
+      const at = end.x === p.x && end.z === p.z;
+      this.clickMarker.position.set(end.x, (at ? p.y : heightAt(end.x, end.z)) + 0.08, end.z);
       this.clickMarker.visible = true;
       this.clickAt = performance.now();
     }
@@ -1863,23 +1880,29 @@ export class Game {
   private bindInput() {
     const el = this.renderer.domElement;
     const pointer = new THREE.Vector2();
-    const pick = (e: PointerEvent | MouseEvent, groundOnly = false): Pick => {
+    /** solid: a click to walk, which stops where the eye does (the hover only needs what is under the cursor) */
+    const pick = (e: PointerEvent | MouseEvent, solid = false): Pick => {
       pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
       this.raycaster.setFromCamera(pointer, this.camera);
-      if (!groundOnly) {
-        const hits = this.raycaster.intersectObjects(this.hitboxes, false);
-        for (const h of hits) {
-          const c = this.ents.get(h.object.userData.entId as number);
-          // off-screen entities keep a stale hitbox (their matrices freeze while hidden)
-          if (c && c.root.visible && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
-        }
+      const hits = this.raycaster.intersectObjects(this.hitboxes, false);
+      for (const h of hits) {
+        const c = this.ents.get(h.object.userData.entId as number);
+        // off-screen entities keep a stale hitbox (their matrices freeze while hidden)
+        if (c && c.root.visible && !(c.rec.k === 'm' && c.flags & F_DEAD && c.id !== this.targetId) && c.id !== this.me.id) return { ent: c };
       }
       const t = this.raycaster.intersectObject(this.world.terrain, true)[0];
-      if (!groundOnly && t) {
-        const node = this.pickNode(this.raycaster.ray, t.point);
-        if (node) return { node, point: t.point };
-      }
-      return t ? { point: t.point } : {};
+      if (!t) return {};
+      const node = this.pickNode(this.raycaster.ray, t.point);
+      if (node) return { node, point: t.point };
+      if (!solid) return { point: t.point };
+      // The ray went on to the ground under what the eye stopped at: a lake's bed (3-4 times its depth farther off from
+      // this low camera) or the ground behind a house. Walk to the water's surface, or the foot of the wall or roof.
+      const ray = this.raycaster.ray;
+      let point = t.point;
+      if (point.y < WATER_LEVEL && ray.direction.y < 0) point = ray.at((WATER_LEVEL - ray.origin.y) / ray.direction.y, new THREE.Vector3());
+      const s = this.raycaster.intersectObjects(this.world.solids, true)[0];
+      if (s && s.distance < ray.origin.distanceTo(point)) point = s.point.clone().setY(heightAt(s.point.x, s.point.z));
+      return { point };
     };
     const cursorFor = (c: CEnt | undefined) => {
       if (!c) return CURSORS.move;
@@ -1887,7 +1910,8 @@ export class Game {
       if (c.rec.k === 'i') return CURSORS.pickup;
       return CURSORS.select;
     };
-    // Left: act on press (no waiting for release); hold to keep walking toward the cursor.
+    // Left: act on press (no waiting for release). A click is one destination: walking on toward the cursor while the
+    // button was held re-picked it under a cursor the camera had carried along, a step or two off the click.
     const dropNodeTip = () => {
       if (!this.nodeTip) return;
       hideTip();
@@ -1906,22 +1930,16 @@ export class Game {
       dropNodeTip();
       if (e.button !== 0 || e.pointerType === 'touch') return; // touch acts on tap (pointerup)
       (document.activeElement as HTMLElement | null)?.blur();
-      const r = pick(e);
+      const r = pick(e, true);
       if (r.ent) clickEnt(r.ent);
       else if (r.node) this.useNode(r.node);
-      else if (r.point) {
-        this.moveTo(r.point, true);
-        this.holdMove = true;
-        this.lastHoldSend = performance.now();
-        el.setPointerCapture(e.pointerId);
-      }
+      else if (r.point) this.moveTo(r.point, true);
     });
     el.addEventListener('pointerup', (e) => {
-      if (e.button === 0) this.holdMove = false;
       // mobile: a tap (not a camera drag) selects / talks / walks
       if (e.pointerType === 'touch' && !this.cam.touchDragged) {
         (document.activeElement as HTMLElement | null)?.blur();
-        const r = pick(e);
+        const r = pick(e, true);
         if (r.ent) clickEnt(r.ent);
         else if (r.node) this.useNode(r.node);
         else if (r.point) this.moveTo(r.point, true);
@@ -1929,17 +1947,6 @@ export class Game {
     });
     el.addEventListener('pointermove', (e) => {
       this.lastPointer = { x: e.clientX, y: e.clientY };
-      if (this.holdMove && e.buttons & 1) {
-        const now = performance.now();
-        if (now - this.lastHoldSend > 90) {
-          const r = pick(e, true);
-          if (r.point) {
-            this.lastHoldSend = now;
-            this.moveTo(r.point, false);
-          }
-        }
-        return;
-      }
       if (e.buttons) return dropNodeTip(); // dragging the camera
       const r = pick(e), ent = r.ent;
       this.hoverId = ent?.id ?? null;
@@ -2043,6 +2050,20 @@ export class Game {
    * otherwise follow the newest server position with no interpolation delay.
    * Returns whether the character is moving (for animation).
    */
+  /** Where we were at time t (between the positions kept), or null when that is older than what is kept. */
+  private histAt(t: number): { x: number; z: number } | null {
+    const h = this.selfHist;
+    if (!h.length || t < h[0].t) return null;
+    for (let i = h.length - 1; i >= 0; i--) {
+      if (h[i].t > t) continue;
+      const a = h[i], b = h[i + 1];
+      if (!b) return a;
+      const k = (t - a.t) / (b.t - a.t || 1);
+      return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k };
+    }
+    return null;
+  }
+
   private updateSelf(c: CEnt, now: number, dt: number): boolean {
     // asked to do something while sitting: the get-up plays first (the server waits as long before moving us)
     if (c.flags & F_SITTING && this.predict && !isStanding(c)) c.standAt = now;
@@ -2129,15 +2150,24 @@ export class Game {
       // close as it gets (the server's step_toward stops there too); walking on was walking in place until the next click
       const held = k > 0 && !pr.chase && pr.path.length === 1 && d < 1 && Math.hypot(np.x - c.pos.x, np.z - c.pos.z) < Math.min(step, d) * 0.1;
       if (k && !held) {
+        // facing where we actually go (along a trunk we slide past, round a corner turning), not at the waypoint
+        const mx = np.x - c.pos.x, mz = np.z - c.pos.z, md = Math.hypot(mx, mz);
+        let dr = (md > step * 0.3 ? Math.atan2(mx, mz) : Math.atan2(dx, dz)) - c.ry;
+        dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+        c.ry += dr * Math.min(1, dt * 12);
         c.pos.x = np.x;
         c.pos.z = np.z;
-        let dr = Math.atan2(dx, dz) - c.ry;
-        dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-        c.ry += dr * Math.min(1, dt * 25);
         moving = true;
       } else if (!pr.arrivedAt) pr.arrivedAt = now;
-      // hand back to the server once it caught up, or if we drifted too far from it
-      const err = Math.hypot(srv.x - c.pos.x, srv.z - c.pos.z);
+      // The server's latest position against where we were when it took it (half a round trip and half a tick ago):
+      // set against where we are now, our own head start read as an error, and the pull toward it cut corners
+      // through the trunks we were walking round.
+      const hist = this.selfHist;
+      hist.push({ t: now, x: c.pos.x, z: c.pos.z });
+      while (hist.length > 2 && now - hist[0].t > 1500) hist.shift();
+      const then = this.histAt(srv.t - this.rtt / 2 - 25) ?? c.pos;
+      const ex = srv.x - then.x, ez = srv.z - then.z;
+      const err = Math.hypot(ex, ez);
       const srvDone = Math.hypot(srv.x - pr.x, srv.z - pr.z) < 0.3;
       // no headway for a while (held back towards a server that stopped short or went another way): hand back to the
       // server rather than walk on the spot, turning, pulled both ways
@@ -2148,10 +2178,15 @@ export class Game {
         if (pr.best === undefined || left < pr.best - 0.3) (pr.best = left), (pr.progressAt = now);
         else if (now - (pr.progressAt ?? now) > 800) this.predict = null;
       }
-      // TEMP debug (rubber-banding): log every time the server pulls us back
-      // ponytail: small steady disagreement (paths around trees differ slightly) is eased away, no snap
-      if (err > PREDICT_SOFT_ERR) { const k = Math.min(1, dt * 2); c.pos.x += (srv.x - c.pos.x) * k; c.pos.z += (srv.z - c.pos.z) * k; }
-      if (err > PREDICT_MAX_ERR) console.warn('[snap]', { err: +err.toFixed(1), me: [+c.pos.x.toFixed(1), +c.pos.z.toFixed(1)], srv: [+srv.x.toFixed(1), +srv.z.toFixed(1)], srvAge: Math.round(now - srv.t), dt: Math.round(dt * 1000) });
+      // a real disagreement is eased away: that much of it moves us (and our history, so the next snapshot doesn't count
+      // it again), and never into an obstacle
+      if (err > PREDICT_SOFT_ERR) {
+        const k = Math.min(1, dt * 2), o = pushOut(c.pos.x + ex * k, c.pos.z + ez * k);
+        const sx = o.x - c.pos.x, sz = o.z - c.pos.z;
+        for (const h of hist) (h.x += sx), (h.z += sz);
+        c.pos.x = o.x;
+        c.pos.z = o.z;
+      }
       if (err > PREDICT_MAX_ERR || (pr.arrivedAt && (srvDone || now - pr.arrivedAt > PREDICT_SETTLE_MS))) this.predict = null;
       c.pos.y = heightAt(c.pos.x, c.pos.z);
       return moving;
@@ -2170,6 +2205,8 @@ export class Game {
     c.pos.x += (tx - c.pos.x) * k;
     c.pos.z += (tz - c.pos.z) * k;
     c.pos.y = heightAt(c.pos.x, c.pos.z);
+    this.selfHist.push({ t: now, x: c.pos.x, z: c.pos.z });
+    while (this.selfHist.length > 2 && now - this.selfHist[0].t > 1500) this.selfHist.shift();
     let dr = srv.ry - c.ry;
     dr = Math.atan2(Math.sin(dr), Math.cos(dr));
     c.ry += dr * Math.min(1, dt * 14);
@@ -2249,6 +2286,16 @@ export class Game {
         c.ry += d * Math.min(1, dt * 14);
       }
       c.root.position.copy(c.pos);
+      // how fast it really goes over the ground (pressed against a trunk, barely): the run plays at that pace, and a
+      // player held in place stops running on the spot
+      const moved = Math.hypot(c.pos.x - (c.groundX ?? c.pos.x), c.pos.z - (c.groundZ ?? c.pos.z));
+      c.groundX = c.pos.x;
+      c.groundZ = c.pos.z;
+      c.groundSpeed = (c.groundSpeed ?? 0) + ((dt > 0 ? Math.min(moved / dt, 40) : 0) - (c.groundSpeed ?? 0)) * Math.min(1, dt * 8);
+      if (c.rec.k === 'p' && moving && c.groundSpeed < HELD_SPEED) {
+        c.heldSince ??= now;
+        if (now - c.heldSince > 150) moving = false;
+      } else c.heldSince = undefined;
       // in deep water the body floats at the swimming line
       const swimming = c.rig !== null && isDeep(c.pos.x, c.pos.z);
       const sitting = (c.flags & F_SITTING) !== 0 && !isStanding(c);
@@ -2340,6 +2387,7 @@ export class Game {
           atkStab: c.atkStab,
           atkStep: c.atkStep,
           atkInterval: c.atkInterval,
+          speed: c.groundSpeed,
           deadAge: c.flags & F_DEAD ? (c.deadAt < 0 ? 5000 : now - c.deadAt) : -1,
           t: tSec + c.id,
           swimming,
@@ -2417,6 +2465,8 @@ export class Game {
     }
     if (self) {
       this.cam.update(dt, self.root.position); // follows the body (it floats over deep water)
+      // the crowns between the camera and us are seen through (render/nature.ts)
+      setSeeThrough(this.camera.position, this.seeFocus.set(self.pos.x, self.root.position.y + self.height * 0.6, self.pos.z));
       this.world.updateSky(this.camera, this.camera.far, dt);
       this.world.follow(self.pos);
       tickWind(dt);

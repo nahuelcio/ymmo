@@ -2,12 +2,21 @@ import * as THREE from 'three';
 import { heightAt } from '../../../shared/src/terrain';
 import { settings } from '../settings';
 import { getObstacles, type Obstacle } from '../../../shared/src/collision';
+import { layoutTrees } from '../../../shared/src/layout';
 
 /** Solid walls the camera must not clip through: boxes (houses, walls) and big circles (rocks, huts, tents). Thin trunks are skipped. */
 let walls: Obstacle[] | null = null;
 // ponytail: obstacles are 2D, so their height is guessed from the shape (thick box = house with roof, thin box = wall or stall,
 // circle = tent/hut/boulder about as tall as it is wide). Give Obstacle a real height if a prop reads wrong.
-const topOf = (ob: Obstacle) => heightAt(ob.x, ob.z) + (ob.k === 'c' ? ob.r * 1.2 : ob.hd < 1 ? 4 : 6);
+/** The giants' trees, thick enough to count (their trunks are a metre and more across): by where they stand, their
+ * height (the tree model is about 6.9 m at scale 1). Guessed as wide as tall, they were 3 m high, and the camera arm
+ * went over them, then hit them, then over again as it swung: in and out among the giants. */
+let tallTrees: Map<string, number> | null = null;
+const topOf = (ob: Obstacle) => {
+  tallTrees ??= new Map(layoutTrees().filter((t) => 0.35 * t.sc >= 1).map((t) => [`${t.x},${t.z}`, 6.9 * t.sc]));
+  const tree = ob.k === 'c' ? tallTrees.get(`${ob.x},${ob.z}`) : undefined;
+  return heightAt(ob.x, ob.z) + (tree ?? (ob.k === 'c' ? ob.r * 1.2 : ob.hd < 1 ? 4 : 6));
+};
 /**
  * Exact ground distance from (ax,az) towards the unit direction (dx,dz) to the first wall the camera arm really goes through,
  * or Infinity. The arm starts at height y0 and climbs `rise` per metre, so an obstacle it clears over the top doesn't count.

@@ -158,26 +158,117 @@ const blockedCell = (cx: number, cz: number) => cx < 0 || cz < 0 || cx >= N || c
 /** A walker can stand at (x, z) by the walk grid (paths and straight walks end only on such cells). */
 export const walkable = (x: number, z: number) => !blockedCell(toCell(x), toCell(z));
 
-/** True when a walker can go in a straight line from a to b. */
-export function lineClear(ax: number, az: number, bx: number, bz: number): boolean {
-  const d = Math.hypot(bx - ax, bz - az);
-  const steps = Math.ceil(d / (RES * 0.5));
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    if (blockedCell(toCell(ax + (bx - ax) * t), toCell(az + (bz - az) * t))) return false;
+/** How far a circle at (x, z) of radius r sinks into an obstacle (> 0: they overlap). */
+function overlap(ob: Obstacle, x: number, z: number, r: number): number {
+  if (ob.k === 'c') return ob.r + r - Math.hypot(x - ob.x, z - ob.z);
+  const dx = x - ob.x, dz = z - ob.z;
+  const lx = dx * ob.cos - dz * ob.sin, lz = dx * ob.sin + dz * ob.cos;
+  const ox = Math.abs(lx) - ob.hw, oz = Math.abs(lz) - ob.hd;
+  return r - (ox > 0 || oz > 0 ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) : Math.max(ox, oz));
+}
+
+/** A walker fits at (x, z): its circle overlaps no obstacle, by their real shapes (the walk grid's cells are a metre
+ * apart, so a point beside an obstacle can sit in a blocked cell and still be free). */
+export function pointFree(x: number, z: number, r = WALK_RADIUS): boolean {
+  ensure();
+  if (Math.abs(x) > PLAYABLE_HALF || Math.abs(z) > PLAYABLE_HALF) return false;
+  const l = hash!.get(hkey(Math.floor(x / CELL), Math.floor(z / CELL)));
+  return !l || l.every((ob) => overlap(ob, x, z, r) <= 0);
+}
+
+/** Distance from the point (px, pz) to the segment a-b. */
+function segDist(px: number, pz: number, ax: number, az: number, bx: number, bz: number): number {
+  const ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez;
+  const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * ex + (pz - az) * ez) / l2)) : 0;
+  return Math.hypot(px - (ax + ex * t), pz - (az + ez * t));
+}
+/** Distance from the segment a-b to the rectangle |x| <= hw, |z| <= hd (0 when they touch). */
+function segRectDist(ax: number, az: number, bx: number, bz: number, hw: number, hd: number): number {
+  // Liang-Barsky: does the segment cross the rectangle at all?
+  let t0 = 0, t1 = 1;
+  const ex = bx - ax, ez = bz - az;
+  const clip = (p: number, q: number) => {
+    if (p === 0) return q >= 0;
+    const t = q / p;
+    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+    return true;
+  };
+  if (clip(-ex, ax + hw) && clip(ex, hw - ax) && clip(-ez, az + hd) && clip(ez, hd - az)) return 0;
+  const toRect = (x: number, z: number) => Math.hypot(Math.max(Math.abs(x) - hw, 0), Math.max(Math.abs(z) - hd, 0));
+  let d = Math.min(toRect(ax, az), toRect(bx, bz));
+  for (const [cx, cz] of [[hw, hd], [-hw, hd], [hw, -hd], [-hw, -hd]]) d = Math.min(d, segDist(cx, cz, ax, az, bx, bz));
+  return d;
+}
+
+/** A hair under the walker: one pressed against an obstacle (the push-out leaves it exactly touching) still sees past. */
+const SEG_R = WALK_RADIUS - 0.02;
+const segObs = new Set<Obstacle>();
+/**
+ * True when a walker can go in a straight line from a to b: its circle swept along the segment touches no obstacle,
+ * by their real shapes. (Sampling the walk grid along the line passed lines that grazed a trunk: the walker then bumped
+ * into it and slid round, and two trunks closer than a body could look open.)
+ */
+export function lineClear(ax: number, az: number, bx: number, bz: number, r = SEG_R): boolean {
+  ensure();
+  if (Math.abs(bx) > PLAYABLE_HALF || Math.abs(bz) > PLAYABLE_HALF) return false;
+  // the obstacles listed in the hash cells along the line: each is listed in every cell within its reach + 1 m, so a
+  // sample every half metre finds any the swept circle can touch
+  segObs.clear();
+  const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.5));
+  let last = NaN;
+  for (let i = 0; i <= steps; i++) {
+    const k = hkey(Math.floor((ax + ((bx - ax) * i) / steps) / CELL), Math.floor((az + ((bz - az) * i) / steps) / CELL));
+    if (k === last) continue;
+    last = k;
+    for (const ob of hash!.get(k) ?? []) segObs.add(ob);
+  }
+  for (const ob of segObs) {
+    if (ob.k === 'c') {
+      if (segDist(ob.x, ob.z, ax, az, bx, bz) < ob.r + r) return false;
+      continue;
+    }
+    // the segment in the box's own space
+    const tl = (x: number, z: number) => [(x - ob.x) * ob.cos - (z - ob.z) * ob.sin, (x - ob.x) * ob.sin + (z - ob.z) * ob.cos];
+    const [lax, laz] = tl(ax, az), [lbx, lbz] = tl(bx, bz);
+    if (segRectDist(lax, laz, lbx, lbz, ob.hw, ob.hd) < r) return false;
   }
   return true;
 }
 
-function nearestFree(cx: number, cz: number): [number, number] | null {
+/**
+ * The free walk-grid cell nearest the point (x, z) within 12 cells (ties: the one nearest (px, pz)), or null. The
+ * first free cell found used to win, scanning from a corner: a click inside a house went to a corner of it, metres off.
+ */
+function nearestFree(x: number, z: number, px = x, pz = z): [number, number] | null {
+  const cx = toCell(x), cz = toCell(z);
   if (!blockedCell(cx, cz)) return [cx, cz];
-  for (let rad = 1; rad <= 12; rad++)
+  let best: [number, number] | null = null, bd = Infinity;
+  for (let rad = 1; rad <= 12; rad++) {
     for (let dx = -rad; dx <= rad; dx++)
-      for (const dz of [-rad, rad]) {
-        if (!blockedCell(cx + dx, cz + dz)) return [cx + dx, cz + dz];
-        if (!blockedCell(cx + dz, cz + dx)) return [cx + dz, cz + dx];
+      for (let dz = -rad; dz <= rad; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== rad || blockedCell(cx + dx, cz + dz)) continue;
+        const wx = toWorld(cx + dx), wz = toWorld(cz + dz);
+        const d = Math.hypot(wx - x, wz - z) + Math.hypot(wx - px, wz - pz) * 1e-3;
+        if (d < bd) (bd = d), (best = [cx + dx, cz + dz]);
       }
-  return null;
+    // nothing on a farther ring can be nearer than (rad + 0.5) cells
+    if (best && bd <= (rad + 0.5) * RES) break;
+  }
+  return best;
+}
+
+/** From the free point a toward b: b itself when a walker fits there and goes straight to it from a, else as far
+ * along as it can (the edge of what is in the way). */
+function towardFree(ax: number, az: number, bx: number, bz: number): { x: number; z: number } {
+  const ok = (x: number, z: number) => pointFree(x, z) && lineClear(ax, az, x, z);
+  if (ok(bx, bz)) return { x: bx, z: bz };
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 10; i++) {
+    const m = (lo + hi) / 2;
+    if (ok(ax + (bx - ax) * m, az + (bz - az) * m)) lo = m;
+    else hi = m;
+  }
+  return { x: ax + (bx - ax) * lo, z: az + (bz - az) * lo };
 }
 
 const MAX_NODES = 40000;
@@ -195,15 +286,15 @@ function scratch() {
 /**
  * Waypoints from (sx,sz) to (tx,tz) around static obstacles (start excluded).
  * Straight line when clear; A* on the nav grid + string pulling otherwise.
- * If the target is inside an obstacle, walks to the closest free spot.
+ * It ends on the target itself wherever a walker fits there, else on the nearest spot it can reach beside it (the
+ * edge of the house or rock in the way).
  */
 export function findPath(sx: number, sz: number, tx: number, tz: number, maxNodes = MAX_NODES): { x: number; z: number }[] {
   if (lineClear(sx, sz, tx, tz)) return [{ x: tx, z: tz }];
-  const s = nearestFree(toCell(sx), toCell(sz));
-  const g = nearestFree(toCell(tx), toCell(tz));
+  const s = nearestFree(sx, sz);
+  const g = nearestFree(tx, tz, sx, sz);
   if (!s || !g) return [{ x: tx, z: tz }];
-  const goalFree = g[0] === toCell(tx) && g[1] === toCell(tz);
-  const end = goalFree ? { x: tx, z: tz } : { x: toWorld(g[0]), z: toWorld(g[1]) };
+  const end = towardFree(toWorld(g[0]), toWorld(g[1]), tx, tz);
   if (lineClear(sx, sz, end.x, end.z)) return [end];
 
   const start = s[1] * N + s[0], goal = g[1] * N + g[0];
@@ -300,7 +391,8 @@ export function findPath(sx: number, sz: number, tx: number, tz: number, maxNode
     n = came[n];
   }
   cells.reverse();
-  if (found) cells[cells.length - 1] = end;
+  // the goal cell, then on to the end beside it (the string pulling drops the cell when the end is in sight)
+  if (found && cells.length && (cells[cells.length - 1].x !== end.x || cells[cells.length - 1].z !== end.z)) cells.push(end);
   if (!cells.length) return [end];
   // string pulling: keep only the waypoints we can't see past
   const out: { x: number; z: number }[] = [];
@@ -438,7 +530,7 @@ export function tripLegs(sx: number, sz: number, tx: number, tz: number, leg = 5
   // none right before the end
   while (out.length && Math.hypot(tx - out[out.length - 1].x, tz - out[out.length - 1].z) < leg * 0.5) out.pop();
   const stops = out.map((p) => {
-    const c = nearestFree(toCell(p.x), toCell(p.z));
+    const c = nearestFree(p.x, p.z);
     return c ? { x: toWorld(c[0]), z: toWorld(c[1]) } : p;
   });
   // A leg the walk grid can't do in one search crosses what the coarse grid missed (a thin wall: its centres fall either

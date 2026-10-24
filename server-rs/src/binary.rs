@@ -29,12 +29,19 @@ pub fn encode_snap(upd: &[[f64; 6]], gone: &[u32], time: f64) -> Vec<u8> {
 }
 
 /** Frequent client messages (same layouts as shared/src/binary.ts encodeC2S), turned back into the JSON they stand for:
- *    move: u8 16, f64 x, f64 z · attack: u8 17, u32 id, u8 force · dash: u8 18, f64 x, z, dx, dz · pong: u8 19, f64 s · stop: u8 20 */
+ *    move: u8 16, f64 x, f64 z · attack: u8 17, u32 id, u8 force · dash: u8 18, f64 x, z, dx, dz · pong: u8 19, f64 s · stop: u8 20
+ *    move with the client's route: u8 21, f64 x, f64 z, u8 n, n × (f32 x, f32 z) */
 pub fn decode_c2s(b: &[u8]) -> Option<serde_json::Value> {
     use serde_json::json;
     let f = |o: usize| Some(f64::from_le_bytes(b.get(o..o + 8)?.try_into().ok()?));
+    let f32_at = |o: usize| Some(f32::from_le_bytes(b.get(o..o + 4)?.try_into().ok()?) as f64);
     match *b.first()? {
         16 => Some(json!({ "t": "move", "x": f(1)?, "z": f(9)? })),
+        21 => {
+            let n = *b.get(17)? as usize;
+            let path: Option<Vec<[f64; 2]>> = (0..n).map(|i| Some([f32_at(18 + i * 8)?, f32_at(22 + i * 8)?])).collect();
+            Some(json!({ "t": "move", "x": f(1)?, "z": f(9)?, "path": path? }))
+        }
         17 => Some(json!({ "t": "attack", "id": u32::from_le_bytes(b.get(1..5)?.try_into().ok()?), "force": *b.get(5)? != 0 })),
         18 => Some(json!({ "t": "dash", "x": f(1)?, "z": f(9)?, "dx": f(17)?, "dz": f(25)? })),
         19 => Some(json!({ "t": "pong", "s": f(1)? })),

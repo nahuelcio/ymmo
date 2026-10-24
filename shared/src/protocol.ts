@@ -93,7 +93,8 @@ export type C2S =
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
   | { t: 'enter'; id: number }
-  | { t: 'move'; x: number; z: number }
+  /** path: the route the client walks there (collision.ts findPath, at most 64 points): the server walks it too */
+  | { t: 'move'; x: number; z: number; path?: { x: number; z: number }[] }
   | { t: 'target'; id: number | null }
   | { t: 'attack'; id: number; force: boolean }
   | { t: 'skill'; skill: string; force: boolean }

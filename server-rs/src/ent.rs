@@ -52,7 +52,8 @@ impl Outbox {
 pub struct ActiveStatus { pub until: f64, pub src: u32, pub dps: f64, pub next_tick: f64 }
 
 #[derive(Clone, Debug)]
-pub struct Nav { pub gx: f64, pub gz: f64, pub at: f64, pub path: Vec<P> }
+/** A cached route to (gx, gz); `fixed`: the client's own (World::client_path), followed as is with no re-planning. */
+pub struct Nav { pub gx: f64, pub gz: f64, pub at: f64, pub path: Vec<P>, pub fixed: bool }
 
 pub struct Common {
     pub id: u32,
