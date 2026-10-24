@@ -8,6 +8,7 @@ import { COMBAT_MS, DEFAULT_INTERVAL, HOLD_MS, SWINGS, swingKind, swingOf, swing
 import { WeaponTrail } from './trail';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 import { STAND_UP_MS } from '../../../shared/src/nodes';
+import { SKILLS } from '../../../shared/src/data/skills';
 
 /**
  * Player characters built from the Quaternius modular kits (CC0): an outfit piece per
@@ -1398,21 +1399,45 @@ const ATK_MS = 700;
 /**
  * A skill's own animation, from the CC0 libraries (UAL2's on this rig, KayKit's retargeted by q-assets.mjs): `cast` plays
  * while it is cast, from its start up to `hold` (clip seconds) and held there - or, once over, `loop` on a loop (`loop:
- * true`: the cast clip itself loops); `strike` plays as it goes off, from `from` at `speed`. Clip times come from where
- * each clip's blow lands (its arm's fastest turn).
+ * true`: the cast clip itself loops); `strike` plays as it goes off, from `from` at `speed` up to `to` (the clip's end
+ * when none: a cut of a longer combo otherwise). `impact`: where its (first) blow lands, which game.ts shows the hit at.
+ * Clip times come from where each clip's blow lands (its arm's fastest turn).
  */
-interface SkillAnim { cast?: string; start?: number; hold?: number; loop?: string | true; speed?: number; strike?: string; from?: number }
+interface SkillAnim { cast?: string; start?: number; hold?: number; loop?: string | true; speed?: number; strike?: string; from?: number; to?: number; impact?: number }
 // the dagger's stabs: a quick jab with the blade (the weapon hand's: Punch_Jab_M), a low lunge in from behind, and the
 // wide spinning finisher for the mark
-const STAB: SkillAnim = { cast: 'Punch_Jab_M', hold: 0.06, strike: 'Punch_Jab_M', from: 0.06 };
-const LUNGE: SkillAnim = { cast: 'Sword_Dash', hold: 0.2, strike: 'Sword_Dash', from: 0.2 };
-const MARK: SkillAnim = { cast: 'Sword_Regular_C', hold: 0.4, strike: 'Sword_Regular_C', from: 0.4 };
-const DUAL_STAB: SkillAnim = { cast: 'KK_Dual_Stab', hold: 0.22, strike: 'KK_Dual_Stab', from: 0.22, speed: 1.6 };
-const CUT_A: SkillAnim = { cast: 'Sword_Regular_A', hold: 0.12, strike: 'Sword_Regular_A', from: 0.12 };
-const CUT_B: SkillAnim = { cast: 'Sword_Regular_B', hold: 0.1, strike: 'Sword_Regular_B', from: 0.1 };
-const HOOK: SkillAnim = { cast: 'Melee_Hook', hold: 0.12, strike: 'Melee_Hook', from: 0.12 };
-const THROW: SkillAnim = { cast: 'OverhandThrow', hold: 0.25, strike: 'OverhandThrow', from: 0.25, speed: 1.2 };
+const STAB: SkillAnim = { cast: 'Punch_Jab_M', hold: 0.06, strike: 'Punch_Jab_M', from: 0.06, impact: 0.14 };
+const LUNGE: SkillAnim = { cast: 'Sword_Dash', hold: 0.2, strike: 'Sword_Dash', from: 0.2, impact: 0.33 };
+const MARK: SkillAnim = { cast: 'Sword_Regular_C', hold: 0.4, strike: 'Sword_Regular_C', from: 0.4, impact: 0.64 };
+const DUAL_STAB: SkillAnim = { cast: 'KK_Dual_Stab', hold: 0.22, strike: 'KK_Dual_Stab', from: 0.22, speed: 1.6, impact: 0.38 };
+const CUT_A: SkillAnim = { cast: 'Sword_Regular_A', hold: 0.12, strike: 'Sword_Regular_A', from: 0.12, impact: 0.24 };
+const CUT_B: SkillAnim = { cast: 'Sword_Regular_B', hold: 0.1, strike: 'Sword_Regular_B', from: 0.1, impact: 0.27 };
+const HOOK: SkillAnim = { cast: 'Melee_Hook', hold: 0.12, strike: 'Melee_Hook', from: 0.12, impact: 0.25 };
+const THROW: SkillAnim = { cast: 'OverhandThrow', hold: 0.25, strike: 'OverhandThrow', from: 0.25, speed: 1.2, impact: 0.37 };
 const KICK: SkillAnim = { cast: 'KK_Kick', hold: 0.25, strike: 'KK_Kick', from: 0.25, speed: 1.2 };
+// the fighter's and its specs' blows: single heavy ones cut out of UAL2's heavy combo (a lunging cut, a backhand, a
+// rising cut, an overhead slam), its quick combo for the flurries and the finisher, KayKit's leap and chop, two-handed
+// slam and spins for the blows all around, the one-handed cuts
+const HEAVY_1: SkillAnim = { cast: 'Sword_Heavy_Combo', start: 0.1, hold: 0.25, strike: 'Sword_Heavy_Combo', from: 0.25, to: 0.72, impact: 0.4 };
+const HEAVY_2: SkillAnim = { cast: 'Sword_Heavy_Combo', start: 0.85, hold: 1.0, strike: 'Sword_Heavy_Combo', from: 1.0, to: 1.45, impact: 1.17 };
+const HEAVY_3: SkillAnim = { cast: 'Sword_Heavy_Combo', start: 1.5, hold: 1.65, strike: 'Sword_Heavy_Combo', from: 1.65, to: 1.99, impact: 1.82 };
+const HEAVY_4: SkillAnim = { cast: 'Sword_Heavy_Combo', start: 2.15, hold: 2.4, strike: 'Sword_Heavy_Combo', from: 2.4, to: 2.73, impact: 2.56 };
+const HEAVY_ALL: SkillAnim = { cast: 'Sword_Heavy_Combo', start: 0.1, hold: 0.25, strike: 'Sword_Heavy_Combo', from: 0.25, to: 2.73, speed: 2, impact: 0.4 };
+const FLURRY: SkillAnim = { cast: 'Sword_Regular_Combo', hold: 0.1, strike: 'Sword_Regular_Combo', from: 0.1, to: 1.73, speed: 1.6, impact: 0.25 };
+const FLURRY_2: SkillAnim = { cast: 'Sword_Regular_Combo', hold: 0.1, strike: 'Sword_Regular_Combo', from: 0.1, to: 0.85, speed: 1.3, impact: 0.25 };
+const FINISHER: SkillAnim = { cast: 'Sword_Regular_Combo', start: 1.1, hold: 1.3, strike: 'Sword_Regular_Combo', from: 1.3, to: 1.73, impact: 1.55 };
+const LEAP: SkillAnim = { cast: 'KK_Jump_Chop', hold: 0.12, strike: 'KK_Jump_Chop', from: 0.12, to: 1.2, speed: 1.2, impact: 0.68 };
+const SLAM: SkillAnim = { cast: 'KK_2H_Chop', start: 0.2, hold: 0.45, strike: 'KK_2H_Chop', from: 0.45, to: 1.0, impact: 0.67 };
+const SPIN: SkillAnim = { cast: 'KK_Spin', start: 0.2, hold: 0.5, strike: 'KK_Spin', from: 0.5, to: 1.41, impact: 0.7 };
+const SPINNING: SkillAnim = { cast: 'KK_Spin', start: 0.2, hold: 0.5, strike: 'KK_Spinning', from: 0, speed: 0.8, impact: 0.3 };
+const DIAGONAL: SkillAnim = { cast: 'KK_1H_Slice_Diagonal', start: 0.1, hold: 0.3, strike: 'KK_1H_Slice_Diagonal', from: 0.3, to: 0.7, impact: 0.43 };
+const CHOP: SkillAnim = { cast: 'KK_1H_Chop', start: 0.3, hold: 0.5, strike: 'KK_1H_Chop', from: 0.5, to: 0.9, impact: 0.65 };
+// spells: the free hand raised and held, then pushed out as it goes off (UAL1); a long one channelled through the staff
+// and loosed with it raised to the sky, a nova gathered crouched and burst out of rising, a heal with the staff lifted
+const SPELL: SkillAnim = { cast: 'Spell_Simple_Enter', loop: 'Spell_Simple_Idle_Loop', strike: 'Spell_Simple_Shoot', from: 0 };
+const SPELL_LONG: SkillAnim = { cast: 'KK_Magic_Channel', loop: true, strike: 'KK_Magic_Summon', from: 2.75, to: 3.6 };
+const NOVA: SkillAnim = { cast: 'KK_Magic_Summon', start: 1.6, hold: 2.5, strike: 'KK_Magic_Summon', from: 2.5, to: 3.4 };
+const HEAL: SkillAnim = { cast: 'KK_Magic_Raise', hold: 0.8, strike: 'KK_Magic_Raise', from: 1.2, to: 2.0 };
 const BASH: SkillAnim = { cast: 'Shield_OneShot', hold: 0, strike: 'Shield_OneShot', from: 0 };
 const CHARGE: SkillAnim = { cast: 'Shield_Dash', hold: 0.45, strike: 'Shield_Dash', from: 0.45 };
 const GUARD: SkillAnim = { cast: 'Idle_Shield_Loop', loop: true };
@@ -1430,6 +1455,17 @@ const SKILL_ANIM: Record<string, SkillAnim> = {
   shield_bash: BASH, aegis_charge: CHARGE, fortress: GUARD, iron_bulwark: GUARD, shield_of_faith: GUARD, phoenix_ward: GUARD, guardian_aura: GUARD,
   // the bow's (every bow skill draws, aims and looses; the volleys shoot up)
   arrow_rain: BOW_UP, arrow_storm: BOW_UP, '@bow': BOW,
+  // the fighter's (every spec has them too): two heavy blows, a spin, a slam
+  power_strike: HEAVY_1, mortal_blow: HEAVY_4, whirlwind: SPIN, power_smash: HEAVY_3,
+  // the knight's: a heavy cut, a leap onto the ground, the finisher, a two-handed slam, a dash through
+  holy_strike: HEAVY_2, earthquake: LEAP, judgment: FINISHER, titan_slam: SLAM, phoenix_strike: LUNGE,
+  // the gladiator's and the duelist's: flurries, the blade's wave thrown, spins, a cut, a dash, every heavy blow at once
+  triple_slash: FLURRY, triple_sonic_slash: FLURRY, double_sonic_slash: FLURRY_2, sonic_blaster: THROW, sonic_storm: SPINNING,
+  sonic_buster: DIAGONAL, dual_blade_dance: SPINNING, storm_slash: LUNGE, thousand_sonic_slashes: HEAVY_ALL,
+  // the swordsinger's: a chop, spins for the songs, the blade's wave to hold one in place
+  hammer_crush: CHOP, sword_symphony: SPINNING, grand_sword_symphony: SPINNING, arrest: THROW,
+  // spells, by kind (skillAnimOf)
+  '@spell': SPELL, '@spell_long': SPELL_LONG, '@nova': NOVA, '@heal': HEAL,
 };
 /** The clips the entity's clock drives (set to a time each frame), and the bow's string as each one leaves it. */
 const DRIVEN_SKILL_CLIPS = new Set(Object.values(SKILL_ANIM).flatMap((a) => [a.loop === true ? '' : a.cast ?? '', a.strike ?? '']).filter(Boolean));
@@ -1445,7 +1481,17 @@ export const skillStrikes = (key: string | undefined) => !!(key && SKILL_ANIM[ke
 export function skillAnimOf(skill: string | undefined, weapon?: string): string | undefined {
   if (!skill) return undefined;
   if (SKILL_ANIM[skill]) return skill;
-  return weapon === 'bow' ? '@bow' : undefined;
+  if (weapon === 'bow') return '@bow';
+  // a spell by its kind: a heal, a nova around the caster, a long one (meteor, apocalypse...), any other
+  const def = SKILLS[skill];
+  if (def?.kind === 'heal') return '@heal';
+  if (def?.kind === 'magic' || def?.kind === 'drain') return def.aoeOnSelf ? '@nova' : def.cast >= 2200 ? '@spell_long' : '@spell';
+  return undefined;
+}
+/** How long after a skill goes off its blow lands (ms), for an animation that has one (a melee skill's); none else. */
+export function skillImpactMs(key: string | undefined): number | undefined {
+  const a = key ? SKILL_ANIM[key] : undefined;
+  return a?.impact === undefined ? undefined : ((a.impact - (a.from ?? 0)) / (a.speed ?? 1)) * 1000;
 }
 /** How far the string is drawn as a bow clip plays (the string follows the hand while it is). */
 /** How upright the bow stands as a bow clip plays: raised as the draw lifts it, lowered as the release follows through. */
@@ -1560,13 +1606,15 @@ export function animateQ(q: QAnim, s: AnimState): number {
       if (cur === next) q.acts[cur].time = Math.min(hold, ((s.castAge ?? Infinity) / 250) * hold);
     } else cur = s.castMove === 'raise' && q.acts.Spell_Simple_Idle_Loop_M ? 'Spell_Simple_Idle_Loop_M' : 'Spell_Simple_Idle_Loop';
   } else if (s.atkAnim && SKILL_ANIM[s.atkAnim]?.strike && q.acts[SKILL_ANIM[s.atkAnim].strike!]
-      && s.atkAge < ((clips[SKILL_ANIM[s.atkAnim].strike!].duration - (SKILL_ANIM[s.atkAnim].from ?? 0)) / (SKILL_ANIM[s.atkAnim].speed ?? 1)) * 1000) {
-    // a skill's own blow, from where its cast held it
+      && s.atkAge < (((SKILL_ANIM[s.atkAnim].to ?? clips[SKILL_ANIM[s.atkAnim].strike!].duration) - (SKILL_ANIM[s.atkAnim].from ?? 0)) / (SKILL_ANIM[s.atkAnim].speed ?? 1)) * 1000) {
+    // a skill's own blow, from where its cast held it (up to `to`, a cut out of a longer combo)
     const a = SKILL_ANIM[s.atkAnim];
     cur = a.strike!;
-    q.acts[cur].time = Math.min((a.from ?? 0) + (s.atkAge / 1000) * (a.speed ?? 1), clips[cur].duration - 0.02);
+    const end = a.to ?? clips[cur].duration;
+    q.acts[cur].time = Math.min((a.from ?? 0) + (s.atkAge / 1000) * (a.speed ?? 1), end - 0.02);
     bowAt = bowDrawn(cur, q.acts[cur].time);
-    blow = q.acts[cur].time - (a.from ?? 0) < 0.3; // the blow goes from where the cast held it
+    // a blade's streak through the blows (a melee skill's: a spell's staff draws none)
+    blow = a.impact !== undefined && q.acts[cur].time < end - 0.1;
   } else if (q.bow && !s.atkAnim && q.acts.KK_Bow_Draw && q.acts.KK_Bow_Release
       && s.atkAge < BOW_LOOSE_MS + (clips.KK_Bow_Release.duration / BOW_REL_SPEED) * 1000) {
     // the bow's auto-attack: draw from the nock, loose as the arrow goes, the release playing out
