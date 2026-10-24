@@ -544,8 +544,12 @@ export const GodRaysShader = {
         vec3 acc = vec3(0.0);
         for (int i = 0; i < 28; i++) {
           uv += step;
-          vec3 s = texture2D(tDiffuse, clamp(uv, 0.0, 1.0)).rgb;
-          acc += s * smoothstep(0.9, 1.9, max(max(s.r, s.g), s.b)) * decay;
+          vec4 t = texture2D(tDiffuse, clamp(uv, 0.0, 1.0));
+          vec3 s = t.rgb;
+          // Only the sky's light: the sky dome writes alpha 0 and everything solid 1 (clouds and glows part of it), so
+          // a campfire, a spell or an enchantment's glow - as bright as the sun - no longer streaks away from it as if
+          // it were one, and what stands or floats in front of the sun cuts its shafts.
+          acc += s * smoothstep(0.9, 1.9, max(max(s.r, s.g), s.b)) * (1.0 - clamp(t.a, 0.0, 1.0)) * decay;
           decay *= 0.95;
         }
         base.rgb += acc / 28.0 * strength;
