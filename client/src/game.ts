@@ -1041,11 +1041,18 @@ export class Game {
     if (!!c.ghost === on) return;
     if (on) {
       const own = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+      // clone() leaves the shader patches behind (dye, rim, gear shine): they come along. A solid surface's map may
+      // carry something else in its alpha (the gear's shine): that was never coverage, so the fade alone sets it
       const fade = (m: THREE.Material) => {
-        const f = m.clone();
+        const f = m.clone(), solid = !m.transparent, prev = m.onBeforeCompile.bind(m), key = m.customProgramCacheKey();
         f.transparent = true;
         f.opacity = 0.28 * m.opacity;
         f.depthWrite = false;
+        f.onBeforeCompile = (sh, r) => {
+          prev(sh, r);
+          if (solid) sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.a = opacity;');
+        };
+        f.customProgramCacheKey = () => `${key}|ghost${+solid}`;
         return f;
       };
       c.model.traverse((o) => {
