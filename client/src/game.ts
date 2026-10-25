@@ -9,7 +9,7 @@ import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
-import { GATHER, isRest, nodeById, nodeIndex, nodesNear, reachOf, STAND_UP_MS, tentCentre, type NodeDef } from '../../shared/src/nodes';
+import { GATHER, isRest, isShelter, nodeById, nodeIndex, nodesNear, reachOf, shelterCentre, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees, layoutZoneProps } from '../../shared/src/layout';
 import { NodeVisuals } from './render/nodes';
 import { setSeeThrough } from './render/nature';
@@ -23,7 +23,7 @@ import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimO
 import { CHAIN_MS, swingOf, swingTiming, windup } from './render/swings';
 import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
-import { BRAZIER_FIRES, createWorldScene, footingAt, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
+import { BRAZIER_FIRES, createWorldScene, footingAt, hutDoorClosed, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph, setTipLevel, setTipSelf } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
@@ -112,8 +112,9 @@ export interface CEnt {
   standAt?: number;
   /** sat on the ground (not a seat): the floor-sit clips, not the chair's (render/quaternius.ts) */
   groundSit?: boolean;
-  /** resting inside a tent: the body hidden, the door let down, zzz over it, and the plate and hitbox on the tent */
-  tent?: { door: THREE.Object3D; zzz: CSS2DObject; top: THREE.Vector3 };
+  /** resting inside a tent or a hut (Game.shelters): the body hidden, the plate over it (`top`, where the tag goes),
+   * `slot` places up its stack; a tent's hitbox moves onto it, a hut's occupant has none */
+  shelter?: { node: number; slot: number; hut: boolean; top: THREE.Vector3 };
   /** the node it is working (from the server's 'gather') and how many strokes were already shown */
   gather?: { node: NodeDef; at: number; swingMs: number; anim: 'chop' | 'mine' | 'pick'; strokes: number };
   /** last ripple while swimming */
@@ -187,7 +188,7 @@ const GATHER_LABEL: Record<'chop' | 'mine' | 'pick', () => string> = {
   pick: () => tx('Recolectando…', 'Picking…'),
 };
 /** How tall each kind of node stands, for picking it with the cursor. */
-const nodeHeight = (n: NodeDef) => (n.kind === 'tree' ? 5 * layoutTrees()[nodeIndex(n)].sc : n.kind === 'rock' ? layoutRocks()[nodeIndex(n)].s[1] * 1.6 : n.kind === 'tent' ? 2.5 : 1.1);
+const nodeHeight = (n: NodeDef) => (n.kind === 'tree' ? 5 * layoutTrees()[nodeIndex(n)].sc : n.kind === 'rock' ? layoutRocks()[nodeIndex(n)].s[1] * 1.6 : n.kind === 'tent' ? 2.5 : n.kind === 'hut' ? 4 : 1.1);
 /** Cursor and hover hint for each kind of node. */
 const NODE_HINT: Record<NodeDef['kind'], { cursor: () => string; label: () => string }> = {
   tree: { cursor: () => CURSORS.chop, label: () => tx('Talar (requiere un hacha)', 'Fell (needs an axe)') },
@@ -195,7 +196,11 @@ const NODE_HINT: Record<NodeDef['kind'], { cursor: () => string; label: () => st
   bush: { cursor: () => 'grab', label: () => tx('Recolectar bayas', 'Pick berries') },
   seat: { cursor: () => 'pointer', label: () => tx('Sentarse', 'Sit down') },
   tent: { cursor: () => 'pointer', label: () => tx('Descansar (recuperás vida y maná más rápido)', 'Rest (health and mana come back faster)') },
+  hut: { cursor: () => 'pointer', label: () => tx('Entrar a la cabaña (descansás el doble y nadie te puede atacar)', 'Go into the hut (rest twice as fast, and nobody can attack you)') },
 };
+/** Where the plates of those resting in a tent or a hut stand, over its ground; each one more inside stacks its plate
+ * this much higher on screen (a hut's plates show the name line only, see .np-sheltered). */
+const TENT_PLATES = 2.9, HUT_PLATES = 4.4, PLATE_STEP = 17;
 
 // Shared ground decals marking NPCs (gold) and other players (blue).
 const DECAL_GEO = new THREE.RingGeometry(0.78, 0.92, 32).rotateX(-Math.PI / 2);
@@ -253,6 +258,9 @@ export class Game {
   fx: FxManager;
   ui: UI;
   ents = new Map<number, CEnt>();
+  /** Tents and huts someone rests in, by node: one door let down and one zzz however many are inside, and who holds
+   * which place in its stack of plates. */
+  private shelters = new Map<number, { door: THREE.Object3D; zzz: CSS2DObject; slots: (number | undefined)[] }>();
   hitboxes: THREE.Object3D[] = [];
   me: SelfState;
   inv: InvItem[];
@@ -762,7 +770,7 @@ export class Game {
       const mutual = !!war && war.ours && war.theirs;
       const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : mutual ? '#ff8a3a' : self ? '#ffffff' : '#7fc4ff';
       el.innerHTML = '';
-      el.className = `nameplate np-player${self ? ' np-self' : ''}`;
+      el.className = `nameplate np-player${self ? ' np-self' : ''}${c.shelter?.hut ? ' np-sheltered' : ''}`;
       // as in L2: the title over the name, the clan's crest before it (and here its name under it)
       if (r.ti) {
         const t = document.createElement('div');
@@ -997,41 +1005,77 @@ export class Game {
       // already seated when it comes into view: on a seat or on the floor, as it would have sat down
       groundSit: r.f & F_SITTING ? !nodesNear(r.x, r.z, 0.6).some((n) => n.kind === 'seat') : undefined,
     };
-    if (r.f & F_SITTING) this.enterTent(c, r.x, r.z);
+    if (r.f & F_SITTING) this.enterShelter(c, r.x, r.z);
     this.refreshLabel(c);
     this.refreshQuestMarker(c);
     return c;
   }
 
-  /** Sat down at a tent's door: in it, as everyone sees it (the server keeps the body at the door). */
-  private enterTent(c: CEnt, x: number, z: number) {
-    const n = nodesNear(x, z, 0.6).find((nd) => nd.kind === 'tent');
-    if (!n || c.tent) return;
-    const t = layoutZoneProps().tents[nodeIndex(n)], mid = tentCentre(n), y = heightAt(mid.x, mid.z);
-    const door = tentDoorClosed(t);
-    this.entLayer.add(door);
-    const el = document.createElement('div');
-    el.className = 'rest-zzz';
-    for (const ch of 'zzZ') el.appendChild(document.createElement('span')).textContent = ch;
-    const zzz = new CSS2DObject(el);
-    zzz.position.set(mid.x, y + 3.9, mid.z);
-    this.labelLayer.add(zzz);
-    c.tent = { door, zzz, top: new THREE.Vector3(mid.x, y + 0.6, mid.z) }; // the plate rides its usual height above this
+  /** Sat down at a tent's or a hut's door: in it, as everyone sees it (the server keeps the body at the door). */
+  private enterShelter(c: CEnt, x: number, z: number) {
+    const n = nodesNear(x, z, 0.6).find((nd) => isShelter(nd.kind));
+    if (!n || c.shelter) return;
+    const hut = n.kind === 'hut', mid = shelterCentre(n), plates = heightAt(mid.x, mid.z) + (hut ? HUT_PLATES : TENT_PLATES);
+    let s = this.shelters.get(n.id);
+    if (!s) {
+      const zp = layoutZoneProps();
+      const door = hut ? hutDoorClosed(zp.huts[nodeIndex(n)]) : tentDoorClosed(zp.tents[nodeIndex(n)]);
+      this.entLayer.add(door);
+      const el = document.createElement('div');
+      el.className = 'rest-zzz';
+      for (const ch of 'zzZ') el.appendChild(document.createElement('span')).textContent = ch;
+      const zzz = new CSS2DObject(el);
+      zzz.position.set(mid.x, plates, mid.z);
+      this.labelLayer.add(zzz);
+      this.shelters.set(n.id, (s = { door, zzz, slots: [] }));
+    }
+    let slot = s.slots.findIndex((id) => id === undefined);
+    if (slot < 0) slot = s.slots.length;
+    s.slots[slot] = c.id;
+    // the tag goes where its plate (c.height + 0.35 over it) lands at the shelter's, whatever the body's height
+    c.shelter = { node: n.id, slot, hut, top: new THREE.Vector3(mid.x, plates - c.height - 0.35, mid.z) };
+    c.labelEl.style.translate = slot ? `0 ${-slot * PLATE_STEP}px` : '';
+    c.labelEl.classList.toggle('np-sheltered', hut);
+    this.restackShelter(s);
     c.model.visible = false;
-    // the tent stands for the body: clicking it picks whoever rests inside
-    c.hit.position.set(mid.x - n.x, c.hit.position.y, mid.z - n.z);
-    c.hit.scale.set(3, 1.2, 3);
+    if (hut) {
+      // nobody picks out whoever is in a hut: a click on it is always a way in
+      this.hitboxes = this.hitboxes.filter((h) => h !== c.hit);
+    } else {
+      // the tent stands for the body: clicking it picks whoever rests inside
+      c.hit.position.set(mid.x - n.x, c.hit.position.y, mid.z - n.z);
+      c.hit.scale.set(3, 1.2, 3);
+    }
   }
 
-  /** Out of the tent again (got up, or left view): the body back at the door, the door rolled up. */
-  private leaveTent(c: CEnt) {
-    if (!c.tent) return;
-    this.entLayer.remove(c.tent.door);
-    c.tent.door.traverse((o) => o instanceof THREE.Mesh && o.geometry.dispose());
-    this.labelLayer.remove(c.tent.zzz);
-    c.tent.zzz.element.remove();
-    c.tent = undefined;
+  /** The zzz just over the highest plate in the shelter's stack. */
+  private restackShelter(s: { zzz: CSS2DObject; slots: (number | undefined)[] }) {
+    const top = s.slots.reduce<number>((m, id, i) => (id === undefined ? m : i), 0);
+    s.zzz.element.style.translate = `0 ${-(top * PLATE_STEP + PLATE_STEP / 2 + 22)}px`;
+  }
+
+  /** Out of the tent or hut again (got up, or left view): the body back at the door, and the door rolled up or opened
+   * once the last one is out. */
+  private leaveShelter(c: CEnt) {
+    const sh = c.shelter;
+    if (!sh) return;
+    const s = this.shelters.get(sh.node);
+    if (s) {
+      s.slots[sh.slot] = undefined;
+      if (s.slots.some((id) => id !== undefined)) this.restackShelter(s);
+      else {
+        this.entLayer.remove(s.door);
+        s.door.traverse((o) => o instanceof THREE.Mesh && o.geometry.dispose());
+        this.labelLayer.remove(s.zzz);
+        s.zzz.element.remove();
+        this.shelters.delete(sh.node);
+      }
+    }
+    c.shelter = undefined;
+    c.labelEl.style.translate = '';
+    c.labelEl.classList.remove('np-sheltered');
     c.model.visible = true;
+    if (sh.hut && !this.hitboxes.includes(c.hit)) this.hitboxes.push(c.hit);
     c.hit.position.set(0, c.hit.position.y, 0);
     c.hit.scale.set(1, 1, 1);
   }
@@ -1074,7 +1118,7 @@ export class Game {
     const c = this.ents.get(id);
     if (!c) return;
     this.ghost(c, false);
-    this.leaveTent(c);
+    this.leaveShelter(c);
     this.entLayer.remove(c.root);
     this.labelLayer.remove(c.tag);
     c.label.element.remove();
@@ -1150,7 +1194,7 @@ export class Game {
       this.ents.set(r.id, c);
       this.entLayer.add(c.root);
       this.labelLayer.add(c.tag);
-      this.hitboxes.push(c.hit);
+      if (!c.shelter?.hut) this.hitboxes.push(c.hit); // in a hut already: nobody picks it out
       this.pushSnap(c, r.x, r.z, r.ry, t);
       if (!old && r.id !== this.me.id && r.k !== 'i') c.pos.set(r.x, heightAt(r.x, r.z), r.z);
     }
@@ -1168,13 +1212,13 @@ export class Game {
       if (f & F_SITTING && !(c.flags & F_SITTING)) {
         c.sitAt = performance.now();
         c.groundSit = !nodesNear(c.pos.x, c.pos.z, 0.6).some((n) => n.kind === 'seat');
-        this.enterTent(c, x, z);
+        this.enterShelter(c, x, z);
         // the walk to the seat is over: left in place it would read as a request to get up again
         if (c.id === this.me.id) this.predict = null;
       }
       // our own get-up already started on the click (updateSelf): don't restart it when the server agrees
       if (!(f & F_SITTING) && c.flags & F_SITTING && !isStanding(c)) c.standAt = performance.now();
-      if (!(f & F_SITTING)) this.leaveTent(c);
+      if (!(f & F_SITTING)) this.leaveShelter(c);
       if (!(f & F_GATHER) && c.flags & F_GATHER) {
         c.gather = undefined;
         if (c.id === this.me.id && this.castBar && Object.values(GATHER_LABEL).some((l) => l() === this.castBar!.name)) this.castBar = null;
@@ -1586,15 +1630,18 @@ export class Game {
   private pickNode(ray: THREE.Ray, ground: THREE.Vector3): NodeDef | null {
     let best: NodeDef | null = null, bestT = Infinity;
     const a = new THREE.Vector3(), b = new THREE.Vector3(), onRay = new THREE.Vector3();
-    for (const n of nodesNear(ground.x, ground.z, 9)) {
+    // a ray over a hut's roof (or a tent's) meets the ground well behind it from this low camera: those are looked for
+    // farther off than the rest
+    for (const n of nodesNear(ground.x, ground.z, 24)) {
+      if (!isShelter(n.kind) && Math.hypot(n.x - ground.x, n.z - ground.z) > 9) continue;
       if (!isRest(n.kind) && this.nodes.isGone(n.id)) continue;
-      // a tent is picked by its body, not its door
-      const at = n.kind === 'tent' ? tentCentre(n) : n, y = heightAt(at.x, at.z);
+      // a tent or hut is picked by its body, not its door
+      const at = isShelter(n.kind) ? shelterCentre(n) : n, y = heightAt(at.x, at.z);
       a.set(at.x, y, at.z);
       // a tree by its trunk: this low camera's rays cross the crowns on their way to the ground behind them, and a
       // click there means walking there, not felling the tree
       b.set(at.x, y + nodeHeight(n) * (n.kind === 'tree' ? 0.45 : 1), at.z);
-      const r = n.kind === 'tree' ? Math.max(0.6, n.r + 0.35) : n.kind === 'rock' ? n.r + 0.25 : n.kind === 'tent' ? 2.2 : 0.65;
+      const r = n.kind === 'tree' ? Math.max(0.6, n.r + 0.35) : n.kind === 'rock' ? n.r + 0.25 : isShelter(n.kind) ? 2.2 : 0.65;
       if (ray.distanceSqToSegment(a, b, onRay) > r * r) continue;
       const t = onRay.distanceTo(ray.origin);
       if (t < bestT) (bestT = t), (best = n);
@@ -2384,7 +2431,7 @@ export class Game {
       c.root.matrixWorldAutoUpdate = onScreen; // narrowed below, once we know whether it animates this frame
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming
       if (sitting) c.tag.position.y -= c.groundSit ? 0.75 : 0.55; // the plate drops with the seated body (lower on the floor)
-      if (c.tent) c.tag.position.copy(c.tent.top); // in a tent: the plate over it
+      if (c.shelter) c.tag.position.copy(c.shelter.top); // in a tent or hut: the plate over it
       c.tag.visible = onScreen;
       // burning: small flames licking up from it; frostbitten: frost settling on it
       if (onScreen && c.flags & (STATUSES.burn.flag | STATUSES.frostbite.flag) && now - (c.burnAt ?? 0) > 350) {

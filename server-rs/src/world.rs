@@ -165,6 +165,12 @@ impl World {
     /** A vanished player (the assassin's Vanish): nobody else sees it, picks it out or attacks it. */
     pub fn unseen(&self, id: u32) -> bool { self.pl(id).is_some_and(|p| p.invis_until > self.now) }
 
+    /** Resting in a hut: nothing hurts it and nobody picks it out; a mob on it loses it (gather.rs lets it in out of
+     * combat only). */
+    pub fn sheltered(&self, id: u32) -> bool {
+        self.pl(id).and_then(|p| p.sitting).and_then(|s| crate::data::d().nodes.get(&s)).is_some_and(|n| n.kind == crate::data::NodeKind::Hut)
+    }
+
     /** Out of hiding (it attacked or cast): seen again from the next snapshot; its own client stops drawing it faded. */
     pub fn reveal(&mut self, pid: u32) {
         if !self.unseen(pid) { return; }

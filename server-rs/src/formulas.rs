@@ -619,6 +619,22 @@ mod tests {
         assert_eq!(rest / stand, 4.0);
     }
 
+    /// A hut by the roads (and in the hills) rests four at once twice as fast as a tent; every one has a door to go in by.
+    #[test]
+    fn huts_rest_twice_a_tent() {
+        use crate::data::NodeKind;
+        use crate::player::regen_mul;
+        let data = d();
+        let of = |k: NodeKind| data.nodes.iter().filter(|(_, n)| n.kind == k).map(|(&id, _)| id).collect::<Vec<_>>();
+        let (huts, tents) = (of(NodeKind::Hut), of(NodeKind::Tent));
+        assert!(huts.len() >= 25, "huts to rest in: {}", huts.len());
+        let (stand, tent, hut) = (regen_mul(false, None), regen_mul(false, Some(tents[0])), regen_mul(false, Some(huts[0])));
+        assert_eq!(hut / tent, 2.0);
+        assert_eq!(hut / stand, 8.0);
+        assert!(regen_mul(true, Some(huts[0])) < stand, "a fight slows it as anywhere");
+        assert_eq!(data.c.hut_cap, 4);
+    }
+
     /// Ymirak's Congelación slows like a slow (and deals damage over time like a bleed, through tick_statuses).
     #[test]
     fn frostbite_slows() {
