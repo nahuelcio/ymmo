@@ -1,24 +1,33 @@
 # client/src/render/mobs.ts
 
-- MobLook · interface · L16-L38 — interface MobLook
-- orc · function · L41-L41 — orc = (o: Partial<MobLook>): MobLook
-- goblin · function · L42-L42 — goblin = (o: Partial<MobLook>): MobLook
-- realMob · function · L97-L100 — function realMob(tplId: string): Rig | null
-- qMob · function · L102-L116 — function qMob(tplId: string): Rig | null
-- Model · type · L125-L125 — type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
-- Role · type · L126-L126 — type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
-- ClipSet · type · L127-L127 — type ClipSet = Partial<Record<Role, string>>;
-- GlbLook · interface · L133-L156 — interface GlbLook
-- Loaded · interface · L246-L246 — interface Loaded
-- loadMobs · function · L252-L272 — function loadMobs(): Promise<void>
-- get · function · L255-L255 — get = (f: string)
-- add · function · L259-L263 — add = (m: Model, g: { scene: THREE.Object3D }, clips: THREE.AnimationClip[])
-- rockMap · function · L280-L292 — function rockMap(n: number): THREE.Texture | null
-- lambert · function · L293-L332 — function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material
-- ClipAnim · interface · L335-L341 — interface ClipAnim
-- glbMob · function · L343-L396 — function glbMob(tplId: string): Rig | null
-- animateClips · function · L398-L433 — function animateClips(a: ClipAnim, s: AnimState)
-- at · function · L402-L402 — at = (act: THREE.AnimationAction, ms: number)
-- mountMobPreview · function · L439-L527 — async function mountMobPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L477-L485 — resize = ()
-- frame · function · L500-L513 — frame = (now: number, draw = true)
+- MobLook · interface · L19-L41 — interface MobLook
+- orc · function · L44-L44 — orc = (o: Partial<MobLook>): MobLook
+- goblin · function · L45-L45 — goblin = (o: Partial<MobLook>): MobLook
+- KnightLook · interface · L104-L111 — interface KnightLook
+- knightMob · function · L117-L129 — function knightMob(tplId: string): Rig | null
+- realMob · function · L135-L138 — function realMob(tplId: string): Rig | null
+- qMob · function · L140-L154 — function qMob(tplId: string): Rig | null
+- Model · type · L163-L163 — type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
+- Role · type · L164-L164 — type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
+- ClipSet · type · L165-L165 — type ClipSet = Partial<Record<Role, string>>;
+- GlbLook · interface · L171-L198 — interface GlbLook
+- elementOf · function · L202-L203 — elementOf = (tpl: string): 'fire' | 'ice' | undefined
+- Loaded · interface · L324-L324 — interface Loaded
+- loadMobs · function · L330-L350 — function loadMobs(): Promise<void>
+- get · function · L333-L333 — get = (f: string)
+- add · function · L337-L341 — add = (m: Model, g: { scene: THREE.Object3D }, clips: THREE.AnimationClip[])
+- rockMap · function · L358-L370 — function rockMap(n: number): THREE.Texture | null
+- lambert · function · L371-L410 — function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material
+- ClipAnim · interface · L413-L421 — interface ClipAnim
+- glbMob · function · L423-L484 — function glbMob(tplId: string): Rig | null
+- bone · function · L472-L472 — bone = (re: RegExp)
+- runSteps · function · L491-L505 — function runSteps(model: Model, src: Loaded, clip: THREE.AnimationClip): number[]
+- y · function · L499-L499 — y = (b: THREE.Object3D)
+- animateClips · function · L508-L549 — function animateClips(a: ClipAnim, s: AnimState): number
+- at · function · L512-L512 — at = (act: THREE.AnimationAction, ms: number)
+- bob · function · L547-L547 — bob = (t: number)
+- mountMobPreview · function · L555-L656 — async function mountMobPreview(host: HTMLElement): Promise<() => void>
+- place · function · L580-L585 — place = (id: string, i: number)
+- regear · function · L595-L600 — regear = ()
+- resize · function · L605-L613 — resize = ()
+- frame · function · L628-L641 — frame = (now: number, draw = true)

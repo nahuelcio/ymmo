@@ -1,12 +1,14 @@
 # shared/src/nodes.ts
 
-- NodeKind · type · L6-L6 — type NodeKind = 'tree' | 'rock' | 'bush' | 'seat';
-- NodeDef · interface · L11-L24 — interface NodeDef
-- Yield · interface · L27-L27 — interface Yield
-- GatherDef · interface · L29-L39 — interface GatherDef
-- allNodes · function · L61-L73 — function allNodes(): NodeDef[]
-- nodeById · function · L75-L78 — function nodeById(id: number): NodeDef | undefined
-- nodeIndex · function · L81-L81 — nodeIndex = (n: NodeDef)
-- hkey · function · L86-L86 — hkey = (cx: number, cz: number)
-- nodesNear · function · L89-L107 — function nodesNear(x: number, z: number, r: number): NodeDef[]
-- reachOf · function · L113-L113 — reachOf = (n: NodeDef)
+- NodeKind · type · L8-L8 — type NodeKind = 'tree' | 'rock' | 'bush' | 'seat' | 'tent';
+- NodeDef · interface · L13-L26 — interface NodeDef
+- Yield · interface · L29-L29 — interface Yield
+- GatherDef · interface · L31-L41 — interface GatherDef
+- tentCentre · function · L61-L61 — tentCentre = (n: NodeDef)
+- allNodes · function · L73-L91 — function allNodes(): NodeDef[]
+- nodeById · function · L94-L97 — function nodeById(id: number): NodeDef | undefined
+- nodeIndex · function · L100-L100 — nodeIndex = (n: NodeDef)
+- hkey · function · L105-L105 — hkey = (cx: number, cz: number)
+- nodesNear · function · L108-L126 — function nodesNear(x: number, z: number, r: number): NodeDef[]
+- isRest · function · L132-L132 — isRest = (k: NodeKind)
+- reachOf · function · L135-L135 — reachOf = (n: NodeDef)

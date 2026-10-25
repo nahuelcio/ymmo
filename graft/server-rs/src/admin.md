@@ -15,14 +15,14 @@
 - bal · function · L49-L49 — pub fn bal(key: &str, base: f64) -> f64 { balance().read().unwrap().get(key).copied().unwrap_or(base) }
 - tuned_skill · function · L52-L58 — pub fn tuned_skill(s: &SkillDef) -> SkillDef
 - Tunable · struct · L61-L61 — pub struct Tunable { pub key: String, pub label: String, pub base: f64, pub min: f64, pub max: f64 }
-- tunables · function · L64-L94 — pub fn tunables() -> Vec<Tunable>
-- valid_balance · function · L97-L99 — pub fn valid_balance(key: &str, value: Option<f64>) -> bool
-- init · function · L101-L108 — pub fn init()
-- set_balance · function · L111-L120 — fn set_balance(app: &App, key: &str, value: Option<f64>) -> bool
-- set_cast · function · L123-L133 — fn set_cast(app: &App, skill: &str, ms: Option<f64>) -> bool
-- ct_eq · function · L136-L138 — fn ct_eq(a: &[u8], b: &[u8]) -> bool
-- rss · function · L141-L144 — fn rss() -> Option<u64>
-- handle · function · L147-L209 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
-- tests · module · L212-L237 — mod tests
-- log_ring_and_password_compare · function · L216-L225 — fn log_ring_and_password_compare()
-- balance_fallback_and_whitelist · function · L228-L236 — fn balance_fallback_and_whitelist()
+- tunables · function · L64-L96 — pub fn tunables() -> Vec<Tunable>
+- valid_balance · function · L99-L101 — pub fn valid_balance(key: &str, value: Option<f64>) -> bool
+- init · function · L103-L110 — pub fn init()
+- set_balance · function · L113-L122 — fn set_balance(app: &App, key: &str, value: Option<f64>) -> bool
+- set_cast · function · L125-L135 — fn set_cast(app: &App, skill: &str, ms: Option<f64>) -> bool
+- ct_eq · function · L138-L140 — fn ct_eq(a: &[u8], b: &[u8]) -> bool
+- rss · function · L143-L146 — fn rss() -> Option<u64>
+- handle · function · L149-L211 — pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value)
+- tests · module · L214-L239 — mod tests
+- log_ring_and_password_compare · function · L218-L227 — fn log_ring_and_password_compare()
+- balance_fallback_and_whitelist · function · L230-L238 — fn balance_fallback_and_whitelist()

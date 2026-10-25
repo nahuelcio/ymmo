@@ -1,47 +1,47 @@
 # client/src/ui/hud.ts
 
-Declares one hotbar cell as either a skill reference or an item reference, or null when the slot is empty.
-
-- Slot · type · L18-L18 — Declares one hotbar cell as either a skill reference or an item reference, or null when the slot is empty.
+- Slot · type · L18-L18 — type Slot = { type: 'skill' | 'item'; id: string } | null;
 - BarState · interface · L26-L26 — interface BarState
 - emptyBar · function · L27-L27 — emptyBar = (b: number)
 - slotAction · function · L32-L32 — slotAction = (b: number, i: number)
 - foldable · function · L38-L58 — function foldable(box: HTMLElement, head: HTMLElement, id: string, start = false)
-- Hud · class · L60-L757 — Builds every HUD panel and wires its handlers, most importantly the 10-slot hotbar with drag-and-drop rearrangement (slots swap, moved skills trade places), right-click to empty, and click to activate.
-- constructor · method · L98-L260 — Builds every HUD panel and wires its handlers, most importantly the 10-slot hotbar with drag-and-drop rearrangement (slots swap, moved skills trade places), right-click to empty, and click to activate.
-- compact · function · L114-L121 — compact = (on: boolean)
-- syncAtk · function · L170-L170 — Keeps the auto-attack button's keycap label showing the current attack keybind whenever key settings change.
-- up · function · L201-L206 — up = (u: PointerEvent)
-- btn · function · L220-L233 — Factory for the bottom-right menu buttons, giving each an icon, a label and a live key hint that re-syncs when the player rebinds keys.
-- sync · function · L225-L229 — Refreshes a menu button's key hint and tooltip from the current key settings.
-- menuDrawer · method · L266-L299 — private menuDrawer(root: HTMLElement, menu: HTMLDivElement)
-- extra · function · L270-L276 — extra = (icon: string, label: string, fn: () => void)
-- show · function · L279-L288 — show = (on: boolean)
-- pages · method · L302-L304 — private pages(): number[]
-- flip · method · L306-L315 — private flip(d: number)
-- showPage · method · L316-L323 — private showPage()
-- makeStatusMovable · method · L329-L408 — private makeStatusMovable(st: HTMLDivElement)
-- apply · function · L354-L368 — apply = ()
-- save · function · L369-L376 — save = ()
-- drag · function · L377-L393 — drag = (e: PointerEvent, move: (dx: number, dy: number, from: { x: number; y: number; w: number }) => void)
-- mv · function · L382-L385 — mv = (ev: PointerEvent)
-- up · function · L386-L390 — up = ()
-- placeCast · method · L411-L418 — private placeCast()
-- setQuests · method · L420-L445 — Renders the quest tracker, showing each quest's progress (or a 'return to NPC' callout once the objective count is met) with a star button that toggles that quest's map hints.
-- itemCount · method · L447-L449 — Counts how many of an item the player carries in total across inventory stacks, used for hotbar quantity badges and spent detection.
-- onMe · method · L451-L483 — Refreshes the player's own status panel from a state snapshot: name/level/race/class, CP/HP/MP/XP bars, buff icons, PvP/PK flag, plus the rules that the world drains to grey under 30% HP and the mana bar trembles under 30% MP.
-- buildSlots · method · L486-L529 — private buildSlots(b: number, parent: HTMLElement): HTMLDivElement[]
-- syncKey · function · L492-L492 — syncKey = ()
-- loadBars · method · L532-L561 — private loadBars(): BarState
-- fix · function · L533-L543 — fix = (v: Partial<BarState> | null): BarState | null
-- flags · function · L541-L541 — flags = (a: unknown, n: number)
-- queueSave · method · L564-L567 — private queueSave(st: BarState)
-- sendBar · method · L573-L579 — sendBar(st = this.st)
-- saveBar · method · L581-L584 — Persists the hotbar layout and the set of 'known' ids to localStorage (degrading gracefully to a session-only layout if storage is unavailable) and redraws the bar.
-- toggleBarsMenu · method · L587-L608 — toggleBarsMenu()
-- refreshSlots · method · L610-L655 — Keeps the hotbar truthful: loads the per-character saved layout once, auto-drops each newly learned skill or first-seen consumable into the first free slot exactly once, and re-renders icons, counts and greyed-out 'spent' state.
-- activateSlot · method · L657-L670 — Activates a hotbar slot's skill or item, but refuses with a shake when the real (server-confirmed, non-predicted) cooldown is still running instead of sending a doomed request to the server.
-- refreshTarget · method · L672-L674 — Invalidates the cached target snapshot key so the next update() forcibly repaints the target window.
-- setStatuses · method · L677-L684 — Shows one icon per active status effect by filtering STATUS_IDS against the incoming flags bitmask, each with a name/description tooltip.
-- banner · method · L687-L692 — Displays a temporary announcement banner (with an optional bigger style) that automatically hides itself after 2.6 seconds.
-- update · method · L694-L756 — Per-frame HUD animation pass: renders cooldown sweeps and countdown numbers plus a no-mana state on hotbar slots, the attack and dash sweeps, cast-bar progress, and the target window's name and bars.
+- Hud · class · L60-L813 — class Hud
+- constructor · method · L101-L269 — constructor(private g: Game, root: HTMLElement)
+- compact · function · L120-L127 — compact = (on: boolean)
+- syncAtk · function · L176-L176 — syncAtk = ()
+- up · function · L207-L212 — up = (u: PointerEvent)
+- btn · function · L229-L242 — btn = (icon: Action, label: string, fn: () => void)
+- sync · function · L234-L238 — sync = ()
+- menuDrawer · method · L275-L308 — private menuDrawer(root: HTMLElement, menu: HTMLDivElement)
+- extra · function · L279-L285 — extra = (icon: string, label: string, fn: () => void)
+- show · function · L288-L297 — show = (on: boolean)
+- pages · method · L311-L313 — private pages(): number[]
+- flip · method · L315-L324 — private flip(d: number)
+- showPage · method · L325-L332 — private showPage()
+- makeStatusMovable · method · L338-L417 — private makeStatusMovable(st: HTMLDivElement)
+- apply · function · L363-L377 — apply = ()
+- save · function · L378-L385 — save = ()
+- drag · function · L386-L402 — drag = (e: PointerEvent, move: (dx: number, dy: number, from: { x: number; y: number; w: number }) => void)
+- mv · function · L391-L394 — mv = (ev: PointerEvent)
+- up · function · L395-L399 — up = ()
+- placeCast · method · L420-L427 — private placeCast()
+- setQuests · method · L429-L463 — setQuests(list: { id: string; progress: number }[])
+- itemCount · method · L465-L467 — private itemCount(id: string)
+- onMe · method · L469-L512 — onMe()
+- buildSlots · method · L515-L546 — private buildSlots(b: number, parent: HTMLElement): HTMLDivElement[]
+- syncKey · function · L521-L521 — syncKey = ()
+- placeOnBar · method · L550-L563 — placeOnBar(b: number, i: number, d: { from?: { b: number; i: number }; slot?: Slot })
+- slotUnder · method · L566-L573 — slotUnder(x: number, y: number): { b: number; i: number; el: HTMLDivElement } | null
+- loadBars · method · L576-L606 — private loadBars(): BarState
+- fix · function · L577-L588 — fix = (v: Partial<BarState> | null): BarState | null
+- flags · function · L586-L586 — flags = (a: unknown, n: number)
+- queueSave · method · L609-L612 — private queueSave(st: BarState)
+- sendBar · method · L618-L624 — sendBar(st = this.st)
+- saveBar · method · L626-L629 — private saveBar()
+- toggleBarsMenu · method · L632-L653 — toggleBarsMenu()
+- refreshSlots · method · L655-L700 — refreshSlots()
+- activateSlot · method · L702-L715 — activateSlot(b: number, i: number)
+- refreshTarget · method · L717-L719 — refreshTarget()
+- setStatuses · method · L722-L729 — setStatuses(flags: number)
+- banner · method · L732-L737 — banner(text: string, big = false, kind = '')
+- update · method · L739-L812 — update(now: number)

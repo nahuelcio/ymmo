@@ -1,43 +1,55 @@
 # client/src/ui/minimap.ts
 
-- Region · type · L21-L21 — type Region = { id: string; name: string; levels: string; x: number; z: number; poly: [number, number][] };
-- INK_A · function · L32-L32 — INK_A = (a: number)
-- questAreas · function · L38-L45 — Resolves which hunting zones contain spawns for the mobs demanded by the player's active quests, so those zones can be highlighted with quest labels on both maps.
-- paintTerrain · function · L51-L108 — function* paintTerrain(x0: number, z0: number, span: number, res: number): Generator<void, HTMLCanvasElement>
-- drain · function · L111-L116 — function drain(gen: Generator<void, HTMLCanvasElement>): HTMLCanvasElement
-- worldImage · function · L118-L118 — Pre-renders the whole game world once into a 512x512 pixel canvas — water vs. terrain coloring plus north-west-light relief shading — that both maps later crop from.
-- css · function · L120-L120 — Formats a numeric color as a CSS hex string so town structures can be painted with their per-object colors.
-- toMap · function · L122-L122 — Converts a world coordinate into the matching pixel position in the pre-rendered world image, the shared coordinate bridge for both maps.
-- Minimap · class · L124-L847 — The minimap widget: a zoomable radar lens centered on the player plus a world-map window used to plan travel routes and track quests, camps and other players.
-- constructor · method · L151-L254 — Builds the minimap panel — zone label, device-resolution canvas, zoom buttons, clock, legend, the two-click-confirm raid-leave button, and the world-map window with click-to-walk / Ctrl-click-stop / right-click-cancel handlers.
-- setFold · function · L156-L160 — setFold = (on: boolean)
-- mapSpan · method · L257-L259 — private mapSpan()
-- clampMap · method · L261-L265 — private clampMap(v: number)
-- worldAt · method · L268-L273 — private worldAt(px: number, py: number): [number, number]
-- toBig · method · L276-L280 — private toBig(x: number, z: number): [number, number]
-- syncBig · method · L283-L295 — private syncBig(): number
-- blitMap · method · L298-L302 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
-- renderWindow · method · L308-L326 — private renderWindow(key: string)
-- tick · function · L311-L324 — tick = ()
-- toggleMap · method · L328-L331 — Opens or closes the big world-map window and repaints it when shown.
-- drawBig · method · L333-L474 — Paints the full world map: dashed zone circles with names and level ranges, towns, hostile camps, active quest hunting areas, the planned route, other players (party green / flagged red / others blue), and the player's own heading arrow.
-- tag · function · L385-L394 — tag = (t: string, x: number, y: number, px = 12, font = 'bold', spacing = '0px')
-- inView · function · L395-L395 — inView = (x: number, y: number, m = 80)
-- drawStructures · method · L477-L537 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
-- seen · function · L478-L478 — seen = (x: number, y: number, m = 8)
-- strokeWall · function · L493-L500 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L506-L516 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
-- townIcon · method · L540-L552 — private townIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
-- raidIcon · method · L555-L572 — private raidIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
-- compass · method · L575-L604 — private compass(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
-- campIcon · method · L607-L622 — Draws the hostile-camp marker — crossed swords on a dark red disc — shared by the minimap and the world map.
-- drawRoute · method · L625-L658 — Draws the travel route as a double-stroked dashed line with numbered stop pins, but only when a computed path and queued stops both exist.
-- label · method · L660-L668 — Draws map text twice — dark offset shadow under a pale fill — so labels stay readable over any terrain.
-- arrow · method · L670-L687 — Draws the white triangle arrow that shows the player's current facing, rotating world-space heading into canvas orientation.
-- update · method · L689-L846 — Per-tick (throttled to ~150 ms) repaint of the radar lens: crops terrain around the player, then overlays trees, walls, town buildings, NPCs with quest !/? markers, quest hunting areas and mobs, players and items, the route, rim vignette, heading arrow and coordinates, and refreshes the world map.
-- toC · function · L714-L714 — Converts world coordinates into lens pixel coordinates centered on the player at the current zoom, the mapping every overlay uses.
-- seen · function · L716-L716 — Culling test that decides whether a map point (with margin) lies inside the visible lens square and should be drawn at all.
-- strokeWall · function · L729-L736 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
-- rect · function · L742-L752 — Draws zoom-scaled, per-object rotated rectangles (house roofs, wall towers, market stalls) with off-lens culling so built structures stay crisp at any zoom.
-- disc · function · L763-L771 — Draws a zoom-scaled filled-and-outlined circle (town center disc, camp tents) skipping anything outside the lens.
-- questMob · function · L810-L810 — Tests whether a mob template belongs to one of the active quest targets, deciding which monsters get the yellow quest dots on the lens.
+- Region · type · L24-L24 — type Region = { id: string; name: string; levels: string; x: number; z: number; poly: [number, number][] };
+- INK_A · function · L35-L35 — INK_A = (a: number)
+- questAreas · function · L41-L48 — function questAreas(targets: { quest: string; mobs: Set<string> }[]): { zone: ZoneDef; quests: string[] }[]
+- paintTerrain · function · L54-L112 — function* paintTerrain(x0: number, z0: number, span: number, res: number): Generator<void, HTMLCanvasElement>
+- drain · function · L115-L120 — function drain(gen: Generator<void, HTMLCanvasElement>): HTMLCanvasElement
+- worldImage · function · L122-L122 — worldImage = ()
+- css · function · L124-L124 — css = (c: number)
+- toMap · function · L126-L126 — toMap = (v: number)
+- markScale · function · L130-L130 — markScale = (S: number)
+- faceArrow · function · L133-L142 — function faceArrow(parent: HTMLElement): SVGSVGElement
+- drawQuestMark · function · L144-L153 — function drawQuestMark(ctx: CanvasRenderingContext2D, x: number, y: number, qm: NonNullable<QuestMarker>, size: number)
+- RectFn · type · L155-L155 — type RectFn = (x: number, z: number, rw: number, rd: number, rot: number, fill: string) => void;
+- drawTents · function · L158-L165 — function drawTents(rect: RectFn)
+- tent · function · L159-L162 — tent = (t: { x: number; z: number; ry: number }, s: number, fill: string)
+- restTents · function · L169-L169 — restTents = ()
+- tentIcon · function · L172-L191 — function tentIcon(ctx: CanvasRenderingContext2D, x: number, y: number, s: number)
+- Minimap · class · L193-L1015 — class Minimap
+- constructor · method · L232-L372 — constructor(private g: Game, root: HTMLElement)
+- setFold · function · L237-L241 — setFold = (on: boolean)
+- mid · function · L298-L301 — mid = ()
+- lift · function · L320-L326 — lift = (e: PointerEvent)
+- zoomAt · method · L375-L384 — private zoomAt(px: number, py: number, next: number, wx: number, wz: number)
+- mapSpan · method · L387-L389 — private mapSpan()
+- clampMap · method · L391-L395 — private clampMap(v: number)
+- worldAt · method · L398-L403 — private worldAt(px: number, py: number): [number, number]
+- toBig · method · L406-L410 — private toBig(x: number, z: number): [number, number]
+- syncBig · method · L413-L425 — private syncBig(): number
+- blitMap · method · L428-L432 — private blitMap(ctx: CanvasRenderingContext2D, src: HTMLCanvasElement, S: number)
+- renderWindow · method · L438-L456 — private renderWindow(key: string)
+- tick · function · L441-L454 — tick = ()
+- toggleMap · method · L458-L461 — toggleMap()
+- setMapSize · method · L464-L476 — private setMapSize(big: boolean)
+- face · method · L482-L499 — private face()
+- drawBig · method · L501-L533 — private drawBig()
+- drawMarks · method · L536-L677 — private drawMarks(ctx: CanvasRenderingContext2D, S: number)
+- tag · function · L569-L578 — tag = (t: string, x: number, y: number, px = 12, font = 'bold', spacing = '0px')
+- inView · function · L579-L579 — inView = (x: number, y: number, m = 80)
+- drawStructures · method · L680-L732 — private drawStructures(ctx: CanvasRenderingContext2D, pxPer: number, S: number)
+- seen · function · L681-L681 — seen = (x: number, y: number, m = 8)
+- strokeWall · function · L696-L703 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L709-L719 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
+- townIcon · method · L735-L747 — private townIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
+- raidIcon · method · L750-L767 — private raidIcon(ctx: CanvasRenderingContext2D, x: number, y: number)
+- compass · method · L770-L799 — private compass(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
+- campIcon · method · L802-L817 — private campIcon(ctx: CanvasRenderingContext2D, x: number, y: number, r: number)
+- drawRoute · method · L820-L854 — private drawRoute(ctx: CanvasRenderingContext2D, at: (x: number, z: number) => number[])
+- label · method · L856-L864 — private label(ctx: CanvasRenderingContext2D, t: string, x: number, y: number)
+- update · method · L866-L1014 — update(now: number)
+- toC · function · L892-L892 — toC = (x: number, z: number)
+- seen · function · L894-L894 — seen = (x: number, y: number, m = 6)
+- strokeWall · function · L907-L914 — strokeWall = (w: { x: number; z: number; rot: number; hw?: number })
+- rect · function · L920-L930 — rect = (x: number, z: number, rw: number, rd: number, rot: number, fill: string)
+- questMob · function · L979-L979 — questMob = (tpl: string)

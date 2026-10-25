@@ -1,25 +1,27 @@
 # client/src/render/nature.ts
 
 - Mode · type · L48-L48 — type Mode = 'bark' | 'leaves' | 'bush' | 'grass' | 'flower' | 'rock';
-- Prim · interface · L58-L58 — interface Prim
-- natureReady · function · L65-L65 — natureReady = ()
-- dropNodeInstances · function · L72-L78 — function dropNodeInstances(meshes: THREE.Object3D[])
-- pick · function · L87-L89 — function pick<T>(list: readonly T[], u: number): T
-- fileOf · function · L91-L94 — function fileOf(map: THREE.Texture): string
-- modeOf · function · L96-L103 — function modeOf(piece: string, matName: string): Mode
-- bake · function · L105-L120 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
-- ground · function · L123-L134 — function ground(list: Prim[])
-- fitRock · function · L137-L147 — function fitRock(geo: THREE.BufferGeometry)
-- material · function · L149-L183 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
-- loadNature · function · L185-L207 — function loadNature(): Promise<void>
-- Item · interface · L209-L209 — interface Item
-- chunked · function · L212-L247 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
-- spawn · function · L255-L261 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number, leafOnly = false): Item[]
-- natureTile · function · L264-L269 — function natureTile(idx: { trees: number[]; rocks: number[]; bushes: number[] }): THREE.Object3D[]
-- buildNatureTrees · function · L271-L293 — function buildNatureTrees(idx: number[]): THREE.Group
-- buildNatureRocks · function · L295-L307 — function buildNatureRocks(idx: number[]): THREE.Group
-- buildNatureBushes · function · L311-L326 — function buildNatureBushes(idx: number[]): THREE.Group
-- natureDetailCell · function · L331-L371 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
-- buildNatureTown · function · L374-L416 — function buildNatureTown(): THREE.Group
-- place · function · L377-L380 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
-- world · function · L381-L384 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)
+- setSeeThrough · function · L65-L69 — function setSeeThrough(cam: THREE.Vector3, focus: THREE.Vector3 | null)
+- seeThrough · function · L70-L94 — function seeThrough(m: THREE.Material)
+- Prim · interface · L96-L96 — interface Prim
+- natureReady · function · L103-L103 — natureReady = ()
+- dropNodeInstances · function · L110-L116 — function dropNodeInstances(meshes: THREE.Object3D[])
+- pick · function · L125-L127 — function pick<T>(list: readonly T[], u: number): T
+- fileOf · function · L129-L132 — function fileOf(map: THREE.Texture): string
+- modeOf · function · L134-L141 — function modeOf(piece: string, matName: string): Mode
+- bake · function · L143-L158 — function bake(geo: THREE.BufferGeometry, matrix: THREE.Matrix4): THREE.BufferGeometry
+- ground · function · L161-L172 — function ground(list: Prim[])
+- fitRock · function · L175-L185 — function fitRock(geo: THREE.BufferGeometry)
+- material · function · L187-L222 — function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial
+- loadNature · function · L224-L246 — function loadNature(): Promise<void>
+- Item · interface · L248-L248 — interface Item
+- chunked · function · L251-L286 — function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }): THREE.Group
+- spawn · function · L294-L300 — function spawn(piece: string, m: THREE.Matrix4, x: number, z: number, c?: THREE.Color, node?: number, leafOnly = false): Item[]
+- natureTile · function · L303-L308 — function natureTile(idx: { trees: number[]; rocks: number[]; bushes: number[] }): THREE.Object3D[]
+- buildNatureTrees · function · L310-L332 — function buildNatureTrees(idx: number[]): THREE.Group
+- buildNatureRocks · function · L334-L346 — function buildNatureRocks(idx: number[]): THREE.Group
+- buildNatureBushes · function · L350-L365 — function buildNatureBushes(idx: number[]): THREE.Group
+- natureDetailCell · function · L370-L410 — function natureDetailCell(x0: number, z0: number, seed: number): THREE.Object3D[]
+- buildNatureTown · function · L413-L455 — function buildNatureTown(): THREE.Group
+- place · function · L416-L419 — place = (piece: string, x: number, y: number, z: number, rot: number, sc: number)
+- world · function · L420-L423 — world = (ox: number, oz: number, rot: number, lx: number, lz: number)

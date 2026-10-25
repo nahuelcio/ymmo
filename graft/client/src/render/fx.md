@@ -1,43 +1,44 @@
 # client/src/render/fx.ts
 
-A self-contained three.js visual-effects layer for the game client that spawns, animates, and cleans up short-lived spell visuals (projectiles, impacts, slashes, shockwaves, light pillars, sparkles, attack telegraphs).
-
-- Fx · interface · L5-L10 — Plain data holder describing one live effect: its scene object, start time, duration, and the per-frame animation callback driven by normalized progress k.
-- out · function · L23-L23 — Ease-out cubic helper so every expansion starts fast and settles softly, making effects read as an impact rather than a slow inflate.
+- Fx · interface · L5-L10 — interface Fx
+- out · function · L23-L23 — out = (k: number)
 - V · function · L24-L24 — V = ()
 - hot · function · L26-L26 — hot = (c: number, k = 0.6)
 - darker · function · L27-L27 — darker = (c: number, k: number)
 - Trail · type · L28-L28 — type Trail = 'magic' | 'fire' | 'ice' | 'dark' | 'holy' | 'none';
-- FxManager · class · L35-L399 — Owns the full effect lifecycle: builders spawn glowing spell visuals into the scene, and the per-frame ticker advances them, expiring and disposing finished ones.
-- constructor · method · L50-L52 — Simply stores the scene that all spawned effects will be added to and later removed from.
-- basic · method · L54-L61 — private basic(color: number, opacity: number, side: THREE.Side, blending: THREE.Blending): THREE.MeshBasicMaterial
-- glow · method · L62-L64 — Creates the additive-blended, transparent, non-depth-writing material style that gives every effect its luminous unlit glow.
-- add · method · L67-L70 — Registers a freshly built effect object with the scene and the ticking list, stamping its start time so progress can be derived each frame.
-- rate · method · L72-L80 — private rate(perSec: number)
-- light · method · L81-L83 — light(at: THREE.Vector3, color: number, power: number, range: number, ms: number)
-- flash · method · L88-L93 — flash(at: THREE.Vector3, color: number, r = 1, light = true)
-- projectile · method · L96-L129 — Spawns a homing glowing bolt — colored halo around a white core plus a fading trail — that arcs from a start point toward a live target position each frame.
-- at · function · L98-L101 — Interpolates a point along the bolt's flight path and lifts it with a sine arc, so both the core and each lagging trail node follow the same curved trajectory.
-- burst · method · L132-L137 — Plays an impact at a position: a quick white flash, an expanding colored halo, and sparks thrown in random directions that fall under gravity as they fade.
-- slash · method · L140-L146 — Draws a crescent arc sweeping across a target, oriented to face the attacker and given a random tilt so each swing reads differently.
-- ring · method · L149-L156 — Plays a ground shockwave of two rings chasing each other outward over a fading disc of light, the second ring delayed a quarter of the duration for a pulse effect.
-- pillar · method · L159-L180 — Summons a column of light that shoots up instantly then narrows away, with a brighter inner core, an expanding ring at its foot, and white motes spiralling up inside it.
-- rune · method · L183-L188 — rune(pos: THREE.Vector3, r: number, color: number, dur = 1000)
-- motes · method · L191-L205 — motes(pos: THREE.Vector3, color: number, dur = 900, o: { n?: number; r?: number; spin?: number; rise?: number; fall?: number; size?: number; cell?: Cell } = {})
-- sparkles · method · L208-L210 — Surrounds a character with twinkling motes that spiral upward at individual speeds and radii, then fade out.
-- shards · method · L213-L217 — shards(pos: THREE.Vector3, color: number, n = 10, spread = 1.5, dur = 700)
-- debris · method · L220-L224 — debris(pos: THREE.Vector3, color = 0x8a7a60, n = 12, spread = 2)
-- dome · method · L227-L244 — dome(pos: THREE.Vector3, color: number, r = 1.5, dur = 800)
-- bolt · method · L247-L276 — bolt(from: THREE.Vector3, to: THREE.Vector3, color: number, dur = 250)
-- chain · function · L252-L259 — chain = (a: THREE.Vector3[], life: number, w: number)
-- beam · method · L279-L296 — beam(from: () => THREE.Vector3, to: () => THREE.Vector3, color: number, dur = 600, travel = true)
-- flame · method · L299-L309 — flame(pos: THREE.Vector3, r = 1, dur = 1000, color = 0xff8a2a)
-- hearth · method · L312-L314 — hearth(at: THREE.Vector3, r = 1)
-- burnHearths · method · L316-L324 — private burnHearths(dt: number, near: THREE.Vector3 | undefined)
-- smoke · method · L327-L329 — smoke(pos: THREE.Vector3, r = 1, dur = 1200, color = 0x5a5550, n = 8)
-- frost · method · L332-L335 — frost(pos: THREE.Vector3, r = 2, dur = 1600)
-- stun · method · L338-L340 — stun(pos: THREE.Vector3, dur = 1500)
-- dust · method · L343-L349 — dust(pos: THREE.Vector3, dur = 450)
-- telegraph · method · L352-L367 — Warns players of an incoming area attack with a fixed red ground outline whose fill disc grows to full radius exactly when the hit lands, while the edge pulses.
-- update · method · L370-L385 — Advances every live effect each frame, and once an effect's duration is up removes it from the scene and disposes its materials to avoid leaks.
-- release · method · L387-L398 — private release(obj: THREE.Object3D)
+- FxManager · class · L40-L446 — class FxManager
+- constructor · method · L55-L57 — constructor(private scene: THREE.Scene)
+- basic · method · L59-L66 — private basic(color: number, opacity: number, side: THREE.Side, blending: THREE.Blending): THREE.MeshBasicMaterial
+- glow · method · L67-L69 — private glow(color: number, opacity = 0.9, side: THREE.Side = THREE.FrontSide)
+- add · method · L72-L77 — private add(obj: THREE.Object3D | null, dur: number, update: (k: number, dt: number) => void)
+- end · method · L79-L81 — end(f: { dur: number } | undefined)
+- rate · method · L83-L91 — private rate(perSec: number)
+- light · method · L92-L94 — light(at: THREE.Vector3, color: number, power: number, range: number, ms: number)
+- flash · method · L99-L104 — flash(at: THREE.Vector3, color: number, r = 1, light = true)
+- projectile · method · L107-L140 — projectile(from: THREE.Vector3, to: () => THREE.Vector3, color: number, dur = 300, size = 0.25, trail: Trail = 'magic')
+- at · function · L109-L112 — at = (v: THREE.Vector3, k: number)
+- burst · method · L143-L148 — burst(pos: THREE.Vector3, color: number, size = 1, dur = 400)
+- slash · method · L151-L157 — slash(pos: THREE.Vector3, from: THREE.Vector3, color: number, size = 1.2, dur = 260)
+- arrow · method · L164-L193 — arrow(from: THREE.Vector3, to: () => THREE.Vector3, opts: { delay?: number; color?: number; fire?: boolean; onHit?: () => void } = {})
+- fly · function · L165-L190 — fly = ()
+- ring · method · L196-L203 — ring(pos: THREE.Vector3, color: number, radius = 2, dur = 600)
+- pillar · method · L206-L227 — pillar(pos: THREE.Vector3, color: number, dur = 1500, height = 6)
+- rune · method · L230-L235 — rune(pos: THREE.Vector3, r: number, color: number, dur = 1000)
+- motes · method · L238-L252 — motes(pos: THREE.Vector3, color: number, dur = 900, o: { n?: number; r?: number; spin?: number; rise?: number; fall?: number; size?: number; cell?: Cell } = {})
+- sparkles · method · L255-L257 — sparkles(pos: THREE.Vector3, color: number, dur = 900)
+- shards · method · L260-L264 — shards(pos: THREE.Vector3, color: number, n = 10, spread = 1.5, dur = 700)
+- debris · method · L267-L271 — debris(pos: THREE.Vector3, color = 0x8a7a60, n = 12, spread = 2)
+- dome · method · L274-L291 — dome(pos: THREE.Vector3, color: number, r = 1.5, dur = 800)
+- bolt · method · L294-L323 — bolt(from: THREE.Vector3, to: THREE.Vector3, color: number, dur = 250)
+- chain · function · L299-L306 — chain = (a: THREE.Vector3[], life: number, w: number)
+- beam · method · L326-L343 — beam(from: () => THREE.Vector3, to: () => THREE.Vector3, color: number, dur = 600, travel = true)
+- flame · method · L346-L356 — flame(pos: THREE.Vector3, r = 1, dur = 1000, color = 0xff8a2a)
+- hearth · method · L359-L361 — hearth(at: THREE.Vector3, r = 1)
+- burnHearths · method · L363-L371 — private burnHearths(dt: number, near: THREE.Vector3 | undefined)
+- smoke · method · L374-L376 — smoke(pos: THREE.Vector3, r = 1, dur = 1200, color = 0x5a5550, n = 8)
+- frost · method · L379-L382 — frost(pos: THREE.Vector3, r = 2, dur = 1600)
+- stun · method · L385-L387 — stun(pos: THREE.Vector3, dur = 1500)
+- dust · method · L390-L396 — dust(pos: THREE.Vector3, dur = 450)
+- telegraph · method · L399-L414 — telegraph(x: number, z: number, r: number, ms: number)
+- update · method · L417-L432 — update(near?: THREE.Vector3)
+- release · method · L434-L445 — private release(obj: THREE.Object3D)

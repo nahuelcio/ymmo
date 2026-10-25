@@ -1,84 +1,109 @@
 # client/src/game.ts
 
-- Snap · interface · L37-L37 — interface Snap
-- CEnt · interface · L39-L91 — interface CEnt
-- crestImg · function · L107-L113 — function crestImg(clan: number, ver: number, ally = false): HTMLImageElement
-- oneLine · function · L117-L123 — function oneLine(text: string): string
-- flashMat · function · L128-L133 — flashMat = (o: THREE.Mesh)
-- Pick · type · L143-L143 — type Pick = { ent?: CEnt; node?: NodeDef; point?: THREE.Vector3 };
-- isStanding · function · L148-L148 — isStanding = (c: CEnt)
-- nodeHeight · function · L158-L158 — nodeHeight = (n: NodeDef)
-- decalMat · function · L169-L170 — decalMat = (color: number, opacity: number)
-- svgCursor · function · L177-L178 — svgCursor = (svg: string, x: number, y: number, fallback: string)
-- conColor · function · L197-L205 — function conColor(diff: number): string
-- Game · class · L207-L2113 — class Game
-- constructor · method · L291-L372 — constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>)
-- glow · function · L340-L340 — glow = (c: number)
-- self · method · L374-L376 — get self(): CEnt | undefined
-- basePixelRatio · method · L379-L381 — private basePixelRatio()
-- setResScale · method · L383-L387 — private setResScale(k: number)
-- adaptRes · method · L398-L417 — private adaptRes(now: number, ms: number)
-- resize · method · L419-L426 — private resize()
-- applySettings · method · L428-L492 — private applySettings(s: Settings, changed: (keyof Settings)[])
-- has · function · L429-L429 — has = (...k: (keyof Settings)[])
-- sys · method · L494-L496 — sys(text: string)
-- bindNet · method · L499-L647 — private bindNet()
-- count · function · L515-L515 — count = (l: InvItem[])
-- onSync · function · L524-L525 — onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void)
-- resetWorld · method · L653-L669 — resetWorld(m: { self: Extract<S2C, { t: 'enter' }>['self']; inv: Extract<S2C, { t: 'enter' }>['inv'] })
-- makeLabel · method · L671-L676 — private makeLabel(): { el: HTMLDivElement; obj: CSS2DObject }
-- refreshLabel · method · L678-L770 — refreshLabel(c: CEnt)
-- toggleTracked · method · L775-L784 — toggleTracked(id: string)
-- questTargets · method · L787-L794 — questTargets(): { quest: string; mobs: Set<string> }[]
-- questMarkerFor · method · L797-L801 — questMarkerFor(npcId: string): QuestMarker
-- refreshQuestMarker · method · L803-L819 — private refreshQuestMarker(c: CEnt)
-- refreshQuestMarkers · method · L821-L826 — refreshQuestMarkers()
-- addStatusIcons · method · L829-L836 — private addStatusIcons(c: CEnt)
-- addHpBar · method · L838-L845 — private addHpBar(c: CEnt)
-- updateHpBar · method · L848-L854 — private updateHpBar(c: CEnt)
-- buildEnt · method · L856-L906 — private buildEnt(r: EntAdd): CEnt
-- removeEnt · method · L908-L925 — private removeEnt(id: number)
-- serverToLocal · method · L934-L945 — private serverToLocal(st: number | undefined): number
-- pushSnap · method · L947-L965 — private pushSnap(c: CEnt, x: number, z: number, ry: number, now: number)
-- onSnap · method · L967-L1027 — private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[], st?: number)
-- speech · method · L1033-L1051 — speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party' | 'clan' | 'ally')
-- floatText · method · L1053-L1069 — private floatText(c: CEnt, text: string, cls: string)
-- near · method · L1072-L1076 — near(c: CEnt): number
-- flash · method · L1079-L1094 — private flash(c: CEnt)
-- onDmg · method · L1096-L1140 — private onDmg(m: Extract<S2C, { t: 'dmg' }>)
-- vfx · method · L1143-L1145 — private vfx(id: string, s: CEnt, t: CEnt = s)
-- onFx · method · L1147-L1201 — private onFx(sId: number, tId: number, skill: string)
-- chest · function · L1150-L1150 — chest = (e: CEnt)
-- setTarget · method · L1204-L1213 — setTarget(id: number | null)
-- interact · method · L1215-L1223 — interact(c: CEnt)
-- pickNode · method · L1230-L1244 — private pickNode(ray: THREE.Ray, ground: THREE.Vector3): NodeDef | null
-- useNode · method · L1247-L1261 — useNode(n: NodeDef)
-- isHostile · method · L1263-L1269 — isHostile(c: CEnt): boolean
-- predictChase · method · L1272-L1277 — private predictChase(t: CEnt, range: number)
-- serverAction · method · L1280-L1293 — private serverAction(m: Parameters<Net['send']>[0])
-- travel · method · L1296-L1300 — travel(x: number, z: number, append: boolean)
-- walkRoute · method · L1302-L1306 — private walkRoute()
-- routePath · method · L1309-L1315 — routePath(): { x: number; z: number }[]
-- moveTo · method · L1317-L1331 — moveTo(p: THREE.Vector3, marker: boolean, route = false)
-- ensureEnemyTarget · method · L1334-L1348 — private ensureEnemyTarget(): boolean
-- attackTarget · method · L1350-L1370 — attackTarget()
-- dash · method · L1373-L1413 — dash()
-- stop · method · L1416-L1421 — stop()
-- setJoystick · method · L1427-L1434 — setJoystick(dx: number, dy: number)
-- driveJoystick · method · L1437-L1449 — private driveJoystick(now: number)
-- showWho · method · L1456-L1466 — private showWho(on: boolean)
-- fillWho · method · L1468-L1483 — private fillWho(names: string[])
-- dropPredictedCooldowns · method · L1486-L1489 — private dropPredictedCooldowns(except?: string)
-- useSkill · method · L1491-L1515 — useSkill(id: string)
-- useItemById · method · L1517-L1520 — useItemById(itemId: string)
-- nextTarget · method · L1522-L1531 — nextTarget()
-- pickupNearest · method · L1533-L1540 — pickupNearest()
-- bindInput · method · L1543-L1701 — private bindInput()
-- pick · function · L1546-L1563 — pick = (e: PointerEvent | MouseEvent, groundOnly = false): Pick
-- cursorFor · function · L1564-L1569 — cursorFor = (c: CEnt | undefined)
-- dropNodeTip · function · L1571-L1575 — dropNodeTip = ()
-- typing · function · L1627-L1630 — typing = ()
-- bound · function · L1632-L1635 — bound = (e: KeyboardEvent)
-- entColor · method · L1705-L1710 — private entColor(c: CEnt): number
-- updateSelf · method · L1717-L1836 — private updateSelf(c: CEnt, now: number, dt: number): boolean
-- frame · method · L1838-L2112 — private frame()
+- Snap · interface · L40-L40 — interface Snap
+- CEnt · interface · L42-L123 — interface CEnt
+- crestImg · function · L139-L145 — function crestImg(clan: number, ver: number, ally = false): HTMLImageElement
+- oneLine · function · L149-L155 — function oneLine(text: string): string
+- flashMat · function · L160-L165 — flashMat = (o: THREE.Mesh)
+- Pick · type · L177-L177 — type Pick = { ent?: CEnt; node?: NodeDef; point?: THREE.Vector3 };
+- isStanding · function · L182-L182 — isStanding = (c: CEnt)
+- nodeHeight · function · L190-L190 — nodeHeight = (n: NodeDef)
+- decalMat · function · L202-L203 — decalMat = (color: number, opacity: number)
+- svgCursor · function · L210-L211 — svgCursor = (svg: string, x: number, y: number, fallback: string)
+- conColor · function · L230-L238 — function conColor(diff: number): string
+- Game · class · L240-L2579 — class Game
+- constructor · method · L339-L422 — constructor(public net: Net, enter: Extract<S2C, { t: 'enter' }>)
+- glow · function · L388-L388 — glow = (c: number)
+- self · method · L424-L426 — get self(): CEnt | undefined
+- basePixelRatio · method · L429-L431 — private basePixelRatio()
+- setResScale · method · L433-L437 — private setResScale(k: number)
+- adaptRes · method · L448-L467 — private adaptRes(now: number, ms: number)
+- resize · method · L469-L476 — private resize()
+- applySettings · method · L478-L542 — private applySettings(s: Settings, changed: (keyof Settings)[])
+- has · function · L479-L479 — has = (...k: (keyof Settings)[])
+- sys · method · L544-L546 — sys(text: string)
+- bindNet · method · L549-L723 — private bindNet()
+- count · function · L565-L565 — count = (l: InvItem[])
+- onSync · function · L574-L575 — onSync = <T extends S2C['t']>(t: T, src: (m: Extract<S2C, { t: T }>) => number, h: (m: Extract<S2C, { t: T }>) => void)
+- resetWorld · method · L729-L745 — resetWorld(m: { self: Extract<S2C, { t: 'enter' }>['self']; inv: Extract<S2C, { t: 'enter' }>['inv'] })
+- makeLabel · method · L747-L752 — private makeLabel(): { el: HTMLDivElement; obj: CSS2DObject }
+- refreshLabel · method · L754-L846 — refreshLabel(c: CEnt)
+- toggleTracked · method · L851-L860 — toggleTracked(id: string)
+- questTargets · method · L863-L870 — questTargets(): { quest: string; mobs: Set<string> }[]
+- questMarkerFor · method · L873-L877 — questMarkerFor(npcId: string): QuestMarker
+- refreshQuestMarker · method · L879-L895 — private refreshQuestMarker(c: CEnt)
+- refreshQuestMarkers · method · L897-L902 — refreshQuestMarkers()
+- addStatusIcons · method · L905-L912 — private addStatusIcons(c: CEnt)
+- addHpBar · method · L914-L921 — private addHpBar(c: CEnt)
+- updateHpBar · method · L924-L930 — private updateHpBar(c: CEnt)
+- remodel · method · L933-L949 — private remodel(c: CEnt)
+- buildEnt · method · L951-L1004 — private buildEnt(r: EntAdd): CEnt
+- enterTent · method · L1007-L1024 — private enterTent(c: CEnt, x: number, z: number)
+- leaveTent · method · L1027-L1037 — private leaveTent(c: CEnt)
+- ghost · method · L1040-L1071 — private ghost(c: CEnt, on: boolean)
+- fade · function · L1046-L1057 — fade = (m: THREE.Material)
+- removeEnt · method · L1073-L1092 — private removeEnt(id: number)
+- serverToLocal · method · L1101-L1112 — private serverToLocal(st: number | undefined): number
+- pushSnap · method · L1114-L1133 — private pushSnap(c: CEnt, x: number, z: number, ry: number, now: number)
+- onSnap · method · L1135-L1198 — private onSnap(add: EntAdd[], upd: EntUpd[], gone: number[], st?: number)
+- speech · method · L1204-L1222 — speech(c: CEnt, text: string, style?: 'line' | 'shout' | 'party' | 'clan' | 'ally')
+- floatText · method · L1224-L1240 — private floatText(c: CEnt, text: string, cls: string)
+- near · method · L1243-L1247 — near(c: CEnt): number
+- nameOf · method · L1250-L1252 — private nameOf(c: CEnt): string
+- cancelCast · method · L1255-L1259 — cancelCast()
+- castStopped · method · L1262-L1277 — private castStopped(id: number)
+- footfall · method · L1285-L1295 — private footfall(c: CEnt, isSelf: boolean, now: number, landed: number)
+- storms · method · L1302-L1313 — private storms(p: THREE.Vector3)
+- flash · method · L1316-L1331 — private flash(c: CEnt)
+- onDmg · method · L1333-L1340 — private onDmg(m: Extract<S2C, { t: 'dmg' }>)
+- showDmg · method · L1341-L1396 — private showDmg(m: Extract<S2C, { t: 'dmg' }>)
+- vfx · method · L1399-L1401 — private vfx(id: string, s: CEnt, t: CEnt = s)
+- skillAnim · method · L1406-L1409 — private skillAnim(skill: string | undefined)
+- meleeWeapon · method · L1410-L1413 — private meleeWeapon(c: CEnt)
+- swingNow · method · L1415-L1419 — private swingNow(c: CEnt)
+- impactMs · method · L1421-L1423 — private impactMs(c: CEnt)
+- startSwing · method · L1426-L1438 — private startSwing(c: CEnt, now = performance.now(), target?: number)
+- deathAt · method · L1440-L1447 — private deathAt(e: CEnt, now = performance.now())
+- castMove · method · L1450-L1456 — private castMove(c: CEnt): 'strike' | 'raise' | 'dance' | undefined
+- holdsBow · method · L1459-L1461 — private holdsBow(c: CEnt)
+- bowHand · method · L1463-L1465 — private bowHand(c: CEnt)
+- onFx · method · L1467-L1557 — private onFx(sId: number, tId: number, skill: string)
+- chest · function · L1470-L1470 — chest = (e: CEnt)
+- hit · function · L1510-L1510 — hit = ()
+- setTarget · method · L1560-L1569 — setTarget(id: number | null)
+- interact · method · L1571-L1579 — interact(c: CEnt)
+- pickNode · method · L1586-L1603 — private pickNode(ray: THREE.Ray, ground: THREE.Vector3): NodeDef | null
+- useNode · method · L1606-L1619 — useNode(n: NodeDef)
+- isHostile · method · L1621-L1627 — isHostile(c: CEnt): boolean
+- predictChase · method · L1630-L1635 — private predictChase(t: CEnt, range: number)
+- serverAction · method · L1638-L1650 — private serverAction(m: Parameters<Net['send']>[0])
+- travel · method · L1653-L1664 — travel(x: number, z: number, append: boolean)
+- walkRoute · method · L1666-L1670 — private walkRoute()
+- routePath · method · L1673-L1679 — routePath(): { x: number; z: number }[]
+- moveTo · method · L1681-L1702 — moveTo(p: THREE.Vector3, marker: boolean, route = false)
+- send · function · L1688-L1688 — send = ()
+- ensureEnemyTarget · method · L1705-L1719 — private ensureEnemyTarget(): boolean
+- reach · method · L1722-L1725 — private reach()
+- attackTarget · method · L1727-L1748 — attackTarget()
+- dash · method · L1751-L1791 — dash()
+- stop · method · L1794-L1799 — stop()
+- setJoystick · method · L1805-L1812 — setJoystick(dx: number, dy: number)
+- driveJoystick · method · L1815-L1827 — private driveJoystick(now: number)
+- showWho · method · L1834-L1844 — private showWho(on: boolean)
+- fillWho · method · L1846-L1861 — private fillWho(names: string[])
+- dropPredictedCooldowns · method · L1864-L1867 — private dropPredictedCooldowns(except?: string)
+- useSkill · method · L1869-L1895 — useSkill(id: string)
+- useItemById · method · L1897-L1900 — useItemById(itemId: string)
+- nextTarget · method · L1902-L1911 — nextTarget()
+- pickupNearest · method · L1913-L1920 — pickupNearest()
+- bindInput · method · L1923-L2080 — private bindInput()
+- pick · function · L1927-L1949 — pick = (e: PointerEvent | MouseEvent, solid = false): Pick
+- cursorFor · function · L1950-L1955 — cursorFor = (c: CEnt | undefined)
+- dropNodeTip · function · L1958-L1962 — dropNodeTip = ()
+- clickEnt · function · L1965-L1970 — clickEnt = (c: CEnt)
+- typing · function · L2005-L2008 — typing = ()
+- bound · function · L2010-L2013 — bound = (e: KeyboardEvent)
+- entColor · method · L2084-L2089 — private entColor(c: CEnt): number
+- histAt · method · L2097-L2108 — private histAt(t: number): { x: number; z: number } | null
+- updateSelf · method · L2110-L2257 — private updateSelf(c: CEnt, now: number, dt: number): boolean
+- frame · method · L2259-L2578 — private frame()

@@ -1,61 +1,67 @@
 # server-rs/src/ent.rs
 
-- F_DEAD · constant · L11-L11 — Flag bit that marks an entity as dead in the client-visible status word.
-- F_MOVING · constant · L12-L12 — Flag bit that marks an entity as currently moving in the client-visible status word.
-- F_CASTING · constant · L13-L13 — Flag bit that marks a player as mid-skill-cast in the client-visible status word.
-- F_COMBAT · constant · L14-L14 — Flag bit that marks an entity as in combat in the client-visible status word.
-- F_PURPLE · constant · L15-L15 — Flag bit for a purple name, shown while a player's PvP timer is active.
-- F_RED · constant · L16-L16 — Flag bit for a red name, shown on karma-carrying (PK) players.
-- F_PVP · constant · L17-L17 — Flag bit that marks a player who has PvP mode toggled on.
+- F_DEAD · constant · L11-L11 — pub const F_DEAD: u16 = 1;
+- F_MOVING · constant · L12-L12 — pub const F_MOVING: u16 = 2;
+- F_CASTING · constant · L13-L13 — pub const F_CASTING: u16 = 4;
+- F_COMBAT · constant · L14-L14 — pub const F_COMBAT: u16 = 8;
+- F_PURPLE · constant · L15-L15 — pub const F_PURPLE: u16 = 16;
+- F_RED · constant · L16-L16 — pub const F_RED: u16 = 32;
+- F_PVP · constant · L17-L17 — pub const F_PVP: u16 = 64;
 - F_SITTING · constant · L19-L19 — pub const F_SITTING: u16 = 2048;
 - F_GATHER · constant · L21-L21 — pub const F_GATHER: u16 = 4096;
-- SLOW_MUL · constant · L22-L22 — Movement-speed multiplier (0.6) applied to entities affected by the 'slow' status.
-- Out · enum · L24-L24 — The two payload kinds a server can push to a client socket: text (JSON) messages or binary snapshots.
-- Outbox · struct · L28-L31 — A player's outbound message queue plus a pending counter used to detect and shed load from slow clients.
-- text · function · L33-L36 — Enqueues a text (JSON) message for a client, counting it toward the congestion backlog.
-- bin · function · L37-L40 — Enqueues a binary (snapshot) payload for a client, counting it toward the congestion backlog.
-- value · function · L42-L44 — pub fn value(&self, v: &Value)
-- congested · function · L46-L46 — Backpressure guard: reports a client as congested once more than 48 messages are queued, letting the loop skip sending it snapshots.
-- ActiveStatus · struct · L50-L50 — One live status effect on an entity: its expiry time, source attacker, damage per tick, and next tick time.
-- Nav · struct · L53-L53 — Movement state for a pathing entity: grid goal, step arrival time, and the remaining path waypoints.
-- Common · struct · L55-L69 — State shared by every world entity regardless of kind: position, heading, dead/hidden/moving flags, spatial cell, pathing, and active statuses.
-- new · function · L71-L73 — Creates default entity state with a sentinel cell so the first tick forces the entity into the spatial grid.
-- has · function · L74-L74 — Tells whether a named status effect is currently active by checking its expiry against game time.
-- speed_mul · function · L75-L75 — Returns the movement-speed multiplier for an entity, cutting it to 0.6x while slowed.
-- base_flags · function · L76-L82 — Builds the base client-visible flag word for an entity: dead/moving bits plus a bit for every status still unexpired.
-- InvItem · struct · L87-L93 — A single inventory entry: unique instance id, item definition, stack count, and the slot it is equipped in (if any).
-- is_false · function · L94-L94 — fn is_false(b: &bool) -> bool { !*b }
-- Intent · enum · L97-L105 — The set of actions a player can have queued for the tick loop: move, attack, skill, pickup, or talk.
-- Buff · struct · L107-L107 — A timed buff on a player, carrying its stat modifiers until it expires.
-- Look · struct · L110-L110 — Character appearance data: gender, hair style, and hair color.
-- gender · function · L112-L112 — Maps the appearance gender char to the 'f'/'m' string that stat computation expects.
-- sanitize · function · L113-L118 — Turns client-supplied appearance JSON into a safe Look, rejecting out-of-range hair style/color values and defaulting them to 0.
-- ClanMods · struct · L123-L123 — pub struct ClanMods { pub max_hp: f64, pub max_mp: f64, pub p_def: f64, pub m_def: f64, pub p_atk: f64, pub m_atk: f64, pub speed: f64, pub mp_regen: f64 }
-- ClanLook · struct · L127-L127 — pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver: u32, /** alliance id and crest version */ pub ally: Option<(u32, u32)> }
-- Player · struct · L129-L193 — Full runtime state of a player character: connection/output, combat and cast timers, party and quest tracking, interest-management caches, inventory, and persistent character fields.
-- one_way · function · L196-L196 — Estimates the player's one-way network latency (half RTT, capped at 150 ms) for lag-aware combat validation.
-- send · function · L197-L197 — Serializes a JSON value and queues it as a text message on the player's outbox.
-- equipped_in · function · L198-L198 — Finds the inventory item currently equipped in a given slot, if any.
-- recalc · function · L199-L219 — Recomputes the player's stats from race/class/level, equipped items, and buffs, then clamps current hp/mp/cp to the new maxima.
-- hp_pct · function · L220-L220 — The player's current HP as a rounded percentage of max HP, used for client health bars and thresholds.
-- name_color · function · L221-L221 — Name-color rule: red (2) for karma carriers, purple (1) while the PvP timer is active, otherwise normal (0).
-- quest · function · L222-L222 — Looks up the player's state entry for a quest by id.
-- quest_mut · function · L223-L223 — Mutable lookup of a quest entry by id so quest progress can be updated in place.
-- Mob · struct · L226-L250 — Monster runtime state: its static template and stats, combat targets with hate/threat lists, AI timers (taunt, wander, special, respawn), and its spawn-home position.
-- map_get · function · L253-L253 — Reads an attacker's hate/threat value from the insertion-ordered list that mimics a JS Map.
-- map_add · function · L254-L256 — Accumulates hate/threat for an attacker, creating the entry if it does not exist yet.
-- map_set · function · L257-L259 — Overwrites an attacker's hate/threat value, creating the entry if missing (e.g. after taunt).
-- map_del · function · L260-L260 — Removes an attacker's hate/threat entry when it leaves combat or dies.
-- new · function · L263-L270 — Spawns a mob from its template at full HP with empty hate lists, remembering the spawn point as its home for leashing.
-- hp_pct · function · L271-L271 — The mob's HP as a rounded percentage of max, used for aggro phase changes and client bars.
-- Npc · struct · L274-L274 — Non-hostile NPC state: its static definition plus the next time it may emit chatter.
-- GroundItem · struct · L276-L287 — A loot drop lying on the world floor, with its item/count, optional owner-pickup lock and expiry, and camp ownership.
-- Kind · enum · L289-L289 — Discriminates which concrete kind of world entity (player, mob, npc, or ground item) an Ent wraps.
-- Ent · struct · L291-L291 — The universal world entity pairing shared positional/state data with its kind-specific payload.
-- player · function · L294-L294 — Downcasts the entity to its Player payload when it is a player.
-- player_mut · function · L295-L295 — Mutable downcast to the Player payload so systems can mutate player state.
-- mob · function · L296-L296 — Downcasts the entity to its Mob payload when it is a monster.
-- mob_mut · function · L297-L297 — Mutable downcast to the Mob payload so combat/AI systems can mutate monster state.
-- is_fighter · function · L298-L298 — Tells whether the entity can participate in combat (players and mobs, but not NPCs or ground items).
-- hp_pct · function · L299-L301 — An entity's HP percentage for combat logic, delegating to the player/mob value and defaulting to 100 for non-fighters.
-- flags · function · L302-L314 — Computes the full client-visible flag word: base dead/moving/status bits plus kind-specific ones (casting, combat window, name color, PvP for players; combat while a mob has a target).
+- SLOW_MUL · constant · L22-L22 — pub const SLOW_MUL: f64 = 0.6;
+- WOUND_HEAL · constant · L24-L24 — pub const WOUND_HEAL: f64 = 0.5;
+- Out · enum · L26-L26 — pub enum Out { Text(String), Bin(Vec<u8>) }
+- Outbox · struct · L30-L33 — pub struct Outbox
+- text · function · L35-L38 — pub fn text(&self, s: String)
+- bin · function · L39-L42 — pub fn bin(&self, b: Vec<u8>)
+- value · function · L44-L46 — pub fn value(&self, v: &Value)
+- congested · function · L48-L48 — pub fn congested(&self) -> bool { self.pending.load(Ordering::Relaxed) > 48 }
+- ActiveStatus · struct · L52-L52 — pub struct ActiveStatus { pub until: f64, pub src: u32, pub dps: f64, pub next_tick: f64 }
+- Nav · struct · L56-L56 — pub struct Nav { pub gx: f64, pub gz: f64, pub at: f64, pub path: Vec<P>, pub fixed: bool }
+- Common · struct · L58-L72 — pub struct Common
+- new · function · L74-L76 — pub fn new(id: u32, x: f64, z: f64) -> Self
+- has · function · L77-L77 — pub fn has(&self, s: &str, now: f64) -> bool { self.statuses.get(s).map_or(false, |st| st.until > now) }
+- speed_mul · function · L79-L79 — pub fn speed_mul(&self, now: f64) -> f64 { if self.has("slow", now) || self.has("frostbite", now) { SLOW_MUL } else { 1.0 } }
+- heal_mul · function · L81-L81 — pub fn heal_mul(&self, now: f64) -> f64 { if self.has("wound", now) { WOUND_HEAL } else { 1.0 } }
+- base_flags · function · L82-L88 — pub fn base_flags(&self, now: f64) -> u16
+- InvItem · struct · L93-L99 — pub struct InvItem
+- is_false · function · L100-L100 — fn is_false(b: &bool) -> bool { !*b }
+- Intent · enum · L103-L111 — pub enum Intent
+- Buff · struct · L113-L113 — pub struct Buff { pub id: String, pub until: f64, pub mods: BuffMods }
+- Look · struct · L116-L116 — pub struct Look { pub g: char, pub hs: i64, pub hc: i64 }
+- gender · function · L118-L118 — pub fn gender(&self) -> &'static str { if self.g == 'f' { "f" } else { "m" } }
+- sanitize · function · L119-L124 — pub fn sanitize(v: Option<&Value>) -> Look
+- ClanMods · struct · L129-L129 — pub struct ClanMods { pub max_hp: f64, pub max_mp: f64, pub p_def: f64, pub m_def: f64, pub p_atk: f64, pub m_atk: f64, pub speed: f64, pub mp_regen: f64 }
+- ClanLook · struct · L133-L133 — pub struct ClanLook { pub id: u32, pub name: String, pub title: String, pub ver: u32, /** alliance id and crest version */ pub ally: Option<(u32, u32)> }
+- Player · struct · L135-L210 — pub struct Player
+- one_way · function · L213-L213 — pub fn one_way(&self) -> f64 { (self.rtt / 2.0).min(150.0) }
+- send · function · L214-L214 — pub fn send(&self, v: Value) { self.out.value(&v); }
+- equipped_in · function · L215-L215 — pub fn equipped_in(&self, slot: &str) -> Option<&InvItem> { self.inv.iter().find(|i| i.s.as_deref() == Some(slot)) }
+- max_charges · function · L217-L219 — pub fn max_charges(&self) -> u32
+- add_charges · function · L221-L225 — pub fn add_charges(&mut self, n: u32) -> bool
+- weapon_type · function · L228-L231 — pub fn weapon_type(&self) -> Option<&'static str>
+- recalc · function · L233-L259 — pub fn recalc(&mut self)
+- hp_pct · function · L260-L260 — pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
+- name_color · function · L261-L261 — pub fn name_color(&self, now: f64) -> u8 { if self.karma > 0 { 2 } else if self.pvp_until > now { 1 } else { 0 } }
+- quest · function · L262-L262 — pub fn quest(&self, id: &str) -> Option<&(String, i64, bool)> { self.quests.iter().find(|q| q.0 == id) }
+- quest_mut · function · L263-L263 — pub fn quest_mut(&mut self, id: &str) -> Option<&mut (String, i64, bool)> { self.quests.iter_mut().find(|q| q.0 == id) }
+- Mob · struct · L266-L298 — pub struct Mob
+- map_get · function · L301-L301 — pub fn map_get(m: &[(u32, f64)], id: u32) -> Option<f64> { m.iter().find(|e| e.0 == id).map(|e| e.1) }
+- map_add · function · L302-L304 — pub fn map_add(m: &mut Vec<(u32, f64)>, id: u32, v: f64)
+- map_set · function · L305-L307 — pub fn map_set(m: &mut Vec<(u32, f64)>, id: u32, v: f64)
+- map_del · function · L308-L308 — pub fn map_del(m: &mut Vec<(u32, f64)>, id: u32) { m.retain(|e| e.0 != id); }
+- new · function · L311-L319 — pub fn new(tpl: &'static MobDef, x: f64, z: f64) -> Mob
+- reset_fight · function · L321-L334 — pub fn reset_fight(&mut self)
+- hp_pct · function · L335-L335 — pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
+- Npc · struct · L338-L338 — pub struct Npc { pub def: &'static crate::data::NpcDef, pub next_chatter: f64, /** travelers: heading to the road's far end, and when they set off again after a rest */ pub fwd: bool, pub rest_until: f64 }
+- GroundItem · struct · L340-L351 — pub struct GroundItem
+- Kind · enum · L353-L353 — pub enum Kind { Player(Box<Player>), Mob(Box<Mob>), Npc(Npc), Item(GroundItem) }
+- Ent · struct · L355-L355 — pub struct Ent { pub c: Common, pub k: Kind }
+- player · function · L358-L358 — pub fn player(&self) -> Option<&Player> { if let Kind::Player(p) = &self.k { Some(p) } else { None } }
+- player_mut · function · L359-L359 — pub fn player_mut(&mut self) -> Option<&mut Player> { if let Kind::Player(p) = &mut self.k { Some(p) } else { None } }
+- mob · function · L360-L360 — pub fn mob(&self) -> Option<&Mob> { if let Kind::Mob(m) = &self.k { Some(m) } else { None } }
+- mob_mut · function · L361-L361 — pub fn mob_mut(&mut self) -> Option<&mut Mob> { if let Kind::Mob(m) = &mut self.k { Some(m) } else { None } }
+- is_fighter · function · L362-L362 — pub fn is_fighter(&self) -> bool { matches!(self.k, Kind::Player(_) | Kind::Mob(_)) }
+- hp_pct · function · L363-L365 — pub fn hp_pct(&self) -> f64
+- flags · function · L366-L378 — pub fn flags(&self, now: f64) -> u16

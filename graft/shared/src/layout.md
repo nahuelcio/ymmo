@@ -12,27 +12,27 @@
 - WallL · interface · L44-L44 — interface WallL
 - PillarL · interface · L45-L45 — interface PillarL
 - TownL · interface · L46-L46 — interface TownL
-- ZonePropsL · interface · L47-L53 — interface ZonePropsL
-- placeTree · function · L56-L81 — function placeTree(rng: () => number, x: number, z: number, forest = false, giant = false): TreeL | null
-- layoutTrees · function · L84-L123 — function layoutTrees(): TreeL[]
-- detailCells · function · L129-L142 — function detailCells(chunk: number, draws: number): { x0: number; z0: number; seed: number }[]
-- at · function · L133-L133 — at = (seed: number, i: number)
-- land · function · L135-L135 — land = (x: number, z: number)
-- fertile · function · L145-L148 — function fertile(x: number, z: number, h: number): boolean
-- spotHash · function · L151-L154 — function spotHash(x: number, z: number): number
-- BushL · interface · L160-L160 — interface BushL
-- layoutBushes · function · L163-L179 — function layoutBushes(): BushL[]
-- plazaBenches · function · L182-L187 — function plazaBenches(): { x: number; z: number; a: number }[]
-- SeatL · interface · L193-L193 — interface SeatL
-- layoutSeats · function · L196-L207 — function layoutSeats(): SeatL[]
-- layoutRocks · function · L210-L226 — function layoutRocks(): RockL[]
-- layoutTown · function · L229-L263 — function layoutTown(): TownL
-- at · function · L241-L241 — at = (lx: number, lz: number)
-- covers · function · L242-L249 — covers = (x: number, z: number)
-- layoutZoneProps · function · L266-L314 — function layoutZoneProps(): ZonePropsL
-- at · function · L270-L273 — at = (zn: (typeof ZONES)[number], maxR: number, minR = 0)
-- clear · function · L311-L311 — clear = <T extends { x: number; z: number }>(l: T[])
-- CampL · interface · L316-L322 — interface CampL
-- layoutCamps · function · L326-L343 — function layoutCamps(): CampL[]
-- HerdL · interface · L356-L356 — interface HerdL
-- layoutHerds · function · L358-L374 — function layoutHerds(): HerdL[]
+- ZonePropsL · interface · L47-L54 — interface ZonePropsL
+- placeTree · function · L57-L82 — function placeTree(rng: () => number, x: number, z: number, forest = false, giant = false): TreeL | null
+- layoutTrees · function · L85-L124 — function layoutTrees(): TreeL[]
+- detailCells · function · L130-L143 — function detailCells(chunk: number, draws: number): { x0: number; z0: number; seed: number }[]
+- at · function · L134-L134 — at = (seed: number, i: number)
+- land · function · L136-L136 — land = (x: number, z: number)
+- fertile · function · L146-L149 — function fertile(x: number, z: number, h: number): boolean
+- spotHash · function · L152-L155 — function spotHash(x: number, z: number): number
+- BushL · interface · L161-L161 — interface BushL
+- layoutBushes · function · L164-L180 — function layoutBushes(): BushL[]
+- plazaBenches · function · L183-L188 — function plazaBenches(): { x: number; z: number; a: number }[]
+- SeatL · interface · L194-L194 — interface SeatL
+- layoutSeats · function · L197-L208 — function layoutSeats(): SeatL[]
+- layoutRocks · function · L211-L227 — function layoutRocks(): RockL[]
+- layoutTown · function · L230-L264 — function layoutTown(): TownL
+- at · function · L242-L242 — at = (lx: number, lz: number)
+- covers · function · L243-L250 — covers = (x: number, z: number)
+- layoutZoneProps · function · L267-L321 — function layoutZoneProps(): ZonePropsL
+- at · function · L271-L274 — at = (zn: (typeof ZONES)[number], maxR: number, minR = 0)
+- clear · function · L318-L318 — clear = <T extends { x: number; z: number }>(l: T[])
+- CampL · interface · L323-L330 — interface CampL
+- layoutCamps · function · L334-L351 — function layoutCamps(): CampL[]
+- HerdL · interface · L364-L364 — interface HerdL
+- layoutHerds · function · L366-L382 — function layoutHerds(): HerdL[]
