@@ -71,15 +71,15 @@ const CAPES: Record<string, string> = {
 };
 type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile | LightFile | `ai_${string}`;
 /**
- * ?ai=1: a set's AI-made pieces worn in place of its own, for the sets that have them: a file standing in for each of
- * the set's (q/gear/ai_<file>.glb for <file>.glb, tools/art/blender/ai_gear.py: the heavy pieces, the weapons, shield and
- * cape in ai_<set>, the light armour in ai_light_<set>, the mage's in ai_mage_<set>), its nodes named as in the file
- * it stands in for; any piece it lacks stays the set's own.
+ * A set's AI-made pieces worn in place of its own, for the sets that have them (?ai=0 for the set's own): a file standing
+ * in for each of the set's (q/gear/ai_<file>.glb for <file>.glb, tools/art/blender/ai_gear.py: the heavy pieces, the
+ * weapons, shield and cape in ai_<set>, the light armour in ai_light_<set>, the mage's in ai_mage_<set>), its nodes named
+ * as in the file it stands in for; any piece it lacks stays the set's own.
  */
 const AI_SETS = new Set(['infernal', 'emerald']);
-const AI_GEAR = typeof location !== 'undefined' && new URLSearchParams(location.search).get('ai') === '1';
+const AI_GEAR = typeof location === 'undefined' || new URLSearchParams(location.search).get('ai') !== '0';
 /**
- * A set's piece from its file `own`, or with ?ai=1 from the AI file standing in for `ai` where the set has one: then
+ * A set's piece from its file `own`, or (unless ?ai=0) from the AI file standing in for `ai` where the set has one: then
  * nothing (the plain stand-in) while that file loads, rather than the set's own for a moment and the set's own file
  * fetched for nothing; the set's own only for a piece the AI file lacks, or if it failed to load.
  */

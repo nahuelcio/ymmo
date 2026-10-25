@@ -7,7 +7,7 @@ its concept image and Tripo's own render. Each picked variant is
 - cut to its triangle budget;
 - given the game's maps (the colour with the shine in its alpha, the relief), as gear.py's finish() does;
 - skinned to the reference body if it is worn on it (the cuirass, the shield);
-and all of them are written to client/public/q/gear/ai_<set>.glb, a node per piece (quaternius.ts draws them with ?ai=1).
+and all of them are written to client/public/q/gear/ai_<set>.glb, a node per piece (quaternius.ts draws them unless ?ai=0).
 
     blender --background --python tools/art/blender/ai_gear.py -- <set> blade=2 staff=1 ...   write the picks
     blender --background --python tools/art/blender/ai_gear.py -- <set> --file light_<set> hood=1 jerkin=1 ...
