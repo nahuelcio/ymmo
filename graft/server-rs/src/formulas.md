@@ -1,34 +1,72 @@
 # server-rs/src/formulas.rs
 
-- Stats · struct · L7-L15 — Derived combat-stat block for a player or mob (hp/mp/cp pools, attack, defense, accuracy, regen, speed) that every other system reads instead of recomputing.
-- BASE_SPEED · constant · L17-L17 — Baseline movement speed every character starts from before race and buff multipliers are applied.
-- MELEE_RANGE · constant · L18-L18 — Distance within which a melee attacker is considered in range to land a hit.
-- PARTY_BONUS · constant · L19-L19 — Experience multiplier lookup by party size, rewarding groups up to 1.8x with ten members.
-- MAX_PARTY · constant · L20-L20 — Hard cap of 9 members per party, bounding the PARTY_BONUS lookup.
-- PVP_FLAG_MS · constant · L21-L21 — How long a player stays flagged for PvP after an aggressive act (30 seconds).
-- KARMA_PER_PK · constant · L22-L22 — Karma penalty added per player-killed-player, the driver of karma/penalty rules.
-- jround · function · L25-L25 — Half-up rounding that exactly matches JavaScript's Math.round so client display always equals server-computed values.
-- level_mod · function · L27-L27 — Global +10%-per-level scaling factor applied to attack and defense formulas so higher levels always hit harder.
-- stat_mods · function · L29-L38 — Fuses race and gender modifiers into one StatMods, multiplying the percentage stats and adding the flat ones.
-- enchant_chance · function · L41-L44 — Probability that enchanting succeeds: guaranteed below the safe point, then decaying by a fixed step per level above it.
-- masterwork_bonus · function · L51-L60 — pub fn masterwork_bonus(race: &str, cls: &str, is_weapon: bool) -> (f64, f64, f64)
-- compute_stats · function · L63-L123 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64, bool)], buffs: &[&BuffMods], gender: &str) -> Stats
-- mob_mult · function · L126-L126 — fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
-- mob_stats · function · L128-L141 — Derives a mob's combat stats purely from its level, scaled by hp/atk/def multipliers that make elite variants stronger.
-- rnd · function · L143-L143 — Uniform [0,1) random source all combat rolls go through.
-- rand_range · function · L144-L144 — Uniform random float in [a, b] used for damage variance rolls.
-- hit_chance · function · L146-L146 — Chance an attack lands, rising with accuracy over evasion around a baseline and clamped to a fair 60-98% window.
-- phys_damage · function · L148-L150 — Melee hit damage: 70 x P.Atk / P.Def, times skill multiplier, +/-10% variance, doubled on crit, never below 1.
-- magic_damage · function · L152-L154 — Spell damage: same 70 x M.Atk / M.Def shape but with tighter 92-108% variance and a 1.8x crit, never below 1.
-- xp_to_next · function · L156-L159 — Experience required to reach the next level, growing superlinearly with level and returning 0 once max level is reached.
-- past_50 · function · L162-L162 — fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
-- mob_xp · function · L164-L164 — Experience awarded for killing a mob, driven by its level and tempering its hp multiplier.
-- level_penalty · function · L166-L169 — Fades experience toward a 5% floor when a player out-levels the mob by more than 5 levels, discouraging low-level farming.
-- tests · module · L172-L294 — Test suite pinning the module's balance pacing, the referential integrity of the data tables, and the enchanting math.
-- levels_go_to_78_slower_past_50 · function · L176-L184 — fn levels_go_to_78_slower_past_50()
-- grades_ask_for_a_level · function · L187-L198 — fn grades_ask_for_a_level()
-- balance_table · function · L203-L218 — Asserts leveling pace stays sane (2-12 same-level kills per level, strictly growing xp curve) and prints a balance table for tuning gear tiers.
-- data_refs · function · L222-L245 — Fails on any dangling id in the data tables (drops, spawns, shops, quests, recipes, raids, skills) so a typo surfaces in CI instead of in play.
-- enchant · function · L248-L257 — Verifies enchant chances are exact (1.0 safe, 0.9 at +3, 0.3 at +9) and that P.Atk strictly grows with enchant level.
-- cdr_sums_and_caps · function · L260-L266 — fn cdr_sums_and_caps()
-- masterwork_by_race · function · L269-L293 — fn masterwork_by_race()
+- Stats · struct · L7-L20 — pub struct Stats
+- BASE_SPEED · constant · L22-L22 — pub const BASE_SPEED: f64 = 6.0;
+- MELEE_RANGE · constant · L23-L23 — pub const MELEE_RANGE: f64 = 2.2;
+- DUAL_CHARGE_CHANCE · constant · L25-L25 — pub const DUAL_CHARGE_CHANCE: f64 = 0.25;
+- BOW_RANGE · constant · L27-L27 — pub const BOW_RANGE: f64 = 15.0;
+- is_behind · function · L30-L34 — pub fn is_behind(ax: f64, az: f64, tx: f64, tz: f64, ry: f64) -> bool
+- PARTY_BONUS · constant · L35-L35 — pub const PARTY_BONUS: [f64; 10] = [1.0, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8];
+- MAX_PARTY · constant · L36-L36 — pub const MAX_PARTY: usize = 9;
+- PVP_FLAG_MS · constant · L37-L37 — pub const PVP_FLAG_MS: f64 = 30000.0;
+- KARMA_PER_PK · constant · L38-L38 — pub const KARMA_PER_PK: i64 = 360;
+- jround · function · L41-L41 — pub fn jround(v: f64) -> f64 { (v + 0.5).floor() }
+- level_mod · function · L43-L43 — pub fn level_mod(level: i64) -> f64 { 1.0 + (level - 1) as f64 * 0.1 }
+- stat_mods · function · L45-L54 — pub fn stat_mods(race: &str, g: &str) -> StatMods
+- land_chance · function · L60-L63 — pub fn land_chance(base: f64, att_level: i64, def_level: i64, boss: bool) -> f64
+- enchant_roll · function · L67-L67 — pub fn enchant_roll(e: i64, sacred: bool, roll: f64) -> bool { sacred || roll < enchant_chance(e) }
+- enchant_chance · function · L69-L72 — pub fn enchant_chance(e: i64) -> f64
+- masterwork_bonus · function · L79-L88 — pub fn masterwork_bonus(race: &str, cls: &str, is_weapon: bool) -> (f64, f64, f64)
+- compute_stats · function · L91-L172 — pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64, bool)], buffs: &[&BuffMods], gender: &str) -> Stats
+- mob_mult · function · L175-L175 — fn mob_mult(m: &MobDef, f: &str, base: Option<f64>) -> f64 { bal(&format!("mob.{}.{f}", m.id), base.unwrap_or(1.0)) }
+- mob_stats · function · L177-L193 — pub fn mob_stats(m: &MobDef) -> Stats
+- rnd · function · L195-L195 — pub fn rnd() -> f64 { rand::thread_rng().gen::<f64>() }
+- rand_range · function · L196-L196 — fn rand_range(a: f64, b: f64) -> f64 { a + rnd() * (b - a) }
+- hit_chance · function · L198-L198 — pub fn hit_chance(accuracy: f64, evasion: f64) -> f64 { (0.9 + (accuracy - evasion - 50.0) * 0.01).clamp(0.6, 0.98) }
+- phys_damage · function · L200-L202 — pub fn phys_damage(p_atk: f64, p_def: f64, mult: f64, crit: bool) -> f64
+- block_hit · function · L205-L207 — pub fn block_hit(dmg: f64, block: f64, roll: f64) -> (f64, bool)
+- with_crit_dmg · function · L210-L210 — pub fn with_crit_dmg(dmg: f64, crit: bool, crit_dmg: f64) -> f64 { if crit { jround(dmg * crit_dmg).max(1.0) } else { dmg } }
+- lifesteal · function · L212-L212 — pub fn lifesteal(dmg: f64, vampire: f64) -> f64 { jround(dmg * vampire) }
+- reflected · function · L213-L213 — pub fn reflected(dmg: f64, reflect: f64) -> f64 { jround(dmg * reflect) }
+- magic_damage · function · L215-L217 — pub fn magic_damage(m_atk: f64, m_def: f64, mult: f64, crit: bool) -> f64
+- heal_amount · function · L224-L224 — pub fn heal_amount(power: f64, m_atk: f64) -> f64 { jround(power * (1.0 + m_atk / 100.0).sqrt()) }
+- xp_to_next · function · L226-L229 — pub fn xp_to_next(level: i64) -> i64
+- past_50 · function · L232-L232 — fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
+- mob_xp · function · L234-L234 — pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * mob_mult(m, "hpMult", m.hp_mult).powf(0.85)) }
+- level_penalty · function · L236-L239 — pub fn level_penalty(player_lvl: i64, mob_lvl: i64) -> f64
+- tests · module · L242-L906 — mod tests
+- stuns_and_slows_land_by_level · function · L246-L255 — fn stuns_and_slows_land_by_level()
+- shields_block_by_grade · function · L258-L280 — fn shields_block_by_grade()
+- capes_guard_a_little_and_quicken_the_stride · function · L283-L304 — fn capes_guard_a_little_and_quicken_the_stride()
+- cleric_buffs_last_and_divine_grace_quickens_casting · function · L307-L317 — fn cleric_buffs_last_and_divine_grace_quickens_casting()
+- graded_scrolls_enchant_their_grade · function · L323-L346 — fn graded_scrolls_enchant_their_grade()
+- sacred_enchants_never_fail · function · L349-L355 — fn sacred_enchants_never_fail()
+- the_pvp_zones_are_full_pvp · function · L358-L375 — fn the_pvp_zones_are_full_pvp()
+- behind_is_the_back_half · function · L378-L385 — fn behind_is_the_back_half()
+- archers_and_assassins · function · L388-L408 — fn archers_and_assassins()
+- light_armour_dodges_and_quickens · function · L411-L421 — fn light_armour_dodges_and_quickens()
+- songs_and_dances_for_the_party · function · L425-L457 — fn songs_and_dances_for_the_party()
+- war_avatar_needs_a_party · function · L462-L502 — fn war_avatar_needs_a_party()
+- Kit · struct · L506-L506 — struct Kit { name: &'static str, plate: Vec<String>, robe: Vec<String> }
+- set_kit · function · L508-L512 — fn set_kit(set: &'static str) -> Kit
+- world_raid_needs_a_party · function · L518-L571 — fn world_raid_needs_a_party(boss_id: &str, add: &str, status: &str, level: i64, kit: Kit, weak: i64, weak_kit: Kit)
+- ignaroth_needs_a_party · function · L575-L575 — fn ignaroth_needs_a_party() { world_raid_needs_a_party("ignaroth", "ember_whelp", "burn", 45, set_kit("dragon"), 40, set_kit("ashforged")); }
+- lycan_king_needs_a_party · function · L580-L580 — fn lycan_king_needs_a_party() { world_raid_needs_a_party("lycan_king", "pack_lycan", "bleed", 27, set_kit("ashforged"), 22, set_kit("abyssal")); }
+- ymirak_needs_a_party · function · L584-L584 — fn ymirak_needs_a_party() { world_raid_needs_a_party("ymirak", "blizzard_yeti", "frostbite", 56, set_kit("glacial"), 52, set_kit("dragon")); }
+- ancient_treant_needs_a_party · function · L588-L588 — fn ancient_treant_needs_a_party() { world_raid_needs_a_party("ancient_treant", "treant_sapling", "poison", 65, set_kit("emerald"), 61, set_kit("glacial")); }
+- skeleton_king_needs_a_party · function · L593-L603 — fn skeleton_king_needs_a_party()
+- tents_rest_better_than_sitting · function · L608-L620 — fn tents_rest_better_than_sitting()
+- frostbite_slows · function · L624-L632 — fn frostbite_slows()
+- plain_mobs_bite_at_every_level · function · L638-L677 — fn plain_mobs_bite_at_every_level()
+- heals_stay_a_share_of_hp · function · L683-L719 — fn heals_stay_a_share_of_hp()
+- a_mystic_can_hold_a_magic_sword_and_a_shield · function · L722-L740 — fn a_mystic_can_hold_a_magic_sword_and_a_shield()
+- gladiators_fight_with_a_pair · function · L743-L763 — fn gladiators_fight_with_a_pair()
+- a_blacksmith_never_melts_an_enchanted_sword · function · L766-L774 — fn a_blacksmith_never_melts_an_enchanted_sword()
+- a_block_halves_the_hit · function · L777-L785 — fn a_block_halves_the_hit()
+- levels_go_to_78_slower_past_50 · function · L788-L796 — fn levels_go_to_78_slower_past_50()
+- grades_ask_for_a_level · function · L799-L810 — fn grades_ask_for_a_level()
+- balance_table · function · L815-L830 — fn balance_table()
+- data_refs · function · L834-L857 — fn data_refs()
+- enchant · function · L860-L869 — fn enchant()
+- cdr_sums_and_caps · function · L872-L878 — fn cdr_sums_and_caps()
+- masterwork_by_race · function · L881-L905 — fn masterwork_by_race()

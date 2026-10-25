@@ -1,26 +1,28 @@
 # client/src/render/atmos.ts
 
-Atmosphere module that makes the world read differently by the hour: a wall-clock-driven day/night cycle, wind sway for materials, a shader water surface, drifting dust/firefly motes, a pooled set of local point lights, and optional screen-space light-shaft and tilt-shift passes, each individually toggleable in Options.
-
-- sunPhase · function · L19-L24 — Converts the shared wall clock into the sun's angle in its 2π round, compressing the night into the remaining 20% of the cycle so every player sees the same in-game hour without a server.
-- gameClock · function · L27-L30 — Renders the current sun phase as an in-game HH:MM clock where sunrise reads 06:00 and sunset 18:00, rounded to ten minutes.
-- tickWind · function · L48-L51 — Advances the shared wind-time uniform each frame and flips the wind on/off switch to match the user's wind setting.
-- sway · function · L58-L77 — Patches a material's vertex shader so its vertices lean in the wind with the square of their height, keeping roots planted while grass blades and canopies sway.
-- waterMaterial · function · L84-L165 — Builds the animated water shader: travelling ripple normals, sky reflection by fresnel, a sun glint, and a baked terrain-depth texture that makes shallows clearer and shallower-looking than deep water.
-- Motes · class · L170-L223 — A cloud of ~70 additive points that meanders in world space near the player, reading as dust in daylight and fireflies at night.
-- constructor · method · L177-L194 — Creates the mote geometry with random starting positions and a hand-drawn soft round sprite texture so the points glow as dots instead of squares.
-- update · method · L196-L222 — Drifts each mote on its own sine path in world space, wrapping only those left behind (or too high/low) back into the box around the player, then restyles color, size, and opacity for firefly-like blinking at night.
-- rainAt · function · L233-L239 — function rainAt(x: number, z: number, now = Date.now()): number
-- Rain · class · L242-L277 — class Rain
-- constructor · method · L249-L260 — constructor()
-- update · method · L262-L276 — update(center: THREE.Vector3, dt: number)
-- wingGeo · function · L281-L286 — function wingGeo(): THREE.BufferGeometry
-- Critters · class · L293-L393 — class Critters
-- constructor · method · L308-L324 — constructor()
-- put · method · L326-L329 — private put(im: THREE.InstancedMesh, i: number, x: number, y: number, z: number, yaw: number, flap: number, sc: number, side: 1 | -1)
-- update · method · L331-L392 — update(center: THREE.Vector3, dt: number, t: number)
-- LightSource · interface · L396-L396 — Plain record of a world-space local light (a lamp post or campfire) plus a flag for whether it should flicker like fire.
-- LocalLights · class · L402-L480 — Keeps a small fixed pool of real point lights in the scene and reassigns them each frame to the sources nearest the player, since real point lights are too expensive to give every light source in view.
-- constructor · method · L414-L414 — One-line constructor that just stores the scene and the list of light sources for later updates.
-- flash · method · L417-L422 — flash(p: THREE.Vector3, color: number, power: number, range: number, ms: number)
-- update · method · L424-L479 — Syncs the pool's existence with the local-lights setting (recompiles happen only on that switch), then hands each pooled light to the nearest source within range and sets its color, fire flicker, and night-scaled intensity.
+- sunPhase · function · L19-L24 — function sunPhase(): number
+- gameClock · function · L27-L30 — function gameClock(): string
+- tickWind · function · L48-L51 — function tickWind(dt: number)
+- sway · function · L58-L77 — function sway<T extends THREE.Material>(m: T, amp: number): T
+- waterMaterial · function · L84-L165 — function waterMaterial(): THREE.ShaderMaterial
+- Motes · class · L170-L223 — class Motes
+- constructor · method · L177-L194 — constructor()
+- update · method · L196-L222 — update(center: THREE.Vector3, dt: number, t: number)
+- rainAt · function · L233-L238 — function rainAt(x: number, z: number, now = Date.now()): number
+- cloudCover · function · L244-L250 — function cloudCover(x: number, z: number, now = Date.now()): number
+- wetness · function · L253-L259 — function wetness(x: number, z: number, now: number): number | null
+- hash01 · function · L266-L270 — hash01 = (a: number, b: number, c: number, salt: number)
+- stormStrikes · function · L275-L285 — function stormStrikes(x: number, z: number, sec: number): { x: number; z: number }[]
+- Rain · class · L288-L323 — class Rain
+- constructor · method · L295-L306 — constructor()
+- update · method · L308-L322 — update(center: THREE.Vector3, dt: number)
+- wingGeo · function · L327-L332 — function wingGeo(): THREE.BufferGeometry
+- Critters · class · L339-L439 — class Critters
+- constructor · method · L354-L370 — constructor()
+- put · method · L372-L375 — private put(im: THREE.InstancedMesh, i: number, x: number, y: number, z: number, yaw: number, flap: number, sc: number, side: 1 | -1)
+- update · method · L377-L438 — update(center: THREE.Vector3, dt: number, t: number)
+- LightSource · interface · L442-L442 — interface LightSource
+- LocalLights · class · L448-L526 — class LocalLights
+- constructor · method · L460-L460 — constructor(private scene: THREE.Scene, private sources: LightSource[])
+- flash · method · L463-L468 — flash(p: THREE.Vector3, color: number, power: number, range: number, ms: number)
+- update · method · L470-L525 — update(p: THREE.Vector3, t: number)

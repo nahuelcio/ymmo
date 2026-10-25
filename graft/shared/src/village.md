@@ -42,5 +42,5 @@
 - freeAngles · function · L608-L624 — function freeAngles(gates: number[], n: number, clear: number): number[]
 - ringFort · function · L626-L657 — function ringFort(s: FortSpec): Fort
 - extras · function · L640-L655 — extras = (): PropInst[]
-- fortById · function · L704-L704 — fortById = (id: string)
-- fortFolk · function · L706-L709 — function fortFolk(id: string): { x: number; z: number; ry: number }
+- fortById · function · L719-L719 — fortById = (id: string)
+- fortFolk · function · L721-L724 — function fortFolk(id: string): { x: number; z: number; ry: number }

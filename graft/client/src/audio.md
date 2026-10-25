@@ -1,14 +1,27 @@
 # client/src/audio.ts
 
-Self-contained game audio engine that synthesizes every sound effect procedurally via Web Audio (no asset files) and streams zone-based background music loops, gating everything behind lazy context creation and user-gesture unlock.
-
-- Sfx · type · L7-L11 — Enumerates the named sound effects the game can request (combat feedback, pickups, UI clicks, status effects), serving as the contract between gameplay code and the procedural synthesizer in play().
-- audio · function · L17-L31 — Lazily creates the shared AudioContext, master gain node, and one second of random white noise (reused by all hiss-style effects), returning null on browsers where audio is unavailable so the game degrades silently.
-- preloadSamples · function · L62-L71 — function preloadSamples(c: AudioContext)
-- loop · function · L80-L85 — Factory that describes one background music track as a looping HTML audio element tagged with its relative volume and whether it belongs to dungeon zones; the element isn't played here, just configured for syncLoops to manage.
-- syncLoops · function · L89-L96 — Keeps background music in step with settings and the current zone: applies the music volume to every loop, then plays only the track matching the current zone type (retrying play() after user gesture) and pauses the rest.
-- ambience · function · L100-L103 — Switches the background music bed when the player enters a zone, treating raid instances as dungeons so they get the dungeon loop instead of surface music.
-- tone · function · L105-L117 — Schedules one oscillator note with a pitch glide and exponential attack/decay envelope — the melodic building block that every pitched effect (hits, heals, coins, level-ups) is composed from.
-- hiss · function · L119-L132 — Schedules a burst of the shared white-noise buffer through a sweepable filter with a fast decay — the percussive/textural building block for whooshes, impacts, and magic shimmer.
-- play · function · L135-L250 — The single entry point gameplay uses to play a named effect: it computes the scaled volume, bails out when muted or the audio context isn't running, adds slight random pitch variety so repeated sounds don't feel mechanical, and dispatches to the per-effect recipes of tone()/hiss() calls.
-- unplug · function · L144-L144 — unplug = (ms: number)
+- Sfx · type · L8-L12 — type Sfx = | 'hit' | 'crit' | 'miss' | 'hurt' | 'cast' | 'magic' | 'heal' | 'buff' | 'levelUp' | 'death' | 'coin' | 'pickup' | 'click' | 'warn' | 'slam' | 'dash' | 'stun' | 'dot' // world interactions (shared/src/nodes.ts) | 'chop' | 'mine' | 'rustle' | 'treeFall' | 'splash';
+- audio · function · L18-L32 — function audio(): AudioContext | null
+- want · function · L67-L79 — function want(f: string)
+- grainsOf · function · L89-L108 — function grainsOf(buf: AudioBuffer): { at: number; dur: number }[]
+- preloadSamples · function · L110-L113 — function preloadSamples(_c: AudioContext)
+- loop · function · L122-L127 — function loop(file: string, gain: number, dungeon: boolean)
+- syncLoops · function · L134-L141 — function syncLoops()
+- ambience · function · L145-L148 — function ambience(zone: string)
+- indoors · function · L151-L151 — indoors = ()
+- tone · function · L153-L165 — function tone(type: OscillatorType, f0: number, f1: number, t0: number, dur: number, vol: number, out: AudioNode)
+- hiss · function · L167-L180 — function hiss(t0: number, dur: number, vol: number, f0: number, f1: number, q: number, out: AudioNode, type: BiquadFilterType = 'bandpass')
+- play · function · L183-L298 — function play(name: Sfx, gain = 1)
+- unplug · function · L192-L192 — unplug = (ms: number)
+- steps · function · L301-L301 — steps = (name: string, n: number)
+- stepFiles · function · L316-L316 — stepFiles = (on: Footing)
+- setStepFiles · function · L318-L321 — function setStepFiles(on: Footing, files: string[])
+- preloadSteps · function · L323-L326 — function preloadSteps(files: string[])
+- stepGrains · function · L328-L328 — stepGrains = (files: string[])
+- step · function · L331-L384 — function step(on: Footing, gain = 1, rate = 1)
+- Bed · type · L391-L391 — type Bed = { file: string; level: number; gain: GainNode | null; src: AudioScheduledSourceNode | null; target: number; quietSince: number; synth: (c: AudioContext, out: AudioNode) => AudioScheduledSourceNode };
+- noiseLoop · function · L392-L397 — noiseLoop = (c: AudioContext)
+- bed · function · L398-L398 — bed = (file: string, level: number, synth: Bed['synth']): Bed
+- startBed · function · L433-L449 — function startBed(b: Bed, c: AudioContext)
+- setWeather · function · L455-L486 — function setWeather(rain: number, wind: number, harsh: number)
+- thunder · function · L489-L527 — function thunder(dist: number)

@@ -1,30 +1,90 @@
 # client/src/render/quaternius.ts
 
-- Prim · interface · L28-L28 — interface Prim
-- Helm · type · L43-L43 — type Helm = keyof typeof HELMS;
-- qReady · function · L63-L63 — qReady = ()
-- qWeapon · function · L65-L65 — qWeapon = (item: string | null): THREE.Object3D | null
-- avgColor · function · L71-L83 — function avgColor(tex: THREE.Texture): THREE.Color
-- lum · function · L77-L77 — lum = (i: number)
-- headOnly · function · L86-L99 — function headOnly(geo: THREE.BufferGeometry)
-- keep · function · L88-L92 — keep = (v: number)
-- loadQ · function · L101-L172 — function loadQ(): Promise<void>
-- collect · function · L131-L150 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
-- get · function · L165-L165 — get = (n: string)
-- setCharAniso · function · L180-L193 — function setCharAniso(n: number): number
-- material · function · L202-L225 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
-- QZone · interface · L228-L228 — interface QZone
-- QOpts · interface · L229-L249 — interface QOpts
-- QAnim · interface · L251-L256 — interface QAnim
-- attach · function · L259-L267 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
-- qPlayer · function · L269-L344 — function qPlayer(o: QOpts): Rig
-- add · function · L278-L289 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
-- zone · function · L291-L292 — zone = (z: QZone, hands?: number)
-- kit · function · L293-L293 — kit = (z: QZone)
-- hair · function · L300-L300 — hair = (p: Prim): [number, number, boolean]
-- animateQ · function · L347-L396 — function animateQ(q: QAnim, s: AnimState)
-- at · function · L353-L358 — at = (name: string, ms: number)
-- mountQuaterniusPreview · function · L399-L491 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
-- resize · function · L417-L425 — resize = ()
-- build · function · L448-L460 — build = ()
-- btn · function · L461-L467 — btn = (label: string, fn: () => void)
+- Prim · interface · L33-L33 — interface Prim
+- GearSet · type · L56-L56 — type GearSet = (typeof GEAR_SETS)[number];
+- GearFile · type · L72-L72 — type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile | LightFile | `ai_${string}`;
+- gearPiece · function · L86-L94 — function gearPiece(ai: string | undefined, own: GearFile | undefined, name: string): THREE.Object3D | undefined
+- MageFile · type · L96-L96 — type MageFile = `mage_${string}`;
+- LightFile · type · L98-L98 — type LightFile = `light_${string}`;
+- armorPiece · function · L111-L119 — function armorPiece(id: string): { node: THREE.Object3D; under: number } | undefined
+- bustGeo · function · L127-L147 — function bustGeo(src: THREE.BufferGeometry): THREE.BufferGeometry
+- swell · function · L131-L134 — swell = (x: number, y: number, z: number)
+- shieldPiece · function · L149-L152 — function shieldPiece(id: string): THREE.Object3D | undefined
+- capePiece · function · L154-L157 — function capePiece(id: string): THREE.Object3D | undefined
+- toSkin · function · L160-L179 — function toSkin(m: THREE.Mesh)
+- Helm · type · L180-L180 — type Helm = keyof typeof HELMS | GearSet | MageFile | LightFile;
+- qReady · function · L208-L208 — qReady = ()
+- qWeapon · function · L217-L232 — function qWeapon(item: string | null): THREE.Object3D | null
+- avgColor · function · L238-L250 — function avgColor(tex: THREE.Texture): THREE.Color
+- lum · function · L244-L244 — lum = (i: number)
+- strongest · function · L253-L258 — function strongest(geo: THREE.BufferGeometry, v: number): string
+- trim · function · L262-L271 — function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean)
+- ok · function · L264-L264 — ok = (v: number)
+- isHead · function · L272-L272 — isHead = (j: string)
+- headOnly · function · L273-L273 — headOnly = (geo: THREE.BufferGeometry)
+- suitTrim · function · L284-L292 — function suitTrim(geo: THREE.BufferGeometry, part: keyof typeof SUIT)
+- isNeckline · function · L293-L293 — isNeckline = (j: string)
+- neckline · function · L301-L373 — function neckline(body: THREE.SkinnedMesh, tunic: THREE.SkinnedMesh)
+- edgeAt · function · L339-L342 — edgeAt = (ax: number)
+- below · function · L344-L348 — below = (i: number)
+- wantGear · function · L384-L421 — function wantGear(s: GearFile): THREE.Object3D | undefined
+- tintGear · function · L431-L461 — function tintGear(root: THREE.Object3D, hex: number, glow = 0)
+- loadQ · function · L463-L569 — function loadQ(): Promise<void>
+- collect · function · L494-L513 — collect = (key: string, meshes: THREE.SkinnedMesh[], head = false)
+- half · function · L539-L540 — half = (clip: THREE.AnimationClip, name: string, top: boolean)
+- get · function · L548-L548 — get = (n: string)
+- setCharAniso · function · L577-L590 — function setCharAniso(n: number): number
+- material · function · L599-L622 — function material(p: Prim, color: number | undefined, k: number, glow: boolean): THREE.MeshLambertMaterial
+- QZone · interface · L625-L625 — interface QZone
+- QOpts · interface · L626-L663 — interface QOpts
+- QAnim · interface · L665-L680 — interface QAnim
+- BowString · interface · L685-L685 — interface BowString
+- bowNode · function · L688-L692 — function bowNode(held: THREE.Object3D): THREE.Object3D | undefined
+- bowString · function · L693-L703 — function bowString(held: THREE.Object3D): BowString | undefined
+- BowArms · interface · L704-L712 — interface BowArms
+- aimBone · function · L716-L722 — function aimBone(bone: THREE.Object3D, tip: THREE.Object3D, dir: THREE.Vector3, w: number)
+- reach · function · L725-L741 — function reach(upper: THREE.Object3D, lower: THREE.Object3D, hand: THREE.Object3D, target: THREE.Vector3, pole: THREE.Vector3, w: number)
+- turnBone · function · L744-L748 — function turnBone(bone: THREE.Object3D, axis: THREE.Vector3, angle: number)
+- bodyDir · function · L750-L752 — function bodyDir(out: THREE.Vector3, fwd: THREE.Vector3, left: THREE.Vector3, x: number, y: number, z: number)
+- hold · function · L755-L763 — function hold(q: QAnim, bones: THREE.Object3D[])
+- stabGrip · function · L769-L782 — function stabGrip(d: NonNullable<QAnim['dagger']>, w: number)
+- aimBow · function · L792-L848 — function aimBow(q: QAnim, b: BowArms, s: AnimState, dt: number, clip: { drawn: number; up: number } | null = null)
+- straightBowArm · function · L851-L856 — function straightBowArm(b: BowArms, k: number)
+- holdBow · function · L865-L885 — function holdBow(b: BowArms, fwd: THREE.Vector3, up = (b.up += (b.w - b.up) * 0.25))
+- pullString · function · L887-L900 — function pullString(b: BowArms, k: number)
+- backOf · function · L905-L914 — function backOf(g: THREE.BufferGeometry)
+- QCape · interface · L918-L953 — interface QCape
+- wrapAngle · function · L958-L958 — wrapAngle = (a: number)
+- clothFrame · function · L962-L969 — function clothFrame(L: THREE.Vector3[], rows: number, cols: number, i: number, out: THREE.Matrix4)
+- capeCloth · function · L977-L1118 — function capeCloth(c: QCape, s: AnimState, dt: number)
+- mirrorClip · function · L1127-L1149 — function mirrorClip(clip: THREE.AnimationClip, rig: THREE.Object3D, name: string): THREE.AnimationClip
+- other · function · L1128-L1128 — other = (n: string)
+- mirror · function · L1129-L1129 — mirror = (q: THREE.Quaternion)
+- K · function · L1131-L1135 — K = (o: THREE.Object3D | null)
+- untwistKnees · function · L1157-L1181 — function untwistKnees(clip: THREE.AnimationClip, rig: THREE.Object3D)
+- keys · function · L1164-L1164 — keys = (k: THREE.KeyframeTrack)
+- attach · function · L1183-L1191 — function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number)
+- qPlayer · function · L1193-L1475 — function qPlayer(o: QOpts): Rig
+- add · function · L1203-L1216 — add = (file: string, tint: (p: Prim) => [number | undefined, number, boolean])
+- zone · function · L1218-L1219 — zone = (z: QZone, hands?: number)
+- kit · function · L1220-L1220 — kit = (z: QZone)
+- suit · function · L1225-L1225 — suit = (): [number, number, boolean]
+- hair · function · L1239-L1239 — hair = (p: Prim): [number, number, boolean]
+- wear · function · L1244-L1257 — wear = (node: THREE.Object3D)
+- restOf · function · L1290-L1290 — restOf = (n: string)
+- link · function · L1319-L1323 — link = (r0: number, c0: number, r1: number, c1: number)
+- mark · function · L1352-L1357 — mark = (y: number)
+- SkillAnim · interface · L1485-L1485 — interface SkillAnim
+- skillStrikes · function · L1559-L1559 — skillStrikes = (key: string | undefined)
+- skillAnimOf · function · L1560-L1569 — function skillAnimOf(skill: string | undefined, weapon?: string): string | undefined
+- skillImpactMs · function · L1571-L1574 — function skillImpactMs(key: string | undefined): number | undefined
+- bowUp · function · L1577-L1582 — function bowUp(clip: string, t: number): number
+- bowDrawn · function · L1583-L1589 — function bowDrawn(clip: string, t: number): number | null
+- basicSwing · function · L1603-L1627 — function basicSwing(q: QAnim, s: AnimState): boolean
+- animateQ · function · L1630-L1754 — function animateQ(q: QAnim, s: AnimState): number
+- at · function · L1639-L1644 — at = (name: string, ms: number)
+- mountQuaterniusPreview · function · L1757-L2009 — async function mountQuaterniusPreview(host: HTMLElement): Promise<() => void>
+- resize · function · L1775-L1783 — resize = ()
+- build · function · L1840-L1938 — build = ()
+- btn · function · L1939-L1945 — btn = (label: string, fn: () => void)
+- clock · function · L1949-L1949 — clock = ()

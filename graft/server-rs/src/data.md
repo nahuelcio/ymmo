@@ -1,69 +1,71 @@
 # server-rs/src/data.rs
 
-This module is the server's typed view of the shared game database (items, mobs, skills, quests, NPCs, zones, raids, world geometry) exported from the client's source of truth, deserializing game.json once into an immutable lookup-friendly Data singleton exposed via d().
-
-- Constants · struct · L8-L27 — Holds the global tuning numbers shared with the client — playable area half, walk radius, starting adena, level caps, and appearance option counts.
-- Town · struct · L31-L31 — Defines the safe town's circular location and its bilingual display name.
-- Named · struct · L35-L35 — Names a shared region (used for the wild area) in both languages.
-- ItemUse · struct · L39-L39 — Describes a consumable item's on-use effects (HP/MP restore, escape scroll) and its cooldown.
-- ItemDef · struct · L43-L68 — Defines one item type — combat stats, price, stackability, usable effects, enchant slot, and craft recipe — so shops, inventory, and enchanting all evaluate against a single authoritative definition.
-- Recipe · struct · L71-L71 — The crafting cost of an item: the required material list plus the adena fee.
-- EnchantCfg · struct · L75-L75 — Rules of the enchantment system — weapon/armor success rates, safe enchant level, step, cap, and whether a failed enchant destroys the item.
-- MasterworkCfg · struct · L80-L80 — pub struct MasterworkCfg { pub chance: f64, pub dwarf_chance: f64, pub weapon: f64, pub piece: f64 }
-- StatusApply · struct · L84-L84 — Describes a status/ailment to inflict, with duration, trigger chance, and optional damage-over-time.
-- Special · struct · L88-L88 — Describes a mob special attack: radius, windup, damage multiplier, cadence, targeting mode, and optional stun.
-- MobCount · struct · L91-L91 — Pairs a mob type with how many of it spawn (used for zones, camps, and boss-phase adds).
-- MobPhase · struct · L95-L95 — Defines a boss fight phase trigger with optional adds, haste buff, special attack, and a spoken line.
-- Drop · struct · L99-L99 — One loot-table entry: the item, its drop chance, and the quantity range.
-- MobDef · struct · L103-L123 — Complete monster template: combat stats, aggression, respawn, boss flags, on-hit status/special/phases, and adena/drop rewards.
-- BuffMods · struct · L127-L134 — The set of optional stat modifiers a buff can grant.
-- BuffDef · struct · L137-L137 — A buff's duration together with the stat mods it applies.
-- SkillDef · struct · L141-L161 — Skill card defining who can learn it (class/spec/race/gender + level requirement) and how it behaves in combat (kind, target, power, MP/cast/cooldown, AoE, buffs, status).
-- Objective · enum · L165-L168 — What a quest requires: either killing N of a mob or collecting N of an item.
-- count · function · L170-L170 — Extracts the required quantity from either objective variant so quest-progress code needn't match on the enum.
-- QuestDef · struct · L175-L175 — One quest: the giving NPC, minimum level gate, objective, and XP/adena rewards.
-- NpcDef · struct · L179-L197 — World NPC record: placement/heading plus interaction services (shop and craft item lists) and localized greeting/dialogue text.
-- ZoneDef · struct · L201-L201 — A hunting zone: a circular area plus which mobs spawn inside it.
-- Teleport · struct · L205-L205 — A fast-travel destination with coordinates and its adena cost.
-- CampChest · struct · L208-L208 — The treasure chest found at a camp: adena range and loot table.
-- CampDef · struct · L212-L212 — An outdoor camp: location, leader NPC, its mob spawns with respawn timer, and chest loot.
-- StatMods · struct · L216-L219 — A complete set of stat modifiers, used for race and gender base bonuses.
-- RaceDef · struct · L223-L223 — One playable race: its allowed classes and its stat modifiers.
-- GenderDef · struct · L226-L226 — One gender's stat modifiers.
-- StartItem · struct · L229-L229 — An item granted at character creation, with count and whether it is auto-equipped.
-- ClassDef · struct · L233-L233 — One playable class: HP/MP growth curve, CP ratio, attack interval, and starting gear.
-- SpecDef · struct · L237-L237 — Specialization entry tying a spec id to its base class, used for class/spec-gated lookups like skill availability.
-- StatusDef · struct · L240-L240 — Maps a status id to the bitmask flag used to encode active statuses.
-- Pos · struct · L243-L243 — A 2D world coordinate (x,z), e.g. a raid's entry point.
-- RaidDef · struct · L247-L247 — Raid instance configuration: boss mob, entry point, player/level gates, optional entry quest, and how long the raid stays open after the kill.
-- ObstacleDef · enum · L251-L256 — A collision obstacle in the world, either a circle or a rotated box.
-- Yield · struct · L260-L260 — pub struct Yield { pub item: String, pub min: i64, pub max: i64, pub chance: f64, pub zones: Option<Vec<String>> }
-- GatherDef · struct · L265-L265 — pub struct GatherDef { pub tools: Option<Vec<String>>, pub swing_ms: f64, pub swings: f64, pub respawn_ms: f64, pub yields: Vec<Yield> }
-- GatherDefs · struct · L268-L268 — pub struct GatherDefs { pub tree: GatherDef, pub rock: GatherDef, pub bush: GatherDef }
-- NodeKind · enum · L271-L271 — pub enum NodeKind { Tree, Rock, Bush, Seat }
-- NodeRaw · struct · L275-L275 — pub struct NodeRaw(pub u32, pub f64, pub f64, pub f64, pub f64, pub f64, pub String);
-- NodeDef · struct · L278-L278 — pub struct NodeDef { pub kind: NodeKind, pub x: f64, pub z: f64, pub r: f64, pub ry: f64, pub zone: String }
-- WaterRaw · struct · L281-L281 — pub struct WaterRaw { pub cell: f64, pub half: f64, pub runs: Vec<(usize, usize, usize)> }
-- ClanLevelDef · struct · L285-L285 — pub struct ClanLevelDef { pub members: usize, pub adena: i64, pub mats: Vec<(String, i64)>, pub rep: i64 }
-- ClanCfg · struct · L288-L296 — pub struct ClanCfg
-- ClanSkillDef · struct · L299-L299 — pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
-- ClanRepDef · struct · L302-L302 — pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
-- ClansDef · struct · L305-L305 — pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
-- Raw · struct · L308-L338 — Transient deserialization mirror of the raw game.json document, kept only until it is converted into the indexed Data structure.
-- Data · struct · L340-L378 — The loaded game database: ordered lists where client order matters (skills, quests, NPCs, zones) alongside by-id HashMap indexes for fast item/mob/skill/class/raid lookups.
-- item · function · L381-L381 — O(1) item-catalog lookup by id.
-- wear_level · function · L383-L383 — pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
-- skill · function · L384-L384 — Skill lookup by id via the id→index map, preserving data order.
-- quest · function · L385-L385 — Finds a quest by its id.
-- quest_by_npc · function · L386-L386 — Finds the quest offered by a given NPC.
-- camp · function · L387-L387 — Finds a camp by its id.
-- npc · function · L388-L388 — Finds an NPC by its id.
-- status_flag · function · L389-L389 — Translates a status id into its bitmask flag, defaulting to 0 for unknown ids.
-- spec · function · L391-L391 — Looks up a specialization definition by its id so callers can resolve a spec to its base class.
-- evolution_of · function · L393-L393 — pub fn evolution_of(&self, spec: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.parent.as_deref() == Some(spec)) }
-- is_deep · function · L396-L400 — pub fn is_deep(&self, x: f64, z: f64) -> bool
-- gather_def · function · L402-L404 — pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef>
-- skill_available · function · L406-L411 — Enforces the rule for whether a character may learn a skill: every optional restriction recorded on the skill (class, specialization, race, gender) must match the character, while absent restrictions impose no limit.
-- skills_for · function · L414-L418 — Builds a character's learnable skill list at a given level, stably sorted by level so skill bars match the client's ordering.
-- DATA · constant · L421-L421 — Process-wide singleton slot guaranteeing the parsed game data is built exactly once.
-- d · function · L423-L467 — Lazily parses the embedded game.json exactly once and converts it into the indexed Data singleton, failing fast with a hint to re-run the export script.
+- Constants · struct · L8-L32 — pub struct Constants
+- Town · struct · L36-L36 — pub struct Town { pub x: f64, pub z: f64, pub r: f64, pub name: String, pub name_en: String }
+- Named · struct · L40-L40 — pub struct Named { pub name: String, pub name_en: String }
+- ItemUse · struct · L44-L44 — pub struct ItemUse { pub hp: Option<f64>, pub mp: Option<f64>, pub escape: Option<bool>, pub cd: f64 }
+- ItemDef · struct · L48-L86 — pub struct ItemDef
+- Recipe · struct · L89-L89 — pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
+- EnchantCfg · struct · L93-L93 — pub struct EnchantCfg { pub weapon: f64, pub armor: f64, pub safe: i64, pub chance: f64, pub max: i64, pub fail_destroys: bool }
+- MasterworkCfg · struct · L98-L98 — pub struct MasterworkCfg { pub chance: f64, pub dwarf_chance: f64, pub weapon: f64, pub piece: f64 }
+- StatusApply · struct · L102-L102 — pub struct StatusApply { pub id: String, pub ms: f64, pub chance: Option<f64>, pub dot: Option<f64> }
+- Special · struct · L106-L106 — pub struct Special { pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub at: String, pub stun: Option<f64> }
+- Barrage · struct · L110-L110 — pub struct Barrage { pub count: u32, pub r: f64, pub windup: f64, pub mult: f64, pub every: f64, pub range: f64 }
+- Pulse · struct · L114-L114 — pub struct Pulse { pub r: f64, pub windup: f64, pub pct: f64, pub every: f64 }
+- Enrage · struct · L118-L118 — pub struct Enrage { pub after: f64, pub haste: f64, pub atk: f64 }
+- MobCount · struct · L121-L121 — pub struct MobCount { pub mob: String, pub count: u32 }
+- MobPhase · struct · L125-L128 — pub struct MobPhase
+- Drop · struct · L132-L132 — pub struct Drop { pub item: String, pub chance: f64, pub min: Option<i64>, pub max: Option<i64> }
+- MobDef · struct · L136-L159 — pub struct MobDef
+- BuffMods · struct · L163-L185 — pub struct BuffMods
+- BuffDef · struct · L188-L188 — pub struct BuffDef { pub dur: f64, pub mods: BuffMods }
+- SkillDef · struct · L192-L221 — pub struct SkillDef
+- Objective · enum · L225-L228 — pub enum Objective
+- count · function · L230-L230 — pub fn count(&self) -> i64 { match self { Objective::Kill { count, .. } | Objective::Collect { count, .. } => *count } }
+- QuestDef · struct · L235-L235 — pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64, /** turning it in evolves the character's specialization */ #[serde(default)] pub evolve: bool }
+- NpcDef · struct · L239-L257 — pub struct NpcDef
+- ZoneDef · struct · L261-L261 — pub struct ZoneDef { pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub spawns: Vec<MobCount>, pub pvp: Option<bool> }
+- Teleport · struct · L265-L265 — pub struct Teleport { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub cost: i64 }
+- CampChest · struct · L268-L268 — pub struct CampChest { pub adena: (f64, f64), pub loot: Vec<Drop> }
+- CampDef · struct · L272-L272 — pub struct CampDef { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub leader: String, pub mobs: Vec<MobCount>, pub respawn: f64, pub chest: CampChest }
+- StatMods · struct · L276-L279 — pub struct StatMods
+- RaceDef · struct · L283-L283 — pub struct RaceDef { pub id: String, pub classes: Vec<String>, pub mods: StatMods, pub mw: String }
+- GenderDef · struct · L286-L286 — pub struct GenderDef { pub id: String, pub mods: StatMods }
+- StartItem · struct · L289-L289 — pub struct StartItem { pub item: String, pub count: i64, pub equip: bool }
+- ClassDef · struct · L293-L293 — pub struct ClassDef { pub id: String, pub base_hp: f64, pub hp_lvl: f64, pub base_mp: f64, pub mp_lvl: f64, pub cp_ratio: f64, pub atk_interval: f64, pub start_items: Vec<StartItem> }
+- SpecDef · struct · L297-L308 — pub struct SpecDef
+- StatusDef · struct · L311-L311 — pub struct StatusDef { pub id: String, pub flag: u16 }
+- Pos · struct · L314-L314 — pub struct Pos { pub x: f64, pub z: f64 }
+- RaidDef · struct · L318-L318 — pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64 }
+- ObstacleDef · enum · L322-L327 — pub enum ObstacleDef
+- Yield · struct · L331-L331 — pub struct Yield { pub item: String, pub min: i64, pub max: i64, pub chance: f64, pub zones: Option<Vec<String>> }
+- GatherDef · struct · L336-L336 — pub struct GatherDef { pub tools: Option<Vec<String>>, pub swing_ms: f64, pub swings: f64, pub respawn_ms: f64, pub yields: Vec<Yield> }
+- GatherDefs · struct · L339-L339 — pub struct GatherDefs { pub tree: GatherDef, pub rock: GatherDef, pub bush: GatherDef }
+- NodeKind · enum · L342-L342 — pub enum NodeKind { Tree, Rock, Bush, Seat, Tent }
+- is_rest · function · L346-L346 — pub fn is_rest(self) -> bool { matches!(self, NodeKind::Seat | NodeKind::Tent) }
+- NodeRaw · struct · L351-L351 — pub struct NodeRaw(pub u32, pub f64, pub f64, pub f64, pub f64, pub f64, pub String);
+- NodeDef · struct · L354-L354 — pub struct NodeDef { pub kind: NodeKind, pub x: f64, pub z: f64, pub r: f64, pub ry: f64, pub zone: String }
+- WaterRaw · struct · L357-L357 — pub struct WaterRaw { pub cell: f64, pub half: f64, pub runs: Vec<(usize, usize, usize)> }
+- ClanLevelDef · struct · L361-L361 — pub struct ClanLevelDef { pub members: usize, pub adena: i64, pub mats: Vec<(String, i64)>, pub rep: i64 }
+- ClanCfg · struct · L364-L372 — pub struct ClanCfg
+- ClanSkillDef · struct · L375-L375 — pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
+- ClanRepDef · struct · L378-L378 — pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
+- ClansDef · struct · L381-L381 — pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
+- Raw · struct · L384-L414 — struct Raw
+- Data · struct · L416-L454 — pub struct Data
+- item · function · L457-L457 — pub fn item(&self, id: &str) -> Option<&ItemDef> { self.items.get(id) }
+- wear_level · function · L459-L459 — pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
+- skill · function · L460-L460 — pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
+- quest · function · L461-L461 — pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
+- quest_by_npc · function · L462-L462 — pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc) }
+- camp · function · L463-L463 — pub fn camp(&self, id: &str) -> Option<&CampDef> { self.camps.iter().find(|c| c.id == id) }
+- npc · function · L464-L464 — pub fn npc(&self, id: &str) -> Option<&NpcDef> { self.npcs.iter().find(|n| n.id == id) }
+- status_flag · function · L465-L465 — pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
+- spec · function · L467-L467 — pub fn spec(&self, id: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.id == id) }
+- evolution_of · function · L469-L469 — pub fn evolution_of(&self, spec: &str) -> Option<&SpecDef> { self.specs.iter().find(|s| s.parent.as_deref() == Some(spec)) }
+- is_deep · function · L472-L476 — pub fn is_deep(&self, x: f64, z: f64) -> bool
+- gather_def · function · L478-L480 — pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef>
+- skill_available · function · L482-L487 — pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool
+- skills_for · function · L490-L494 — pub fn skills_for(&self, cls: &str, spec: Option<&str>, level: i64, race: &str, gender: &str) -> Vec<&SkillDef>
+- DATA · constant · L497-L497 — static DATA: OnceLock<Data> = OnceLock::new();
+- d · function · L499-L543 — pub fn d() -> &'static Data

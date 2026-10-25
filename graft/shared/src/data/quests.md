@@ -1,11 +1,9 @@
 # shared/src/data/quests.ts
 
-Shared quest catalog: definitions for the game's kill/collect quests (NPC, level gate, dialogue, objective, XP/adena rewards) plus helpers for objective summaries, NPC markers, qualifying mobs, and status dialogue.
-
-- QuestStatus · type · L4-L4 — Enumerates the player-facing lifecycle stages of a quest: locked, available, active, ready, and done.
-- QuestDef · interface · L6-L21 — The contract for a single quest: which NPC offers it, its level gate, its four dialogue strings, its kill-or-collect objective, and its XP/adena payout.
-- questSummary · function · L23-L27 — Renders a quest's objective as a player-facing one-liner in Spanish, resolving mob or item ids to their display names.
-- QuestMarker · type · L32-L32 — The set of punctuation markers shown over a quest giver (yellow !/? actionable, grey 'soon', 'active', or none).
-- questMarker · function · L35-L40 — Decides which WoW-style marker floats over a quest giver by prioritizing done → active/ready → level-gated availability → not-yet 'soon'.
-- questMobs · function · L43-L47 — Determines which mob templates advance a quest: the designated kill target, or every mob whose drop table contains the quest item.
-- questLine · function · L49-L55 — Maps a quest's current status to the dialogue line the giver NPC should say (level lock notice, offer, in-progress nag, turn-in, or post-completion text).
+- QuestStatus · type · L4-L4 — type QuestStatus = 'locked' | 'available' | 'active' | 'ready' | 'done';
+- QuestDef · interface · L6-L21 — interface QuestDef
+- questSummary · function · L23-L27 — function questSummary(q: QuestDef): string
+- QuestMarker · type · L32-L32 — type QuestMarker = 'available' | 'soon' | 'ready' | 'active' | null;
+- questMarker · function · L35-L40 — function questMarker(q: QuestDef, level: number, active: { progress: number } | undefined, done: boolean): QuestMarker
+- questMobs · function · L43-L47 — function questMobs(q: QuestDef): string[]
+- questLine · function · L49-L55 — function questLine(q: QuestDef, status: QuestStatus): string

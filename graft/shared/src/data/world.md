@@ -1,12 +1,11 @@
 # shared/src/data/world.ts
 
-Central world-data module that lays out the game's static geography: level-banded hunting zones with their mob spawn tables, teleport destinations with costs, all town/outpost NPCs (shops, gatekeepers, quest givers, flavor talkers), and the coordinate-to-area-name lookup used by the UI.
-
-- ZoneDef · interface · L4-L11 — Shape of a hunting-zone record: circular map bounds, intended level range, ground tint, and which mobs spawn in what numbers.
-- zoneAt · function · L52-L56 — Resolves a world coordinate to its display area name, enforcing the precedence that towns claim their radius plus a 10-unit buffer first, then hunting zones, with 'Tierras Salvajes' as the wilderness fallback.
-- NpcDef · interface · L58-L75 — Blueprint for every NPC's identity and interactive role: the 'kind' discriminator (shop / gatekeeper / talker / quest) drives what the engine offers, while shop/craft item lists, click lines, and appearance options flesh out merchants, teleporters, chatter, and quest givers.
-- randomLine · function · L100-L103 — Picks a random flavor line when the player clicks or passes by an NPC, falling back to its standard greeting if it has no dedicated chatter lines.
-- drop · function · L106-L111 — function drop(id: string, dx = 0, dz = 0): { x: number; z: number }
-- folk · function · L138-L138 — folk = (id: string)
-- fort · function · L139-L139 — fort = (id: string)
-- walker · function · L143-L143 — walker = (i: number)
+- ZoneDef · interface · L4-L13 — interface ZoneDef
+- inPvpZone · function · L83-L83 — inPvpZone = (x: number, z: number)
+- zoneAt · function · L85-L89 — function zoneAt(x: number, z: number): string
+- NpcDef · interface · L91-L108 — interface NpcDef
+- randomLine · function · L133-L136 — function randomLine(n: NpcDef): string
+- drop · function · L139-L144 — function drop(id: string, dx = 0, dz = 0): { x: number; z: number }
+- folk · function · L184-L184 — folk = (id: string)
+- fort · function · L185-L185 — fort = (id: string)
+- walker · function · L189-L189 — walker = (i: number)
