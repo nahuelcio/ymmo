@@ -383,14 +383,42 @@ def unit(g):
     return (g - [(lo[0] + hi[0]) / 2, lo[1], (lo[2] + hi[2]) / 2]) / np.ptp(g, 0).max()
 
 
-def on_head(ob, name):
+def cut_gorget(ob):
+    """A helm's gorget cut away (`cut_gorget` in the set's spec): its lames flaring out below the skull, from the
+    foot of the narrow stretch of its lower half (where the visor ends) down. Left on, its bottom went to the jaw and
+    the head sat in the gaps between its lames; the cuirass's own collar closes round the neck."""
+    g = unit(turn(coords(ob)))
+    width = lambda y: np.ptp(g[(g[:, 1] >= y) & (g[:, 1] < y + 0.025)][:, [0, 2]], 0).mean() if ((g[:, 1] >= y) & (g[:, 1] < y + 0.025)).sum() > 5 else 9.0
+    waist = min(np.arange(0.15, 0.5, 0.025), key=width)
+    narrow = width(waist) * 1.04
+    while waist - 0.025 >= 0.1 and width(waist - 0.025) <= narrow:
+        waist -= 0.025
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    bmesh.ops.delete(bm, geom=[bm.verts[i] for i in np.nonzero(g[:, 1] < waist)[0]], context='VERTS')
+    bm.to_mesh(ob.data)
+    bm.free()
+    print(f'[ai_gear] helm: its gorget cut away below {waist:.3f} of its height')
+
+
+def on_head(ob, name, spec=None):
     """A helm or a circlet set on the head (head_fit), round the head bone's pivot, where the client hangs it."""
+    cut = name == 'helm' and (spec or {}).get('cut_gorget')
+    if cut:
+        cut_gorget(ob)
     g = unit(turn(coords(ob)))
     lo, hi = g.min(0), g.max(0)
-    if name == 'circlet' and (np.abs(g[:, 0]) < 0.15)[g[:, 2] < lo[2] + 0.25 * (hi[2] - lo[2])].sum() < 0.01 * len(g):
-        g[:, 2] -= lo[2]  # a tiara, open at the back: its ends at the ears (round the head's middle), its front on the brow
+    if name == 'circlet' and (np.abs(g[:, 0]) < 0.3)[g[:, 2] < lo[2] + 0.25 * (hi[2] - lo[2])].sum() < 0.01 * len(g):
+        g[:, 2] -= lo[2]  # a tiara, open wide at the back: its ends at the ears (round the head's middle), its front on the brow
     s, dy, dz = head_fit(g, faces(ob), name)
-    put(ob, g * s + [0.0, dy, dz])
+    p = g * s + [0.0, dy, dz]
+    if cut and p[:, 1].min() > -0.055:  # a helm cut short at its visor: its front drawn down over the chin (the back stays)
+        front = np.clip((p[:, 2] + 0.02) / 0.07, 0, 1)
+        k = (0.06 + 0.055) / (0.06 - p[:, 1].min())
+        low = p[:, 1] < 0.06
+        p[low, 1] = 0.06 - (0.06 - p[low, 1]) * (1 + (k - 1) * front[low])
+    put(ob, p)
     print(f'[ai_gear] {name}: {s:.3f} m across its largest side, its bottom at y {dy:+.3f}, z {dz:+.3f}')
 
 
@@ -594,8 +622,26 @@ def over_body(ob, light=False):
                 top = lo[1] + (f + 0.05) * h
                 break
         s = 0.56 / (top - lo[1])
+        # and never narrower than the waist: a slim cuirass drawn long (a plackart down to a point) came out narrower
+        # than the body at its height. Its torso's width, the middle one of its slices a sixth to a third up it, made the
+        # body's at the waist (the tunic's, y 1.05 to 1.2) and 2.5 cm each side, when that is a tenth wider or more
+        waist = V[torso & (V[:, 1] > 1.05) & (V[:, 1] < 1.2)]
+        band = [np.ptp(g[(g[:, 1] >= lo[1] + f * h) & (g[:, 1] < lo[1] + (f + 0.025) * h)][:, 0]) for f in np.arange(0.15, 0.35, 0.025)]
+        wide = (np.ptp(waist[:, 0]) + 0.05) / np.median(band)
+        if wide > 1.1 * s:
+            s = wide
     g = (g - [(lo[0] + hi[0]) / 2, top, (lo[2] + hi[2]) / 2]) * s + [0.0, 1.56, (ribs[:, 2].max() + ribs[:, 2].min()) / 2]
+    collar = (g[:, 1] > 1.56) if not light and top < hi[1] else np.zeros(len(g), bool)  # the gorget, above the shoulders
     turned = raise_pauldrons(g)
+    if collar.any():
+        # a gorget standing far off the neck (a thick ring of fur) drawn in round it: no wider than 20 cm across
+        neck = np.array(gear.bone('neck_01'))
+        for y in np.arange(1.56, g[collar, 1].max() + 0.01, 0.01):
+            sl = collar & (g[:, 1] >= y) & (g[:, 1] < y + 0.01)
+            if sl.sum() > 5 and np.ptp(g[sl, 0]) > 0.2:
+                k = 1 - (1 - 0.2 / np.ptp(g[sl, 0])) * np.clip((y - 1.56) / 0.03, 0, 1)
+                g[sl, 0] = g[sl, 0] * k
+                g[sl, 2] = neck[2] + (g[sl, 2] - neck[2]) * k
     if light:  # a jerkin hugs the body: widened round the spine (pushing each point out would cross its faces)
         g, moved = inflate(g, ('pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01'), bare_points(x=(-0.2, 0.2), y=(0.95, 1.6)), GAP, bins=(12, 16))
         put(ob, g)
@@ -672,12 +718,15 @@ def inflate(g, chain, skin, gap, bins=(16, 12), keep=None, share=15, cap=1.45):
     return Cp + (g - Cp) * f[:, None], int((f > 1.001).sum())
 
 
-def robe_fit(ob):
+def robe_fit(ob, spec=None):
     """The robe set on the reference body as the cuirass is (its middle over the body's at the ribs, its mantle raised
     over the level arms), from the base of the neck (1.56) to mid-shin (0.3), pushed out of the body and of the
     breeches (under a robe the legs are bare, but the skirt hangs over them as cloth would) and skinned to the body:
-    its skirt to the hips and, under half as much, to the thighs, as near each lies. (Widened round the body, not pushed
-    point by point out of it.)"""
+    its skirt to the hips and, under half as much, to the thighs, as near each lies. With `skirt` in its spec, to the
+    two bones the client hangs a skirt from over the thighs instead (quaternius.ts swingSkirt: each swings forward and
+    back with its thigh and no other way), nine tenths of their pull: it follows each stride and stays closed standing.
+    `follow`, how much of the thighs' (or those bones') pull it keeps. (Widened round the body, not pushed point by point
+    out of it.)"""
     g = turn(coords(ob))
     bd = gear.body('m')
     V = np.array(bd['v'])
@@ -690,6 +739,18 @@ def robe_fit(ob):
     if g[:, 1].min() < 0.3:  # its skirt taken up to mid-shin, from the waist down
         low = g[:, 1] < 1.0
         g[low, 1] = 1.0 - (1.0 - g[low, 1]) * (0.7 / (1.0 - g[:, 1].min()))
+    # a skirt flaring out like a bell (a cloak cut wide at the hem) drawn in to fall as a gown does: from the waist
+    # down no wider than 50 cm, and 80 at mid-shin, nor deeper than 36 and 60 (round the middle of the body), room
+    # left for the legs to stride inside it (the skirt follows each only under half as much)
+    zc = (ribs[:, 2].max() + ribs[:, 2].min()) / 2
+    for y in np.arange(0.3, 1.0, 0.01):
+        sl = (g[:, 1] >= y) & (g[:, 1] < y + 0.01)
+        if sl.sum() < 6:
+            continue
+        for k, half, c in ((0, 0.25 + (1.0 - y) * 0.214, 0.0), (2, 0.18 + (1.0 - y) * 0.171, zc)):
+            reach = np.abs(g[sl, k] - c).max()
+            if reach > half:
+                g[sl, k] = c + (g[sl, k] - c) * half / reach
     turned = raise_pauldrons(g)
     # widened round a line down the spine and on between the legs to its hem, clear of the bare body (and so its skirt
     # round both legs, as a skirt hangs)
@@ -699,10 +760,14 @@ def robe_fit(ob):
     put(ob, g)
     print(f'[ai_gear] robe: scaled {s:.3f}, mantle raised {turned[0]:.0f} and {turned[1]:.0f} degrees, y {g[:, 1].min():.2f}..{g[:, 1].max():.2f}, '
           f'{np.ptp(g[:, 0]):.2f} m across; {moved} of {len(g)} vertices pushed out of the body')
+    if (spec or {}).get('covers_thighs'):
+        ob['covers_thighs'] = True  # a gown closed all round: the client draws no hips nor thighs under it to come through
+    skirt = (spec or {}).get('skirt')
+    follow = (spec or {}).get('follow', 0.9 if skirt else 0.45)
     trunk = ('pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'clavicle_l', 'clavicle_r')
     legs = ('thigh_l', 'thigh_r')  # not the calves: a skirt does not bend at the knee
     skin(ob, g, lambda i, p: trunk + (('upperarm_l',) if p[0] > 0.2 else ('upperarm_r',) if p[0] < -0.2 else ()) + (legs if p[1] < 1.0 else ()),
-         soften={'thigh_l': 0.45, 'thigh_r': 0.45})
+         soften={'thigh_l': follow, 'thigh_r': follow}, rename={'thigh_l': 'skirt_l', 'thigh_r': 'skirt_r'} if skirt else None)
 
 
 # ---------------------------------------------------------------- the gauntlets, cuisses and boots: one side, mirrored
@@ -882,13 +947,13 @@ def cape(ob):
         ob[k] = v
 
 
-def skin(ob, g, allowed, soften=None):
+def skin(ob, g, allowed, soften=None, rename=None):
     """Each vertex's four joints and weights, from the body under it kept to the bones `allowed(i, p)` allows the i-th
     point, as the _joints and _weights attributes the client binds the piece with (gear.py skin_weights()). `soften`
     ({bone: share}) keeps only that share of a bone's pull, the rest going to the pelvis (a skirt that follows each leg
-    only so far)."""
+    only so far); `rename` ({bone: joint}) then hands a bone's pull to a joint the client makes (a skirt's)."""
     bd = gear.body('m')
-    joints = list(bd['joints'])
+    joints = list(bd['joints']) + [j for j in (rename or {}).values() if j not in bd['joints']]
     jix = {n: i for i, n in enumerate(joints)}
     J, W = [], []
     for i, p in enumerate(g):
@@ -897,6 +962,7 @@ def skin(ob, g, allowed, soften=None):
             if b in w:
                 w['pelvis'] = w.get('pelvis', 0.0) + w[b] * (1 - k)
                 w[b] *= k
+        w = {(rename or {}).get(b, b): v for b, v in w.items()}
         top = sorted(w.items(), key=lambda kv: -kv[1])[:4]
         total = sum(v for _, v in top) or 1.0
         J += [float(jix[n]) for n, _ in top] + [0.0] * (4 - len(top))
@@ -992,13 +1058,13 @@ def make(name, n):
     elif kind == 'shield':
         shield(ob, spec)
     elif kind in ('helm', 'circlet'):
-        on_head(ob, kind)
+        on_head(ob, kind, spec)
     elif kind == 'hood':
         hood(ob)
     elif kind == 'chest':
         over_body(ob, light=name == 'jerkin')
     elif kind == 'robe':
-        robe_fit(ob)
+        robe_fit(ob, spec)
     elif kind in LIMBS:
         limb(ob, kind, LIMBS.get(name))
     elif kind == 'cape':
