@@ -39,6 +39,7 @@ impl World {
         let Some(t) = te.player() else { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()) };
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
         if self.unseen(tid) { return Some(tr(l, "Tu objetivo desapareció.", "Your target has vanished.").into()); }
+        if self.sheltered(tid) { return Some(tr(l, "Tu objetivo está a salvo en una cabaña.", "Your target is safe in a hut.").into()); }
         if in_town(pc.x, pc.z) || in_town(te.c.x, te.c.z) { return Some(tr(l, "No se puede atacar en una zona de paz.", "You cannot attack in a peace zone.").into()); }
         if p.party.is_some() && p.party == t.party { return Some(tr(l, "No podés atacar a alguien de tu party.", "You cannot attack a party member.").into()); }
         match crate::clans::relation(p.char_id, t.char_id) {
@@ -123,6 +124,7 @@ impl World {
 
     /** Put a status on t (refreshes duration). Damage over time scales off the hit that caused it. */
     pub fn apply_status(&mut self, src: u32, tid: u32, sa: &StatusApply, hit: f64, now: f64) {
+        if self.sheltered(tid) { return; }
         let Some(e) = self.ents.get_mut(&tid) else { return };
         if e.c.dead { return; }
         let dps = sa.dot.map_or(0.0, |dot| jround(hit * dot).max(1.0));
@@ -218,7 +220,8 @@ impl World {
     /** dot: a bleed or poison tick; blk: a physical hit the target caught on its shield (blocked, already halved) */
     pub fn apply_damage(&mut self, src: u32, tid: u32, dmg: f64, now: f64, crit: bool, dot: bool, blk: bool) {
         if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
-        if self.pl(tid).is_some_and(|p| p.god) { return; }
+        // a god, or someone in a hut: whatever was on its way (a wound up special, a bleed) lands on nothing
+        if self.pl(tid).is_some_and(|p| p.god) || self.sheltered(tid) { return; }
         // a vampire dealer (Danza del Vampiro) drinks part of a blow it lands (not of damage over time); a wound halves it
         if !dot && src != tid {
             let mul = self.ents.get(&src).map_or(1.0, |e| e.c.heal_mul(now));

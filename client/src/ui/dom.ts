@@ -51,14 +51,14 @@ export function hideTip() {
 
 /**
  * The tooltip at a point, shown and hidden by the caller: for hints over the 3D world, where the canvas
- * is one element under the whole screen (a 	itle on it would stick for good, see below).
+ * is one element under the whole screen (a `title` on it would stick for good, see below).
  */
 export function showTipAt(text: string, x: number, y: number) {
   const t = tipBox();
   if (t.textContent !== text) t.textContent = text;
   t.style.display = 'block';
-  t.style.left = `px`;
-  t.style.top = `px`;
+  t.style.left = `${Math.min(x + 14, innerWidth - t.offsetWidth - 8)}px`;
+  t.style.top = `${Math.min(y + 14, innerHeight - t.offsetHeight - 8)}px`;
 }
 
 // Native `title` tooltips take about a second to show up. Any element that has one gets the same

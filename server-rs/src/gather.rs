@@ -1,10 +1,11 @@
-//! World nodes: felling trees, mining rocks, picking berries, sitting and resting in tents (shared/src/nodes.ts).
+//! World nodes: felling trees, mining rocks, picking berries, sitting and resting in tents and huts (shared/src/nodes.ts).
 //! Node ids, places and rules come from game.json; which nodes are spent lives here, per world.
 use crate::collision::approach_point;
 use crate::data::{d, NodeKind};
 use crate::ent::*;
 use crate::formulas::rnd;
 use crate::inventory::add_item;
+use crate::player::IN_COMBAT_MS;
 use crate::world::World;
 use serde_json::json;
 
@@ -22,7 +23,7 @@ impl World {
             return self.sys(pid, "Acá no queda nada por ahora.", "There is nothing left here for now.");
         }
         if n.kind.is_rest() {
-            if self.seats.get(&node).map_or(false, |&o| o != pid) { return self.taken(pid, n.kind); }
+            if let Some((es, en)) = self.rest_refused(pid, node, now) { return self.sys(pid, es, en); }
         } else if let Err((es, en)) = self.tool_ok(pid, n.kind) {
             return self.sys(pid, es, en);
         }
@@ -151,23 +152,44 @@ impl World {
         self.send(pid, json!({ "t": "nodes", "gone": gone }));
     }
 
-    fn taken(&mut self, pid: u32, kind: NodeKind) {
-        if kind == NodeKind::Tent { self.sys(pid, "Esa carpa está ocupada.", "That tent is taken.") } else { self.sys(pid, "Ese lugar está ocupado.", "That seat is taken.") }
+    /** Why this player can't sit or rest at this node now, if they can't: a seat or tent holds one, a hut HUT_CAP, and
+     * nobody walks into a hut's safety mid-fight. */
+    fn rest_refused(&self, pid: u32, node: u32, now: f64) -> Option<(&'static str, &'static str)> {
+        let n = &d().nodes[&node];
+        match n.kind {
+            NodeKind::Hut => {
+                if self.pl(pid).map_or(false, |p| now - p.last_combat < IN_COMBAT_MS) {
+                    return Some(("No podés entrar a la cabaña en pleno combate.", "You cannot go into the hut in the middle of a fight."));
+                }
+                let inside = self.near_players(n.x, n.z, 1.0).into_iter().filter(|&id| id != pid && self.pl(id).is_some_and(|p| p.sitting == Some(node))).count();
+                (inside >= d().c.hut_cap).then_some(("La cabaña está llena.", "The hut is full."))
+            }
+            _ if self.seats.get(&node).map_or(false, |&o| o != pid) => Some(if n.kind == NodeKind::Tent {
+                ("Esa carpa está ocupada.", "That tent is taken.")
+            } else {
+                ("Ese lugar está ocupado.", "That seat is taken.")
+            }),
+            _ => None,
+        }
     }
 
-    /** Sit on a seat node, rest in a tent (at its door, inside as the clients draw it), or sit on the ground (None). */
+    /** Sit on a seat node, rest in a tent or a hut (at its door, inside as the clients draw it), or sit on the ground
+     * (None). */
     pub fn sit(&mut self, pid: u32, seat: Option<u32>) {
         let e = &self.ents[&pid];
         if e.c.dead || e.player().map_or(true, |p| p.sitting.is_some()) { return; }
         if d().is_deep(e.c.x, e.c.z) { return self.sys(pid, "No podés sentarte en el agua.", "You cannot sit in the water."); }
         if let Some(s) = seat {
             let n = &d().nodes[&s];
-            if self.seats.get(&s).map_or(false, |&o| o != pid) { return self.taken(pid, n.kind); }
+            if let Some((es, en)) = self.rest_refused(pid, s, self.now) { return self.sys(pid, es, en); }
             self.set_pos(pid, n.x, n.z);
             self.ents.get_mut(&pid).unwrap().c.ry = n.ry;
-            self.seats.insert(s, pid);
-            if n.kind == NodeKind::Tent {
-                self.sys(pid, "Descansás en la carpa: recuperás vida y maná más rápido.", "You rest in the tent: health and mana come back faster.");
+            // a hut counts who sits in it (rest_refused); a seat or tent keeps its one in `seats`
+            if n.kind != NodeKind::Hut { self.seats.insert(s, pid); }
+            match n.kind {
+                NodeKind::Tent => self.sys(pid, "Descansás en la carpa: recuperás vida y maná más rápido.", "You rest in the tent: health and mana come back faster."),
+                NodeKind::Hut => self.sys(pid, "Entrás a la cabaña: recuperás vida y maná el doble que en una carpa, y nadie puede atacarte.", "You go into the hut: health and mana come back twice as fast as in a tent, and nobody can attack you."),
+                _ => {}
             }
         }
         // sitting down cancels a cast: it costs what Esc does

@@ -10,11 +10,16 @@ pub struct Constants {
     pub playable_half: f64,
     #[serde(rename = "STAND_UP_MS")]
     pub stand_up_ms: f64,
-    /** out-of-combat regen, times standing: sitting down, and resting in a tent (shared/src/nodes.ts) */
+    /** out-of-combat regen, times standing: sitting down, and resting in a tent or a hut (shared/src/nodes.ts) */
     #[serde(rename = "SIT_REGEN")]
     pub sit_regen: f64,
     #[serde(rename = "TENT_REGEN")]
     pub tent_regen: f64,
+    #[serde(rename = "HUT_REGEN")]
+    pub hut_regen: f64,
+    /** how many rest in one hut */
+    #[serde(rename = "HUT_CAP")]
+    pub hut_cap: usize,
     #[serde(rename = "SWIM_SPEED")]
     pub swim_speed: f64,
     #[serde(rename = "WALK_RADIUS")]
@@ -339,11 +344,11 @@ pub struct GatherDef { pub tools: Option<Vec<String>>, pub swing_ms: f64, pub sw
 pub struct GatherDefs { pub tree: GatherDef, pub rock: GatherDef, pub bush: GatherDef }
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NodeKind { Tree, Rock, Bush, Seat, Tent }
+pub enum NodeKind { Tree, Rock, Bush, Seat, Tent, Hut }
 
 impl NodeKind {
     /** A place to sit or rest (shared isRest) rather than something to work. */
-    pub fn is_rest(self) -> bool { matches!(self, NodeKind::Seat | NodeKind::Tent) }
+    pub fn is_rest(self) -> bool { matches!(self, NodeKind::Seat | NodeKind::Tent | NodeKind::Hut) }
 }
 
 /** A world node: [id, x, z, r, ry, seatY, zone] in the export. The kind comes from the id (shared NODE_BASE). */
@@ -476,7 +481,7 @@ impl Data {
     }
 
     pub fn gather_def(&self, kind: NodeKind) -> Option<&GatherDef> {
-        match kind { NodeKind::Tree => Some(&self.gather.tree), NodeKind::Rock => Some(&self.gather.rock), NodeKind::Bush => Some(&self.gather.bush), NodeKind::Seat | NodeKind::Tent => None }
+        match kind { NodeKind::Tree => Some(&self.gather.tree), NodeKind::Rock => Some(&self.gather.rock), NodeKind::Bush => Some(&self.gather.bush), NodeKind::Seat | NodeKind::Tent | NodeKind::Hut => None }
     }
 
     pub fn skill_available(&self, s: &SkillDef, cls: &str, spec: Option<&str>, race: &str, gender: &str) -> bool {
@@ -529,7 +534,7 @@ pub fn d() -> &'static Data {
             raids: raw.raids.into_iter().map(|r| (r.id.clone(), r)).collect(),
             obstacles: raw.obstacles,
             nodes: raw.nodes.into_iter().filter_map(|NodeRaw(id, x, z, r, ry, _seat_y, zone)| {
-                let kind = match id / 100000 { 1 => NodeKind::Tree, 2 => NodeKind::Rock, 3 => NodeKind::Bush, 4 => NodeKind::Seat, 5 => NodeKind::Tent, _ => return None };
+                let kind = match id / 100000 { 1 => NodeKind::Tree, 2 => NodeKind::Rock, 3 => NodeKind::Bush, 4 => NodeKind::Seat, 5 => NodeKind::Tent, 6 => NodeKind::Hut, _ => return None };
                 Some((id, NodeDef { kind, x, z, r, ry, zone }))
             }).collect(),
             gather: raw.gather,

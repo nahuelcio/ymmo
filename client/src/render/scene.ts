@@ -1657,6 +1657,53 @@ export function tentDoorClosed(t: { x: number; z: number; ry: number }): THREE.G
   return g;
 }
 
+// ---------------------------------------------------------------- huts
+/** A hut's six-sided log wall, narrowing up to the thatch, inside a 2.2 m obstacle. */
+const HUT_R = 2.2, HUT_TOP_R = 1.8, HUT_WALL = 2;
+/** The middle of a side at the foot of the wall, and how far each side leans in. */
+const HUT_APOTHEM = HUT_R * Math.cos(Math.PI / 6), HUT_LEAN = Math.atan2((HUT_R - HUT_TOP_R) * Math.cos(Math.PI / 6), HUT_WALL);
+const HUT_DOOR_W = 0.9, HUT_DOOR_H = 1.5, HUT_TRIM = 0x3a2a18;
+
+/** The door's side of the wall as its own frame: x along it, y up it, +z out of it. */
+function hutFront(): THREE.Group {
+  const g = new THREE.Group();
+  g.position.z = HUT_APOTHEM;
+  g.rotation.x = -HUT_LEAN;
+  return g;
+}
+
+/** A hut on the ground at its origin, door towards +z: the wall turned to put a flat side there, the dark doorway in
+ * its frame of posts and lintel, the thatched cone over it all. */
+function hutModel(): THREE.Group {
+  const g = new THREE.Group();
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(HUT_TOP_R, HUT_R, HUT_WALL, 6), mat(0x6a5a3a));
+  wall.position.y = HUT_WALL / 2;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 2, 6), mat(0x8a7a3a));
+  roof.position.y = HUT_WALL + 1;
+  wall.rotation.y = roof.rotation.y = Math.PI / 6;
+  wall.castShadow = roof.castShadow = true;
+  const front = hutFront();
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(HUT_DOOR_W, HUT_DOOR_H), mat(0x1a120c, 'none'));
+  door.position.set(0, HUT_DOOR_H / 2, 0.015);
+  front.add(door);
+  for (const sx of [-1, 1]) front.add(box(0.12, HUT_DOOR_H + 0.1, 0.1, HUT_TRIM, sx * (HUT_DOOR_W / 2 + 0.06), (HUT_DOOR_H + 0.1) / 2, 0.04));
+  front.add(box(HUT_DOOR_W + 0.36, 0.12, 0.12, HUT_TRIM, 0, HUT_DOOR_H + 0.1, 0.05));
+  g.add(wall, roof, front);
+  return g;
+}
+
+/** The plank door shut over a hut's doorway while anyone rests inside (game.ts adds and drops it). */
+export function hutDoorClosed(h: { x: number; z: number; ry: number }): THREE.Group {
+  const g = new THREE.Group(), front = hutFront();
+  front.add(box(HUT_DOOR_W, HUT_DOOR_H, 0.05, 0x5a3a20, 0, HUT_DOOR_H / 2, 0.03));
+  // two battens across the planks
+  for (const y of [0.35, 1.15]) front.add(box(HUT_DOOR_W - 0.08, 0.1, 0.04, HUT_TRIM, 0, y, 0.07));
+  g.add(front);
+  g.position.set(h.x, heightAt(h.x, h.z), h.z);
+  g.rotation.y = h.ry;
+  return g;
+}
+
 function buildZoneProps(): THREE.Group {
   const g = new THREE.Group();
   const zp = layoutZoneProps();
@@ -1680,13 +1727,11 @@ function buildZoneProps(): THREE.Group {
     s.rotation.y = rot;
     g.add(s);
   }
-  for (const { x, z } of zp.huts) {
-    const hut = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 2, 6), mat(0x6a5a3a));
-    hut.position.set(x, heightAt(x, z) + 1, z);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 2, 6), mat(0x8a7a3a));
-    roof.position.set(x, heightAt(x, z) + 3, z);
-    hut.castShadow = roof.castShadow = true;
-    g.add(hut, roof);
+  for (const h of zp.huts) {
+    const hut = hutModel();
+    hut.position.set(h.x, heightAt(h.x, h.z), h.z);
+    hut.rotation.y = h.ry;
+    g.add(hut);
   }
   return g;
 }

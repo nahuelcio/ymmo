@@ -8,7 +8,7 @@ import { F_DEAD } from '../../../shared/src/protocol';
 import * as terrain from '../../../shared/src/terrain';
 import { heightAt, PLAYABLE_HALF, TOWN, TOWNS, valueNoise, WATER_LEVEL, WORLD_HALF } from '../../../shared/src/terrain';
 import { layoutCamps, layoutTown, layoutTrees, layoutZoneProps } from '../../../shared/src/layout';
-import { allNodes, tentCentre } from '../../../shared/src/nodes';
+import { allNodes, isShelter, shelterCentre } from '../../../shared/src/nodes';
 import { F_RED, type Game } from '../game';
 import { el, Win } from './dom';
 import { lang, t as tx } from '../lang';
@@ -164,9 +164,12 @@ function drawTents(rect: RectFn) {
   for (const t of layoutZoneProps().tents) tent(t, 1, '#d2c09a');
 }
 
-let rest: { x: number; z: number }[] | null = null;
-/** The tents one can rest in (their middles, not their doors). */
-const restTents = () => (rest ??= allNodes().filter((n) => n.kind === 'tent').map(tentCentre));
+let rest: { x: number; z: number; hut: boolean }[] | null = null;
+/** The tents and huts one can rest in (their middles, not their doors). */
+const restShelters = () => (rest ??= allNodes().filter((n) => isShelter(n.kind)).map((n) => ({ ...shelterCentre(n), hut: n.kind === 'hut' })));
+/** Its mark on either map. */
+const shelterIcon = (ctx: CanvasRenderingContext2D, s: { hut: boolean }, x: number, y: number, size: number) =>
+  (s.hut ? hutIcon : tentIcon)(ctx, x, y, size);
 
 /** A little tent marking a place to rest: an inked cream triangle with its dark door. */
 function tentIcon(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
@@ -187,6 +190,22 @@ function tentIcon(ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   ctx.lineTo(x - s * 0.38, y + s * 0.7);
   ctx.closePath();
   ctx.fill();
+  ctx.lineWidth = 1;
+}
+
+/** A little hut marking a refuge: an inked log-brown cabin under its roof, with its dark door. */
+function hutIcon(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  ctx.fillStyle = '#c89a5a';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - s);
+  for (const [dx, dy] of [[1, -0.15], [0.72, -0.15], [0.72, 0.75], [-0.72, 0.75], [-0.72, -0.15], [-1, -0.15]]) ctx.lineTo(x + dx * s, y + dy * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#2a1a10';
+  ctx.fillRect(x - s * 0.22, y + s * 0.2, s * 0.44, s * 0.55);
   ctx.lineWidth = 1;
 }
 
@@ -368,7 +387,8 @@ export class Minimap {
       : tx('Rueda: acercar · Arrastrar: mover · Click: caminar · Ctrl+click: parada · Click derecho: cancelar',
         'Wheel: zoom · Drag: pan · Click: walk · Ctrl+click: add a stop · Right click: cancel'));
     // what the map's own marks mean (the corner minimap has no room for more)
-    el('div', 'mm-legend map-legend', this.mapWin.body).innerHTML = `<i class="mm-tent"></i> ${tx('carpa para descansar', 'tent to rest in')}`;
+    el('div', 'mm-legend map-legend', this.mapWin.body).innerHTML =
+      `<i class="mm-tent"></i> ${tx('carpa para descansar', 'tent to rest in')} <i class="mm-hut"></i> ${tx('cabaña: refugio para 4', 'hut: a refuge for 4')}`;
   }
 
   /** World-map zoom to `next`, with the world point (wx, wz) landing under (px, py) on the canvas (the wheel's cursor, a pinch's middle). */
@@ -623,10 +643,11 @@ export class Minimap {
       this.campIcon(ctx, x, y, close ? 8 : 6);
       if (close) tag(`${campName(c.id, lang)} (${tx('Nv', 'Lv')} ${c.level})`, x, y - 12, 11);
     }
-    // tents to rest in (the travelers' camps by the roads): a little tent once zoomed in past the whole-world view
-    if (mid) for (const c of restTents()) {
+    // tents and huts to rest in (the travelers' camps by the roads): a little tent or hut once zoomed in past the
+    // whole-world view
+    if (mid) for (const c of restShelters()) {
       const [x, y] = this.toBig(c.x, c.z);
-      if (inView(x, y, 10)) tentIcon(ctx, x, y, close ? 6 : 5);
+      if (inView(x, y, 10)) shelterIcon(ctx, c, x, y, close ? 6 : 5);
     }
     // quest hunting areas: always outlined, named once zoomed in
     for (const { zone, quests } of questAreas(this.g.questTargets())) {
@@ -940,9 +961,9 @@ export class Minimap {
     for (const st of town.stalls) rect(st.x, st.z, 3.4, 1.8, st.rot, css(st.color));
     rect(TOWN.x + BELL_TOWER.x, TOWN.z + BELL_TOWER.z, BELL_TOWER.hw * 2, BELL_TOWER.hd * 2, BELL_TOWER.rot, '#5a5a62');
     drawTents(rect);
-    for (const c of restTents()) {
+    for (const c of restShelters()) {
       const [x, y] = toC(c.x, c.z);
-      if (seen(x, y, 8)) tentIcon(ctx, x, y, 5);
+      if (seen(x, y, 8)) shelterIcon(ctx, c, x, y, 5);
     }
     // the path is recomputed a couple of times a second, not on every redraw
     if (now - this.routeAt > 500) {

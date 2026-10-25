@@ -1,14 +1,14 @@
-// Things in the world a character can use: trees to fell, rocks to mine, fruit bushes to pick, seats and tents to rest in.
+// Things in the world a character can use: trees to fell, rocks to mine, fruit bushes to pick, seats, tents and huts to rest in.
 // Built from the shared layouts, so client and server agree on every node's id and place. The server runs
 // the gathering and owns which nodes are spent (it reads all of this from server-rs/data/game.json).
 import { walkable } from './collision';
 import { layoutBushes, layoutRocks, layoutSeats, layoutTrees, layoutZoneProps, zoneOf } from './layout';
 import { heightAt, WATER_LEVEL } from './terrain';
 
-export type NodeKind = 'tree' | 'rock' | 'bush' | 'seat' | 'tent';
+export type NodeKind = 'tree' | 'rock' | 'bush' | 'seat' | 'tent' | 'hut';
 
 /** Ids: kind base + index into that kind's layout. Stable as long as the layouts are. */
-export const NODE_BASE: Record<NodeKind, number> = { tree: 100000, rock: 200000, bush: 300000, seat: 400000, tent: 500000 };
+export const NODE_BASE: Record<NodeKind, number> = { tree: 100000, rock: 200000, bush: 300000, seat: 400000, tent: 500000, hut: 600000 };
 
 export interface NodeDef {
   id: number;
@@ -17,7 +17,7 @@ export interface NodeDef {
   z: number;
   /** body radius: how close the character can stand */
   r: number;
-  /** facing (seats; a tent's door) */
+  /** facing (seats; a tent's or a hut's door) */
   ry?: number;
   /** seat height above the ground */
   y?: number;
@@ -40,7 +40,7 @@ export interface GatherDef {
   yields: Yield[];
 }
 
-export const GATHER: Record<Exclude<NodeKind, 'seat' | 'tent'>, GatherDef> = {
+export const GATHER: Record<Exclude<NodeKind, 'seat' | 'tent' | 'hut'>, GatherDef> = {
   tree: { tools: ['axe'], swingMs: 1000, swings: 4, respawnMs: 180_000, anim: 'chop', yields: [{ item: 'wood_log', min: 1, max: 3, chance: 1 }] },
   rock: {
     tools: ['pickaxe', 'blunt'], swingMs: 1100, swings: 4, respawnMs: 240_000, anim: 'mine',
@@ -57,12 +57,21 @@ export const GATHER: Record<Exclude<NodeKind, 'seat' | 'tent'>, GatherDef> = {
 /** How far in front of a tent's middle a character stands to go in: past its obstacle (2.6), a walker's radius and the
  * 1 m walk grid's rounding, so a path can end there. */
 export const TENT_DOOR = 3.8;
-/** The tent a 'tent' node is the door of. */
-export const tentCentre = (n: NodeDef) => ({ x: n.x - Math.sin(n.ry ?? 0) * TENT_DOOR, z: n.z - Math.cos(n.ry ?? 0) * TENT_DOOR });
+/** The same for a hut, past its 2.2 obstacle by the same margin. */
+export const HUT_DOOR = 3.4;
+/** The tent or hut a 'tent' or 'hut' node is the door of. */
+export const shelterCentre = (n: NodeDef) => {
+  const back = n.kind === 'hut' ? HUT_DOOR : TENT_DOOR;
+  return { x: n.x - Math.sin(n.ry ?? 0) * back, z: n.z - Math.cos(n.ry ?? 0) * back };
+};
 
-/** HP and MP regen out of combat, times standing still: sitting down (on the ground or a seat) and resting in a tent. */
+/** HP and MP regen out of combat, times standing still: sitting down (on the ground or a seat), resting in a tent, and
+ * in a hut (twice a tent). */
 export const SIT_REGEN = 2.5;
 export const TENT_REGEN = 4;
+export const HUT_REGEN = 8;
+/** A hut holds this many; a tent or a seat one. Nobody can hurt those inside, and nobody gets in mid-fight. */
+export const HUT_CAP = 4;
 
 /** Pebbles are too small to mine (they are also walkable). */
 const MIN_ROCK = 0.45;
@@ -86,6 +95,11 @@ export function allNodes(): NodeDef[] {
   layoutZoneProps().tents.forEach((t, i) => {
     const x = t.x + Math.sin(t.ry) * TENT_DOOR, z = t.z + Math.cos(t.ry) * TENT_DOOR;
     if (heightAt(x, z) > WATER_LEVEL + 0.5 && walkable(x, z)) nodes!.push({ id: NODE_BASE.tent + i, kind: 'tent', x, z, r: 0, ry: t.ry });
+  });
+  // the huts, the same way
+  layoutZoneProps().huts.forEach((h, i) => {
+    const x = h.x + Math.sin(h.ry) * HUT_DOOR, z = h.z + Math.cos(h.ry) * HUT_DOOR;
+    if (heightAt(x, z) > WATER_LEVEL + 0.5 && walkable(x, z)) nodes!.push({ id: NODE_BASE.hut + i, kind: 'hut', x, z, r: 0, ry: h.ry });
   });
   return nodes;
 }
@@ -129,7 +143,9 @@ export function nodesNear(x: number, z: number, r: number): NodeDef[] {
 export const STAND_UP_MS = 1000;
 
 /** A place to sit or rest rather than something to work. */
-export const isRest = (k: NodeKind) => k === 'seat' || k === 'tent';
+export const isRest = (k: NodeKind) => k === 'seat' || k === 'tent' || k === 'hut';
+/** Rested in out of sight: a tent or a hut. */
+export const isShelter = (k: NodeKind) => k === 'tent' || k === 'hut';
 
 /** How far from a node's centre a character can use it. */
 export const reachOf = (n: NodeDef) => (isRest(n.kind) ? 0.3 : n.r + 0.9);

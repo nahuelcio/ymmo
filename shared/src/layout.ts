@@ -50,7 +50,8 @@ export interface ZonePropsL {
   totems: { x: number; z: number }[];
   ruins: { x: number; z: number; h: number; tilt: number }[];
   graves: { x: number; z: number; rot: number }[];
-  huts: { x: number; z: number }[];
+  /** ry: the door, as for tents */
+  huts: { x: number; z: number; ry: number }[];
 }
 
 /** A tree at (x, z), or null where none grows. */
@@ -291,7 +292,11 @@ export function layoutZoneProps(): ZonePropsL {
         zp.graves.push({ ...p, rot: rng() * 0.6 });
       }
     }
-    if (zn.id === 'hills') for (let i = 0; i < 8; i++) zp.huts.push(at(zn, zn.r * 0.8));
+    // the doors face the middle of the hills
+    if (zn.id === 'hills') for (let i = 0; i < 8; i++) {
+      const p = at(zn, zn.r * 0.8);
+      zp.huts.push({ ...p, ry: Math.atan2(zn.x - p.x, zn.z - p.z) });
+    }
   }
   // waysides: every ~170 m of road, a little off to one side, a travelers' camp, a hut or a ring of old pillars
   // (own rng, so the zones' props above keep their places)
@@ -303,11 +308,10 @@ export function layoutZoneProps(): ZonePropsL {
       const x = ax + (bx - ax) * t + nx * off * side, z = az + (bz - az) * t + nz * off * side;
       const kind = wr();
       if (inTown(x, z) || heightAt(x, z) < WATER_LEVEL + 1 || roadDist(x, z) < 9) continue;
-      if (kind < 0.4) {
-        // both doors face the road
-        const ry = Math.atan2(-nx * side, -nz * side);
-        zp.tents.push({ x, z, ry }, { x: x + nx * 6 * side + (bx - ax) / len * 4, z: z + nz * 6 * side + (bz - az) / len * 4, ry });
-      } else if (kind < 0.7) zp.huts.push({ x, z });
+      // the doors face the road
+      const ry = Math.atan2(-nx * side, -nz * side);
+      if (kind < 0.4) zp.tents.push({ x, z, ry }, { x: x + nx * 6 * side + (bx - ax) / len * 4, z: z + nz * 6 * side + (bz - az) / len * 4, ry });
+      else if (kind < 0.7) zp.huts.push({ x, z, ry });
       else for (let k = 0; k < 7; k++) {
         if (wr() < 0.25) continue; // a fallen one here and there
         const a = (k / 7) * Math.PI * 2;

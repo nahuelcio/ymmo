@@ -4,14 +4,18 @@ use crate::formulas::{BOW_RANGE, MELEE_RANGE};
 use crate::data::{d, NodeKind};
 use crate::world::World;
 
-/** HP and MP regen, times the base rate: slowed in combat (5 s since the last blow either way), faster sitting down,
- * fastest resting in a tent (as in L2). `sitting` is the seat or tent node, 0 on the ground. */
+/** In combat: this soon after the last blow, either way. */
+pub const IN_COMBAT_MS: f64 = 5000.0;
+
+/** HP and MP regen, times the base rate: slowed in combat, faster sitting down, faster still resting in a tent (as in
+ * L2) and fastest in a hut. `sitting` is the seat, tent or hut node, 0 on the ground. */
 pub fn regen_mul(in_combat: bool, sitting: Option<u32>) -> f64 {
     if in_combat { return 0.6; }
-    match sitting {
-        None => 1.5,
-        Some(s) if d().nodes.get(&s).map_or(false, |n| n.kind == NodeKind::Tent) => 1.5 * d().c.tent_regen,
-        Some(_) => 1.5 * d().c.sit_regen,
+    let Some(s) = sitting else { return 1.5 };
+    match d().nodes.get(&s).map(|n| n.kind) {
+        Some(NodeKind::Tent) => 1.5 * d().c.tent_regen,
+        Some(NodeKind::Hut) => 1.5 * d().c.hut_regen,
+        _ => 1.5 * d().c.sit_regen,
     }
 }
 
@@ -24,7 +28,7 @@ impl World {
         let (px, pz) = (e.c.x, e.c.z);
         let p = e.player_mut().unwrap();
         let s = p.stats.clone();
-        let regen = regen_mul(now - p.last_combat < 5000.0, p.sitting);
+        let regen = regen_mul(now - p.last_combat < IN_COMBAT_MS, p.sitting);
         p.hp = (p.hp + s.hp_regen * dt * regen * wound).min(s.max_hp);
         p.mp = (p.mp + s.mp_regen * dt * regen).min(s.max_mp);
         p.cp = (p.cp + s.cp_regen * dt).min(s.max_cp);

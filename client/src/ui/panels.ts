@@ -926,6 +926,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>Hacé click en los objetos del piso o apretá <b>Z</b> para juntar el más cercano. Los materiales se los podés vender a cualquier vendedor.</p>
     <h4>Descanso</h4>
     <p>Fuera de combate, <b>sentarte</b> (<code>/sit</code> o en un banco) recupera vida y maná 2,5 veces más rápido, y <b>descansar en una carpa</b> de los campamentos junto a los caminos, 4 veces: hacé click en la carpa. Un golpe o cualquier acción te hace salir.</p>
+    <p>Las <b>cabañas</b> de los caminos y las colinas son un refugio para hasta 4: adentro recuperás 8 veces más rápido y nadie te puede atacar, ni monstruos ni jugadores. Se entra fuera de combate; cualquier acción te hace salir.</p>
     <h4>Aldea del Alba</h4>
     <p>Hablá con <b>Lia</b> (pociones), <b>Gerald</b> (armas), <b>Hilda</b> (armaduras) y <b>Roxxy</b>, la Guardiana del Portal, que te lleva a las zonas de caza. Los vecinos con misiones te pagan por darles una mano. Y el viejo <b>Luigi</b>, al lado de la fuente, te va a contar todo sobre el chat. Todo.</p>
     <h4>Campamentos hostiles</h4>
@@ -974,6 +975,7 @@ const HELP_EN = `
     <p>Click items on the ground or press <b>Z</b> to pick up the nearest one. Materials can be sold to any merchant.</p>
     <h4>Resting</h4>
     <p>Out of combat, <b>sitting down</b> (<code>/sit</code> or on a bench) brings health and mana back 2.5 times faster, and <b>resting in a tent</b> at the camps by the roads 4 times: click the tent. A hit or any action brings you out.</p>
+    <p>The <b>huts</b> by the roads and in the hills are a refuge for up to 4: inside, you recover 8 times faster and nobody can attack you, monsters or players. You go in out of combat; any action brings you out.</p>
     <h4>Dawn Village</h4>
     <p>Talk to <b>Lia</b> (potions), <b>Gerald</b> (weapons), <b>Hilda</b> (armor) and <b>Roxxy</b>, the Gatekeeper, who takes you to the hunting grounds. Villagers with quests pay you for a hand. And old <b>Luigi</b>, by the fountain, will tell you everything about the chat. Everything.</p>
     <h4>Hostile camps</h4>
