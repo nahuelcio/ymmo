@@ -1,0 +1,30 @@
+{
+  "set": "infernal",
+  "image_model": "seedream_v5",
+  "tint": { "leggings": "7a1a20" },
+  "style": "Ornate high-fantasy MMORPG equipment, semi-realistic hand-crafted game asset. Blackened steel with deep crimson enamel panels and fine gold filigree trim, small ember-red gemstones, subtle demonic horned motifs, worn polished edges.",
+  "frame": "Single isolated object, centered, the whole object visible, straight front view, orthographic, even studio lighting, plain neutral grey background, no character, no hands, no text, no watermark.",
+  "pieces": {
+    "blade": { "prompt": "A one-handed longsword standing vertically, blade pointing straight up, crossguard horizontal, hilt and pommel at the bottom.", "faces": 3000, "length": 1.28, "grip": "guard" },
+    "staff": { "prompt": "A two-handed mage staff standing vertically, long dark shaft, ornate head at the top cradling a large glowing crimson crystal.", "faces": 3500, "length": 2.08, "grip": 0.32 },
+    "spellblade": { "prompt": "A slender one-handed magic sword standing vertically, blade pointing up, glowing red runes etched along the blade, a large gem set in the crossguard.", "faces": 3000, "length": 1.0, "grip": "guard" },
+    "bow": { "prompt": "A recurve longbow standing vertically, limbs curving at both tips, ornate grip in the middle, an unstrung bow with no bowstring.", "faces": 3000, "length": 1.48, "grip": 0.5 },
+    "dagger": { "prompt": "A curved dagger standing vertically, blade pointing up, short crossguard, wrapped grip.", "faces": 2000, "length": 0.54, "grip": "guard" },
+    "shield": { "prompt": "A kite shield seen from the front, pointed bottom, raised central boss and emblem.", "faces": 4000, "length": 0.74 },
+    "helm": { "prompt": "A closed great helm seen from the front, full visor with eye slits, two swept-back horns.", "faces": 8000 },
+    "circlet": { "prompt": "A slim diadem circlet seen from the front, an ornate metal band with a central teardrop gem.", "faces": 4000 },
+    "chest": { "prompt": "A breastplate cuirass with shoulder pauldrons, armor only, hollow and empty, no body, no head and no arms inside, symmetric, seen from the front.", "faces": 12000 },
+    "gloves": { "prompt": "A single armored gauntlet for the left hand, fingers extended and pointing straight down, the back of the hand facing the viewer, articulated finger plates, a flared cuff covering the forearm, armor only, no hand inside.", "faces": 3000 },
+    "legs": { "prompt": "Thigh armor for one leg: a single cuisse that fully wraps round the thigh like a tube, with a knee cop joined at its bottom, one connected piece standing upright, seen from the front, armor only, no leg inside.", "faces": 3000 },
+    "feet": { "prompt": "A single armored boot for the left foot: a pointed sabaton of articulated plates over the foot and a greave covering the shin up to the knee, seen from the front, armor only, no leg inside.", "faces": 3000 },
+    "cape": { "prompt": "A long knight's cape hanging straight down, seen from behind, its hem cut into long points, an embroidered border down its edges, a stiff ornate yoke across the top, no character.", "faces": 4000 },
+    "hood": { "prompt": "A ninja-style assassin's hood of black cloth that fits closely round the head, with an integrated cloth face wrap covering the nose and mouth and leaving only a narrow slit for the eyes, crimson lining and gold-trimmed edges, and a short attached capelet that drapes down over the shoulders, keeping its shape as if worn, symmetric, seen from the front, no head inside.", "faces": 6000 },
+    "jerkin": { "prompt": "A fitted sleeveless brigandine jerkin of black leather with small riveted blackened-steel plates, crimson panels and a high collar, armor only, hollow and empty, no body inside, symmetric, seen from the front.", "faces": 12000 },
+    "bracers": { "prompt": "A single black leather bracer for the left forearm with a riveted steel plate and a fingerless glove, the hand opening pointing straight down, the back of the hand facing the viewer, armor only, no arm inside.", "faces": 3000 },
+    "leggings": { "prompt": "Black leather leggings for a single left leg covering the thigh, with a riveted steel knee guard at the bottom, one connected piece standing upright, seen from the front, armor only, no leg inside.", "faces": 3000 },
+    "treads": { "prompt": "A single soft black leather boot for the left foot reaching just below the knee, with a small steel shin plate and buckled straps, seen from the front, armor only, no leg inside.", "faces": 3000 },
+    "robe": { "prompt": "A long sleeveless mage robe of embroidered black silk and crimson velvet reaching to the mid-shin, a high collar, an ornate shoulder mantle, a front panel with gold embroidery, the skirt split at the front, hollow and empty, no body inside, symmetric, seen from the front.", "faces": 12000 },
+    "mage_gloves": { "prompt": "A single black silk mage glove for the left hand embroidered with gold runes, a small crimson gem on the back of the hand, fingers extended and pointing straight down, the back of the hand facing the viewer, no hand inside.", "faces": 3000 },
+    "shoes": { "prompt": "A single low black silk mage shoe for the left foot reaching just above the ankle, with a perfectly flat sole and no heel at all, a gently pointed toe and gold embroidered trim, seen from the front, no foot inside.", "faces": 3000 }
+  }
+}
