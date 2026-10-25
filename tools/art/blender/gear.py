@@ -7097,6 +7097,7 @@ def run(set_id, pieces):
     print(f'[gear] {set_id}: {", ".join(pieces)} -> {path} ({os.path.getsize(path) // 1024} KB)')
 
 
-for set_id, pieces in SETS.items():
-    if not ONLY or set_id in ONLY.split(','):
-        run(set_id, pieces)
+if __name__ == '__main__':  # ai_gear.py imports this file for its body and helpers
+    for set_id, pieces in SETS.items():
+        if not ONLY or set_id in ONLY.split(','):
+            run(set_id, pieces)

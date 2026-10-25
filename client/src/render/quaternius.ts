@@ -69,7 +69,29 @@ const CAPES: Record<string, string> = {
   wool_cape: 'wool', hunter_cape: 'hunter', knight_cape: 'knight', abyssal_cape: 'abyssal', ashforged_cape: 'ashforged', dragon_cape: 'dragon',
   glacial_cape: 'glacial', emerald_cape: 'emerald', infernal_cape: 'infernal',
 };
-type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile | LightFile;
+type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${string}` | MageFile | LightFile | `ai_${string}`;
+/**
+ * ?ai=1: a set's AI-made pieces worn in place of its own, for the sets that have them: a file standing in for each of
+ * the set's (q/gear/ai_<file>.glb for <file>.glb, tools/art/blender/ai_gear.py: the heavy pieces, the weapons, shield and
+ * cape in ai_<set>, the light armour in ai_light_<set>, the mage's in ai_mage_<set>), its nodes named as in the file
+ * it stands in for; any piece it lacks stays the set's own.
+ */
+const AI_SETS = new Set(['infernal', 'emerald']);
+const AI_GEAR = typeof location !== 'undefined' && new URLSearchParams(location.search).get('ai') === '1';
+/**
+ * A set's piece from its file `own`, or with ?ai=1 from the AI file standing in for `ai` where the set has one: then
+ * nothing (the plain stand-in) while that file loads, rather than the set's own for a moment and the set's own file
+ * fetched for nothing; the set's own only for a piece the AI file lacks, or if it failed to load.
+ */
+function gearPiece(ai: string | undefined, own: GearFile | undefined, name: string): THREE.Object3D | undefined {
+  if (AI_GEAR && ai && AI_SETS.has(ai.replace(/^(mage|light)_/, '')) && !gearFailed.has(`ai_${ai}`)) {
+    const file = wantGear(`ai_${ai}`);
+    if (!file) return undefined;
+    const node = file.getObjectByName(name);
+    if (node) return node;
+  }
+  return (own && wantGear(own)?.getObjectByName(name)) || undefined;
+}
 /** A region set's mage gear, a file a set (q/gear/mage_<set>.glb): `robe`, `circlet`, `gloves` and `feet`. */
 type MageFile = `mage_${string}`;
 /** a set's light armour (the archer's and the assassin's), a file of its own: nodes 'hood', 'chest', 'gloves', 'legs', 'feet' */
@@ -92,7 +114,7 @@ export function armorPiece(id: string): { node: THREE.Object3D; under: number } 
     jerkin: 'chest', bracers: 'gloves', leggings: 'legs', treads: 'feet' }[m[2]]!] : SET_PIECE[id] ?? [];
   // a mage's pieces (the robe, the cloth gloves, the shoes) and the light armour come in files of their own
   const file: GearFile | undefined = m && /^(robe|gloves|shoes)$/.test(m[2]) ? `mage_${m[1]}` : m && /^(jerkin|bracers|leggings|treads)$/.test(m[2]) ? `light_${m[1]}` : set;
-  const node = file && wantGear(file)?.getObjectByName(name);
+  const node = gearPiece(file, file, name);
   return node ? { node, under: UNDER[set!] ?? 0x3a3530 } : undefined;
 }
 /**
@@ -126,12 +148,12 @@ function bustGeo(src: THREE.BufferGeometry): THREE.BufferGeometry {
 /** A shield's model, when it has one (a body piece like the rest of the armour, skinned to the left forearm). */
 export function shieldPiece(id: string): THREE.Object3D | undefined {
   const key = SHIELDS[id];
-  return (key && wantGear(`shield_${key}`)?.getObjectByName('shield')) || undefined;
+  return gearPiece(key, key ? `shield_${key}` : undefined, 'shield');
 }
 /** A cape's model, when it has one (capePiece -> QOpts.cape): its node, with its cloth's grid in its extras. */
 export function capePiece(id: string): THREE.Object3D | undefined {
   const key = CAPES[id];
-  return (key && wantGear(`cape_${key}`)?.getObjectByName('cape')) || undefined;
+  return gearPiece(key, key ? `cape_${key}` : undefined, 'cape');
 }
 /** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
  * a skin in our joint order (a cape's own bones after the rig's 65). */
@@ -196,7 +218,7 @@ export function qWeapon(item: string | null): THREE.Object3D | null {
   if (!item) return null;
   if (WEAPONS.includes(item)) return props[item].clone();
   const m = BASIC_WEAPONS.has(item) ? ['', 'basic', item] : SET_WEAPON.exec(item);
-  const node = m && wantGear(`weapons_${m[1]}`)?.getObjectByName(m[2]);
+  const node = m && gearPiece(m[1], `weapons_${m[1]}`, m[2]);
   if (!node) return null;
   const w = node.clone(), held = new THREE.Group();
   w.position.set(0, 0, 0);
@@ -236,15 +258,14 @@ function strongest(geo: THREE.BufferGeometry, v: number): string {
 }
 
 /** The outfits cover the body: keep only the triangles of the base mesh that follow the head and neck. */
-/** Keep only the triangles touching a vertex whose strongest joint `keep` accepts (or, with `all`, only those whose
- * every vertex it accepts). */
-function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean, all = false) {
+/** Keep only the triangles touching a vertex whose strongest joint `keep` accepts. */
+function trim(geo: THREE.BufferGeometry, keep: (joint: string) => boolean) {
   const idx = geo.index!;
   const ok = (v: number) => keep(strongest(geo, v));
   const out: number[] = [];
   for (let i = 0; i < idx.count; i += 3) {
     const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
-    if (all ? ok(a) && ok(b) && ok(c) : ok(a) || ok(b) || ok(c)) out.push(a, b, c);
+    if (ok(a) || ok(b) || ok(c)) out.push(a, b, c);
   }
   geo.setIndex(out);
 }
@@ -257,6 +278,18 @@ const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
   legs: (j) => /^(pelvis|thigh|calf)/.test(j),
   feet: (j) => /^(foot|ball)/.test(j),
 };
+/** Keep a suit part's triangles: those off the head with most of their corners in it, so the parts meet without a gap
+ * (kept to the triangles with every corner in the part, a ring at the waist and the ankles was in none of them, and
+ * the armour's inside showed through there). */
+function suitTrim(geo: THREE.BufferGeometry, part: keyof typeof SUIT) {
+  const idx = geo.index!;
+  const out: number[] = [];
+  for (let i = 0; i < idx.count; i += 3) {
+    const js = [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)].map((v) => strongest(geo, v));
+    if (!js.some(isHead) && js.filter(SUIT[part]).length >= 2) out.push(idx.getX(i), idx.getX(i + 1), idx.getX(i + 2));
+  }
+  geo.setIndex(out);
+}
 const isNeckline = (j: string) => j === 'neck_01' || j === 'spine_03' || j === 'clavicle_l' || j === 'clavicle_r';
 /**
  * The skin a tunic's open collar shows: the peasant tunic has a V there and no skin of its own (the kit expects the bare
@@ -341,6 +374,8 @@ function neckline(body: THREE.SkinnedMesh, tunic: THREE.SkinnedMesh) {
 
 let gearLoader: GLTFLoader | null = null;
 const gearLoading = new Set<GearFile>();
+/** the files that failed to load (a piece falls back to the set's own, for an AI file) */
+const gearFailed = new Set<GearFile>();
 /**
  * An armour set's file, fetched the first time a character wears something of it (a whole set's maps are tens of
  * megabytes on the GPU: only the sets on screen get loaded). Until it is in, the piece is left off; then a
@@ -377,7 +412,11 @@ function wantGear(s: GearFile): THREE.Object3D | undefined {
     });
     gear[s] = g.scene;
     dispatchEvent(new CustomEvent('gear-loaded', { detail: s }));
-  }).catch((err) => console.warn('gear', s, err)); // a set that fails to load leaves its pieces off
+  }).catch((err) => {
+    console.warn('gear', s, err); // a set that fails to load leaves its pieces off
+    gearFailed.add(s);
+    dispatchEvent(new CustomEvent('gear-loaded', { detail: s })); // and an AI file's stand-ins are the set's own after all
+  });
   return undefined;
 }
 
@@ -488,6 +527,7 @@ export function loadQ(): Promise<void> {
     });
     armature.m!.updateMatrixWorld(true);
     restInv = joints.map((n) => armature.m!.getObjectByName(n)!.matrixWorld.clone().invert());
+    for (const clip of Object.values(clips)) untwistKnees(clip, armature.m!);
     // the jab with the right hand, the dagger's (its stab skill); and the spell gesture made with the weapon hand (a
     // fighter's buff)
     if (clips.Punch_Jab) clips.Punch_Jab_M = mirrorClip(clips.Punch_Jab, armature.m!, 'Punch_Jab_M');
@@ -509,7 +549,7 @@ export function loadQ(): Promise<void> {
       for (const part of ['top', 'legs', 'feet'] as const) {
         const b = get('body'), m = new THREE.SkinnedMesh(b.geometry.clone(), b.material);
         m.bind(b.skeleton, b.bindMatrix);
-        trim(m.geometry, SUIT[part], true);
+        suitTrim(m.geometry, part);
         collect(`Suit_${part}_${g}`, [m]);
       }
       // the skin under an open collar, cut from the body before the head piece trims it to the neck
@@ -1108,6 +1148,38 @@ function mirrorClip(clip: THREE.AnimationClip, rig: THREE.Object3D, name: string
   return new THREE.AnimationClip(name, clip.duration, tracks);
 }
 
+/**
+ * The clips turn a foot out by twisting the shin round its length at the knee (the idle's right one by some 45 degrees),
+ * which a leg cannot do: a set's cuisse and boot came apart at the knee, the plate over it torn between the two. Each
+ * key's twist of the shin is moved up to the thigh, round the thigh's own length: the knee, the ankle and the foot stay
+ * where they were, and the leg turns out from the hip.
+ */
+function untwistKnees(clip: THREE.AnimationClip, rig: THREE.Object3D) {
+  for (const s of ['l', 'r']) {
+    const calf = rig.getObjectByName(`calf_${s}`), foot = rig.getObjectByName(`foot_${s}`);
+    const ti = clip.tracks.findIndex((t) => t.name === `thigh_${s}.quaternion`), ci = clip.tracks.findIndex((t) => t.name === `calf_${s}.quaternion`);
+    if (!calf || !foot || ti < 0 || ci < 0) continue;
+    const tt = clip.tracks[ti], ct = clip.tracks[ci];
+    const times = [...new Set([...tt.times, ...ct.times])].sort((a, b) => a - b);
+    const keys = (k: THREE.KeyframeTrack) => new THREE.QuaternionLinearInterpolant(k.times, k.values, 4, new Float32Array(4));
+    const ta = keys(tt), ca = keys(ct);
+    const restInv = calf.quaternion.clone().invert();
+    const shin = foot.position.clone().normalize(), thigh = calf.position.clone().normalize(); // each one's length, in its own frame
+    const T = new THREE.Quaternion(), C = new THREE.Quaternion(), d = new THREE.Quaternion(), w = new THREE.Quaternion();
+    const tv = new Float32Array(times.length * 4), cv = new Float32Array(times.length * 4);
+    times.forEach((t, k) => {
+      T.fromArray(ta.evaluate(t));
+      C.fromArray(ca.evaluate(t));
+      d.copy(restInv).multiply(C); // the shin's turn from the bind pose, in its own frame
+      w.setFromAxisAngle(thigh, 2 * Math.atan2(shin.x * d.x + shin.y * d.y + shin.z * d.z, d.w)); // its twist, round the thigh
+      T.multiply(w).toArray(tv, k * 4);
+      C.premultiply(w.invert()).toArray(cv, k * 4);
+    });
+    clip.tracks[ti] = new THREE.QuaternionKeyframeTrack(tt.name, times, tv);
+    clip.tracks[ci] = new THREE.QuaternionKeyframeTrack(ct.name, times, cv);
+  }
+}
+
 function attach(bone: THREE.Object3D, o: THREE.Object3D, x: number, y: number, z: number, scale: number) {
   const q = bone.getWorldQuaternion(new THREE.Quaternion()).invert();
   const anchor = new THREE.Group();
@@ -1153,7 +1225,9 @@ export function qPlayer(o: QOpts): Rig {
     const suit = (): [number, number, boolean] => [o.suit!, 0.9, false];
     if (o.noTop) add(`Suit_top_${o.g}`, suit);
     if (o.noLegs) add(`Suit_legs_${o.g}`, suit);
-    if (o.bareFeet) add(`Suit_feet_${o.g}`, suit);
+    // a boot that closes round the whole foot (its node's covers_feet) leaves nothing of it to show: none is drawn to come
+    // through it
+    if (o.bareFeet && !o.armor?.some((n) => n.userData.covers_feet)) add(`Suit_feet_${o.g}`, suit);
   }
   if (!o.noTop) {
     add(`${S}_${kit(o.chest)}_Body`, zone(o.chest));
@@ -1166,23 +1240,22 @@ export function qPlayer(o: QOpts): Rig {
   if (o.hood !== undefined) add(`${S}_Ranger_Head_Hood`, zone({ ranger: true, dye: o.hood }));
   else if (!o.hideHair && (o.bald || HAIR[o.hairStyle])) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle]!, hair);
   if (o.beard) add('Hair_Beard', hair);
-  if (o.armor?.length) {
-    const sk = new THREE.Skeleton(bones, restInv);
-    skeletons.set(-1, sk);
-    for (const node of o.armor) {
-      const torsoPiece = node.name === 'chest' || node.name === 'robe';
-      const bust = o.g === 'f' && torsoPiece;
-      node.traverse((x) => {
-        if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
-        const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
-        m.bind(sk, new THREE.Matrix4());
-        m.castShadow = true;
-        m.frustumCulled = false;
-        body.add(m);
-        worn.push(m);
-      });
-    }
-  }
+  let sk: THREE.Skeleton | undefined;
+  const wear = (node: THREE.Object3D) => {
+    if (!sk) skeletons.set(-1, (sk = new THREE.Skeleton(bones, restInv)));
+    const torsoPiece = node.name === 'chest' || node.name === 'robe';
+    const bust = o.g === 'f' && torsoPiece;
+    node.traverse((x) => {
+      if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
+      const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
+      m.bind(sk!, new THREE.Matrix4());
+      m.castShadow = true;
+      m.frustumCulled = false;
+      body.add(m);
+      worn.push(m);
+    });
+  };
+  for (const node of o.armor ?? []) wear(node);
 
   let cape: QCape | undefined;
   const grid = o.cape?.userData.cape_grid as number[] | undefined;
@@ -1351,9 +1424,15 @@ export function qPlayer(o: QOpts): Rig {
   }
   if (o.helm) {
     const fixed = (HELMS as Record<string, readonly [number, number, number]>)[o.helm];
-    const model = fixed ? props[o.helm] : wantGear(o.helm as GearFile)?.getObjectByName(o.helm.startsWith('mage_') ? 'circlet' : o.helm.startsWith('light_') ? 'hood' : 'helm');
+    const part = o.helm.startsWith('mage_') ? 'circlet' : o.helm.startsWith('light_') ? 'hood' : 'helm';
+    const model = fixed ? props[o.helm] : gearPiece(o.helm, o.helm as GearFile, part);
     const [y, z, s] = fixed ?? [0, 0, 1];
-    if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
+    // a headpiece skinned to the body (a hood with a capelet: the hood on the head, the capelet on the shoulders) is worn
+    // as the armour is; the rest hang from the head
+    let skinned = false;
+    model?.traverse((x) => void (skinned ||= !!x.userData.skinned));
+    if (model && skinned) wear(model);
+    else if (model) attach(byName.Head, model.clone(), 0, y, z, s); // geometry and materials are shared
   }
   // a bow in the left hand (the right draws the string), any other weapon in the right; the plain bow (models.ts, while
   // a model loads) has its back towards +Z where the modelled ones have it towards +X, and is held by its string: its
@@ -1856,8 +1935,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       rig.root.position.set((i * 2 + j - 4.5) * 1.25, 0, 0);
       scene.add(rig.root);
       return rig;
-    }));
-  };
+    }));  };
   const btn = (label: string, fn: () => void) => {
     const b = document.createElement('button');
     b.textContent = label;
