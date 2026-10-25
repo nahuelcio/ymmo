@@ -76,7 +76,7 @@ type GearFile = GearSet | `shield_${string}` | `weapons_${string}` | `cape_${str
  * weapons, shield and cape in ai_<set>, the light armour in ai_light_<set>, the mage's in ai_mage_<set>), its nodes named
  * as in the file it stands in for; any piece it lacks stays the set's own.
  */
-const AI_SETS = new Set(['infernal', 'emerald']);
+const AI_SETS = new Set(['infernal', 'emerald', 'glacial']);
 const AI_GEAR = typeof location === 'undefined' || new URLSearchParams(location.search).get('ai') !== '0';
 /**
  * A set's piece from its file `own`, or (unless ?ai=0) from the AI file standing in for `ai` where the set has one: then
@@ -155,14 +155,18 @@ export function capePiece(id: string): THREE.Object3D | undefined {
   const key = CAPES[id];
   return gearPiece(key, key ? `cape_${key}` : undefined, 'cape');
 }
+/** The two bones a robe's skirt hangs from (ai_gear.py robe_fit `skirt`), made by the wearer's rig over each thigh: see
+ * swingSkirt. */
+const SKIRT = ['skirt_l', 'skirt_r'];
 /** A body piece's joints and weights (the _joints and _weights attributes, the joint names in its node's extras), as
- * a skin in our joint order (a cape's own bones after the rig's 65). */
+ * a skin in our joint order (a cape's own bones, or a skirt's, after the rig's 65). */
 function toSkin(m: THREE.Mesh) {
   const g = m.geometry, j = g.getAttribute('_joints'), w = g.getAttribute('_weights');
   const names = (m.userData.joints ?? m.parent?.userData.joints) as string[] | undefined;
   if (!j || !w || !names) return;
   const grid = (m.userData.cape_grid ?? m.parent?.userData.cape_grid) as number[] | undefined;
-  const all = grid ? joints.concat(Array.from({ length: grid[0] * grid[1] }, (_, i) => `cape_${Math.floor(i / grid[1])}_${i % grid[1]}`)) : joints;
+  const all = grid ? joints.concat(Array.from({ length: grid[0] * grid[1] }, (_, i) => `cape_${Math.floor(i / grid[1])}_${i % grid[1]}`))
+    : names.includes(SKIRT[0]) ? joints.concat(SKIRT) : joints;
   const map = names.map((n) => Math.max(0, all.indexOf(n)));
   const idx = new Uint16Array(j.count * 4), wt = new Float32Array(j.count * 4);
   for (let i = 0; i < j.count; i++) {
@@ -273,10 +277,11 @@ const isHead = (j: string) => j === 'Head' || j === 'neck_01';
 const headOnly = (geo: THREE.BufferGeometry) => trim(geo, isHead);
 /** The bare body under a set's armour, in three parts (whichever the armour covers stands in for the cloth there):
  * the trunk and arms, the hips and legs, the feet; the head and neck are the head's. */
-const SUIT: Record<'top' | 'legs' | 'feet', (j: string) => boolean> = {
+const SUIT: Record<'top' | 'legs' | 'feet' | 'shins', (j: string) => boolean> = {
   top: (j) => !isHead(j) && j !== 'pelvis' && !/^(thigh|calf|foot|ball)/.test(j),
   legs: (j) => /^(pelvis|thigh|calf)/.test(j),
   feet: (j) => /^(foot|ball)/.test(j),
+  shins: (j) => /^calf/.test(j), // the legs below the knee alone, under a gown closed round the hips and thighs
 };
 /** Keep a suit part's triangles: those off the head with most of their corners in it, so the parts meet without a gap
  * (kept to the triangles with every corner in the part, a ring at the waist and the ankles was in none of them, and
@@ -546,7 +551,7 @@ export function loadQ(): Promise<void> {
     armature.f!.updateMatrixWorld(true);
     for (const g of ['m', 'f'] as const) {
       const get = (n: string) => heads.scene.getObjectByName(`${g}__${n}`) as THREE.SkinnedMesh;
-      for (const part of ['top', 'legs', 'feet'] as const) {
+      for (const part of ['top', 'legs', 'feet', 'shins'] as const) {
         const b = get('body'), m = new THREE.SkinnedMesh(b.geometry.clone(), b.material);
         m.bind(b.skeleton, b.bindMatrix);
         suitTrim(m.geometry, part);
@@ -670,6 +675,8 @@ export interface QAnim {
   held: Map<THREE.Object3D, THREE.Quaternion>; heldNow: THREE.Object3D[];
   /** a cape's cloth, as capeCloth moves it */
   cape?: QCape;
+  /** a robe's skirt bones, as swingSkirt turns them */
+  skirt?: QSkirt;
   /** a bow's arms, as aimBow poses them */
   bow?: BowArms;
   /** a dagger: its anchor (turned to point the blade along the forearm as it stabs), with its rest pose and the forearm */
@@ -911,6 +918,29 @@ function backOf(g: THREE.BufferGeometry) {
     else if (y > 0.55 && y < 0.75 && x < 0.2) low = Math.min(low, p.getZ(i));
   }
   return { top, low };
+}
+/**
+ * A robe's skirt bones (SKIRT), children of the pelvis, each at its hip in the male bind pose (`rest`, its matrix under
+ * the pelvis there; `down`, how far forward the thigh leans at rest) and following its thigh and calf.
+ */
+interface QSkirt { pelvis: THREE.Object3D; pelvisRest: THREE.Matrix4; legs: { bone: THREE.Bone; thigh: THREE.Object3D; calf: THREE.Object3D; rest: THREE.Matrix4; down: number }[] }
+const skirtTo = new THREE.Matrix4(), skirtTurn = new THREE.Matrix4(), skirtHip = new THREE.Vector3(), skirtKnee = new THREE.Vector3();
+/**
+ * Each skirt bone turned round its hip, about the body's side-to-side axis, as far as its thigh swings forward or back
+ * (the thigh's lean in the pelvis's rest space, against its lean at rest), and no other way: a skirt following the thigh
+ * itself was dragged round by its twist and spread with the legs (a robe opened standing), and following it little,
+ * the legs came through it as they strode.
+ */
+function swingSkirt(k: QSkirt) {
+  k.pelvis.updateWorldMatrix(true, false);
+  skirtTo.copy(k.pelvis.matrixWorld).invert().premultiply(k.pelvisRest);
+  for (const l of k.legs) {
+    l.calf.updateWorldMatrix(true, false);
+    skirtHip.setFromMatrixPosition(l.thigh.matrixWorld).applyMatrix4(skirtTo);
+    skirtKnee.setFromMatrixPosition(l.calf.matrixWorld).applyMatrix4(skirtTo);
+    const swing = Math.atan2(skirtKnee.z - skirtHip.z, skirtHip.y - skirtKnee.y) - l.down;
+    l.bone.matrix.copy(l.rest).multiply(skirtTurn.makeRotationX(-swing));
+  }
 }
 /** A cape's cloth as capeCloth simulates it: its grid of points (rows down from the pinned top row, columns across),
  * their bones and bind places, where they are in the world now and a step ago, what holds them together and what of
@@ -1224,7 +1254,9 @@ export function qPlayer(o: QOpts): Rig {
   if (o.suit !== undefined) {
     const suit = (): [number, number, boolean] => [o.suit!, 0.9, false];
     if (o.noTop) add(`Suit_top_${o.g}`, suit);
-    if (o.noLegs) add(`Suit_legs_${o.g}`, suit);
+    // under a gown closed all round (its node's covers_thighs) the hips and thighs it hides are not drawn: striding,
+    // they came through it
+    if (o.noLegs) add(o.armor?.some((n) => n.userData.covers_thighs) ? `Suit_shins_${o.g}` : `Suit_legs_${o.g}`, suit);
     // a boot that closes round the whole foot (its node's covers_feet) leaves nothing of it to show: none is drawn to come
     // through it
     if (o.bareFeet && !o.armor?.some((n) => n.userData.covers_feet)) add(`Suit_feet_${o.g}`, suit);
@@ -1240,7 +1272,28 @@ export function qPlayer(o: QOpts): Rig {
   if (o.hood !== undefined) add(`${S}_Ranger_Head_Hood`, zone({ ranger: true, dye: o.hood }));
   else if (!o.hideHair && (o.bald || HAIR[o.hairStyle])) add(o.bald ? 'Hair_Buzzed' : HAIR[o.hairStyle]!, hair);
   if (o.beard) add('Hair_Beard', hair);
-  let sk: THREE.Skeleton | undefined;
+  let sk: THREE.Skeleton | undefined, skirtSk: THREE.Skeleton | undefined, skirt: QSkirt | undefined;
+  // a robe's skirt bones (SKIRT), made the first time a piece hangs from them: over each hip in the male bind pose, as
+  // the armour is fitted
+  const skirtSkeleton = () => {
+    if (skirtSk) return skirtSk;
+    const restOf = (n: string) => armature.m!.getObjectByName(n)!.matrixWorld;
+    const pelvisRest = restOf('pelvis').clone(), under = pelvisRest.clone().invert();
+    const legs = (['l', 'r'] as const).map((s) => {
+      const hip = new THREE.Vector3().setFromMatrixPosition(restOf(`thigh_${s}`)), knee = new THREE.Vector3().setFromMatrixPosition(restOf(`calf_${s}`));
+      const bone = new THREE.Bone();
+      bone.name = `skirt_${s}`;
+      bone.matrixAutoUpdate = false;
+      const rest = under.clone().multiply(new THREE.Matrix4().makeTranslation(hip.x, hip.y, hip.z));
+      bone.matrix.copy(rest);
+      byName.pelvis.add(bone);
+      return { bone, thigh: byName[`thigh_${s}`], calf: byName[`calf_${s}`], rest, down: Math.atan2(knee.z - hip.z, hip.y - knee.y), hip };
+    });
+    skirt = { pelvis: byName.pelvis, pelvisRest, legs };
+    skeletons.set(-3, (skirtSk = new THREE.Skeleton([...bones, ...legs.map((l) => l.bone)],
+      [...restInv, ...legs.map((l) => new THREE.Matrix4().makeTranslation(-l.hip.x, -l.hip.y, -l.hip.z))])));
+    return skirtSk;
+  };
   const wear = (node: THREE.Object3D) => {
     if (!sk) skeletons.set(-1, (sk = new THREE.Skeleton(bones, restInv)));
     const torsoPiece = node.name === 'chest' || node.name === 'robe';
@@ -1248,7 +1301,8 @@ export function qPlayer(o: QOpts): Rig {
     node.traverse((x) => {
       if (!(x instanceof THREE.Mesh) || !x.userData.skinned) return;
       const m = new THREE.SkinnedMesh(bust ? bustGeo(x.geometry) : x.geometry, x.material); // geometry and materials are shared
-      m.bind(sk!, new THREE.Matrix4());
+      const names = (x.userData.joints ?? x.parent?.userData.joints) as string[] | undefined;
+      m.bind(names?.includes(SKIRT[0]) ? skirtSkeleton() : sk!, new THREE.Matrix4());
       m.castShadow = true;
       m.frustumCulled = false;
       body.add(m);
@@ -1460,7 +1514,7 @@ export function qPlayer(o: QOpts): Rig {
   for (const t of trails) root.add(t.mesh);
   return {
     root, body, kind: 'humanoid', legs: [], height: top * o.scale, radius: 0.33 * o.scale * o.bulk,
-    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, held: new Map(), heldNow: [], cape, trails,
+    q: { mixer, acts, w, t: Infinity, armed: !!o.inHand, held: new Map(), heldNow: [], cape, skirt, trails,
       swing: o.bow ? null : swingKind(o.weaponType, !!o.inHand, o.shield),
       dagger: o.dagger && o.inHand ? { grip: o.inHand.parent ?? undefined, rest: o.inHand.parent?.quaternion.clone() ?? new THREE.Quaternion(),
         la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
@@ -1742,6 +1796,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   for (const b of q.heldNow) b.quaternion.copy(q.held.get(b)!);
   q.heldNow.length = 0;
   q.mixer.update(dt);
+  if (q.skirt) swingSkirt(q.skirt);
   // the jog's clock runs at any weight: a foot lands when it passes one of the clip's landing moments
   // (its legs alone under a blow struck on the run keep the same clock: both started together and run at the same pace)
   const legs = cur === 'Jog_Fwd_Loop' ? q.w.Jog_Fwd_Loop : cur2 === JOG_LEGS ? q.w[JOG_LEGS] : 0;
