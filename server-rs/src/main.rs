@@ -17,6 +17,7 @@ mod formulas;
 mod gather;
 mod i18n;
 mod inventory;
+mod legend;
 mod msgs;
 mod party;
 mod player;

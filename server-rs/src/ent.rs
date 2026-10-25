@@ -1,7 +1,7 @@
 //! Entities (port of server/src/world/entities.ts).
 use crate::collision::P;
 use crate::data::{d, Barrage, BuffMods, MobDef, Pulse, Special};
-use crate::formulas::{compute_stats, jround, mob_stats, Stats};
+use crate::formulas::{compute_stats, gear_mods, jround, legend_mods, mob_stats, Stats};
 use crate::i18n::Lang;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -200,6 +200,11 @@ pub struct Player {
     pub spec: Option<String>,
     pub level: i64,
     pub xp: i64,
+    /** past the level cap: Legend levels reached, XP towards the next one, and the points spent on each passive
+     * (legend.rs; the free points are the levels not spent) */
+    pub legend_lvl: i64,
+    pub legend_xp: i64,
+    pub legend: HashMap<String, i64>,
     pub hp: f64,
     pub mp: f64,
     pub cp: f64,
@@ -233,7 +238,11 @@ impl Player {
     pub fn recalc(&mut self) {
         let data = d();
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
-        let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
+        let mut bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
+        // and, as buffs that never run out: what the worn gear adds (a boss jewel, a set's bonus) and the Legend's passives
+        bm.extend(gear_mods(&eq));
+        let legend = legend_mods(&self.legend);
+        bm.push(&legend);
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());
         if let Some(k) = self.spec.as_deref().and_then(|s| data.spec(s)).and_then(|s| s.block) { self.stats.block *= k; } // the tanks block more
         // the assassin's eye for a weak spot, with a dagger in hand (the spec's weapon)

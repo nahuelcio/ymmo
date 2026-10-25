@@ -1,7 +1,8 @@
-import { CLASSES, EVOLVE_LEVEL, evolutionOf, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { CLASSES, EVOLVE_LEVEL, evolutionOf, MAX_LEVEL, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { LEGEND } from '../../../shared/src/data/legend';
 import { makeMovable } from './movable';
 import { foldable } from './hud';
-import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, SLOTS, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, wearLevel, WORN_SLOTS, type WornSlot } from '../../../shared/src/data/items';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
@@ -10,20 +11,20 @@ const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
+import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
 import { isTouchDevice } from './touch';
 import { touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
 
-const SLOT_LABEL: Record<Slot, string> = SLOT_NAME;
-/** the item whose icon outlines each empty equipment slot */
+const SLOT_LABEL: Record<WornSlot, string> = { ...SLOT_NAME, ring2: SLOT_NAME.ring };
 /** Where each slot sits on the doll: [column, row] - what is worn down the left, what is held and the jewels down the right */
-const DOLL_AT: Record<Slot, [number, number]> = {
+const DOLL_AT: Record<WornSlot, [number, number]> = {
   head: [1, 1], chest: [1, 2], cape: [1, 3], legs: [1, 4], feet: [1, 5], amulet: [1, 6],
-  weapon: [3, 1], shield: [3, 2], gloves: [3, 3], earring: [3, 4], ring: [3, 5],
+  weapon: [3, 1], shield: [3, 2], gloves: [3, 3], earring: [3, 4], ring: [3, 5], ring2: [3, 6],
 };
-const GHOST: Record<Slot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', shield: 'brigandine_shield', chest: 'full_plate_armor', cape: 'knight_cape', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor' };
+/** the item whose icon outlines each empty equipment slot */
+const GHOST: Record<WornSlot, string> = { head: 'full_plate_helmet', weapon: 'broadsword', shield: 'brigandine_shield', chest: 'full_plate_armor', cape: 'knight_cape', gloves: 'reinforced_gloves', legs: 'karmian_stockings', feet: 'reinforced_boots', amulet: 'necklace_of_valor', earring: 'earring_of_focus', ring: 'ring_of_vigor', ring2: 'ring_of_vigor' };
 
 export class InventoryPanel {
   win: Win;
@@ -31,12 +32,12 @@ export class InventoryPanel {
   private grid: HTMLDivElement;
   private footer: HTMLDivElement;
   private menu: HTMLDivElement | null = null;
-  private dollCells: Partial<Record<Slot, HTMLDivElement>> = {};
+  private dollCells: Partial<Record<WornSlot, HTMLDivElement>> = {};
   private stats?: HTMLDivElement; // built with the doll on the first refresh
   private tabs!: HTMLDivElement;
   private filter: 'all' | 'gear' | 'use' | 'mat' = 'all';
   /** what is being dragged: a bag item (by its uid) or the item worn in a slot */
-  private drag: { u?: InvItem['u']; slot?: Slot } | null = null;
+  private drag: { u?: InvItem['u']; slot?: WornSlot } | null = null;
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('inventory', tx('Inventario', 'Inventory'), -390, 90, 364, root);
@@ -118,6 +119,10 @@ export class InventoryPanel {
     if (it.s) act(tx('Sacártelo', 'Take it off'), () => g.net.send({ t: 'unequip', slot: it.s! }));
     else if (def.slot || def.use) act(def.slot ? tx('Equipar', 'Equip') : tx('Usar', 'Use'), () => g.net.send({ t: 'use', u: it.u }));
     if (def.slot && this.canEnchant(it)) act(tx(`Encantar a +${(it.e ?? 0) + 1}`, `Enchant to +${(it.e ?? 0) + 1}`), () => this.askEnchant(it));
+    // where it can fail, a Protection Stone keeps it from breaking
+    if (def.slot && this.canEnchant(it) && (it.e ?? 0) >= ENCHANT.safe && this.g.inv.some((i) => !i.s && ITEMS[i.i].protects)) {
+      act(tx(`Encantar a +${(it.e ?? 0) + 1} (con Piedra de Protección)`, `Enchant to +${(it.e ?? 0) + 1} (with a Protection Stone)`), () => this.askEnchant(it, true));
+    }
     if (def.slot && (it.e ?? 0) < ENCHANT.max && this.g.inv.some((i) => !i.s && ITEMS[i.i].enchant === 'sacred')) {
       act(tx(`Encantar a +${(it.e ?? 0) + 1} (sagrado, seguro)`, `Enchant to +${(it.e ?? 0) + 1} (sacred, safe)`), () => g.net.send({ t: 'enchant', u: it.u, sacred: true }));
     }
@@ -135,20 +140,32 @@ export class InventoryPanel {
     return this.g.inv.some((i) => !i.s && scrollFits(ITEMS[i.i], ITEMS[id]));
   }
 
-  /** Enchant a piece, asking first once the attempt can fail. */
-  private askEnchant(it: InvItem) {
+  /** Enchant a piece, asking first once the attempt can fail (with a Protection Stone, `protect`, it can't break). */
+  private askEnchant(it: InvItem, protect = false) {
     const e = it.e ?? 0, pct = Math.round(enchantChance(e) * 100), name = itemName(it.i, lang);
-    const send = () => this.g.net.send({ t: 'enchant', u: it.u });
+    const send = () => this.g.net.send({ t: 'enchant', u: it.u, ...(protect && { protect }) });
     if (pct >= 100) return send();
-    const risk = ENCHANT.failDestroys ? tx('Si falla, se destruye.', 'If it fails, it is destroyed.') : tx('Si falla, vuelve a +0.', 'If it fails, it goes back to +0.');
+    const risk = protect ? tx('Si falla, vuelve a +0. Se gasta una Piedra de Protección.', 'If it fails, it goes back to +0. A Protection Stone is used up.')
+      : ENCHANT.failDestroys ? tx('Si falla, se destruye.', 'If it fails, it is destroyed.') : tx('Si falla, vuelve a +0.', 'If it fails, it goes back to +0.');
     this.g.ui.dialogs.confirm(tx(`¿Encantar ${name} a +${e + 1}? ${pct}% de éxito. ${risk}`, `Enchant ${name} to +${e + 1}? ${pct}% chance. ${risk}`), send);
+  }
+
+  /** What putting this piece on takes off: what its slot holds, or for a ring what the server's rule picks (the same
+   * jewel, else nothing while a hand is free, else the first hand's ring; server-rs formulas.rs ring_slot). */
+  private replaces(id: string): InvItem | undefined {
+    const slot = ITEMS[id].slot;
+    if (slot !== 'ring') return this.g.inv.find((i) => i.s === slot);
+    const r1 = this.g.inv.find((i) => i.s === 'ring'), r2 = this.g.inv.find((i) => i.s === 'ring2');
+    if (r1?.i === id) return r1;
+    if (r2?.i === id) return r2;
+    return r1 && r2 ? r1 : undefined;
   }
 
   /** Tooltip block: this item's stats against what is worn in the same slot. */
   private compare(it: InvItem): string {
     const d = ITEMS[it.i];
     if (!d.slot) return '';
-    const worn = this.g.inv.find((i) => i.s === d.slot);
+    const worn = this.replaces(it.i);
     const c = worn ? ITEMS[worn.i] : undefined;
     const STATS = [['pAtk', tx('Atq.F', 'P.Atk')], ['mAtk', tx('Atq.M', 'M.Atk')], ['pDef', tx('Def.F', 'P.Def')], ['mDef', tx('Def.M', 'M.Def')], ['hp', 'HP'], ['mp', 'MP']] as const;
     const val = (def: typeof d | undefined, k: (typeof STATS)[number][0], e?: number) => (!def ? 0 : k === 'hp' || k === 'mp' ? def[k] ?? 0 : enchanted(def, k, e));
@@ -175,7 +192,7 @@ export class InventoryPanel {
     // slots down both sides (head/chest/legs, weapon/gloves/feet) around a card with the stats gear changes
     this.stats = el('div', 'doll-stats', this.doll);
     this.refreshStats();
-    SLOTS.forEach((s) => {
+    WORN_SLOTS.forEach((s) => {
       const cell = (this.dollCells[s] = el('div', 'doll-slot', this.doll));
       const [col, row] = DOLL_AT[s];
       cell.style.gridColumn = String(col);
@@ -215,7 +232,7 @@ export class InventoryPanel {
       }
       const slot = ITEMS[it.i].slot;
       if (slot) {
-        const worn = g.inv.find((i) => i.s === slot);
+        const worn = this.replaces(it.i);
         if ((it.l || wearLevel(ITEMS[it.i]) <= g.me.lvl) && this.score(it) > (worn ? this.score(worn) : 0)) el('span', 'inv-up', cell, '▲');
         cell.draggable = true;
         cell.ondragstart = () => (hideTip(), (this.drag = { u: it.u }), this.dollCells[slot]?.classList.add('match'));
@@ -247,6 +264,33 @@ export class CharacterPanel {
     this.win.onShow = () => this.refresh();
   }
 
+  /** Past the level cap: the Legend's bar and free points, a row per passive (its ranks, what they give, one more for a
+   * point), and taking them all back for adena, in a town. */
+  private legend(b: HTMLElement) {
+    const m = this.g.me;
+    el('div', 'section', b, tx(`Leyenda ${m.legendLvl}`, `Legend ${m.legendLvl}`));
+    el('div', 'tt-dim', b, m.legendNeed
+      ? tx(`La experiencia que ganás llena la barra de Leyenda (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): cada nivel es un punto para una pasiva.`,
+        `The experience you earn fills the Legend bar (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): every level is a point for a passive.`)
+      : tx('Tu Leyenda está completa.', 'Your Legend is full.'));
+    el('div', 'legend-pts', b, tx(`Puntos libres: ${m.legendPts}`, `Free points: ${m.legendPts}`));
+    for (const p of LEGEND.passives) {
+      const r = m.legend[p.id] ?? 0;
+      const row = el('div', 'shop-row', b);
+      const now = r ? modsText(p.mods, r) : tx('sin rangos', 'no ranks');
+      el('div', 'grow', row).innerHTML = `<b>${esc(lang === 'en' ? p.nameEn : p.name)}</b> ${r}/${p.max}<br><span class="tt-dim">${esc(now)}${r < p.max ? ` → ${esc(modsText(p.mods, r + 1))}` : ''}</span>`;
+      const up = el('button', 'btn', row, '+');
+      up.disabled = m.legendPts <= 0 || r >= p.max;
+      up.onclick = () => this.g.net.send({ t: 'legendSpend', id: p.id });
+    }
+    const spent = Object.values(m.legend).reduce((a, n) => a + n, 0);
+    if (!spent) return;
+    const cost = (spent * LEGEND.resetCost).toLocaleString(fmtLoc);
+    el('button', 'btn', b, tx(`Reiniciar puntos (${cost} adena)`, `Reset points (${cost} adena)`)).onclick = () => this.g.ui.dialogs.confirm(
+      tx(`¿Recuperar tus ${spent} puntos de Leyenda por ${cost} adena? Solo se puede en un pueblo.`, `Take back your ${spent} Legend points for ${cost} adena? Only in a town.`),
+      () => this.g.net.send({ t: 'legendReset' }));
+  }
+
   refresh() {
     if (!this.win.visible) return;
     const m = this.g.me;
@@ -265,6 +309,7 @@ export class CharacterPanel {
       el('span', 'stat-k', grid, k);
       el('span', 'stat-v', grid, String(v));
     }
+    if (m.lvl >= MAX_LEVEL) this.legend(b);
     if (m.lvl >= SPEC_LEVEL && !m.spec) {
       el('div', 'section', b, tx('Elegí tu especialización', 'Choose your specialization'));
       // the four of level 20; their evolutions come later, with the quest "El Despertar"
@@ -940,6 +985,8 @@ export function createHelp(root: HTMLElement): Win {
     <p>Por el paso del este está <b>Juncoverde</b>, cuyos maestros fabrican el set Esmeralda (grado A) con veneno del pantano y corteza ancestral: Pantano Ponzoñoso (60-65) · Selva Antigua (65-70, jefe Ent Ancestral Corrompido). Su raid es el <b>Templo del Pantano</b> (<b>/raid swamp</b>).</p>
     <p>Por el paso del sur, la última muralla antes del Abismo es <b>Brasaoscura</b>: sus maestros fabrican el set Infernal (grado S) con núcleos de magma y esencia del abismo. Tierras Volcánicas (70-74, jefe Señor de las Llamas) · Abismo (74-78). Su raid es el <b>Corazón del Abismo</b> (<b>/raid abyss</b>).</p>
     <p>A nivel 76, la misión <b>«El Despertar»</b> de Veyra, en Brasaoscura, despierta tu <b>tercera especialización</b>: el Caballero se vuelve Paladín del Fénix, el Gladiador Duelista, el Hechicero Archimago y el Clérigo Hierofante, con una habilidad nueva en el 76, el 77 y el 78.</p>
+    <p>En el nivel 78 la experiencia llena la barra de <b>Leyenda</b>: cada nivel de Leyenda es un punto para una pasiva (ataque, defensa, HP, crítico, regeneración, velocidad) en Estado del Personaje. En un pueblo podés recuperar los puntos pagando adena.</p>
+    <p>Cada jefe tiene su <b>joya</b> única, con un poder propio: Ent Ancestral, Ssithra, Treant Ancestral, Señor de las Llamas, Azgaroth y el Avatar de la Guerra. Tenés <b>una tirada por jefe por semana</b> (se renueva el lunes). Se pueden llevar <b>dos anillos</b>. El set Infernal completo da un <b>bonus de set</b> con 2, 4 y 5 piezas, y en Brasaoscura Cassius fabrica <b>Piedras de Protección</b>: si un encantamiento falla con una, la pieza vuelve a +0 en vez de romperse.</p>
     <p>Lo que un maestro le fabrica a un <b>enano</b> (los enanos son los artesanos) a veces sale <b class="tt-mw">Obra Maestra</b>, con el nombre en dorado, y cualquiera puede usarla. Da velocidad o recarga según la raza de quien la lleva: Vel.Atq a orcos y enanos, Vel.Casteo a elfos, menos recarga a elfos oscuros, y mitad velocidad y mitad recarga a humanos (a un místico la velocidad le llega como Vel.Casteo, a un guerrero como Vel.Atq). El arma da 6% y cada armadura o joya 1%.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
@@ -989,6 +1036,8 @@ const HELP_EN = `
     <p>Through the east pass lies <b>Reedgreen</b>, whose masters craft the Emerald set (grade A) from swamp venom and ancient bark: Poison Swamp (60-65) · Ancient Jungle (65-70, boss Corrupted Elder Ent). Its raid is the <b>Swamp Temple</b> (<b>/raid swamp</b>).</p>
     <p>Through the south pass, the last wall before the Abyss is <b>Emberdark</b>: its masters craft the Infernal set (grade S) from magma cores and abyss essence. Volcanic Lands (70-74, boss Lord of Flames) · The Abyss (74-78). Its raid is the <b>Heart of the Abyss</b> (<b>/raid abyss</b>).</p>
     <p>At level 76, Veyra's quest <b>"The Awakening"</b>, in Emberdark, awakens your <b>third specialization</b>: the Knight becomes a Phoenix Paladin, the Gladiator a Duelist, the Sorcerer an Archmage and the Cleric a Hierophant, with a new skill at 76, 77 and 78.</p>
+    <p>At level 78 experience fills the <b>Legend</b> bar: every Legend level is a point for a passive (attack, defence, HP, critical, regeneration, speed) in Character Status. In a town you can take the points back for adena.</p>
+    <p>Every boss has its own <b>jewel</b>, with a power of its own: the Ancient Ent, Ssithra, the Ancient Treant, the Lord of Flames, Azgaroth and the War Avatar. You get <b>one roll per boss per week</b> (renewed on Mondays). You can wear <b>two rings</b>. The full Infernal set gives a <b>set bonus</b> at 2, 4 and 5 pieces, and in Emberdark Cassius crafts <b>Protection Stones</b>: an enchant that fails with one sends the piece back to +0 instead of breaking it.</p>
     <p>What a master crafts for a <b>dwarf</b> (dwarves are the craftsmen) sometimes comes out a <b class="tt-mw">Masterwork</b>, its name in gold, and anyone can wear it. It gives speed or cooldown as the wearer's race says: Atk.Spd to orcs and dwarves, Cast.Spd to elves, shorter cooldowns to dark elves, and half speed and half cooldown to humans (a mystic gets the speed as Cast.Spd, a fighter as Atk.Spd). The weapon gives 6% and each armor piece or jewel 1%.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.

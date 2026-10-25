@@ -1,5 +1,5 @@
 import type { ClassType, Look, Race, Spec } from './data/classes';
-import type { Slot } from './data/items';
+import type { WornSlot } from './data/items';
 import type { QuestStatus } from './data/quests';
 
 /** Name colour: 0 normal, 1 PvP flagged (purple), 2 karma (red). */
@@ -60,11 +60,13 @@ export const F_SITTING = 2048;
 export const F_GATHER = 4096;
 
 /** e: enchant level; l: legacy, worn at any level whatever its grade asks; m: Masterwork (data/items.ts MASTERWORK) */
-export interface InvItem { u: number; i: string; c: number; s: Slot | null; e?: number; l?: boolean; m?: boolean }
+export interface InvItem { u: number; i: string; c: number; s: WornSlot | null; e?: number; l?: boolean; m?: boolean }
 
 export interface SelfState {
   id: number; name: string; race: Race; cls: ClassType; spec?: Spec | null; look: Look;
   lvl: number; xp: number; xpNeed: number;
+  /** past the level cap: Legend level, XP towards the next (legendNeed 0: the Legend is full), free points, ranks spent */
+  legendLvl: number; legendXp: number; legendNeed: number; legendPts: number; legend: Record<string, number>;
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
   /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time); blk: block chance in % */
@@ -101,11 +103,12 @@ export type C2S =
   | { t: 'pickup'; id: number }
   | { t: 'talk'; id: number }
   | { t: 'equip'; u: number }
-  | { t: 'unequip'; slot: Slot }
+  | { t: 'unequip'; slot: WornSlot }
   | { t: 'use'; u: number }
   | { t: 'destroy'; u: number }
   /** spend a matching enchant scroll from the bag on this piece */
-  | { t: 'enchant'; u: number; /** with a sacred scroll: any piece, never fails */ sacred?: boolean }
+  | { t: 'enchant'; u: number; /** with a sacred scroll: any piece, never fails */ sacred?: boolean;
+      /** spending a Protection Stone too: failing, the piece goes back to +0 instead of breaking */ protect?: boolean }
   | { t: 'buy'; npc: number; item: string; qty: number }
   | { t: 'sell'; npc: number; u: number; qty: number }
   /** have a merchant make an item from its recipe (ItemDef.craft) */
@@ -155,6 +158,9 @@ export type C2S =
   | { t: 'hotbar'; data: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }
+  /** past the level cap: one more rank of a Legend passive, or every point back for adena (in a town) */
+  | { t: 'legendSpend'; id: string }
+  | { t: 'legendReset' }
   | { t: 'respawn' }
   | { t: 'pvpMode'; on: boolean }
   | { t: 'autoLoot'; on: boolean }

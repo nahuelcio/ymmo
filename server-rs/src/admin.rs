@@ -85,6 +85,8 @@ pub fn tunables() -> Vec<Tunable> {
             let b = b.unwrap_or(1.0);
             add(format!("mob.{}.{f}", m.id), format!("{} {f}", m.name_en), b, (0.1, (b * 3.0).max(5.0)));
         }
+        // a boss jewel's weekly chance (combat.rs jewel_rolls)
+        if let Some(j) = &m.jewel { add(format!("jewel.{}", m.id), format!("{} jewel chance", m.name_en), j.chance, (0.0, 1.0)); }
     }
     for c in data.classes.values() {
         for (f, b) in [("baseHp", c.base_hp), ("hpLvl", c.hp_lvl), ("baseMp", c.base_mp), ("mpLvl", c.mp_lvl)] {

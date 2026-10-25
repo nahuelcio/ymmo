@@ -40,6 +40,9 @@ export interface MobDef {
   enrage?: Enrage;
   adena: [number, number];
   drops: Drop[];
+  /** a boss's own jewel (items.ts): each character who fought it gets one roll at `chance` a week, kept in the
+   * database (server-rs combat.rs jewel_rolls); the panel can tune it as `jewel.<boss id>` */
+  jewel?: { item: string; chance: number };
 }
 
 export interface MobPhase {
@@ -332,7 +335,8 @@ const list: MobDef[] = [
     ],
     adena: [30000, 48000],
     drops: [{ item: 'emerald_blade', chance: 0.2 }, { item: 'emerald_duals', chance: 0.1 }, { item: 'emerald_bow', chance: 0.2 }, { item: 'emerald_dagger', chance: 0.2 }, { item: 'emerald_staff', chance: 0.2 }, { item: 'emerald_spellblade', chance: 0.2 }, { item: 'emerald_plate', chance: 0.18 }, { item: 'emerald_jerkin', chance: 0.18 }, { item: 'emerald_robe', chance: 0.18 }, { item: 'emerald_necklace', chance: 0.25 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 2 }, { item: 'scroll_enchant_armor', chance: 1, min: 2, max: 5 }, { item: 'ancient_bark', chance: 1, min: 6, max: 12 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 2 }, { item: 'scroll_enchant_armor', chance: 1, min: 2, max: 5 }, { item: 'ancient_bark', chance: 1, min: 6, max: 12 }],
+    jewel: { item: 'ring_of_the_elder_ent', chance: 0.06 } },
   { id: 'ent_sapling', name: 'Retoño Corrompido', level: 64, shape: 'golem', color: 0x7a9a5a, scale: 0.9, aggressive: true, speed: 5, atkInterval: 1500, range: 2.2, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Swamp Temple raid (instanced, `/raid swamp`)
   { id: 'ssithra', name: 'Ssithra, la Madre Serpiente', level: 70, shape: 'beast', color: 0x3a8a6a, scale: 3.4, aggressive: true, speed: 4.5, atkInterval: 1700, range: 5, hpMult: 26, atkMult: 1.35, defMult: 1.25, respawn: 1e12, boss: true,
@@ -346,7 +350,8 @@ const list: MobDef[] = [
     adena: [70000, 110000],
     drops: [{ item: 'emerald_blade', chance: 0.6 }, { item: 'emerald_duals', chance: 0.3 }, { item: 'emerald_bow', chance: 0.6 }, { item: 'emerald_dagger', chance: 0.6 }, { item: 'emerald_staff', chance: 0.6 }, { item: 'emerald_spellblade', chance: 0.6 }, { item: 'emerald_plate', chance: 0.5 }, { item: 'emerald_jerkin', chance: 0.5 }, { item: 'emerald_robe', chance: 0.5 }, { item: 'emerald_helm', chance: 0.5 }, { item: 'emerald_hood', chance: 0.5 }, { item: 'emerald_circlet', chance: 0.5 }, { item: 'emerald_shield', chance: 0.5 }, { item: 'emerald_cape', chance: 0.5 },
       { item: 'emerald_ring', chance: 0.5 }, { item: 'emerald_earring', chance: 0.5 }, { item: 'emerald_necklace', chance: 0.5 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 2, max: 4 }, { item: 'scroll_enchant_armor', chance: 1, min: 4, max: 8 }, { item: 'swamp_venom', chance: 1, min: 10, max: 20 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 2, max: 4 }, { item: 'scroll_enchant_armor', chance: 1, min: 4, max: 8 }, { item: 'swamp_venom', chance: 1, min: 10, max: 20 }],
+    jewel: { item: 'ring_of_ssithra', chance: 0.1 } },
   { id: 'serpent_brood', name: 'Cría de Serpiente', level: 67, shape: 'beast', color: 0x8ac060, scale: 0.9, aggressive: true, speed: 6, atkInterval: 1300, range: 1.8, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Volcanic Lands 70-74 (the volcanic region, past the south pass)
   { id: 'lava_salamander', name: 'Salamandra de Lava', level: 71, shape: 'beast', color: 0xc84a1a, scale: 1.3, aggressive: true, speed: 6, atkInterval: 1300, range: 2.4, onHit: { id: 'bleed', ms: 5000, chance: 0.3, dot: 0.24 }, adena: [3290, 4540],
@@ -383,7 +388,8 @@ const list: MobDef[] = [
     ],
     adena: [45000, 70000],
     drops: [{ item: 'infernal_blade', chance: 0.12 }, { item: 'infernal_duals', chance: 0.06 }, { item: 'infernal_bow', chance: 0.12 }, { item: 'infernal_dagger', chance: 0.12 }, { item: 'infernal_staff', chance: 0.12 }, { item: 'infernal_spellblade', chance: 0.12 }, { item: 'infernal_plate', chance: 0.1 }, { item: 'infernal_jerkin', chance: 0.1 }, { item: 'infernal_robe', chance: 0.1 }, { item: 'infernal_necklace', chance: 0.15 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 3 }, { item: 'scroll_enchant_armor', chance: 1, min: 3, max: 6 }, { item: 'magma_core', chance: 1, min: 8, max: 15 }, { item: 'abyss_essence', chance: 1, min: 3, max: 6 }, { item: 'awakening_shard', chance: 1, min: 2, max: 3 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 1, max: 3 }, { item: 'scroll_enchant_armor', chance: 1, min: 3, max: 6 }, { item: 'magma_core', chance: 1, min: 8, max: 15 }, { item: 'abyss_essence', chance: 1, min: 3, max: 6 }, { item: 'awakening_shard', chance: 1, min: 2, max: 3 }],
+    jewel: { item: 'earring_of_the_flame_lord', chance: 0.06 } },
   { id: 'fire_elemental', name: 'Elemental de Fuego', level: 72, shape: 'golem', color: 0xff7a3a, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.2, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Heart of the Abyss raid (instanced, `/raid abyss`)
   { id: 'azgaroth', name: 'Azgaroth, el Devorador', level: 78, shape: 'beast', color: 0x4a2a5a, scale: 3.8, aggressive: true, speed: 4.5, atkInterval: 1800, range: 5.5, hpMult: 30, atkMult: 1.4, defMult: 1.3, respawn: 1e12, boss: true,
@@ -397,7 +403,8 @@ const list: MobDef[] = [
     adena: [100000, 160000],
     drops: [{ item: 'infernal_blade', chance: 0.45 }, { item: 'infernal_duals', chance: 0.225 }, { item: 'infernal_bow', chance: 0.45 }, { item: 'infernal_dagger', chance: 0.45 }, { item: 'infernal_staff', chance: 0.45 }, { item: 'infernal_spellblade', chance: 0.45 }, { item: 'infernal_plate', chance: 0.4 }, { item: 'infernal_jerkin', chance: 0.4 }, { item: 'infernal_robe', chance: 0.4 }, { item: 'infernal_helm', chance: 0.4 }, { item: 'infernal_hood', chance: 0.4 }, { item: 'infernal_circlet', chance: 0.4 }, { item: 'infernal_shield', chance: 0.4 }, { item: 'infernal_cape', chance: 0.4 },
       { item: 'infernal_ring', chance: 0.4 }, { item: 'infernal_earring', chance: 0.4 }, { item: 'infernal_necklace', chance: 0.4 },
-      { item: 'scroll_enchant_weapon', chance: 1, min: 3, max: 5 }, { item: 'scroll_enchant_armor', chance: 1, min: 5, max: 10 }, { item: 'abyss_essence', chance: 1, min: 20, max: 35 }, { item: 'awakening_shard', chance: 1, min: 3, max: 5 }] },
+      { item: 'scroll_enchant_weapon', chance: 1, min: 3, max: 5 }, { item: 'scroll_enchant_armor', chance: 1, min: 5, max: 10 }, { item: 'abyss_essence', chance: 1, min: 20, max: 35 }, { item: 'awakening_shard', chance: 1, min: 3, max: 5 }],
+    jewel: { item: 'necklace_of_azgaroth', chance: 0.1 } },
   { id: 'abyss_spawn', name: 'Engendro del Abismo', level: 76, shape: 'spider', color: 0x6a4a8a, scale: 1.0, aggressive: true, speed: 6, atkInterval: 1300, range: 1.8, hpMult: 1.2, respawn: 1e12, adena: [0, 0], drops: [] },
   // Encrucijada Sangrienta (full PvP): passive creatures that drop every set's materials and enchants
   { id: 'battlefield_carrion', name: 'Carroñero del Campo', level: 76, shape: 'beast', color: 0x6a4a3a, scale: 1.3, aggressive: false, speed: 5, atkInterval: 1500, range: 2.2, hpMult: 2.2, atkMult: 1.1,
@@ -427,8 +434,11 @@ const list: MobDef[] = [
       { at: 10, haste: 1.6, say: ['¡Caigan conmigo!', 'Fall with me!'] },
     ],
     adena: [300000, 500000],
+    // a level 80 boss: the Infernal set, its weapons and jewels (and its own jewel), not the lower sets it used to drop
     drops: [{ item: 'scroll_enchant_sacred', chance: 1, min: 2, max: 2 }, { item: 'scroll_enchant_weapon', chance: 1, min: 4, max: 8 }, { item: 'scroll_enchant_armor', chance: 1, min: 8, max: 15 },
-      ...setArmor('abyssal', 0.08), ...setArmor('ashforged', 0.08), ...setArmor('dragon', 0.06), ...setArmor('glacial', 0.06), ...setArmor('emerald', 0.05), ...setArmor('infernal', 0.04)] },
+      ...['blade', 'bow', 'dagger', 'staff', 'spellblade'].map((w) => ({ item: `infernal_${w}`, chance: 0.15 })), { item: 'infernal_duals', chance: 0.08 },
+      ...setArmor('infernal', 0.12), ...['ring', 'earring', 'necklace'].map((j) => ({ item: `infernal_${j}`, chance: 0.15 }))],
+    jewel: { item: 'necklace_of_the_war_avatar', chance: 0.2 } },
   // they go for whoever the boss lets them: a pack of them kills a healer nobody covers
   { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 1.41, respawn: 1e12, adena: [0, 0], drops: [] },
   // Grieta de las Brasas (full PvP, levels 40-48): passive creatures that drop the dragon set's materials and the C-grade
@@ -553,7 +563,8 @@ const list: MobDef[] = [
     ],
     adena: [220000, 320000],
     drops: [{ item: 'emerald_blade', chance: 0.3 }, { item: 'emerald_duals', chance: 0.15 }, { item: 'emerald_bow', chance: 0.3 }, { item: 'emerald_dagger', chance: 0.3 }, { item: 'emerald_staff', chance: 0.3 }, { item: 'emerald_spellblade', chance: 0.3 },
-      ...setArmor('emerald', 0.15), { item: 'scroll_enchant_weapon_a', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_a', chance: 1, min: 6, max: 12 }] },
+      ...setArmor('emerald', 0.15), { item: 'scroll_enchant_weapon_a', chance: 1, min: 3, max: 6 }, { item: 'scroll_enchant_armor_a', chance: 1, min: 6, max: 12 }],
+    jewel: { item: 'earring_of_ulmoroth', chance: 0.15 } },
   // they go for whoever the boss lets them: a ring of them strangles a healer nobody covers
   { id: 'treant_sapling', name: 'Retoño del Treant', level: 64, shape: 'golem', color: 0x6a8a3a, scale: 1.0, aggressive: true, speed: 5.5, atkInterval: 1300, range: 2.2, hpMult: 2, atkMult: 1.6, respawn: 1e12, adena: [0, 0], drops: [] },
   // Campo de Huesos (full PvP, levels 12-20): passive creatures that drop bones and the NG scrolls (items.ts: they only

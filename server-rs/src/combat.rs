@@ -1,7 +1,9 @@
 //! Combat: attacks, damage, statuses, xp, deaths, skills (port of server/src/systems/combat.ts).
-use crate::data::{d, StatusApply};
+use crate::admin::bal;
+use crate::data::{d, Jewel, MobDef, StatusApply};
 use crate::ent::*;
 use crate::formulas::*;
+use crate::inventory::add_item;
 use crate::i18n::tr;
 use crate::terrain::{in_pvp_zone, in_town};
 use crate::world::{dist, World};
@@ -287,7 +289,7 @@ impl World {
             if p.karma == 0 { self.sys(pid, "Tu karma quedó limpio.", "Your karma has been cleansed."); }
         }
         let p = self.pl_mut(pid).unwrap();
-        if p.level >= max { return; }
+        if p.level >= max { return self.gain_legend(pid, amt); }
         p.xp += amt;
         self.sys(pid, &format!("Ganaste {amt} de experiencia."), &format!("You have earned {amt} experience."));
         let mut up = false;
@@ -379,6 +381,11 @@ impl World {
             m.threat.clear();
             (ex, ez, m.tpl, std::mem::take(&mut m.hate), m.camp_id.clone())
         };
+        // an overworld boss keeps its time across restarts (world.rs restore_boss_respawns)
+        if tpl.boss.unwrap_or(false) && self.raid.is_none() {
+            let at = self.ents[&mid].mob().unwrap().respawn_at;
+            self.db.set_boss_respawn(&tpl.id, at);
+        }
         self.send_near(x, z, json!({ "t": "died", "id": mid, "byPlayer": false }));
         self.mob_killed(mid, now);
 
@@ -441,6 +448,47 @@ impl World {
         if tpl.boss.unwrap_or(false) {
             self.announce(|l| if l.en() { format!("{best_name} has slain the raid boss {}!", tpl.name_en) } else { format!("¡{best_name} derrotó al jefe {}!", tpl.name) });
         }
+        if let Some(j) = &tpl.jewel { self.jewel_rolls(tpl, j, x, z, &owners, &damaged, now); }
+    }
+
+    /**
+     * A boss's jewel: each of the loot's owners who fought it (hit it, or stood by it alive, within 40 m) gets this
+     * week's one roll of it, kept in the database (formulas.rs loot_week: Monday 00:00 Argentina). A lucky one has it
+     * straight in the bag (with no room, on the ground for them alone), and the server hears of it.
+     */
+    fn jewel_rolls(&mut self, boss: &MobDef, j: &Jewel, x: f64, z: f64, owners: &HashSet<u32>, damaged: &[u32], now: f64) {
+        let Some(def) = d().item(&j.item) else { return };
+        let week = loot_week(now);
+        let chance = bal(&format!("jewel.{}", boss.id), j.chance);
+        let mut ids: Vec<u32> = owners.iter().copied().filter(|id| {
+            self.ents.get(id).map_or(false, |e| e.player().is_some() && (damaged.contains(id) || (!e.c.dead && (e.c.x - x).hypot(e.c.z - z) <= 40.0)))
+        }).collect();
+        ids.sort();
+        for pid in ids {
+            let cid = self.pl(pid).unwrap().char_id;
+            if !self.db.take_jewel_roll(cid, &boss.id, week) {
+                self.sys(pid, &format!("Ya usaste esta semana tu tirada de la joya de {}.", boss.name), &format!("You have already used this week's roll for {}'s jewel.", boss.name_en));
+                continue;
+            }
+            if rnd() >= chance {
+                self.sys(pid, &format!("Tu tirada semanal de la joya de {}: esta vez no hubo suerte.", boss.name), &format!("Your weekly roll for {}'s jewel: no luck this time.", boss.name_en));
+                continue;
+            }
+            let p = self.pl_mut(pid).unwrap();
+            if add_item(p, &j.item, 1) {
+                // the week's roll is written already: so is the jewel, right away, not at the next periodic save (in a
+                // raid, standing in the village, as autosave does)
+                let at = self.exit_point();
+                self.save_player(pid, at);
+            } else {
+                let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+                let gid = self.spawn_ground(px, pz, &j.item, 1, Some([pid].into_iter().collect()), now);
+                if let Some(Kind::Item(g)) = self.ents.get_mut(&gid).map(|e| &mut e.k) { (g.owner_until, g.expire_at) = (now + 600_000.0, now + 600_000.0); }
+                self.sys(pid, "Tenés el inventario lleno: la joya quedó en el piso, a tu nombre, por 10 minutos.", "Your inventory is full: the jewel is on the ground, yours alone, for 10 minutes.");
+            }
+            let name = self.pl(pid).unwrap().name.clone();
+            self.announce(|l| if l.en() { format!("{name} obtained the {}!", def.name_en) } else { format!("¡{name} obtuvo el {}!", def.name) });
+        }
     }
 
     pub fn kill_player(&mut self, tid: u32, killer: u32, now: f64) {
@@ -488,6 +536,8 @@ impl World {
                 self.pl_mut(tid).unwrap().xp = (t_xp - loss).max(0);
                 self.sys(tid, &format!("Moriste y perdiste {loss} de experiencia."), &format!("You have died and lost {loss} experience."));
             }
+            // at the level cap the Legend's bar pays instead (never a Legend level)
+            if t_level >= d().c.max_level { self.lose_legend(tid, if t_karma > 0 { 2.0 } else { 1.0 }); }
         }
         if t_karma > 0 && rnd() < 0.4 { self.drop_from_player(tid, now); }
         self.pl_mut(tid).unwrap().pvp_until = 0.0;

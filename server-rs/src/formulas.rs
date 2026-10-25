@@ -87,6 +87,21 @@ pub fn masterwork_bonus(race: &str, cls: &str, is_weapon: bool) -> (f64, f64, f6
     }
 }
 
+/** What worn gear adds on top of its stats, as buffs that never run out: each piece's own (a boss jewel's power), and
+ * every bonus tier a set reaches with the pieces of it worn (SET_BONUS in shared/src/data/items.ts). */
+pub fn gear_mods<'a>(equipped: &[(&'a ItemDef, i64, bool)]) -> Vec<&'a BuffMods> {
+    let mut out: Vec<&BuffMods> = equipped.iter().filter_map(|(it, _, _)| it.mods.as_ref()).collect();
+    let mut sets: Vec<(&str, usize)> = vec![];
+    for (it, _, _) in equipped {
+        let Some(s) = it.set.as_deref() else { continue };
+        match sets.iter_mut().find(|(n, _)| *n == s) { Some(e) => e.1 += 1, None => sets.push((s, 1)) }
+    }
+    for (s, n) in sets {
+        if let Some(tiers) = d().set_bonus.get(s) { out.extend(tiers.iter().filter(|t| t.pieces <= n).map(|t| &t.mods)); }
+    }
+    out
+}
+
 /** equipped: each worn piece with its enchant level (+N) and whether it is a Masterwork */
 pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i64, bool)], buffs: &[&BuffMods], gender: &str) -> Stats {
     let r = stat_mods(race, gender);
@@ -230,6 +245,45 @@ pub fn xp_to_next(level: i64) -> i64 {
 
 /** Past level 50 each level asks progressively more, as in L2: x1 at 50 up to x3 at 77. */
 fn past_50(level: i64) -> f64 { if level <= 50 { 1.0 } else { 1.0 + 2.0 * ((level - 50) as f64 / 27.0).powf(1.3) } }
+
+/** Where a ring goes, given what each hand wears (ring, ring2): over the same jewel if it is on already (never one on
+ * both hands), else the first free hand, else over the first hand's ring. */
+pub fn ring_slot(ring: Option<&str>, ring2: Option<&str>, id: &str) -> &'static str {
+    if ring == Some(id) { "ring" } else if ring2 == Some(id) { "ring2" } else if ring.is_none() { "ring" } else if ring2.is_none() { "ring2" } else { "ring" }
+}
+
+/** The week a boss jewel's roll belongs to (ms since epoch): a new one every Monday at 00:00 in Argentina (UTC-3). */
+pub fn loot_week(now_ms: f64) -> i64 {
+    let days = ((now_ms - 3.0 * 3_600_000.0) / 86_400_000.0).floor() as i64;
+    // 1970-01-01 was a Thursday: three days on, the weeks start on Mondays
+    (days + 3).div_euclid(7)
+}
+
+/** XP from Legend level `n` to the next, at the level cap: half of 77 to 78 for the first, 5% more each one after;
+ * 0 once the Legend is full. */
+pub fn legend_to_next(n: i64) -> i64 {
+    if n >= d().legend.max { return 0; }
+    jround(xp_to_next(d().c.max_level - 1) as f64 * (0.5 + 0.05 * n as f64)) as i64
+}
+
+/** The Legend's passives at these ranks, as one buff: every rank adds a multiplier's share (10 ranks of x1.01 are
+ * x1.10) or its points once more. */
+pub fn legend_mods(ranks: &std::collections::HashMap<String, i64>) -> BuffMods {
+    let mut out = BuffMods::default();
+    let mul = |acc: &mut Option<f64>, per: Option<f64>, r: f64| if let Some(v) = per { *acc = Some(acc.unwrap_or(1.0) + (v - 1.0) * r) };
+    let add = |acc: &mut Option<f64>, per: Option<f64>, r: f64| if let Some(v) = per { *acc = Some(acc.unwrap_or(0.0) + v * r) };
+    for p in &d().legend.passives {
+        let r = ranks.get(&p.id).copied().unwrap_or(0).clamp(0, p.max) as f64;
+        if r == 0.0 { continue; }
+        let m = &p.mods;
+        mul(&mut out.p_atk, m.p_atk, r); mul(&mut out.p_def, m.p_def, r); mul(&mut out.m_atk, m.m_atk, r); mul(&mut out.m_def, m.m_def, r);
+        mul(&mut out.speed, m.speed, r); mul(&mut out.atk_spd, m.atk_spd, r); mul(&mut out.cast_spd, m.cast_spd, r);
+        mul(&mut out.max_hp, m.max_hp, r); mul(&mut out.hp_regen, m.hp_regen, r); mul(&mut out.mp_regen, m.mp_regen, r); mul(&mut out.crit_dmg, m.crit_dmg, r);
+        add(&mut out.crit, m.crit, r); add(&mut out.evasion, m.evasion, r); add(&mut out.cdr, m.cdr, r); add(&mut out.accuracy, m.accuracy, r);
+        add(&mut out.vampire, m.vampire, r); add(&mut out.reflect, m.reflect, r);
+    }
+    out
+}
 
 pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * mob_mult(m, "hpMult", m.hp_mult).powf(0.85)) }
 
@@ -633,6 +687,82 @@ mod tests {
         assert_eq!(hut / stand, 8.0);
         assert!(regen_mul(true, Some(huts[0])) < stand, "a fight slows it as anywhere");
         assert_eq!(data.c.hut_cap, 4);
+    }
+
+    /// Past the cap the Legend's bar starts at half of 77 to 78 and asks 5% more each level, up to a full Legend whose
+    /// passives take every point (8 of 10 ranks).
+    #[test]
+    fn legend_bar_and_tree() {
+        let data = d();
+        assert_eq!(xp_to_next(data.c.max_level), 0, "the level cap stays the cap");
+        let half = jround(xp_to_next(data.c.max_level - 1) as f64 * 0.5) as i64;
+        assert_eq!(legend_to_next(0), half);
+        for n in 0..data.legend.max - 1 { assert!(legend_to_next(n + 1) > legend_to_next(n), "{n}"); }
+        assert_eq!(legend_to_next(data.legend.max), 0, "a full Legend asks for nothing");
+        assert_eq!(data.legend.passives.iter().map(|p| p.max).sum::<i64>(), data.legend.max, "the tree takes every point");
+    }
+
+    /// Ranks add up: 10 of Might are x1.10 P.Atk, 4 of Edge +2 crit, 2 of Renewal x1.06 regen; unspent passives add nothing.
+    #[test]
+    fn legend_ranks_add_up() {
+        let ranks: std::collections::HashMap<String, i64> = [("might", 10), ("edge", 4), ("renewal", 2)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        let m = legend_mods(&ranks);
+        assert!((m.p_atk.unwrap() - 1.10).abs() < 1e-9 && (m.crit.unwrap() - 2.0).abs() < 1e-9);
+        assert!((m.hp_regen.unwrap() - 1.06).abs() < 1e-9 && (m.mp_regen.unwrap() - 1.06).abs() < 1e-9);
+        assert!(m.m_atk.is_none() && m.max_hp.is_none(), "no ranks, no bonus");
+        // more ranks than a passive has count as its max
+        let over = legend_mods(&[("might".to_string(), 99)].into_iter().collect());
+        assert!((over.p_atk.unwrap() - 1.10).abs() < 1e-9);
+        let base = compute_stats("human", "fighter", 78, &[], &[], "m");
+        let strong = compute_stats("human", "fighter", 78, &[], &[&m], "m");
+        assert!((strong.p_atk / base.p_atk - 1.10).abs() < 0.02, "{} vs {}", strong.p_atk, base.p_atk);
+        assert!(strong.crit - base.crit == 2.0);
+    }
+
+    /// Worn gear's own buffs: a boss jewel's mods, and each Infernal tier once 2, 4 and 5 of its armour pieces are on.
+    #[test]
+    fn jewels_and_set_bonus() {
+        let data = d();
+        let worn = |ids: &[&str]| ids.iter().map(|id| (data.item(id).unwrap_or_else(|| panic!("{id}")), 0, false)).collect::<Vec<_>>();
+        assert_eq!(gear_mods(&worn(&["infernal_helm"])).len(), 0, "one piece is no set");
+        assert_eq!(gear_mods(&worn(&["infernal_helm", "infernal_plate", "infernal_greaves"])).len(), 1);
+        assert_eq!(gear_mods(&worn(&["infernal_helm", "infernal_plate", "infernal_greaves", "infernal_gauntlets"])).len(), 2);
+        let full = worn(&["infernal_hood", "infernal_jerkin", "infernal_leggings", "infernal_bracers", "infernal_treads", "infernal_ring", "infernal_cape"]);
+        assert_eq!(gear_mods(&full).len(), 3, "any of the set's lines, jewels and cape not counted");
+        let jewels = worn(&["necklace_of_azgaroth", "ring_of_ssithra"]);
+        assert_eq!(gear_mods(&jewels).len(), 2);
+        let bm = gear_mods(&jewels);
+        let with = compute_stats("human", "fighter", 78, &jewels, &bm, "m");
+        let without = compute_stats("human", "fighter", 78, &jewels, &[], "m");
+        assert!(with.p_atk > without.p_atk && with.vampire > 0.0 && with.cdr > without.cdr);
+        // every boss with a jewel names one that exists, worn where a jewel goes
+        for m in data.mobs.values().filter_map(|m| m.jewel.as_ref()) {
+            let it = data.item(&m.item).unwrap_or_else(|| panic!("{}", m.item));
+            assert!(matches!(it.slot.as_deref(), Some("ring" | "earring" | "amulet")) && it.mods.is_some(), "{}", m.item);
+        }
+    }
+
+    /// Two rings: the first free hand, never the same jewel twice, the first hand's ring swapped when both are on.
+    #[test]
+    fn rings_go_on_either_hand() {
+        assert_eq!(ring_slot(None, None, "a"), "ring");
+        assert_eq!(ring_slot(Some("a"), None, "b"), "ring2");
+        assert_eq!(ring_slot(Some("a"), None, "a"), "ring", "the same ring does not go on the other hand");
+        assert_eq!(ring_slot(None, Some("a"), "a"), "ring2");
+        assert_eq!(ring_slot(None, Some("a"), "b"), "ring");
+        assert_eq!(ring_slot(Some("a"), Some("b"), "c"), "ring");
+        assert_eq!(ring_slot(Some("a"), Some("b"), "b"), "ring2");
+    }
+
+    /// A jewel's week turns on Monday at 00:00 in Argentina (03:00 UTC), and lasts until Sunday 23:59.
+    #[test]
+    fn loot_weeks_start_on_monday() {
+        // Monday 2024-01-01 00:00 UTC-3
+        let monday = 1_704_078_000_000.0;
+        let w = loot_week(monday);
+        assert_eq!(loot_week(monday - 1.0), w - 1, "Sunday night is the week before");
+        assert_eq!(loot_week(monday + 7.0 * 86_400_000.0 - 1.0), w, "until Sunday 23:59");
+        assert_eq!(loot_week(monday + 7.0 * 86_400_000.0), w + 1);
     }
 
     /// Ymirak's Congelación slows like a slow (and deals damage over time like a bleed, through tick_statuses).

@@ -88,7 +88,25 @@ pub struct ItemDef {
     pub craft: Option<Recipe>,
     /** sword, axe, pickaxe...: decides which gathering tool a weapon is */
     pub weapon_type: Option<String>,
+    /** what it adds while worn, as a buff that never runs out (a boss jewel's power) */
+    pub mods: Option<BuffMods>,
+    /** the set of an armour line's piece, for its SET_BONUS */
+    pub set: Option<String>,
+    /** a Protection Stone: a failed enchant made with one sends the piece back to +0 instead of breaking it */
+    pub protects: Option<bool>,
 }
+
+/** A set's bonus tier: what its armour pieces add once this many of them are worn (SET_BONUS in shared/src/data/items.ts). */
+#[derive(Deserialize, Clone, Debug)]
+pub struct SetTier { pub pieces: usize, pub mods: BuffMods }
+
+/** Legend past the level cap (LEGEND in shared/src/data/legend.ts): its passives, each rank adding `mods` once more. */
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LegendPassive { pub id: String, pub name: String, pub name_en: String, pub max: i64, pub mods: BuffMods }
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LegendCfg { pub max: i64, pub reset_cost: i64, pub passives: Vec<LegendPassive> }
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
@@ -161,7 +179,12 @@ pub struct MobDef {
     pub enrage: Option<Enrage>,
     pub adena: (f64, f64),
     pub drops: Vec<Drop>,
+    /** a boss's own jewel: one roll at `chance` a week for each character who fought it (combat.rs jewel_rolls) */
+    pub jewel: Option<Jewel>,
 }
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Jewel { pub item: String, pub chance: f64 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -396,6 +419,8 @@ struct Raw {
     #[serde(rename = "gradeLevel")]
     grade_level: HashMap<String, i64>,
     masterwork: MasterworkCfg,
+    #[serde(rename = "setBonus")]
+    set_bonus: HashMap<String, Vec<SetTier>>,
     mobs: Vec<MobDef>,
     skills: Vec<SkillDef>,
     quests: Vec<QuestDef>,
@@ -415,6 +440,7 @@ struct Raw {
     nodes: Vec<NodeRaw>,
     gather: GatherDefs,
     clans: ClansDef,
+    legend: LegendCfg,
     water: WaterRaw,
 }
 
@@ -448,9 +474,12 @@ pub struct Data {
     pub nodes: HashMap<u32, NodeDef>,
     pub gather: GatherDefs,
     pub clans: ClansDef,
+    pub legend: LegendCfg,
     /** the level a character needs to wear each grade (GRADE_LEVEL in shared/src/data/items.ts) */
     pub grade_level: HashMap<String, i64>,
     pub masterwork: MasterworkCfg,
+    /** each set's bonus tiers, fewest pieces first */
+    pub set_bonus: HashMap<String, Vec<SetTier>>,
     /** deep water on a grid (cell m, from -half): true where a character swims */
     water: Vec<bool>,
     water_cell: f64,
@@ -517,6 +546,7 @@ pub fn d() -> &'static Data {
             items: raw.items.into_iter().map(|i| (i.id.clone(), i)).collect(),
             grade_level: raw.grade_level,
             masterwork: raw.masterwork,
+            set_bonus: raw.set_bonus,
             mobs: raw.mobs.into_iter().map(|m| (m.id.clone(), m)).collect(),
             skills: raw.skills,
             skill_by_id,
@@ -539,6 +569,7 @@ pub fn d() -> &'static Data {
             }).collect(),
             gather: raw.gather,
             clans: raw.clans,
+            legend: raw.legend,
             water_n: water_n,
             water_cell: raw.water.cell,
             water_half: raw.water.half,

@@ -1,8 +1,11 @@
 import { RACES, type ClassType, type Race } from './classes';
+import type { BuffMods } from './skills';
 
 export type Slot = 'weapon' | 'shield' | 'head' | 'chest' | 'cape' | 'legs' | 'gloves' | 'feet' | 'amulet' | 'earring' | 'ring';
-// ponytail: one ring, so an item's slot is always where it is worn; a second ring needs ring1/ring2 and a "first free" rule in equip
 export const SLOTS: Slot[] = ['head', 'weapon', 'shield', 'chest', 'cape', 'gloves', 'legs', 'feet', 'amulet', 'earring', 'ring'];
+/** Where a piece is worn: its slot, but a ring (slot 'ring') goes on either hand, 'ring' or 'ring2' (server-rs formulas.rs ring_slot). */
+export type WornSlot = Slot | 'ring2';
+export const WORN_SLOTS: WornSlot[] = [...SLOTS, 'ring2'];
 export type Grade = 'NG' | 'D' | 'C' | 'B' | 'A' | 'S';
 /** A shield's chance to block, by its grade: 15% at NG, 3% more each grade, 30% at S. */
 export const SHIELD_BLOCK: Record<Grade, number> = { NG: 0.15, D: 0.18, C: 0.21, B: 0.24, A: 0.27, S: 0.3 };
@@ -46,10 +49,31 @@ export interface ItemDef {
   craft?: { mats: [string, number][]; adena: number };
   /** enchant scroll: the kind of gear it works on (sacred: any piece, and it never fails) */
   enchant?: 'weapon' | 'armor' | 'sacred';
+  /** what it adds while worn on top of its stats, as a buff that never runs out (a boss jewel's power) */
+  mods?: BuffMods;
+  /** a Protection Stone: an enchant made with one that fails sends the piece back to +0 instead of breaking it */
+  protects?: boolean;
+  /** the set it belongs to (an armour line's five pieces: head, chest, legs, gloves, feet), for SET_BONUS */
+  set?: string;
   icon: string;
   color: number;
   desc?: string;
 }
+
+/** The slots of a set's armour line, the pieces SET_BONUS counts (whichever line: plate, robe or light). */
+const SET_SLOTS: Slot[] = ['head', 'chest', 'legs', 'gloves', 'feet'];
+/**
+ * What a set's armour pieces add, worn together: every tier up to as many pieces as are worn (multipliers, crit points,
+ * as BuffMods). Only the Infernal set has one so far.
+ */
+export const SET_NAME: Record<string, { es: string; en: string }> = { infernal: { es: 'Infernal', en: 'Infernal' } };
+export const SET_BONUS: Record<string, { pieces: number; mods: BuffMods }[]> = {
+  infernal: [
+    { pieces: 2, mods: { maxHp: 1.03 } },
+    { pieces: 4, mods: { pDef: 1.04, mDef: 1.04 } },
+    { pieces: 5, mods: { pAtk: 1.05, mAtk: 1.05, crit: 1 } },
+  ],
+};
 
 /**
  * One full gear set. w: sword P.Atk (what a fighter needs to drop a same-level mob in ~12 hits,
@@ -59,7 +83,8 @@ function tier(grade: Grade, p: string, sg: string, pl: string, w: number, a: num
   const r = Math.round;
   // crafted tiers: 4 of each material per price step (a weapon is 24 + 24) and a third of the price in adena
   const craft = (k: number) => (mats ? { craft: { mats: mats.map((m) => [m, r(k * 4)] as [string, number]), adena: r((price * k) / 3) } } : {});
-  const armor = (id: string, name: string, slot: Slot, icon: string, k: number, s: Partial<ItemDef>): ItemDef => ({ id: `${p}_${id}`, name, type: 'armor', slot, grade, ...(look && { look }), price: r(price * k), icon, color, ...s, ...craft(k) });
+  const armor = (id: string, name: string, slot: Slot, icon: string, k: number, s: Partial<ItemDef>): ItemDef => ({ id: `${p}_${id}`, name, type: 'armor', slot, grade, ...(look && { look }),
+    ...(SET_SLOTS.includes(slot) && { set: p }), price: r(price * k), icon, color, ...s, ...craft(k) });
   return [
     { id: `${p}_blade`, name: `Hoja ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'sword', pAtk: w, mAtk: r(w * 0.55), price: price * 6, icon: '⚔️', color, ...craft(6) },
     { id: `${p}_staff`, name: `Báculo ${sg}`, type: 'weapon', slot: 'weapon', grade, ...(look && { look }), weaponType: 'staff', twoHanded: true, pAtk: r(w * 0.55), mAtk: r(w * 1.06), price: price * 6, icon: '🪄', color, ...craft(6) },
@@ -193,6 +218,14 @@ const list: ItemDef[] = [
   { id: 'ring_of_swiftness', name: 'Anillo de Presteza', type: 'armor', slot: 'ring', grade: 'NG', look: 'D', mDef: 2, cdr: 0.05, price: 4000, icon: '💍', color: 0x60d0c0, desc: 'Recarga de habilidades -5%.' },
   { id: 'earring_of_clarity', name: 'Pendiente de la Claridad', type: 'armor', slot: 'earring', grade: 'D', look: 'C', mDef: 5, mp: 40, cdr: 0.08, price: 9500, icon: '✨', color: 0x80c8ff, desc: 'Recarga de habilidades -8%.' },
   { id: 'amulet_of_haste', name: 'Amuleto de Celeridad', type: 'armor', slot: 'amulet', grade: 'D', look: 'C', mDef: 6, hp: 50, cdr: 0.1, price: 13000, icon: '📿', color: 0xe0c060, desc: 'Recarga de habilidades -10%.' },
+  // Boss jewels (L2's epic jewels): a little above the Infernal ones, and a power of their own (mods). Each boss rolls
+  // its own once a week for each character who fought it (mobs.ts jewel; server-rs combat.rs jewel_rolls).
+  { id: 'ring_of_the_elder_ent', name: 'Anillo del Ent Ancestral', type: 'armor', slot: 'ring', grade: 'S', mDef: 39, hp: 260, mods: { hpRegen: 1.25, maxHp: 1.03 }, price: 1_000_000, icon: '💍', color: 0x7ab060, desc: 'La joya del Ent Ancestral Corrompido.' },
+  { id: 'ring_of_ssithra', name: 'Anillo de Ssithra', type: 'armor', slot: 'ring', grade: 'S', mDef: 39, hp: 260, mods: { vampire: 0.03, accuracy: 3 }, price: 1_000_000, icon: '💍', color: 0x3ac88a, desc: 'La joya de Ssithra, la Madre Serpiente.' },
+  { id: 'earring_of_ulmoroth', name: 'Pendiente de Ulmoroth', type: 'armor', slot: 'earring', grade: 'S', mDef: 44, mp: 390, mods: { reflect: 0.06, mpRegen: 1.25 }, price: 1_000_000, icon: '✨', color: 0x6a9a3a, desc: 'La joya de Ulmoroth, el Treant Ancestral.' },
+  { id: 'earring_of_the_flame_lord', name: 'Pendiente del Señor de las Llamas', type: 'armor', slot: 'earring', grade: 'S', mDef: 44, mp: 390, mods: { critDmg: 1.12, crit: 1 }, price: 1_000_000, icon: '✨', color: 0xff6a2a, desc: 'La joya del Señor de las Llamas.' },
+  { id: 'necklace_of_azgaroth', name: 'Collar de Azgaroth', type: 'armor', slot: 'amulet', grade: 'S', mDef: 52, hp: 360, mp: 260, mods: { pAtk: 1.04, mAtk: 1.04, cdr: 0.03 }, price: 1_200_000, icon: '📿', color: 0x9a4ad8, desc: 'La joya de Azgaroth, el Devorador.' },
+  { id: 'necklace_of_the_war_avatar', name: 'Collar del Avatar de la Guerra', type: 'armor', slot: 'amulet', grade: 'S', mDef: 52, hp: 360, mp: 260, mods: { pDef: 1.05, mDef: 1.05, maxHp: 1.04 }, price: 1_200_000, icon: '📿', color: 0xd83a2a, desc: 'La joya del Avatar de la Guerra.' },
   // Consumables
   { id: 'lesser_healing_potion', name: 'Poción de Curación Menor', type: 'consumable', stack: true, price: 15, use: { hp: 60, cd: 5000 }, icon: '🧪', color: 0xd04040, desc: 'Recupera 60 de HP.' },
   { id: 'healing_potion', name: 'Poción de Curación', type: 'consumable', stack: true, price: 60, use: { hp: 160, cd: 5000 }, icon: '🧪', color: 0xff3030, desc: 'Recupera 160 de HP.', craft: { mats: [['wild_berries', 5]], adena: 15 } },
@@ -208,6 +241,11 @@ const list: ItemDef[] = [
   // dropped by the Avatar de la Guerra (Encrucijada Sangrienta): never fails
   { id: 'scroll_enchant_sacred', name: 'Pergamino Sagrado de Encantamiento', type: 'consumable', stack: true, price: 150000, enchant: 'sacred', icon: '📜', color: 0xffe9a0, desc: 'Sube +1 seguro cualquier arma, armadura o joya: no puede fallar ni romperla.' },
   { id: 'scroll_enchant_armor', name: 'Pergamino: Encantar Armadura', type: 'consumable', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya. Click derecho sobre la pieza para usarlo.' },
+  // Brasaoscura's Cassius makes them from what the endgame leaves over (world.ts): with one, a failed enchant sends the
+  // piece back to +0 instead of breaking it (server-rs inventory.rs enchant); one goes on every attempt
+  { id: 'protect_stone', name: 'Piedra de Protección', type: 'consumable', stack: true, protects: true, price: 40000, icon: '💠', color: 0x9ad8ff,
+    craft: { mats: [['magma_core', 4], ['abyss_essence', 4], ['awakening_shard', 1]], adena: 20000 },
+    desc: 'Encantá con ella: si el intento falla, la pieza vuelve a +0 en vez de romperse. Se gasta una en cada intento.' },
   // dropped in the Grieta de las Brasas: their grade is the only gear they enchant (server-rs inventory.rs enchant)
   { id: 'scroll_enchant_weapon_c', name: 'Pergamino: Encantar Arma (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 9000, enchant: 'weapon', icon: '📜', color: 0xff8a50, desc: 'Sube +1 un arma de grado C (solo grado C). Click derecho sobre el arma para usarlo.' },
   { id: 'scroll_enchant_armor_c', name: 'Pergamino: Encantar Armadura (Grado C)', type: 'consumable', grade: 'C', stack: true, price: 3500, enchant: 'armor', icon: '📜', color: 0x50a0ff, desc: 'Sube +1 una pieza de armadura o joya de grado C (solo grado C). Click derecho sobre la pieza para usarlo.' },

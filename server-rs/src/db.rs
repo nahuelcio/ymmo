@@ -9,7 +9,7 @@ pub struct Db { pub c: Connection }
 
 /** What a save writes of a character (realm.rs char_save). */
 pub struct CharSave {
-    pub id: i64, pub level: i64, pub xp: i64, pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64,
+    pub id: i64, pub level: i64, pub xp: i64, pub legend_lvl: i64, pub legend_xp: i64, pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64,
     pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub inv: Vec<InvItem>, pub quests: Vec<(String, i64, bool)>,
 }
 
@@ -17,7 +17,8 @@ pub struct CharSave {
 pub struct TradeLog { pub a_id: i64, pub a_name: String, pub a_gave: String, pub a_adena: i64, pub b_id: i64, pub b_name: String, pub b_gave: String, pub b_adena: i64 }
 
 fn write_char(tx: &Transaction, c: &CharSave) -> rusqlite::Result<()> {
-    tx.execute("UPDATE characters SET level=?, xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?", params![c.level, c.xp, c.x, c.z, c.hp, c.mp, c.cp, c.adena, c.karma, c.pk, c.pvp, c.id])?;
+    tx.execute("UPDATE characters SET level=?, xp=?, legend_lvl=?, legend_xp=?, x=?, z=?, hp=?, mp=?, cp=?, adena=?, karma=?, pk=?, pvp=? WHERE id=?",
+        params![c.level, c.xp, c.legend_lvl, c.legend_xp, c.x, c.z, c.hp, c.mp, c.cp, c.adena, c.karma, c.pk, c.pvp, c.id])?;
     tx.execute("DELETE FROM items WHERE char_id = ?", [c.id])?;
     for it in &c.inv { tx.execute("INSERT INTO items (char_id, item_id, count, slot, enchant, legacy, mw) VALUES (?, ?, ?, ?, ?, ?, ?)", params![c.id, it.i, it.c, it.s, it.e, it.l as i64, it.m as i64])?; }
     tx.execute("DELETE FROM quests WHERE char_id = ?", [c.id])?;
@@ -31,6 +32,8 @@ pub struct CharRow {
     pub id: i64, pub name: String, pub race: String, pub cls: String, pub level: i64, pub xp: i64,
     pub x: f64, pub z: f64, pub hp: f64, pub mp: f64, pub cp: f64, pub adena: i64, pub karma: i64, pub pk: i64, pub pvp: i64, pub look: Look, pub spec: Option<String>,
     pub hotbar: String,
+    /** past the level cap: Legend level, XP towards the next, and the points spent on each passive (JSON) */
+    pub legend_lvl: i64, pub legend_xp: i64, pub legend: String,
 }
 
 pub struct CharSummary { pub id: i64, pub name: String, pub race: String, pub cls: String, pub spec: Option<String>, pub level: i64, pub look: Look }
@@ -109,7 +112,9 @@ impl Db {
             "clan_id INTEGER", "clan_grade INTEGER NOT NULL DEFAULT 5", "title TEXT NOT NULL DEFAULT ''",
             "clan_join_until INTEGER NOT NULL DEFAULT 0", "clan_found_until INTEGER NOT NULL DEFAULT 0",
             // the skill bars' layout, as the client keeps it (JSON, client/src/ui/hud.ts)
-            "hotbar TEXT NOT NULL DEFAULT ''"] {
+            "hotbar TEXT NOT NULL DEFAULT ''",
+            // past the level cap (legend.rs): Legend level, XP towards the next, and the points spent (JSON: passive -> ranks)
+            "legend_lvl INTEGER NOT NULL DEFAULT 0", "legend_xp INTEGER NOT NULL DEFAULT 0", "legend TEXT NOT NULL DEFAULT ''"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
         }
         let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
@@ -122,6 +127,10 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)", []);
         // every finished player trade (trade.rs): what each side gave, for sorting out a "I never got it"
         let _ = c.execute("CREATE TABLE IF NOT EXISTS trade_log (id INTEGER PRIMARY KEY, at INTEGER NOT NULL, a_id INTEGER NOT NULL, a_name TEXT NOT NULL, a_gave TEXT NOT NULL, a_adena INTEGER NOT NULL, b_id INTEGER NOT NULL, b_name TEXT NOT NULL, b_gave TEXT NOT NULL, b_adena INTEGER NOT NULL)", []);
+        // a boss jewel's roll, once a week a character (combat.rs jewel_rolls; week: formulas.rs loot_week)
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS boss_loot (char_id INTEGER NOT NULL, boss TEXT NOT NULL, week INTEGER NOT NULL, PRIMARY KEY (char_id, boss, week))", []);
+        // when each overworld boss is back (ms since epoch), so a restart doesn't bring them all back at once
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS boss_respawn (mob TEXT PRIMARY KEY, at INTEGER NOT NULL)", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -210,12 +219,13 @@ impl Db {
     /** items come back as (item id, count, slot, enchant) */
     pub fn load_char(&self, account_id: i64, id: i64) -> Option<(CharRow, Vec<(String, i64, Option<String>, i64, bool, bool)>, Vec<(String, i64, bool)>)> {
         let row = self.c.query_row(
-            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec, hotbar FROM characters WHERE id = ? AND account_id = ?",
+            "SELECT id, name, race, cls, level, xp, x, z, hp, mp, cp, adena, karma, pk, pvp, gender, hair_style, hair_color, spec, hotbar, legend_lvl, legend_xp, legend FROM characters WHERE id = ? AND account_id = ?",
             params![id, account_id],
             |r| Ok(CharRow {
                 id: r.get(0)?, name: r.get(1)?, race: r.get(2)?, cls: r.get(3)?, level: r.get(4)?, xp: r.get(5)?, x: r.get(6)?, z: r.get(7)?,
                 hp: r.get(8)?, mp: r.get(9)?, cp: r.get(10)?, adena: r.get(11)?, karma: r.get(12)?, pk: r.get(13)?, pvp: r.get(14)?,
                 look: look_of(r.get(15)?, r.get(16)?, r.get(17)?), spec: r.get(18)?, hotbar: r.get(19)?,
+                legend_lvl: r.get(20)?, legend_xp: r.get(21)?, legend: r.get(22)?,
             }),
         ).optional().ok().flatten()?;
         let data = d();
@@ -258,6 +268,23 @@ impl Db {
     }
 
     pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
+
+    /** The Legend points spent (JSON: passive -> ranks): written right away, like the spec. */
+    pub fn set_legend(&self, id: i64, json: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET legend = ? WHERE id = ?", params![json, id]) }
+
+    /** This week's roll of this boss's jewel for this character: true if it was still to take (and it is taken now). */
+    pub fn take_jewel_roll(&self, char_id: i64, boss: &str, week: i64) -> bool {
+        self.c.execute("INSERT OR IGNORE INTO boss_loot (char_id, boss, week) VALUES (?, ?, ?)", params![char_id, boss, week]).map_or(false, |n| n > 0)
+    }
+
+    /** When an overworld boss is back (ms since epoch), kept across restarts. */
+    pub fn set_boss_respawn(&self, mob: &str, at: f64) {
+        let _ = self.c.execute("INSERT INTO boss_respawn (mob, at) VALUES (?, ?) ON CONFLICT(mob) DO UPDATE SET at = excluded.at", params![mob, at as i64]);
+    }
+    pub fn boss_respawns(&self) -> Vec<(String, f64)> {
+        let Ok(mut st) = self.c.prepare("SELECT mob, at FROM boss_respawn") else { return vec![] };
+        st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as f64))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
 
     pub fn save_char(&mut self, c: &CharSave) -> rusqlite::Result<()> {
         let tx = self.c.transaction()?;

@@ -486,12 +486,18 @@ export class Hud {
       this.chargesEl.style.display = maxCharges > 0 ? '' : 'none';
       for (let i = 0; i < maxCharges; i++) el('span', `charge${i < charges ? ' on' : ''}`, this.chargesEl);
     }
+    // at the level cap the bar is the Legend's
+    this.xp.root.classList.toggle('legend', m.xpNeed === 0);
     if (m.xpNeed > 0) {
       this.xp.set(m.xp, m.xpNeed);
       this.xp.text.textContent = `XP ${((m.xp / m.xpNeed) * 100).toFixed(2)}%`;
+    } else if (m.legendNeed > 0) {
+      this.xp.set(m.legendXp, m.legendNeed);
+      const pts = m.legendPts > 0 ? ` · ${m.legendPts} pts` : '';
+      this.xp.text.textContent = `${tx('LEYENDA', 'LEGEND')} ${m.legendLvl} · ${((m.legendXp / m.legendNeed) * 100).toFixed(2)}%${pts}`;
     } else {
       this.xp.set(1, 1);
-      this.xp.text.textContent = tx('NIVEL MÁXIMO', 'MAX LEVEL');
+      this.xp.text.textContent = tx(`LEYENDA ${m.legendLvl} · COMPLETA`, `LEGEND ${m.legendLvl} · FULL`);
     }
     this.buffs.innerHTML = '';
     for (const b of m.buffs) {

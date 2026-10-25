@@ -3,7 +3,7 @@
 //   npm run export-data   (also run by the Docker builds)
 import { layoutHerds } from '../../shared/src/layout';
 import { writeFileSync } from 'node:fs';
-import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK } from '../../shared/src/data/items';
+import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK, SET_BONUS } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
 import { SKILLS } from '../../shared/src/data/skills';
 import { QUEST_LIST } from '../../shared/src/data/quests';
@@ -11,6 +11,7 @@ import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
 import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
 import { RAIDS } from '../../shared/src/data/raids';
+import { LEGEND } from '../../shared/src/data/legend';
 import { CLAN, CLAN_DEFAULT_PRIVS, CLAN_GRADE_LEVEL, CLAN_LEVELS, CLAN_REP, CLAN_SKILLS } from '../../shared/src/data/clans';
 import { STATUSES } from '../../shared/src/status';
 import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
@@ -41,6 +42,7 @@ const out = {
   items: Object.values(ITEMS).map((i) => ({ ...i, nameEn: itemName(i.id, 'en') })),
   gradeLevel: GRADE_LEVEL,
   masterwork: MASTERWORK,
+  setBonus: SET_BONUS,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
   quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false })),
@@ -64,6 +66,7 @@ const out = {
   nodes: allNodes().map((n) => [n.id, +n.x.toFixed(2), +n.z.toFixed(2), +n.r.toFixed(2), +(n.ry ?? 0).toFixed(3), n.y ?? 0, n.zone ?? '']),
   gather: GATHER,
   clans: { levels: CLAN_LEVELS, cfg: CLAN, privs: CLAN_DEFAULT_PRIVS, gradeLevel: CLAN_GRADE_LEVEL, rep: CLAN_REP, skills: CLAN_SKILLS },
+  legend: LEGEND,
   water: { cell: WATER_CELL, half: WORLD_HALF, runs: waterRuns() },
   obstacles: getObstacles().map((o) => (o.k === 'c' ? { k: 'c', x: o.x, z: o.z, r: o.r } : { k: 'b', x: o.x, z: o.z, hw: o.hw, hd: o.hd, cos: o.cos, sin: o.sin })),
 };

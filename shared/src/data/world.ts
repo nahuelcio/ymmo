@@ -351,6 +351,8 @@ export const NPCS: NpcDef[] = [
     greeting: 'Acá abajo no hay segunda armadura. Que la primera sea buena.' },
   { id: 'ember_grocer', name: 'Cassius', title: 'Alquimista', ...fort('ember_grocer'), kind: 'shop', color: 0x8a4a2a,
     shop: ['greater_healing_potion', 'supreme_healing_potion', 'greater_mana_potion', 'supreme_mana_potion', 'scroll_of_escape', 'scroll_enchant_armor', 'scroll_enchant_weapon'],
+    // what the volcano and the Abyss leave over, once the Infernal is made: stones that keep an enchant from breaking a piece
+    craft: ['protect_stone'],
     greeting: 'Pociones contra el calor no tengo. Contra la muerte, algunas.' },
   { id: 'ember_gate', name: 'Orrin', title: 'Guardián del Portal', ...fort('ember_gate'), kind: 'gatekeeper', color: 0x6a2a5a,
     greeting: 'Cualquier lugar es mejor que este. Por unas monedas te llevo.' },

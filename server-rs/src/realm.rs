@@ -30,6 +30,7 @@ impl World {
             talking_to: None, sitting: None, stand_until: 0.0, gather: None, quests, quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(), hotbar: row.hotbar,
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
+            legend_lvl: row.legend_lvl.clamp(0, d().legend.max), legend_xp: row.legend_xp.max(0), legend: serde_json::from_str(&row.legend).unwrap_or_default(),
         };
         // worn pieces the level no longer allows (grades ask for a level since the 78 cap) go back to the bag
         let mut took_off: Vec<&'static str> = vec![];
@@ -66,7 +67,7 @@ impl World {
         let (x, z) = at.map_or((c.x, c.z), |p| (p.x, p.z));
         let p = self.ents[&pid].player().unwrap();
         CharSave {
-            id: p.char_id, level: p.level, xp: p.xp, x, z, hp: p.hp.max(1.0), mp: p.mp, cp: p.cp,
+            id: p.char_id, level: p.level, xp: p.xp, legend_lvl: p.legend_lvl, legend_xp: p.legend_xp, x, z, hp: p.hp.max(1.0), mp: p.mp, cp: p.cp,
             adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, inv: p.inv.clone(), quests: p.quests.clone(),
         }
     }
@@ -101,7 +102,7 @@ impl World {
     }
 
     /** Where a character leaving a raid is saved: the village, never the arena's coordinates. */
-    fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point(None)) } else { None } }
+    pub fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point(None)) } else { None } }
 
     pub fn quit(&mut self, sid: u64) {
         let Some(&pid) = self.sessions.get(&sid) else { return };

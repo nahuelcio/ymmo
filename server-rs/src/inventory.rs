@@ -1,7 +1,7 @@
 //! Items: bag, equipment, consumables, shops, teleports, loot (port of server/src/systems/inventory.ts).
 use crate::data::d;
 use crate::ent::*;
-use crate::formulas::{jround, rnd};
+use crate::formulas::{jround, ring_slot, rnd};
 use crate::i18n::{item_name, npc_greeting, npc_lines, npc_title, teleport_name, trs};
 use crate::world::World;
 use serde_json::{json, Value};
@@ -121,6 +121,11 @@ impl World {
             let g = def.grade.clone().unwrap_or_default();
             return self.sys(pid, &format!("Necesitás nivel {need} para usar equipo de grado {g}."), &format!("You need level {need} to wear {g} grade gear."));
         }
+        // a ring goes on either hand (formulas.rs ring_slot): never the same jewel on both
+        let slot = if slot == "ring" {
+            let on = |s: &str| p.equipped_in(s).map(|i| i.i.as_str());
+            ring_slot(on("ring"), on("ring2"), &def.id).to_string()
+        } else { slot };
         // a shield and a weapon held in both hands do not go together: the one put on takes the other off
         let two_handed = |id: &str| d().item(id).and_then(|w| w.two_handed).unwrap_or(false);
         let (other, clash) = match slot.as_str() {
@@ -202,8 +207,9 @@ impl World {
     }
 
     /// Spend a matching scroll from the bag on a piece of gear: +1, or the piece is lost (see ENCHANT in the data). A
-    /// sacred scroll works on any piece and never fails; a graded one only on its own grade (pick_scroll).
-    pub fn enchant(&mut self, pid: u32, uid: u32, sacred: bool) {
+    /// sacred scroll works on any piece and never fails; a graded one only on its own grade (pick_scroll). `protect`
+    /// spends a Protection Stone too, wherever the attempt can fail: failing, the piece goes back to +0 instead.
+    pub fn enchant(&mut self, pid: u32, uid: u32, sacred: bool, protect: bool) {
         if self.ents[&pid].c.dead { return; }
         let data = d();
         let cfg = &data.enchant;
@@ -222,22 +228,30 @@ impl World {
             Err(Some(g)) => return self.sys(pid, &format!("Tu pergamino solo encanta equipo de grado {g}."), &format!("Your scroll only enchants {g}-grade gear.")),
             Err(None) => return self.sys(pid, "No tenés un pergamino para encantar eso.", "You have no scroll to enchant that."),
         };
+        // below the safe level nothing can fail: a stone would be spent for nothing
+        let protect = protect && !sacred && e >= cfg.safe;
+        let stone = data.items.values().find(|s| s.protects == Some(true) && count_item(p, &s.id) > 0).map(|s| s.id.clone());
+        if protect && stone.is_none() { return self.sys(pid, "No tenés una Piedra de Protección.", "You have no Protection Stone."); }
         take_items(p, &scroll.id, 1);
+        if protect { take_items(p, stone.as_deref().unwrap(), 1); }
         let ok = crate::formulas::enchant_roll(e, sacred, rnd());
         // the scroll's row may be gone: look the piece up again
         let idx = p.inv.iter().position(|i| i.u == uid).unwrap();
         let worn = p.inv[idx].s.is_some();
         let weapon = p.inv[idx].s.as_deref() == Some("weapon");
-        if ok { p.inv[idx].e += 1; } else if cfg.fail_destroys { p.inv.remove(idx); } else { p.inv[idx].e = 0; }
+        let destroyed = !ok && cfg.fail_destroys && !protect;
+        if ok { p.inv[idx].e += 1; } else if destroyed { p.inv.remove(idx); } else { p.inv[idx].e = 0; }
         p.recalc();
         p.inv_dirty = true;
-        // a worn piece crumbling, or the held weapon's glow growing (enchant-fx.ts): everyone redraws the character
-        if (worn && !ok && cfg.fail_destroys) || (weapon && ok) { self.ents.get_mut(&pid).unwrap().c.av += 1; }
+        // a worn piece crumbling, or the held weapon's glow growing or gone (enchant-fx.ts): everyone redraws the character
+        if (worn && destroyed) || weapon { self.ents.get_mut(&pid).unwrap().c.av += 1; }
         let n = e + 1;
         if ok && sacred {
             self.sys(pid, &format!("¡Éxito sagrado! {} ahora es +{n}.", def.name), &format!("Sacred success! {} is now +{n}.", def.name_en));
         } else if ok {
             self.sys(pid, &format!("¡Éxito! {} ahora es +{n}.", def.name), &format!("Success! {} is now +{n}.", def.name_en));
+        } else if protect {
+            self.sys(pid, &format!("El encantamiento falló, pero la Piedra de Protección salvó {}: volvió a +0.", def.name), &format!("The enchantment failed, but the Protection Stone saved {}: it is back to +0.", def.name_en));
         } else if cfg.fail_destroys {
             self.sys(pid, &format!("El encantamiento falló: {} +{e} se hizo polvo.", def.name), &format!("The enchantment failed: {} +{e} crumbled to dust.", def.name_en));
         } else {

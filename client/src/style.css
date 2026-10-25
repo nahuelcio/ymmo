@@ -94,6 +94,8 @@ input { font: inherit; user-select: text; }
 .bar-mp .bar-fill { background: var(--mp); }
 .bar-cp .bar-fill { background: var(--cp); }
 .bar-xp .bar-fill { background: var(--xp); }
+/* at the level cap: the Legend's bar */
+.bar-xp.legend .bar-fill { background: linear-gradient(90deg, #8a40c8, #d8a0ff); }
 .bar-label { position: absolute; left: 4px; top: 0; z-index: 1; font-size: 9px; font-weight: bold; line-height: 13px; color: #fff; opacity: 0.8; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .bar.low { animation: barTremble 1.2s infinite; box-shadow: 0 0 6px rgba(90, 150, 255, 0.9); }
 @keyframes barTremble { 0%, 40%, 100% { transform: translateX(0); } 6%, 18%, 30% { transform: translateX(-2px); } 12%, 24%, 36% { transform: translateX(2px); } }
@@ -369,6 +371,11 @@ input { font: inherit; user-select: text; }
 .tt-down { color: #ff6a5a; }
 /* Masterwork (data/items.ts MASTERWORK): a gold name, a gold-edged cell with a star, a gold banner */
 .tt-mw { color: #ffc94a; text-shadow: 0 0 6px rgba(255, 190, 60, 0.45); }
+/* a boss jewel's power, and a set's bonus tiers */
+.tt-jewel { color: #d8a0ff; text-shadow: 0 0 6px rgba(190, 120, 255, 0.45); }
+.tt-set { color: #ffb070; }
+/* the character panel's Legend section */
+.legend-pts { margin: 4px 0; color: #d8a0ff; font-weight: bold; }
 .inv-cell.mw, .doll-slot.mw { border-color: #e0a830; box-shadow: inset 0 0 7px rgba(255, 190, 60, 0.45), 0 0 5px rgba(255, 190, 60, 0.35); }
 .doll-slot.mw { position: relative; }
 .inv-cell.mw::after, .doll-slot.mw::after { content: '★'; position: absolute; left: 2px; bottom: 0; font-size: 9px; color: #ffc94a; text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: none; }
