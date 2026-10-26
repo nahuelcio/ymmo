@@ -58,6 +58,10 @@ impl World {
             (inside != was).then_some(inside)
         };
         match crossed {
+            Some(true) if crate::siege::besieged_at(px, pz).is_some() => {
+                let f = &d().siege.forts[crate::siege::besieged_at(px, pz).unwrap()];
+                self.sys(pid, &format!("Entraste al asedio de {}: zona PvP. Estás flageado y cualquiera puede atacarte.", f.name), &format!("You entered the siege of {}: a PvP zone. You are flagged and anyone can attack you.", f.name_en));
+            }
             Some(true) => {
                 let zone = crate::terrain::zone_at(px, pz);
                 let en = crate::i18n::zone_name(&zone, crate::i18n::Lang::En);

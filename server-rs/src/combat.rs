@@ -40,7 +40,10 @@ impl World {
         let pc = &self.ents[&pid].c;
         let Some(te) = self.ents.get(&tid) else { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()) };
         if te.c.dead { return Some(tr(l, "Tu objetivo ya está muerto.", "Your target is already dead.").into()); }
-        if te.mob().is_some() { return None; }
+        if te.mob().is_some() {
+            if self.spares(tid, pid) { return Some(tr(l, "El Guardián defiende a tu clan: no lo podés atacar.", "The Guardian defends your clan: you cannot attack it.").into()); }
+            return None;
+        }
         let Some(t) = te.player() else { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()) };
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
         if self.unseen(tid) { return Some(tr(l, "Tu objetivo desapareció.", "Your target has vanished.").into()); }
@@ -227,6 +230,8 @@ impl World {
         if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
         // a god, or someone in a hut: whatever was on its way (a wound up special, a bleed) lands on nothing
         if self.pl(tid).is_some_and(|p| p.god) || self.sheltered(tid) { return; }
+        // a fort's Guardian and the side it defends never hurt each other (an area blow, a bleed left behind)
+        if self.spares(tid, src) || self.spares(src, tid) { return; }
         // a vampire dealer (Danza del Vampiro) drinks part of a blow it lands (not of damage over time); a wound halves it
         if !dot && src != tid {
             let mul = self.ents.get(&src).map_or(1.0, |e| e.c.heal_mul(now));
@@ -247,6 +252,8 @@ impl World {
 
         if self.ents[&tid].mob().is_some() {
             if let Some(fighter) = src_player {
+                // a Guardian keeps count of each clan's damage: the most takes the fort (siege.rs)
+                if let Some(fort) = self.ents[&tid].mob().unwrap().guard { self.siege_hit(fort, src, dmg); }
                 let m = self.ents.get_mut(&tid).unwrap().mob_mut().unwrap();
                 map_add(&mut m.hate, src, dmg);
                 map_add(&mut m.threat, src, dmg * if fighter { 1.3 } else { 1.0 });
@@ -533,6 +540,9 @@ impl World {
             }
             let k = self.pl_mut(killer).unwrap();
             if matches!(k.intent, Some(Intent::Attack { id, .. }) if id == tid) { k.intent = None; }
+        } else if crate::siege::besieged_at(x, z).is_some() {
+            // a siege's dead lose nothing, the Guardian's included (as in L2's siege zones)
+            self.sys(tid, "Caíste en el asedio: no perdés experiencia.", "You fell in the siege: you lose no experience.");
         } else {
             let loss = jround(xp_to_next(t_level) as f64 * 0.04 * if t_karma > 0 { 2.0 } else { 1.0 }) as i64;
             if loss > 0 && t_xp > 0 {

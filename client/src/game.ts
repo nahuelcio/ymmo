@@ -275,6 +275,8 @@ export class Game {
   dailyToday: string[] = [];
   dailyDone = new Set<string>();
   dailyResetAt = 0;
+  /** the fort sieges (sieges.ts): forts under siege now, who holds which, the next one and, while one runs, its end */
+  sieges: Extract<S2C, { t: 'sieges' }> = { t: 'sieges', active: [], owners: {}, next: 0, ends: null };
   targetId: number | null = null;
   cooldowns = new Map<string, { end: number; dur: number; predicted?: boolean }>();
   /** round-trip time to the server (ms), measured by the server's pings */
@@ -693,6 +695,7 @@ export class Game {
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
     n.on('rift', (m) => this.ui.hud.banner(tx(`La Grieta — Piso ${m.floor}`, `The Rift — Floor ${m.floor}`), true));
+    n.on('sieges', (m) => (this.sieges = m));
     n.on('admin', (m) => this.ui.admin.set(m));
     n.on('quests', (m) => {
       this.quests = m.list;

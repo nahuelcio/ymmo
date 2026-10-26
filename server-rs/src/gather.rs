@@ -156,6 +156,10 @@ impl World {
      * nobody walks into a hut's safety mid-fight. */
     fn rest_refused(&self, pid: u32, node: u32, now: f64) -> Option<(&'static str, &'static str)> {
         let n = &d().nodes[&node];
+        // a siege is fought out in the open: no hut's safety, no tent's rest in its zone
+        if matches!(n.kind, NodeKind::Hut | NodeKind::Tent) && crate::siege::besieged_at(n.x, n.z).is_some() {
+            return Some(("No podés descansar acá durante el asedio.", "You cannot rest here during the siege."));
+        }
         match n.kind {
             NodeKind::Hut => {
                 if self.pl(pid).map_or(false, |p| now - p.last_combat < IN_COMBAT_MS) {

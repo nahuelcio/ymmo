@@ -112,6 +112,7 @@ interface KnightLook {
 export const MOB_KNIGHT: Record<string, KnightLook> = {
   war_avatar: { race: 'orc', set: 'infernal', weapon: 'infernal_blade', cape: true, tint: 0xb01810, fire: true },
   war_herald: { race: 'orc', set: 'ashforged', weapon: 'ashforged_blade', shield: true },
+  fort_guardian: { race: 'human', set: 'ashforged', weapon: 'ashforged_blade', shield: true, cape: true, tint: 0xc8a040 },
 };
 
 function knightMob(tplId: string): Rig | null {

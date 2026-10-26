@@ -99,4 +99,7 @@ export const CLAN_REP = {
   campClear: 50,
   warKill: 20,
   warDeath: -10,
+  /** fort sieges (sieges.ts): taking a fort, and holding it through a siege */
+  siegeWin: 1000,
+  siegeHold: 500,
 };

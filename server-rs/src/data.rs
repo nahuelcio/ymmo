@@ -439,10 +439,21 @@ pub struct ClanCfg {
 pub struct ClanSkillDef { pub id: String, pub name: String, pub name_en: String, pub stat: String, pub bonus: Vec<f64>, pub rep: Vec<i64> }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64 }
+pub struct ClanRepDef { pub raid_boss: i64, pub camp_clear: i64, pub war_kill: i64, pub war_death: i64, pub siege_win: i64, pub siege_hold: i64 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClansDef { pub levels: Vec<ClanLevelDef>, pub cfg: ClanCfg, pub privs: Vec<u32>, pub grade_level: Vec<u8>, pub rep: ClanRepDef, pub skills: Vec<ClanSkillDef> }
+
+/** Fort sieges (shared/src/data/sieges.ts SIEGE): when, how wide, who may take a fort, the owner's tax. */
+#[derive(Deserialize)]
+pub struct SiegeDef {
+    pub weekday: i64, pub hour: f64, pub minutes: f64, pub warn: Vec<f64>, pub zone: f64, pub level: u8, pub tax: f64,
+    pub guardian: String, pub forts: Vec<SiegeFort>,
+}
+/** A sieged fort: its town's centre and radius, and the camps on its roads where the attackers come back. */
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SiegeFort { pub id: String, pub name: String, pub name_en: String, pub x: f64, pub z: f64, pub r: f64, pub camps: Vec<(f64, f64)> }
 
 #[derive(Deserialize)]
 struct Raw {
@@ -476,6 +487,7 @@ struct Raw {
     nodes: Vec<NodeRaw>,
     gather: GatherDefs,
     clans: ClansDef,
+    siege: SiegeDef,
     legend: LegendCfg,
     #[serde(rename = "dailyProbe", default)]
     daily_probe: Vec<(i64, Vec<String>)>,
@@ -512,6 +524,7 @@ pub struct Data {
     pub nodes: HashMap<u32, NodeDef>,
     pub gather: GatherDefs,
     pub clans: ClansDef,
+    pub siege: SiegeDef,
     pub legend: LegendCfg,
     /** the client's dailySet on a week of days (day, contract ids): daily_set must pick the same (a test) */
     pub daily_probe: Vec<(i64, Vec<String>)>,
@@ -622,6 +635,7 @@ pub fn d() -> &'static Data {
             }).collect(),
             gather: raw.gather,
             clans: raw.clans,
+            siege: raw.siege,
             legend: raw.legend,
             daily_probe: raw.daily_probe,
             water_n: water_n,

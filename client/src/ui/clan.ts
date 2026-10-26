@@ -1,7 +1,8 @@
 // The clan window (N), after Lineage 2's: the clan's level, reputation and leader, its members, the grades'
 // privileges and the crest, its wars and its alliance. What a member may do comes from the clan's privilege masks (shared/src/data/clans.ts).
 import { CLAN, CLAN_GRADE_LEVEL, CLAN_GRADES, CLAN_LEVELS, CLAN_PRIV, CLAN_SKILLS, MAX_CLAN_LEVEL, type ClanPriv, type ClanSkill } from '../../../shared/src/data/clans';
-import { className, itemName } from '../../../shared/src/i18n';
+import { className, itemName, zoneName } from '../../../shared/src/i18n';
+import { SIEGE, SIEGE_FORTS } from '../../../shared/src/data/sieges';
 import type { ClanInfo, S2C } from '../../../shared/src/protocol';
 import { crestImg, type Game } from '../game';
 import { lang, t as tx } from '../lang';
@@ -81,6 +82,13 @@ export class ClanPanel {
     row(tx('Líder', 'Leader'), c.leader);
     row(tx('Reputación', 'Reputation'), c.rep.toLocaleString(lang === 'en' ? 'en-US' : 'es-AR'));
     row(tx('Miembros', 'Members'), `${c.members.length} / ${c.cap} (${online} ${tx('conectados', 'online')})`);
+    // the fort it holds (sieges.ts), and the next siege for a clan that may take one
+    const fort = SIEGE_FORTS.find((f) => f.id === c.fort);
+    row(tx('Fuerte', 'Fort'), fort ? zoneName(fort.name, lang) : '—');
+    if ((fort || c.level >= SIEGE.level) && c.nextSiege) {
+      const left = Math.max(0, c.nextSiege - Date.now()), d = Math.floor(left / 86_400_000), h = Math.floor((left % 86_400_000) / 3_600_000);
+      row(tx('Próximo asedio', 'Next siege'), tx(`sábado 21:00 (en ${d} d ${h} h)`, `Saturday 21:00 ART (in ${d} d ${h} h)`));
+    }
     if (c.level < MAX_CLAN_LEVEL) el('div', 'tt-dim', b, tx(`Para subir de nivel: hablá con el Maestro de Clanes (líder).`, `To level up: talk to the Clan Master (leader).`));
     const learned = CLAN_SKILLS.filter((s) => c.skills[s.id]);
     if (learned.length) {

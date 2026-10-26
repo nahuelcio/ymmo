@@ -21,6 +21,8 @@ pub enum WorldCmd {
     Announce(String),
     /** admin panel: god mode on/off for that session's character */
     God { sid: u64, on: bool },
+    /** admin panel: a fort siege now for so many minutes, or the running one over (siege.rs) */
+    Siege { start: bool, minutes: f64 },
     Shutdown,
 }
 
@@ -79,6 +81,7 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                             w.sys(pid, if on { "Modo dios activado." } else { "Modo dios desactivado." }, if on { "God mode on." } else { "God mode off." });
                         }
                     }
+                    WorldCmd::Siege { start, minutes } => if w.raid.is_none() { w.siege_admin(start, minutes) },
                     WorldCmd::Shutdown => {
                         for sid in w.sessions.keys().copied().collect::<Vec<_>>() { w.quit(sid); }
                         break;

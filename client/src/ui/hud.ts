@@ -5,6 +5,7 @@ import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { inPvpZone, NPCS } from '../../../shared/src/data/world';
+import { siegeZoneAt } from '../../../shared/src/data/sieges';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
 import { el, esc, hideTip, setTip } from './dom';
@@ -511,7 +512,11 @@ export class Hud {
       w.title = m.karma > 0 ? `Karma: ${m.karma}` : tx('Con flag de PvP', 'PvP flagged');
     }
     const self = this.g.self;
-    if (self && inPvpZone(self.pos.x, self.pos.z)) {
+    const siege = self && siegeZoneAt(self.pos.x, self.pos.z, this.g.sieges.active);
+    if (siege) {
+      const fort = zoneName(siege.name, lang), end = this.g.sieges.ends ? new Date(this.g.sieges.ends).toLocaleTimeString(lang === 'en' ? 'en-US' : 'es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+      el('div', 'buff flag pvp-zone', this.buffs, tx('⚔ Asedio', '⚔ Siege')).title = tx(`Asedio de ${fort}: zona PvP${end ? ` hasta las ${end}` : ''}. Todos están flageados y cualquiera puede atacarte.`, `Siege of ${fort}: a PvP zone${end ? ` until ${end}` : ''}. Everyone is flagged and anyone can attack you.`);
+    } else if (self && inPvpZone(self.pos.x, self.pos.z)) {
       el('div', 'buff flag pvp-zone', this.buffs, tx('⚔ Zona PvP', '⚔ PvP zone')).title = tx('Zona PvP: todos están flageados y cualquiera puede atacarte.', 'PvP zone: everyone is flagged and anyone can attack you.');
     }
     this.refreshSlots();
