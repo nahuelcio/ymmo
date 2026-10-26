@@ -261,9 +261,38 @@ export class InventoryPanel {
 
 export class CharacterPanel {
   win: Win;
+  /** what the window was last built for (refresh): only a change in it builds it again */
+  private shape = '';
+  /** the values that change all the time, kept current where they stand: the stat grid's and the Legend bar's line */
+  private statVals: HTMLElement[] = [];
+  private legendBar: HTMLElement | null = null;
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('character', tx('Estado del Personaje', 'Character Status'), 16, 210, 300, root);
-    this.win.onShow = () => this.refresh();
+    this.win.onShow = () => {
+      this.shape = '';
+      this.refresh();
+    };
+  }
+
+  /** The stat grid's rows, as they stand now. */
+  private stats(): [string, string | number][] {
+    const m = this.g.me;
+    return [
+      ['HP', `${m.hp}/${m.maxHp}`], ['MP', `${m.mp}/${m.maxMp}`], ['CP', `${m.cp}/${m.maxCp}`],
+      ['XP', m.xpNeed ? `${m.xp}/${m.xpNeed}` : 'MAX'],
+      [tx('Atq.F', 'P.Atk'), m.pAtk], [tx('Atq.M', 'M.Atk'), m.mAtk], [tx('Def.F', 'P.Def'), m.pDef], [tx('Def.M', 'M.Def'), m.mDef],
+      [tx('Precisión', 'Accuracy'), m.acc], [tx('Evasión', 'Evasion'), m.eva], [tx('Crítico', 'Critical'), `${m.crit}%`], [tx('Vel.Atq', 'Atk.Spd'), m.atkSpd], [tx('Vel.Casteo', 'Cast.Spd'), `${m.castSpd}%`], [tx('Velocidad', 'Speed'), m.speed],
+      ['Karma', m.karma], ['PvP', m.pvp], ['PK', m.pk],
+    ];
+  }
+
+  /** The Legend bar's line, as it stands now. */
+  private legendBarText(): string {
+    const m = this.g.me;
+    return m.legendNeed
+      ? tx(`La experiencia que ganás llena la barra de Leyenda (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): cada nivel es un punto para una pasiva.`,
+        `The experience you earn fills the Legend bar (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): every level is a point for a passive.`)
+      : tx('Tu Leyenda está completa.', 'Your Legend is full.');
   }
 
   /** Past the level cap: the Legend's bar and free points, a row per passive (its ranks, what they give, one more for a
@@ -271,10 +300,7 @@ export class CharacterPanel {
   private legend(b: HTMLElement) {
     const m = this.g.me;
     el('div', 'section', b, tx(`Leyenda ${m.legendLvl}`, `Legend ${m.legendLvl}`));
-    el('div', 'tt-dim', b, m.legendNeed
-      ? tx(`La experiencia que ganás llena la barra de Leyenda (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): cada nivel es un punto para una pasiva.`,
-        `The experience you earn fills the Legend bar (${m.legendXp.toLocaleString(fmtLoc)}/${m.legendNeed.toLocaleString(fmtLoc)}): every level is a point for a passive.`)
-      : tx('Tu Leyenda está completa.', 'Your Legend is full.'));
+    this.legendBar = el('div', 'tt-dim', b, this.legendBarText());
     el('div', 'legend-pts', b, tx(`Puntos libres: ${m.legendPts}`, `Free points: ${m.legendPts}`));
     for (const p of LEGEND.passives) {
       const r = m.legend[p.id] ?? 0;
@@ -293,24 +319,38 @@ export class CharacterPanel {
       () => this.g.net.send({ t: 'legendReset' }));
   }
 
+  /**
+   * Called on every self update while open: up to 10 a second while life regenerates or a buff counts down. Built anew
+   * each time, the window swapped the buttons under the cursor, and a click pressed on one and released on its
+   * replacement never fired (a Legend point that could not be spent until logging in again). So it is built again only
+   * when its shape changes; the stats and the Legend bar's line change where they stand.
+   */
   refresh() {
     if (!this.win.visible) return;
     const m = this.g.me;
+    const shape = JSON.stringify([lang, m.name, m.lvl, m.race, m.cls, m.spec, m.look.g, m.legendLvl, m.legendPts, m.legend, m.hero, m.heroLook, m.skills]);
+    if (shape !== this.shape) {
+      this.shape = shape;
+      this.build();
+    }
+    this.stats().forEach(([, v], i) => {
+      const cell = this.statVals[i];
+      if (cell && cell.textContent !== String(v)) cell.textContent = String(v);
+    });
+    if (this.legendBar) this.legendBar.textContent = this.legendBarText();
+  }
+
+  private build() {
+    const m = this.g.me;
     const b = this.win.body;
     b.innerHTML = '';
+    this.legendBar = null;
     el('div', 'char-head', b).innerHTML = `<b>${esc(m.name)}</b><br><span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${raceName(m.race, lang)} ${className(m.cls, lang, m.spec)}</span>`;
     const grid = el('div', 'stat-grid', b);
-    const rows: [string, string | number][] = [
-      ['HP', `${m.hp}/${m.maxHp}`], ['MP', `${m.mp}/${m.maxMp}`], ['CP', `${m.cp}/${m.maxCp}`],
-      ['XP', m.xpNeed ? `${m.xp}/${m.xpNeed}` : 'MAX'],
-      [tx('Atq.F', 'P.Atk'), m.pAtk], [tx('Atq.M', 'M.Atk'), m.mAtk], [tx('Def.F', 'P.Def'), m.pDef], [tx('Def.M', 'M.Def'), m.mDef],
-      [tx('Precisión', 'Accuracy'), m.acc], [tx('Evasión', 'Evasion'), m.eva], [tx('Crítico', 'Critical'), `${m.crit}%`], [tx('Vel.Atq', 'Atk.Spd'), m.atkSpd], [tx('Vel.Casteo', 'Cast.Spd'), `${m.castSpd}%`], [tx('Velocidad', 'Speed'), m.speed],
-      ['Karma', m.karma], ['PvP', m.pvp], ['PK', m.pk],
-    ];
-    for (const [k, v] of rows) {
+    this.statVals = this.stats().map(([k, v]) => {
       el('span', 'stat-k', grid, k);
-      el('span', 'stat-v', grid, String(v));
-    }
+      return el('span', 'stat-v', grid, String(v));
+    });
     if (m.lvl >= MAX_LEVEL) this.legend(b);
     // an Olympiad Hero chooses the aura it wears (render/hero-fx.ts)
     if (m.hero) {
