@@ -3,7 +3,9 @@ import { LEGEND } from '../../../shared/src/data/legend';
 import { makeMovable } from './movable';
 import { foldable } from './hud';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, wearLevel, WORN_SLOTS, type WornSlot } from '../../../shared/src/data/items';
+import { siegeZoneAt, withTax } from '../../../shared/src/data/sieges';
 import { QUESTS } from '../../../shared/src/data/quests';
+import { TELEPORTS } from '../../../shared/src/data/world';
 import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
 
@@ -430,9 +432,13 @@ export class NpcPanel {
         const row = el('div', 'shop-row', b);
         el('div', 'grow', row).innerHTML = `<b>${esc(d.name)}</b><br><span class="tt-dim">${d.cost ? tx(`${d.cost} de adena`, `${d.cost} adena`) : tx('Gratis', 'Free')}</span>`;
         const btn = el('button', 'btn', row, tx('Viajar', 'Travel'));
-        btn.disabled = g.adena < d.cost;
+        // a fort under siege takes no travellers until it is over (sieges.ts)
+        const tp = TELEPORTS.find((t) => t.id === d.id), war = tp && siegeZoneAt(tp.x, tp.z, g.sieges.active);
+        if (war) btn.textContent = tx('Bajo asedio', 'Under siege');
+        btn.disabled = g.adena < d.cost || !!war;
         btn.onclick = () => g.net.send({ t: 'teleport', npc: m.npc, dest: d.id });
       }
+      if (m.tax && m.taxClan) el('div', 'tt-dim shop-tax', b, tx(`Impuesto del fuerte: ${Math.round(m.tax * 100)}% — clan ${m.taxClan}`, `Fort tax: ${Math.round(m.tax * 100)}% — clan ${m.taxClan}`));
       return;
     }
     const tabs = el('div', 'tabs', b);
@@ -447,13 +453,15 @@ export class NpcPanel {
     const list = el('div', 'shop-list', b);
     // a shop that takes an item instead of adena (the Cambista's Marks), at its own prices
     const cur = m.currency, have = (id: string) => g.inv.reduce((n, i) => n + (i.i === id && !i.s ? i.c : 0), 0);
+    // a fort some clan holds: its adena prices carry the owner's tax (the server charges the same)
+    const taxed = (p: number) => withTax(p, m.tax ?? 0);
     if (this.tab === 'buy') {
       for (const id of m.shop ?? []) {
         const def = ITEMS[id];
         const row = el('div', 'shop-row', list);
         itemIcon(id, row);
         const info = el('div', 'grow', row);
-        const price = cur ? `<span class="${have(cur) >= (m.prices?.[id] ?? 0) ? 'tt-dim' : 'tt-down'}">${m.prices?.[id]} × ${esc(itemName(cur, lang))}</span>` : `<span class="tt-dim">${def.price} adena</span>`;
+        const price = cur ? `<span class="${have(cur) >= (m.prices?.[id] ?? 0) ? 'tt-dim' : 'tt-down'}">${m.prices?.[id]} × ${esc(itemName(cur, lang))}</span>` : `<span class="tt-dim">${taxed(def.price)} adena</span>`;
         info.innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br>${price}${this.needTag(def)}`;
         setTip(row, () => itemTip(id));
         const qty = el('input', 'qty', row);
@@ -472,10 +480,10 @@ export class NpcPanel {
         const row = el('div', 'shop-row', list);
         itemIcon(id, row);
         const mats = rec.mats.map(([mid, n]) => `<span class="${have(mid) >= n ? 'tt-dim' : 'tt-down'}">${n} × ${esc(itemName(mid, lang))} (${have(mid)})</span>`).join(' · ');
-        el('div', 'grow', row).innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span>${this.needTag(def)}<br>${mats} · <span class="${g.adena >= rec.adena ? 'tt-dim' : 'tt-down'}">${rec.adena} adena</span>`;
+        el('div', 'grow', row).innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span>${this.needTag(def)}<br>${mats} · <span class="${g.adena >= taxed(rec.adena) ? 'tt-dim' : 'tt-down'}">${taxed(rec.adena)} adena</span>`;
         setTip(row, () => itemTip(id));
         const btn = el('button', 'btn', row, tx('Fabricar', 'Craft'));
-        btn.disabled = g.adena < rec.adena || rec.mats.some(([mid, n]) => have(mid) < n);
+        btn.disabled = g.adena < taxed(rec.adena) || rec.mats.some(([mid, n]) => have(mid) < n);
         btn.onclick = () => g.net.send({ t: 'craft', npc: m.npc, item: id });
       }
     } else {
@@ -497,6 +505,9 @@ export class NpcPanel {
         const btn = el('button', 'btn', row, tx('Vender', 'Sell'));
         btn.onclick = () => g.net.send({ t: 'sell', npc: m.npc, u: it.u, qty: Math.min(it.c, Math.max(1, Math.floor(+qty.value || 1))) });
       }
+    }
+    if (m.tax && m.taxClan && !cur && this.tab !== 'sell') {
+      el('div', 'tt-dim shop-tax', b, tx(`Impuesto del fuerte: ${Math.round(m.tax * 100)}% — clan ${m.taxClan}`, `Fort tax: ${Math.round(m.tax * 100)}% — clan ${m.taxClan}`));
     }
     el('div', 'inv-footer', b).innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span>${cur ? `<span>${have(cur).toLocaleString(fmtLoc)} × ${esc(itemName(cur, lang))}</span>` : ''}`;
   }
@@ -1041,6 +1052,7 @@ export function createHelp(root: HTMLElement): Win {
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
     matar a un jugador sin flag te suma karma y te pone en <span style="color:#ff4040">rojo</span>, y a los rojos se les pueden caer objetos al morir.</p>
     <p>Para <b>comerciar</b>, seleccioná a un jugador cercano → <b>Comerciar</b> (o <code>/trade</code>). Cada uno agrega objetos y adena a su oferta: lo que se agrega no se puede sacar (para arrepentirse, se cancela), y apenas uno de los dos confirma ya nadie puede agregar nada más. Cuando confirman los dos, se intercambia todo junto.</p>
+    <p><b>Asedios:</b> cada <b>sábado a las 21:00</b> los cinco fuertes (Bastión, Escama, Escarcha, Juncoverde y Brasaoscura) se asedian durante una hora. El fuerte y sus alrededores pasan a ser <b>zona PvP</b>, y junto a la hoguera aparece un <b>Guardián</b> que defiende al clan dueño y a su alianza. Si cae, el fuerte pasa al clan que más daño le hizo (nivel 3 o más, un fuerte por clan); si resiste la hora, el dueño lo conserva. Los defensores reaparecen adentro y los demás en el campamento del camino, y morir en el asedio no cuesta experiencia. El dueño cobra un <b>10%</b> de lo que se gasta en adena en las tiendas del fuerte. <code>/asedio</code> muestra los dueños y cuándo es el próximo.</p>
     <h4>Ventanas</h4>
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
   </div>`;
@@ -1093,6 +1105,7 @@ const HELP_EN = `
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives karma and turns you <span style="color:#ff4040">red</span>, and red players can drop items on death.</p>
     <p>To <b>trade</b>, select a nearby player → <b>Trade</b> (or <code>/trade</code>). Each of you adds items and adena to your offer: what goes in cannot come back out (cancel instead), and once either of you confirms nobody can add anything more. When both confirm, everything changes hands at once.</p>
+    <p><b>Sieges:</b> every <b>Saturday at 21:00</b> (Argentina) the five forts (Dusk Bastion, Scale, Frost, Reedgreen and Emberdark) are besieged for an hour. The fort and its surroundings become a <b>PvP zone</b>, and a <b>Guardian</b> appears by the brazier to defend the owning clan and its alliance. If it falls, the fort goes to the clan that dealt it the most damage (level 3 or more, one fort per clan); if it stands the hour, the owner keeps it. Defenders come back inside, everyone else at the camp on the road, and dying in the siege costs no experience. The owner earns <b>10%</b> of the adena spent at the fort's shops. <code>/siege</code> shows the owners and when the next one is.</p>
     <h4>Windows</h4>
     <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>O</b> options · <b>Enter</b> chat · <b>Esc</b> close / clear target</p>
   </div>`;

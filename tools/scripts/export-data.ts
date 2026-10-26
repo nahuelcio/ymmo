@@ -13,6 +13,7 @@ import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAI
 import { RAIDS } from '../../shared/src/data/raids';
 import { LEGEND } from '../../shared/src/data/legend';
 import { CLAN, CLAN_DEFAULT_PRIVS, CLAN_GRADE_LEVEL, CLAN_LEVELS, CLAN_REP, CLAN_SKILLS } from '../../shared/src/data/clans';
+import { SIEGE, SIEGE_FORTS } from '../../shared/src/data/sieges';
 import { STATUSES } from '../../shared/src/status';
 import { getObstacles, WALK_RADIUS } from '../../shared/src/collision';
 import { isDeep, PLAYABLE_HALF, SWIM_SPEED, TOWN, TOWNS, WATER_CELL, WORLD_HALF } from '../../shared/src/terrain';
@@ -66,6 +67,7 @@ const out = {
   nodes: allNodes().map((n) => [n.id, +n.x.toFixed(2), +n.z.toFixed(2), +n.r.toFixed(2), +(n.ry ?? 0).toFixed(3), n.y ?? 0, n.zone ?? '']),
   gather: GATHER,
   clans: { levels: CLAN_LEVELS, cfg: CLAN, privs: CLAN_DEFAULT_PRIVS, gradeLevel: CLAN_GRADE_LEVEL, rep: CLAN_REP, skills: CLAN_SKILLS },
+  siege: { ...SIEGE, forts: SIEGE_FORTS.map((f) => ({ ...f, nameEn: zoneName(f.name, 'en') })) },
   legend: LEGEND,
   // what the client's dailySet offers on a week of days: server-rs checks its daily_set picks the same (formulas.rs test)
   dailyProbe: Array.from({ length: 7 }, (_, i) => [20000 + i, dailySet(20000 + i).map((q) => q.id)]),

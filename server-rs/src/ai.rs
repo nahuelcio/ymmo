@@ -10,10 +10,10 @@ const LEASH: f64 = 50.0;
 const AGGRO_RANGE: f64 = 9.0;
 
 impl World {
-    fn valid_enemy(&self, pid: u32, hx: f64, hz: f64) -> bool {
+    fn valid_enemy(&self, mid: u32, pid: u32, hx: f64, hz: f64) -> bool {
         match self.ents.get(&pid) {
             // (a vanished player, or one gone into a hut, is lost to it: it turns on someone else or goes home)
-            Some(e) if e.player().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH && !self.unseen(pid) && !self.sheltered(pid),
+            Some(e) if e.player().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH && !self.unseen(pid) && !self.sheltered(pid) && !self.spares(mid, pid),
             _ => false,
         }
     }
@@ -37,13 +37,13 @@ impl World {
         let (hx, hz) = { let m = e.mob().unwrap(); (m.home_x, m.home_z) };
         let (mx, mz) = (e.c.x, e.c.z);
         if let Some(t) = e.mob().unwrap().target {
-            let tvalid = self.valid_enemy(t, hx, hz) && (mx - hx).hypot(mz - hz) <= LEASH;
+            let tvalid = self.valid_enemy(mid, t, hx, hz) && (mx - hx).hypot(mz - hz) <= LEASH;
             if !tvalid {
                 let cands: Vec<(u32, f64)> = { let m = self.ents[&mid].mob().unwrap(); m.threat.iter().copied().filter(|e| e.0 != t).collect() };
                 let mut best = -1.0;
                 let mut next = None;
                 for (id, h) in cands {
-                    if self.valid_enemy(id, hx, hz) && h > best { best = h; next = Some(id); }
+                    if self.valid_enemy(mid, id, hx, hz) && h > best { best = h; next = Some(id); }
                 }
                 let m = self.ents.get_mut(&mid).unwrap().mob_mut().unwrap();
                 map_del(&mut m.hate, t);
@@ -121,7 +121,7 @@ impl World {
         if tpl.aggressive {
             for pid in self.near_players(mx, mz, AGGRO_RANGE) {
                 let pe = &self.ents[&pid];
-                if !pe.c.dead && !in_town(pe.c.x, pe.c.z) && pe.player().unwrap().level < tpl.level + 8 && !self.unseen(pid) && !self.sheltered(pid) {
+                if !pe.c.dead && !in_town(pe.c.x, pe.c.z) && pe.player().unwrap().level < tpl.level + 8 && !self.unseen(pid) && !self.sheltered(pid) && !self.spares(mid, pid) {
                     let m = self.ents.get_mut(&mid).unwrap().mob_mut().unwrap();
                     m.target = Some(pid);
                     map_set(&mut m.hate, pid, 1.0);
@@ -171,6 +171,8 @@ impl World {
                 let Some(p) = pe.player() else { return };
                 if pe.c.dead || p.dodge_until > t { return; }
                 if (pe.c.x - ax).hypot(pe.c.z - az) > sp.r + 0.5 { return; }
+                // a fort's Guardian: its circle spares the side it defends, stun included
+                if w.spares(mid, pid) { return; }
                 let (dmg, blk) = w.blocked(pid, phys_damage(p_atk, p.stats.p_def, sp.mult, false));
                 w.apply_damage(mid, pid, dmg, t, false, false, blk);
                 if let Some(stun) = sp.stun {
@@ -213,7 +215,7 @@ impl World {
         let mut best_id = None;
         for (id, v) in m.threat.clone() {
             if id == cur_t || v <= best { continue; }
-            if !self.valid_enemy(id, hx, hz) { continue; }
+            if !self.valid_enemy(mid, id, hx, hz) { continue; }
             best = v;
             best_id = Some(id);
         }

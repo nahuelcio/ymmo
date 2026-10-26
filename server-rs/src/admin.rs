@@ -177,6 +177,11 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
             if let Some(tx) = hub.worlds.get(&w) { let _ = tx.send(WorldCmd::God { sid, on }); }
             log!("[admin] god mode {} for session {sid}", if on { "on" } else { "off" });
         }
+        // a fort siege now ({ siege: "start", minutes }) or the running one over ({ siege: "end" }), in the overworld
+        if let Some(what) = m["siege"].as_str() {
+            if let Some(tx) = hub.worlds.get(&0) { let _ = tx.send(WorldCmd::Siege { start: what == "start", minutes: m["minutes"].as_f64().unwrap_or(60.0) }); }
+            log!("[admin] siege {what}");
+        }
         let text: String = m["announce"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(200).collect();
         if !text.is_empty() {
             for tx in hub.worlds.values() { let _ = tx.send(WorldCmd::Announce(text.clone())); }

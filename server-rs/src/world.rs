@@ -66,6 +66,8 @@ pub struct World {
     pub rift: Option<crate::rift::RiftState>,
     /** the server day (formulas.rs loot_day) this world last saw: a new one resets the daily contracts (quests.rs) */
     pub day: i64,
+    /** the fort sieges, run by the overworld (siege.rs) */
+    pub siege: crate::siege::SiegeRun,
     /** socket session id -> player entity */
     pub sessions: HashMap<u64, u32>,
     pub events: Vec<HubEvent>,
@@ -83,7 +85,7 @@ impl World {
         let mut w = World {
             ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
-            rift: None, day: crate::formulas::loot_day(now_ms()),
+            rift: None, day: crate::formulas::loot_day(now_ms()), siege: Default::default(),
             sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
         };
         if let Some((r, size)) = raid {
@@ -246,9 +248,14 @@ impl World {
         self.players.iter().copied().find(|id| self.pl(*id).map_or(false, |p| p.name.to_lowercase() == l))
     }
 
-    /// A free spot in the town closest to this entity (the starting village when there is none, or inside a raid).
+    /// A free spot in the town closest to this entity (the starting village when there is none, or inside a raid). While
+    /// a siege runs, a player comes back where the siege puts them (siege.rs siege_point).
     pub fn town_point(&self, near: Option<u32>) -> P {
-        town_near(near.filter(|_| self.raid.is_none()).and_then(|id| self.ents.get(&id)).map(|e| (e.c.x, e.c.z)))
+        let at = near.filter(|_| self.raid.is_none()).and_then(|id| self.ents.get(&id)).map(|e| (e.c.x, e.c.z));
+        if let (Some(pid), Some((x, z))) = (near, at) {
+            if let Some(p) = self.siege_point(pid, x, z) { return p; }
+        }
+        town_near(at)
     }
 
     pub fn teleport(&mut self, pid: u32, x: f64, z: f64) {
@@ -494,6 +501,7 @@ impl World {
             });
         }
         if self.rift.is_some() { return self.rift_mob_killed(mid, now); }
+        if let Some(fort) = self.ents.get(&mid).and_then(|e| e.mob()).and_then(|m| m.guard) { return self.fort_taken(fort, now); }
         if let (Some(raid), Some(boss)) = (self.raid, self.raid_boss) {
             if boss == mid {
                 self.raid_cleared_at = now;
@@ -715,6 +723,7 @@ impl World {
                 self.day = day;
                 self.daily_reset();
             }
+            if self.raid.is_none() { self.siege_tick(now); }
         }
         if self.tick_n % 40 == 0 {
             for pid in &self.players { if let Some(p) = self.pl(*pid) { p.send(json!({ "t": "ping", "s": now.floor(), "rtt": p.rtt.round() })) } }
@@ -783,9 +792,12 @@ impl World {
 pub fn round2(v: f64) -> f64 { jround(v * 100.0) / 100.0 }
 
 /// A free spot in the town closest to (x, z) (the starting village without one).
-pub fn town_near(c: Option<(f64, f64)>) -> P {
+pub fn town_near(c: Option<(f64, f64)>) -> P { town_near_where(c, |_| true) }
+
+/// A free spot in the town closest to (x, z) of those `ok` lets in (the starting village without one).
+pub fn town_near_where(c: Option<(f64, f64)>, ok: impl Fn(&crate::data::Town) -> bool) -> P {
     let dist = |t: &&crate::data::Town| c.map_or(0.0, |(x, z)| (x - t.x).hypot(z - t.z));
-    let t = d().towns.iter().min_by(|a, b| dist(a).total_cmp(&dist(b))).unwrap_or(&d().town);
+    let t = d().towns.iter().filter(|t| ok(t)).min_by(|a, b| dist(a).total_cmp(&dist(b))).unwrap_or(&d().town);
     let (a, r) = (rnd() * std::f64::consts::TAU, 11.0 + rnd() * 4.0);
     push_out(t.x + a.cos() * r, t.z + a.sin() * r, d().c.walk_radius)
 }

@@ -25,6 +25,7 @@ mod quests;
 mod raid;
 mod realm;
 mod rift;
+mod siege;
 mod terrain;
 mod trade;
 mod world;

@@ -267,6 +267,21 @@ pub fn loot_week(now_ms: f64) -> i64 {
     (loot_day(now_ms) + 3).div_euclid(7)
 }
 
+/** This week's fort siege (shared/src/data/sieges.ts SIEGE): when it starts and ends (ms since epoch). The week is
+ * loot_week's, the one that began on Monday, so it is Saturday 21:00 to 22:00 in Argentina. */
+pub fn siege_window(now_ms: f64) -> (f64, f64) {
+    let s = &d().siege;
+    let monday = loot_week(now_ms) * 7 - 3;
+    let start = (monday + s.weekday) as f64 * 86_400_000.0 + ART_MS + s.hour * 3_600_000.0;
+    (start, start + s.minutes * 60_000.0)
+}
+
+/** When the next siege starts (this week's unless it is over), for the clients. */
+pub fn next_siege_at(now_ms: f64) -> f64 {
+    let (start, end) = siege_window(now_ms);
+    if now_ms < end { start } else { siege_window(now_ms + 7.0 * 86_400_000.0).0 }
+}
+
 /** XP from Legend level `n` to the next, at the level cap: half of 77 to 78 for the first, 5% more each one after;
  * 0 once the Legend is full. */
 pub fn legend_to_next(n: i64) -> i64 {
@@ -771,6 +786,18 @@ mod tests {
         assert_eq!(loot_day(midnight + 86_400_000.0 - 1.0), day);
         assert_eq!(next_day_at(midnight - 1.0), midnight);
         assert_eq!(next_day_at(midnight + 3_600_000.0), midnight + 86_400_000.0);
+    }
+
+    /// The forts are sieged on Saturday from 21:00 to 22:00, Argentina time, the whole week long pointing at it.
+    #[test]
+    fn sieges_on_saturday_night() {
+        let monday = 1_704_078_000_000.0; // Monday 2024-01-01 00:00 UTC-3
+        let (sat, hour) = (monday + 5.0 * 86_400_000.0 + 21.0 * 3_600_000.0, 3_600_000.0);
+        for t in [monday, sat - 1.0, sat + 1_800_000.0, monday + 7.0 * 86_400_000.0 - 1.0] { assert_eq!(siege_window(t), (sat, sat + hour)); }
+        assert_eq!(siege_window(monday + 7.0 * 86_400_000.0).0, sat + 7.0 * 86_400_000.0, "a new week, a new siege");
+        assert_eq!(next_siege_at(monday), sat);
+        assert_eq!(next_siege_at(sat + 1_800_000.0), sat, "still on");
+        assert_eq!(next_siege_at(sat + hour), sat + 7.0 * 86_400_000.0, "over: next Saturday's");
     }
 
     /// Each day offers three different contracts of the daily pool, the same for everyone, and they change over the days;

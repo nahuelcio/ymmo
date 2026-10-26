@@ -35,6 +35,8 @@ export interface ClanInfo {
   wars: ClanWarInfo[]; ally: AllyInfo | null; allyJoinUntil: number; allyFoundUntil: number;
   /** clan skill id -> level (CLAN_SKILLS) */
   skills: Record<string, number>;
+  /** the fort it holds (sieges.ts SIEGE_FORTS id), and when the next siege starts (ms since epoch) */
+  fort?: string | null; nextSiege?: number;
 }
 /** A clan warehouse row (id: its row), and a logged movement (dep: a deposit). */
 export interface ClanWhItem { id: number; i: string; c: number; e: number; l?: boolean; m?: boolean }
@@ -90,7 +92,9 @@ export type C2S =
   | { t: 'login'; user: string; pass: string; register: boolean; remember?: boolean }
   | { t: 'resume'; token: string }
   /** admin window (/admin): asks for the server state; pass logs this socket in, kick/announce are the actions */
-  | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } }
+  | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null };
+      /** a fort siege now, for so many minutes, or the running one over (server-rs siege.rs) */
+      siege?: 'start' | 'end'; minutes?: number }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
@@ -213,12 +217,17 @@ export type S2C =
   | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan' | 'board'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number };
       /** a shop that sells for this item instead of adena, at these prices */
       currency?: string; prices?: Record<string, number>;
+      /** a merchant of a fort some clan holds: its adena prices carry this tax (sieges.ts withTax), for that clan */
+      tax?: number; taxClan?: string;
       /** the contracts' board: today's contracts, and when they change (ms since epoch) */
       quests?: { id: string; status: QuestStatus; progress: number }[]; resetAt?: number }
   /** daily: today's contracts; dailyDone: the ones handed in today; resetAt: when they change (ms since epoch) */
   | { t: 'quests'; list: { id: string; progress: number }[]; done: string[]; daily?: string[]; dailyDone?: string[]; resetAt?: number }
   /** a Rift floor opens (server-rs rift.rs) */
   | { t: 'rift'; floor: number }
+  /** the fort sieges (sieges.ts): the forts under siege now, who holds which, when the next one starts and, while one
+   * runs, when it ends (ms since epoch) */
+  | { t: 'sieges'; active: string[]; owners: Record<string, { id: number; name: string }>; next: number; ends: number | null }
   | { t: 'partyInvite'; from: string }
   | { t: 'tradeRequest'; from: string }
   /** the whole trade, after every change: your offer and the other player's */

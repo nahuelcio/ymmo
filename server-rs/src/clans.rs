@@ -224,6 +224,15 @@ fn cast_sys(clan: &Clan, es: &str, en: &str) {
     cast(clan, |l| json!({ "t": "chat", "ch": "sys", "from": "", "text": if l.en() { en } else { es } }));
 }
 fn to_char(char_id: i64, v: Value) { if let Some((out, _)) = online().read().unwrap().get(&char_id) { out.value(&v); } }
+/** Everyone online, in any world (a raid's or the Rift's players too): the same message. */
+pub fn cast_all(v: &Value) { for (out, _) in online().read().unwrap().values() { out.value(v); } }
+/** Everyone online, in any world: an announcement (the fort sieges), in their language. */
+pub fn announce_all(es: &str, en: &str) {
+    let (es, en) = (json!({ "t": "chat", "ch": "announce", "from": "", "text": es }), json!({ "t": "chat", "ch": "announce", "from": "", "text": en }));
+    for (out, l) in online().read().unwrap().values() { out.value(if l.en() { &en } else { &es }); }
+}
+/** Fresh clan info to that clan's online members (its fort changed hands, siege.rs). */
+pub fn push_clan(id: u32) { let r = reg().read().unwrap(); push_id(&r, id); }
 
 /** What the clan window shows (every member sees the same; each client works out what it may do). */
 fn info(r: &Clans, clan: &Clan) -> Value {
@@ -248,7 +257,8 @@ fn info(r: &Clans, clan: &Clan) -> Value {
     });
     json!({ "id": clan.id, "name": clan.name, "level": clan.level, "rep": clan.rep, "leader": leader, "cv": clan.crest_ver,
         "cap": clan.capacity(), "privs": clan.privs, "inviteUntil": clan.invite_until, "members": members,
-        "wars": wars, "ally": ally, "allyJoinUntil": clan.ally_join_until, "allyFoundUntil": clan.ally_found_until, "skills": clan.skills })
+        "wars": wars, "ally": ally, "allyJoinUntil": clan.ally_join_until, "allyFoundUntil": clan.ally_found_until, "skills": clan.skills,
+        "fort": crate::siege::fort_of(clan.id).map(|f| d().siege.forts[f].id.clone()), "nextSiege": crate::formulas::next_siege_at(crate::world::now_ms()) })
 }
 /** Fresh clan info to every online member. */
 fn push(r: &Clans, clan: &Clan) { let v = json!({ "t": "clan", "clan": info(r, clan) }); cast(clan, |_| v.clone()); }
@@ -539,6 +549,7 @@ impl World {
         let cid = self.pl(pid).unwrap().char_id;
         let now = crate::world::now_ms();
         let until = now + d().clans.cfg.dissolve_ms;
+        let gone;
         {
             let mut r = reg().write().unwrap();
             let Some(&clan_id) = r.by_char.get(&cid) else { return };
@@ -557,8 +568,11 @@ impl World {
             r.penalty.insert(cid, (join, until));
             self.db.char_clan_penalty(cid, join, until);
             self.db.clan_delete(clan_id as i64);
+            gone = clan_id;
         }
         changed();
+        // its fort is nobody's (out of the clans' lock: the sieges' message reads it)
+        crate::siege::clan_gone(gone);
     }
 
     // ------------------------------------------------------------------ level, grades, titles, crest
@@ -660,17 +674,31 @@ impl World {
     /** Reputation for what these players did together: each of their clans (once) gains `amount`. */
     pub fn clan_rep(&mut self, pids: &[u32], amount: i64, es: &str, en: &str) {
         let chars: Vec<i64> = pids.iter().filter_map(|id| self.pl(*id).map(|p| p.char_id)).collect();
-        let mut r = reg().write().unwrap();
-        let mut ids: Vec<u32> = chars.iter().filter_map(|c| r.by_char.get(c).copied()).collect();
+        let mut ids: Vec<u32> = { let r = reg().read().unwrap(); chars.iter().filter_map(|c| r.by_char.get(c).copied()).collect() };
         ids.sort();
         ids.dedup();
-        for id in ids {
-            let clan = r.clans.get_mut(&id).unwrap();
+        self.clan_rep_ids(&ids, amount, es, en);
+    }
+    /** Reputation for what one clan did (a fort taken or held, siege.rs). */
+    pub fn clan_rep_of(&mut self, clan: u32, amount: i64, es: &str, en: &str) { self.clan_rep_ids(&[clan], amount, es, en); }
+    fn clan_rep_ids(&mut self, ids: &[u32], amount: i64, es: &str, en: &str) {
+        let mut r = reg().write().unwrap();
+        for &id in ids {
+            let Some(clan) = r.clans.get_mut(&id) else { continue };
             clan.rep = (clan.rep + amount).max(0);
             self.db.clan_save(clan.id as i64, clan.leader, clan.level as i64, clan.rep, clan.ally.map(|a| a as i64), clan.invite_until);
             cast_sys(clan, &format!("Reputación del clan {amount:+} ({es})."), &format!("Clan reputation {amount:+} ({en})."));
             { let id = clan.id; push_id(&r, id); }
         }
+    }
+
+    /** A fort's tax (siege.rs): what a purchase there adds goes to its owner's warehouse adena. */
+    pub fn clan_tax(&mut self, clan: u32, amount: i64) {
+        if amount <= 0 { return; }
+        let mut r = reg().write().unwrap();
+        let Some(c) = r.clans.get_mut(&clan) else { return };
+        c.adena += amount;
+        self.db.clan_adena(clan as i64, c.adena);
     }
 
     /** Clan chat ('@'): every online member, in any world. */

@@ -1,8 +1,9 @@
 //! World geometry the server needs: town, zones, playable bounds.
 use crate::data::d;
 
+/** In a peace zone: a town, unless it is a fort under siege (siege.rs). */
 pub fn in_town(x: f64, z: f64) -> bool {
-    d().towns.iter().any(|t| (x - t.x).hypot(z - t.z) < t.r + 5.0)
+    d().towns.iter().any(|t| (x - t.x).hypot(z - t.z) < t.r + 5.0) && crate::siege::besieged_at(x, z).is_none()
 }
 
 /** zoneAt(): Spanish zone name at (x,z) */
@@ -16,8 +17,9 @@ pub fn zone_at(x: f64, z: f64) -> String {
 }
 
 /** Inside a full-PvP zone (shared/src/data/world.ts inPvpZone). */
+/** A fort's siege zone counts while the siege lasts. */
 pub fn in_pvp_zone(x: f64, z: f64) -> bool {
-    d().zones.iter().any(|zn| zn.pvp == Some(true) && (x - zn.x).hypot(z - zn.z) < zn.r)
+    d().zones.iter().any(|zn| zn.pvp == Some(true) && (x - zn.x).hypot(z - zn.z) < zn.r) || crate::siege::besieged_at(x, z).is_some()
 }
 
 /** Small deterministic PRNG (same as shared/src/terrain.ts mulberry32). */

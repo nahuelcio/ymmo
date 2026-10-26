@@ -2,6 +2,7 @@
 use crate::data::d;
 use crate::ent::*;
 use crate::formulas::{jround, ring_slot, rnd};
+use crate::siege::tax_on;
 use crate::i18n::{item_name, npc_greeting, npc_lines, npc_title, teleport_name, trs};
 use crate::world::World;
 use serde_json::{json, Value};
@@ -12,6 +13,9 @@ const NPC_RANGE: f64 = 8.0;
 const AUTOLOOT_RANGE: f64 = 40.0;
 
 fn qty_prefix(n: i64) -> String { if n > 1 { format!("{n} × ") } else { String::new() } }
+
+/** The clan holding the fort this merchant stands in: it takes the tax on the adena paid here (siege.rs). */
+fn taxed(n: &crate::data::NpcDef) -> Option<u32> { crate::siege::fort_at(n.x, n.z).and_then(crate::siege::owner) }
 
 pub fn add_item(p: &mut Player, item: &str, count: i64) -> bool {
     let Some(def) = d().item(item) else { return false };
@@ -285,8 +289,14 @@ impl World {
         if let Some(craft) = &def.craft { msg["craft"] = json!(craft); }
         // a shop that takes an item instead of adena (the Cambista's Marks), at its own prices
         if let Some(cur) = &def.currency { (msg["currency"], msg["prices"]) = (json!(cur), json!(def.prices)); }
+        // a fort someone holds: its adena prices carry the owner's tax (siege.rs), and the window says whose
+        let tax = taxed(def);
+        if let Some(c) = tax {
+            msg["tax"] = json!(d().siege.tax);
+            msg["taxClan"] = json!(crate::clans::reg().read().unwrap().clans.get(&c).map(|cl| cl.name.clone()));
+        }
         if def.kind == "gatekeeper" {
-            let dests: Vec<Value> = d().teleports.iter().map(|t| json!({ "id": t.id, "name": teleport_name(&t.id, l), "cost": t.cost })).collect();
+            let dests: Vec<Value> = d().teleports.iter().map(|t| json!({ "id": t.id, "name": teleport_name(&t.id, l), "cost": t.cost + tax.map_or(0, |_| tax_on(t.cost)) })).collect();
             msg["dests"] = json!(dests);
         }
         p.send(msg);
@@ -311,12 +321,14 @@ impl World {
             p.inv_dirty = true;
             return self.sys(pid, &format!("Compraste {}{} por {cost} × {}.", qty_prefix(qty), def.name, cdef.name), &format!("You bought {}{} for {cost} × {}.", qty_prefix(qty), def.name_en, cdef.name_en));
         }
-        let cost = def.price * qty;
+        let tax = taxed(n).map(|c| (c, tax_on(def.price) * qty));
+        let cost = def.price * qty + tax.map_or(0, |t| t.1);
         let p = self.pl_mut(pid).unwrap();
         if p.adena < cost { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
         if !add_item(p, item, qty) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
         p.adena -= cost;
         p.inv_dirty = true;
+        if let Some((clan, t)) = tax { self.clan_tax(clan, t); }
         self.sys(pid, &format!("Compraste {}{} por {cost} de adena.", qty_prefix(qty), def.name), &format!("You bought {}{} for {cost} adena.", qty_prefix(qty), def.name_en));
     }
 
@@ -325,16 +337,20 @@ impl World {
         let Some(n) = self.npc_in_range(pid, nid) else { return };
         if !n.craft.as_ref().map_or(false, |c| c.iter().any(|x| x == item)) { return; }
         let Some((def, rec)) = d().item(item).and_then(|i| Some((i, i.craft.as_ref()?))) else { return };
+        let tax = taxed(n).map(|c| (c, tax_on(rec.adena)));
+        let adena = rec.adena + tax.map_or(0, |t| t.1);
         let p = self.pl_mut(pid).unwrap();
-        if p.adena < rec.adena { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
+        if p.adena < adena { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
         if rec.mats.iter().any(|(m, c)| count_mat(p, m) < *c) {
             return self.sys(pid, "Te faltan materiales (las armas tienen que estar en +0).", "You are missing materials (weapons must be +0).");
         }
         // the piece goes in first: a full bag must not eat the materials
         if !add_item(p, item, 1) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
         for (m, c) in &rec.mats { take_mat(p, m, *c); }
-        p.adena -= rec.adena;
+        p.adena -= adena;
         p.inv_dirty = true;
+        if let Some((clan, t)) = tax { self.clan_tax(clan, t); }
+        let p = self.pl_mut(pid).unwrap();
         // gear sometimes comes out a Masterwork when a dwarf has it made (MASTERWORK: never for anyone else); gear never stacks, so it is the
         // row add_item just pushed
         let mw = &d().masterwork;
@@ -367,10 +383,17 @@ impl World {
         let Some(n) = self.npc_in_range(pid, nid) else { return };
         if n.kind != "gatekeeper" || self.ents[&pid].c.dead { return; }
         let Some(tp) = d().teleports.iter().find(|t| t.id == dest) else { return };
+        if let Some(f) = crate::siege::besieged_at(tp.x, tp.z) {
+            let f = &d().siege.forts[f];
+            return self.sys(pid, &format!("{} está bajo asedio: no puedo llevarte hasta que termine.", f.name), &format!("{} is under siege: I cannot take you there until it is over.", f.name_en));
+        }
+        let tax = taxed(n).map(|c| (c, tax_on(tp.cost)));
+        let cost = tp.cost + tax.map_or(0, |t| t.1);
         let p = self.pl_mut(pid).unwrap();
-        if p.adena < tp.cost { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
-        p.adena -= tp.cost;
+        if p.adena < cost { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
+        p.adena -= cost;
         p.inv_dirty = true;
+        if let Some((clan, t)) = tax { self.clan_tax(clan, t); }
         self.teleport(pid, tp.x + (rnd() - 0.5) * 6.0, tp.z + (rnd() - 0.5) * 6.0);
     }
 

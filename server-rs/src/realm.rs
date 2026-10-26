@@ -58,6 +58,7 @@ impl World {
         }
         let p = self.pl(id).unwrap();
         send_quests(p);
+        p.send(crate::siege::sieges_msg(self.siege.on.map(|o| o.1).filter(|_| !self.siege.forts.is_empty())));
         self.send_nodes(id, crate::world::now_ms());
         Some(id)
     }

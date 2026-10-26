@@ -441,6 +441,11 @@ const list: MobDef[] = [
     jewel: { item: 'necklace_of_the_war_avatar', chance: 0.2 } },
   // they go for whoever the boss lets them: a pack of them kills a healer nobody covers
   { id: 'war_herald', name: 'Heraldo de la Guerra', level: 78, shape: 'orc', color: 0x9a2a1a, scale: 1.1, aggressive: true, speed: 5.5, atkInterval: 1400, range: 2.4, hpMult: 2, atkMult: 1.41, respawn: 1e12, adena: [0, 0], drops: [] },
+  // a fort's defender while it is under siege (sieges.ts; server-rs siege.rs spawns it by the brazier): a knight in gilded
+  // plate (render/mobs.ts MOB_KNIGHT) that a clan's group brings down in minutes, never one player alone. It fights
+  // anyone but the owning clan and its alliance; it drops nothing and gives no XP.
+  { id: 'fort_guardian', name: 'Guardián del Fuerte', level: 79, shape: 'orc', color: 0xc8a040, scale: 1.4, aggressive: true, speed: 5, atkInterval: 1500, range: 3, hpMult: 150, atkMult: 2.2, defMult: 1.4, elite: true,
+    respawn: 1e12, onHit: { id: 'slow', ms: 3000, chance: 0.25 }, special: { r: 7, windup: 1400, mult: 1.8, every: 9000, at: 'self', stun: 1500 }, adena: [0, 0], drops: [] },
   // Grieta de las Brasas (full PvP, levels 40-48): passive creatures that drop the dragon set's materials and the C-grade
   // scrolls (items.ts: they only enchant C-grade gear)
   { id: 'cinder_drakeling', name: 'Dragoncillo de Ceniza', level: 40, shape: 'beast', color: 0x8a3a1a, scale: 1.2, aggressive: false, speed: 5.5, atkInterval: 1400, range: 2.2, hpMult: 2.2, atkMult: 1.1,

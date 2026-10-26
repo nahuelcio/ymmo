@@ -16,6 +16,7 @@ import { settings } from '../settings';
 import { gameClock } from '../render/atmos';
 import { campName, zoneName } from '../../../shared/src/i18n';
 import { BELL_TOWER } from '../../../shared/src/village';
+import { SIEGE_FORTS } from '../../../shared/src/data/sieges';
 
 // ponytail: capped so the 4 km continent overview stays ~2.5 M samples at startup (~2.5 m a pixel); the big map
 // re-samples the visible window at full resolution anyway. Raise the cap if the corner minimap looks soft.
@@ -605,7 +606,13 @@ export class Minimap {
     }
     const mid = zoom >= 1.4 || !REGIONS.length;
     const towns = TOWNS.map((t) => [...this.toBig(t.x, t.z), t] as const);
-    if (mid) for (const [x, y, t] of towns) tag(zoneName(t.name, lang), x, y - 13, 13);
+    // a fort's owner under its name, crossed swords while it is under siege (sieges.ts)
+    const fortOf = (name: string) => SIEGE_FORTS.find((f) => f.name === name);
+    if (mid) for (const [x, y, t] of towns) {
+      const f = fortOf(t.name), own = f && this.g.sieges.owners[f.id];
+      tag(`${f && this.g.sieges.active.includes(f.id) ? '⚔ ' : ''}${zoneName(t.name, lang)}`, x, y - 13, 13);
+      if (own) tag(`clan ${own.name}`, x, y + 18, 11, 'italic');
+    }
     ctx.save();
     ctx.strokeStyle = INK_A(0.45);
     ctx.setLineDash([3, 4]);
@@ -890,7 +897,8 @@ export class Minimap {
     if (now - this.lastDraw < 150) return;
     this.lastDraw = now;
     const self = this.g.self;
-    this.zoneEl.textContent = zoneName(this.g.me.zone, lang);
+    const fort = SIEGE_FORTS.find((f) => f.name === this.g.me.zone), own = fort && this.g.sieges.owners[fort.id];
+    this.zoneEl.textContent = `${zoneName(this.g.me.zone, lang)}${own ? ` · ${own.name}` : ''}`;
     this.raidBtn.style.display = Object.values(RAIDS).some((r) => r.name === this.g.me.zone) ? '' : 'none'; // inside one, the zone is the raid's name
     const clock = settings.s.dayNight ? gameClock() : '';
     if (this.clockEl.textContent !== clock) {

@@ -272,7 +272,7 @@ export const EN = {
   "abyss_knight": "Abyss Knight", "lich": "Lich", "abyss_weaver": "Abyss Weaver", "abyss_drake": "Abyssal Drake", "abyss_demon": "Abyss Demon",
   "high_pyromancer": "High Pyromancer", "abyss_commander": "Abyssal Commander", "flame_lord": "Lord of Flames", "fire_elemental": "Fire Elemental",
   "azgaroth": "Azgaroth, the Devourer", "abyss_spawn": "Abyss Spawn",
-  "battlefield_carrion": "Battlefield Scavenger", "fallen_legionnaire": "Fallen Legionnaire", "relic_golem": "Relic Golem", "war_avatar": "Avatar of War", "war_herald": "Herald of War",
+  "battlefield_carrion": "Battlefield Scavenger", "fallen_legionnaire": "Fallen Legionnaire", "relic_golem": "Relic Golem", "war_avatar": "Avatar of War", "war_herald": "Herald of War", "fort_guardian": "Fort Guardian",
   "cinder_drakeling": "Cinder Drakeling", "flame_zealot": "Flame Zealot", "scorched_golem": "Scorched Golem", "ignaroth": "Ignaroth, Lord of Embers", "ember_whelp": "Ember Whelp",
   "dire_wolf": "Dire Wolf", "moon_cultist": "Moon Cultist", "ghoul": "Ghoul", "lycan_king": "Fenrak, the Lycan King", "pack_lycan": "Pack Lycan",
   "glacier_stalker": "Glacier Stalker", "frost_zealot": "Frost Zealot", "glacier_golem": "Glacier Golem", "ymirak": "Ymirak, the Frost Colossus", "blizzard_yeti": "Blizzard Yeti",

@@ -310,6 +310,8 @@ pub struct Mob {
     pub atk_scale: f64,
     pub xp_scale: f64,
     pub no_loot: bool,
+    /** a fort's Guardian while it is under siege (siege.rs): the fort's index in d().siege.forts */
+    pub guard: Option<usize>,
 }
 
 /** ordered map helpers for hate/threat (insertion order, like a JS Map) */
@@ -330,7 +332,7 @@ impl Mob {
             phase: 0, haste: 1.0, special: tpl.special.clone(), summoned: false, next_attack: 0.0, respawn_at: 0.0, hide_at: 0.0,
             wander_at: 0.0, dest: None, returning: false, special_at: 0.0, camp_id: None, winding: None, home_x: x, home_z: z,
             barrage: tpl.barrage.clone(), pulse: tpl.pulse.clone(), barrage_at: 0.0, pulse_at: 0.0, engaged_at: 0.0, enraged: false,
-            atk_scale: 1.0, xp_scale: 1.0, no_loot: false,
+            atk_scale: 1.0, xp_scale: 1.0, no_loot: false, guard: None,
         }
     }
     /** Back to how it started: its own special and world raid mechanics, its own attack (a Rift floor's, scaled), no

@@ -136,6 +136,10 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS rift_best (week INTEGER NOT NULL, party_key TEXT NOT NULL, names TEXT NOT NULL, floor INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (week, party_key))", []);
         // the daily contracts each character handed in, by day (quests.rs)
         let _ = c.execute("CREATE TABLE IF NOT EXISTS daily_done (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, day INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id, day))", []);
+        // fort sieges (siege.rs): which clan holds each fort, and the sieges already decided (key: the week, or an admin
+        // siege's start), so a restart mid-siege only brings back the forts still being fought over
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS fort_owner (fort TEXT PRIMARY KEY, clan_id INTEGER NOT NULL, since INTEGER NOT NULL)", []);
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS siege_done (key INTEGER NOT NULL, fort TEXT NOT NULL, PRIMARY KEY (key, fort))", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -310,6 +314,27 @@ impl Db {
     }
 
     /** When an overworld boss is back (ms since epoch), kept across restarts. */
+    /** Every fort with an owner: (fort, clan id). */
+    pub fn fort_owners(&self) -> Vec<(String, i64)> {
+        let Ok(mut st) = self.c.prepare("SELECT fort, clan_id FROM fort_owner") else { return vec![] };
+        st.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    /** A fort's new owner (None: nobody holds it). */
+    pub fn set_fort_owner(&self, fort: &str, clan: Option<i64>, at: f64) {
+        let _ = match clan {
+            Some(c) => self.c.execute("INSERT INTO fort_owner (fort, clan_id, since) VALUES (?, ?, ?) ON CONFLICT(fort) DO UPDATE SET clan_id = excluded.clan_id, since = excluded.since", params![fort, c, at as i64]),
+            None => self.c.execute("DELETE FROM fort_owner WHERE fort = ?", [fort]),
+        };
+    }
+    /** The forts whose siege under this key is over. */
+    pub fn sieges_done(&self, key: i64) -> Vec<String> {
+        let Ok(mut st) = self.c.prepare("SELECT fort FROM siege_done WHERE key = ?") else { return vec![] };
+        st.query_map([key], |r| r.get(0)).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    pub fn siege_done(&self, key: i64, fort: &str) {
+        let _ = self.c.execute("INSERT OR IGNORE INTO siege_done (key, fort) VALUES (?, ?)", params![key, fort]);
+    }
+
     pub fn set_boss_respawn(&self, mob: &str, at: f64) {
         let _ = self.c.execute("INSERT INTO boss_respawn (mob, at) VALUES (?, ?) ON CONFLICT(mob) DO UPDATE SET at = excluded.at", params![mob, at as i64]);
     }
@@ -515,6 +540,7 @@ impl Db {
         let _ = self.c.execute("DELETE FROM clan_log WHERE clan_id = ?", [id]);
         let _ = self.c.execute("DELETE FROM clan_skills WHERE clan_id = ?", [id]);
         let _ = self.c.execute("DELETE FROM clan_war_cd WHERE clan = ?1 OR target = ?1", [id]);
+        let _ = self.c.execute("DELETE FROM fort_owner WHERE clan_id = ?", [id]);
         let _ = self.c.execute("UPDATE characters SET clan_id = NULL, clan_grade = 5, title = '' WHERE clan_id = ?", [id]);
     }
 
