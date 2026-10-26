@@ -252,11 +252,19 @@ pub fn ring_slot(ring: Option<&str>, ring2: Option<&str>, id: &str) -> &'static 
     if ring == Some(id) { "ring" } else if ring2 == Some(id) { "ring2" } else if ring.is_none() { "ring" } else if ring2.is_none() { "ring2" } else { "ring" }
 }
 
+/** Argentina's time zone, where the server's days and weeks turn (UTC-3, no daylight saving). */
+const ART_MS: f64 = 3.0 * 3_600_000.0;
+
+/** The server day (ms since epoch): a new one at 00:00 in Argentina. The daily contracts and the Rift's paid run go by it. */
+pub fn loot_day(now_ms: f64) -> i64 { ((now_ms - ART_MS) / 86_400_000.0).floor() as i64 }
+
+/** When the next server day begins (ms since epoch), for the clients' countdown. */
+pub fn next_day_at(now_ms: f64) -> f64 { (loot_day(now_ms) + 1) as f64 * 86_400_000.0 + ART_MS }
+
 /** The week a boss jewel's roll belongs to (ms since epoch): a new one every Monday at 00:00 in Argentina (UTC-3). */
 pub fn loot_week(now_ms: f64) -> i64 {
-    let days = ((now_ms - 3.0 * 3_600_000.0) / 86_400_000.0).floor() as i64;
     // 1970-01-01 was a Thursday: three days on, the weeks start on Mondays
-    (days + 3).div_euclid(7)
+    (loot_day(now_ms) + 3).div_euclid(7)
 }
 
 /** XP from Legend level `n` to the next, at the level cap: half of 77 to 78 for the first, 5% more each one after;
@@ -754,6 +762,39 @@ mod tests {
         assert_eq!(ring_slot(Some("a"), Some("b"), "b"), "ring2");
     }
 
+    /// A server day turns at 00:00 in Argentina (03:00 UTC); the countdown points at that moment.
+    #[test]
+    fn days_turn_at_midnight_argentina() {
+        let midnight = 1_704_078_000_000.0; // Monday 2024-01-01 00:00 UTC-3
+        let day = loot_day(midnight);
+        assert_eq!(loot_day(midnight - 1.0), day - 1);
+        assert_eq!(loot_day(midnight + 86_400_000.0 - 1.0), day);
+        assert_eq!(next_day_at(midnight - 1.0), midnight);
+        assert_eq!(next_day_at(midnight + 3_600_000.0), midnight + 86_400_000.0);
+    }
+
+    /// Each day offers three different contracts of the daily pool, the same for everyone, and they change over the days;
+    /// the client's dailySet (shared/src/data/quests.ts, run by the export as dailyProbe) offers the very same ones.
+    #[test]
+    fn three_contracts_a_day() {
+        let data = d();
+        assert_eq!(data.daily_probe.len(), 7, "the export's probe of the client's picks");
+        for (day, ids) in &data.daily_probe {
+            assert_eq!(&data.daily_set(*day).iter().map(|q| q.id.clone()).collect::<Vec<_>>(), ids, "day {day}: the client offers other contracts");
+        }
+        let pool = data.quests.iter().filter(|q| q.daily).count();
+        assert!(pool >= 6, "a pool to pick from: {pool}");
+        let mut seen = std::collections::HashSet::new();
+        for day in 20_000..20_030 {
+            let set = data.daily_set(day);
+            assert_eq!(set.len(), crate::data::DAILY_COUNT);
+            assert_eq!(set.iter().map(|q| &q.id).collect::<std::collections::HashSet<_>>().len(), 3, "three different on day {day}");
+            assert_eq!(set.iter().map(|q| &q.id).collect::<Vec<_>>(), data.daily_set(day).iter().map(|q| &q.id).collect::<Vec<_>>(), "the same for everyone");
+            for q in set { seen.insert(q.id.clone()); }
+        }
+        assert_eq!(seen.len(), pool, "a month offers every contract");
+    }
+
     /// A jewel's week turns on Monday at 00:00 in Argentina (03:00 UTC), and lasts until Sunday 23:59.
     #[test]
     fn loot_weeks_start_on_monday() {
@@ -988,17 +1029,33 @@ mod tests {
         for z in data.zones.iter().chain(&data.herds) { for s in &z.spawns { mob(&s.mob, &z.name); } }
         for n in &data.npcs {
             for s in n.shop.iter().flatten() { item(s, &n.id); }
+            // a shop in another currency prices everything it sells in it
+            if let Some(c) = &n.currency {
+                item(c, &n.id);
+                for s in n.shop.iter().flatten() { assert!(n.prices.get(s).map_or(false, |&p| p > 0), "{} sells {s} with no price in {c}", n.id); }
+            }
             for c in n.craft.iter().flatten() { assert!(data.item(c).map_or(false, |i| i.craft.is_some()), "{} crafts {c}, which has no recipe", n.id); }
         }
         for i in data.items.values() { for (m, _) in i.craft.iter().flat_map(|r| &r.mats) { item(m, &i.id); } }
         for q in &data.quests {
             assert!(data.npc(&q.npc).is_some(), "unknown npc {} in {}", q.npc, q.id);
-            match &q.objective { crate::data::Objective::Kill { mob: m, .. } => mob(m, &q.id), crate::data::Objective::Collect { item: i, .. } => item(i, &q.id) }
+            match &q.objective {
+                crate::data::Objective::Kill { mob: m, .. } => mob(m, &q.id),
+                crate::data::Objective::Collect { item: i, .. } => item(i, &q.id),
+                crate::data::Objective::KillAny { mobs, .. } => for m in mobs { mob(m, &q.id) },
+                crate::data::Objective::Camp { camp, .. } => assert!(data.camp(camp).is_some(), "unknown camp {camp} in {}", q.id),
+                crate::data::Objective::Rift { floor, count } => assert!(*floor >= 1 && *count == 1 && data.raids.values().any(|r| r.rift), "{}", q.id),
+            }
+            for (i, _) in &q.rewards { item(i, &q.id); }
+            // a daily contract's giver is the board; a board gives nothing else
+            assert_eq!(q.daily, data.npc(&q.npc).map_or(false, |n| n.kind == "board"), "{}: daily contracts, and only they, come from the board", q.id);
         }
         for r in data.raids.values() {
-            mob(&r.boss, &r.id);
+            // a boss, or the Rift's waves
+            match &r.boss { Some(b) => mob(b, &r.id), None => assert!(r.rift, "{} has no boss", r.id) }
             if let Some(q) = &r.quest { assert!(data.quest(q).is_some(), "unknown quest {q} in {}", r.id); }
         }
+        for m in crate::rift::TRASH.iter().chain(crate::rift::ELITES.iter()) { mob(m, "the Rift"); }
         for s in &data.skills { if let Some(sp) = &s.spec { assert!(data.spec(sp).is_some(), "unknown spec {sp} in {}", s.id); } }
     }
 

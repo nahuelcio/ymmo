@@ -141,6 +141,13 @@ const SWORDS: Record<string, { grade: Grade; look?: Grade; pAtk: number; mAtk: n
 
 const list: ItemDef[] = [
   { id: 'adena', name: 'Adena', type: 'currency', price: 1, stack: true, icon: '🪙', color: 0xffd34d },
+  // the daily contracts' and the Rift's pay (quests.ts dailies, server-rs rift.rs), spent at Brasaoscura's Cambista: a
+  // currency, so each keeps their own (no trading, selling, depositing or dropping it)
+  { id: 'contract_mark', name: 'Marca de Contrato', type: 'currency', stack: true, price: 0, icon: '🏅', color: 0xd8b04a,
+    desc: 'La pagan los contratos de Brasaoscura y La Grieta. El Cambista de Brasaoscura la cambia por bienes raros.' },
+  // the Cambista's: a boss jewel's roll already spent this week, back once (server-rs combat.rs jewel_rolls)
+  { id: 'jewel_voucher', name: 'Vale de Tirada', type: 'material', stack: true, price: 0, icon: '🎟️', color: 0xd8a0ff,
+    desc: 'Si matás a un jefe cuya tirada semanal de joya ya usaste, se gasta solo y te da otra tirada.' },
   // Weapons
   { id: 'short_sword', name: 'Espada Corta', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'sword', pAtk: 8, mAtk: 6, price: 80, icon: '🗡️', color: 0xb8c4cc },
   { id: 'apprentice_wand', name: 'Varita de Aprendiz', type: 'weapon', slot: 'weapon', grade: 'NG', weaponType: 'staff', pAtk: 5, mAtk: 8, price: 80, icon: '🪄', color: 0x9b7b4a },

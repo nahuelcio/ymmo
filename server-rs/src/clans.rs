@@ -997,6 +997,8 @@ impl World {
         let qty = qty.floor() as i64;
         if qty < 1 || qty > it.c { return; }
         let Some(def) = d().item(&it.i) else { return };
+        // a currency (the Marks) is each character's own
+        if def.kind == "currency" { return self.sys(pid, "Eso no se puede depositar.", "That cannot be deposited."); }
         let stack = def.stack.unwrap_or(false) && it.e == 0;
         {
             let mut r = reg().write().unwrap();

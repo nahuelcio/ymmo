@@ -633,7 +633,8 @@ export class Minimap {
     for (const [x, y] of towns) this.townIcon(ctx, x, y);
     // hostile camps and raid lairs: the icon always, the name only close in and where it fits
     const close = zoom >= 3;
-    for (const r of Object.values(RAIDS)) {
+    // (the Rift is entered by command, on the Heart of the Abyss' own floor: one mark there is enough)
+    for (const r of Object.values(RAIDS).filter((r) => !r.rift)) {
       const [x, y] = this.toBig(r.x, r.z);
       this.raidIcon(ctx, x, y);
       if (close) tag(lang === 'en' ? r.nameEn : r.name, x, y - 12, 11, 'italic bold');

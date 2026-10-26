@@ -283,6 +283,8 @@ impl World {
         let mut msg = json!({ "t": "npc", "npc": nid, "kind": def.kind, "name": def.name, "title": npc_title(&def.id, l), "greeting": greeting });
         if let Some(shop) = &def.shop { msg["shop"] = json!(shop); }
         if let Some(craft) = &def.craft { msg["craft"] = json!(craft); }
+        // a shop that takes an item instead of adena (the Cambista's Marks), at its own prices
+        if let Some(cur) = &def.currency { (msg["currency"], msg["prices"]) = (json!(cur), json!(def.prices)); }
         if def.kind == "gatekeeper" {
             let dests: Vec<Value> = d().teleports.iter().map(|t| json!({ "id": t.id, "name": teleport_name(&t.id, l), "cost": t.cost })).collect();
             msg["dests"] = json!(dests);
@@ -297,6 +299,18 @@ impl World {
         let qty = qty.floor();
         if !(qty >= 1.0) || qty > if def.stack.unwrap_or(false) { 999.0 } else { 10.0 } { return; }
         let qty = qty as i64;
+        // paid in an item (the Cambista's Marks) at the shop's own price, or in adena at the item's
+        if let Some(cur) = n.currency.as_deref() {
+            let (Some(&price), Some(cdef)) = (n.prices.get(item), d().item(cur)) else { return };
+            let cost = price * qty;
+            let p = self.pl_mut(pid).unwrap();
+            if count_item(p, cur) < cost { return self.sys(pid, &format!("Te faltan {} (cuesta {cost}).", cdef.name), &format!("You do not have enough {} (it costs {cost}).", cdef.name_en)); }
+            // the item goes in first: a full bag must not eat the payment
+            if !add_item(p, item, qty) { return self.sys(pid, "Tenés el inventario lleno.", "Your inventory is full."); }
+            take_items(p, cur, cost);
+            p.inv_dirty = true;
+            return self.sys(pid, &format!("Compraste {}{} por {cost} × {}.", qty_prefix(qty), def.name, cdef.name), &format!("You bought {}{} for {cost} × {}.", qty_prefix(qty), def.name_en, cdef.name_en));
+        }
         let cost = def.price * qty;
         let p = self.pl_mut(pid).unwrap();
         if p.adena < cost { return self.sys(pid, "No te alcanza la adena.", "You do not have enough adena."); }
@@ -341,6 +355,8 @@ impl World {
         if it.s.is_some() || !(qty >= 1.0) || qty as i64 > it.c { return; }
         let qty = qty as i64;
         let def = d().item(&it.i).unwrap();
+        // a currency (the Marks) is each character's own: nobody buys it
+        if def.kind == "currency" { return self.sys(pid, "Eso no se vende.", "That cannot be sold."); }
         let gain = (def.price / 2) * qty;
         consume(p, uid, qty);
         p.adena += gain;
@@ -356,6 +372,17 @@ impl World {
         p.adena -= tp.cost;
         p.inv_dirty = true;
         self.teleport(pid, tp.x + (rnd() - 0.5) * 6.0, tp.z + (rnd() - 0.5) * 6.0);
+    }
+
+    /** Straight into the player's bag (a boss jewel, Marks); with no room, on the ground for them alone for 10 minutes.
+     * True if it went in the bag. */
+    pub fn give_or_ground(&mut self, pid: u32, item: &str, count: i64, now: f64) -> bool {
+        if add_item(self.pl_mut(pid).unwrap(), item, count) { return true; }
+        let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
+        let gid = self.spawn_ground(x, z, item, count, Some([pid].into_iter().collect()), now);
+        if let Some(Kind::Item(g)) = self.ents.get_mut(&gid).map(|e| &mut e.k) { (g.owner_until, g.expire_at) = (now + 600_000.0, now + 600_000.0); }
+        self.sys(pid, "Tenés el inventario lleno: quedó en el piso, a tu nombre, por 10 minutos.", "Your inventory is full: it is on the ground, yours alone, for 10 minutes.");
+        false
     }
 
     pub fn spawn_ground(&mut self, x: f64, z: f64, item: &str, count: i64, owners: Option<HashSet<u32>>, now: f64) -> u32 {
@@ -421,8 +448,10 @@ impl World {
 
     pub fn drop_from_player(&mut self, pid: u32, now: f64) {
         let p = self.pl_mut(pid).unwrap();
-        if p.inv.is_empty() { return; }
-        let idx = ((rnd() * p.inv.len() as f64) as usize).min(p.inv.len() - 1);
+        // a currency (the Marks) is each character's own: it never falls
+        let can: Vec<usize> = (0..p.inv.len()).filter(|&i| d().item(&p.inv[i].i).map_or(true, |def| def.kind != "currency")).collect();
+        if can.is_empty() { return; }
+        let idx = can[((rnd() * can.len() as f64) as usize).min(can.len() - 1)];
         let it = p.inv.remove(idx);
         if it.s.is_some() { p.recalc(); }
         p.inv_dirty = true;

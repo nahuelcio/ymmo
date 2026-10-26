@@ -5,7 +5,10 @@ export interface RaidDef {
   id: string;
   name: string;
   nameEn: string;
-  boss: string;
+  /** the one boss it holds; none in the Rift, whose floors spawn waves instead (server-rs rift.rs) */
+  boss?: string;
+  /** La Grieta: endless floors, a stronger wave each, paid once a day a character (server-rs rift.rs) */
+  rift?: boolean;
   /** arena centre (boss spawn) and where players appear */
   x: number;
   z: number;
@@ -26,6 +29,8 @@ export const RAIDS: Record<string, RaidDef> = {
   frost: { id: 'frost', name: 'Trono de Escarcha', nameEn: 'Frost Throne', boss: 'hrimgar', x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z, entry: { x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z + 20 }, maxPlayers: 9, minLevel: 58, quest: 'giant_slayer', closeAfterKill: 90000 },
   abyss: { id: 'abyss', name: 'Corazón del Abismo', nameEn: 'Heart of the Abyss', boss: 'azgaroth', x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z, entry: { x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z - 20 }, maxPlayers: 9, minLevel: 76, quest: 'abyss_guard', closeAfterKill: 90000 },
   swamp: { id: 'swamp', name: 'Templo del Pantano', nameEn: 'Swamp Temple', boss: 'ssithra', x: RAID_FLOORS.swamp.x, z: RAID_FLOORS.swamp.z, entry: { x: RAID_FLOORS.swamp.x, z: RAID_FLOORS.swamp.z + 20 }, maxPlayers: 9, minLevel: 68, quest: 'ent_purge', closeAfterKill: 90000 },
+  // `/raid rift` or `/grieta`: the Abyss raid's floor (each instance is its own copy), endless floors on it
+  rift: { id: 'rift', name: 'La Grieta', nameEn: 'The Rift', rift: true, x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z, entry: { x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z - 20 }, maxPlayers: 9, minLevel: 76, closeAfterKill: 0 },
 };
 
 /** Boss HP multiplier for a raid of n players (a solo try is still possible, just very long). */

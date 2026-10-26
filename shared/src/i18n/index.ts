@@ -80,11 +80,16 @@ export const questName = (id: string, l: Lang) => questField(QUESTS[id], 'name',
 /** Inline bilingual string: tr(lang, 'castellano', 'english'). */
 export const tr = (l: Lang, es: string, enS: string) => (l === 'en' ? enS : es);
 
-/** "Kill 8 × Keltir" / "Bring 5 × Wolf Pelt" in the reader's language. */
+/** "Kill 8 × Keltir" / "Bring 5 × Wolf Pelt" / "Clear the Abyssal Bastion" in the reader's language. */
 export function questSummaryL(q: QuestDef, l: Lang): string {
   const o = q.objective;
-  return o.type === 'kill' ? tr(l, `Matar ${o.count} × ${mobName(o.mob, l)}`, `Kill ${o.count} × ${mobName(o.mob, l)}`)
-    : tr(l, `Traer ${o.count} × ${itemName(o.item, l)}`, `Bring ${o.count} × ${itemName(o.item, l)}`);
+  switch (o.type) {
+    case 'kill': return tr(l, `Matar ${o.count} × ${mobName(o.mob, l)}`, `Kill ${o.count} × ${mobName(o.mob, l)}`);
+    case 'killAny': return tr(l, `Matar ${o.count} × ${o.what}`, `Kill ${o.count} × ${o.whatEn}`);
+    case 'camp': return tr(l, `Limpiar ${campName(o.camp, l)}`, `Clear ${campName(o.camp, l)}`);
+    case 'rift': return tr(l, `Superar el piso ${o.floor} de La Grieta`, `Clear floor ${o.floor} of the Rift`);
+    default: return tr(l, `Traer ${o.count} × ${itemName(o.item, l)}`, `Bring ${o.count} × ${itemName(o.item, l)}`);
+  }
 }
 
 export function questLineL(q: QuestDef, status: 'locked' | 'available' | 'active' | 'ready' | 'done', l: Lang): string {

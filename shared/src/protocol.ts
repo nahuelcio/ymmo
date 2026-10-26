@@ -114,8 +114,9 @@ export type C2S =
   /** have a merchant make an item from its recipe (ItemDef.craft) */
   | { t: 'craft'; npc: number; item: string }
   | { t: 'teleport'; npc: number; dest: string }
-  | { t: 'questAccept'; npc: number }
-  | { t: 'questTurnIn'; npc: number }
+  /** quest: which contract, at the contracts' board (a story giver has its one) */
+  | { t: 'questAccept'; npc: number; quest?: string }
+  | { t: 'questTurnIn'; npc: number; quest?: string }
   | { t: 'chat'; text: string }
   | { t: 'partyInvite'; name: string }
   | { t: 'partyRespond'; accept: boolean }
@@ -209,8 +210,15 @@ export type S2C =
   /** a piece just crafted came out a Masterwork */
   | { t: 'masterwork'; item: string }
   | { t: 'chat'; ch: 'all' | 'shout' | 'party' | 'clan' | 'ally' | 'whisper' | 'sys' | 'announce'; from: string; text: string }
-  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number } }
-  | { t: 'quests'; list: { id: string; progress: number }[]; done: string[] }
+  | { t: 'npc'; npc: number; kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan' | 'board'; name: string; title: string; greeting: string; shop?: string[]; craft?: string[]; dests?: { id: string; name: string; cost: number }[]; quest?: { id: string; status: QuestStatus; progress: number };
+      /** a shop that sells for this item instead of adena, at these prices */
+      currency?: string; prices?: Record<string, number>;
+      /** the contracts' board: today's contracts, and when they change (ms since epoch) */
+      quests?: { id: string; status: QuestStatus; progress: number }[]; resetAt?: number }
+  /** daily: today's contracts; dailyDone: the ones handed in today; resetAt: when they change (ms since epoch) */
+  | { t: 'quests'; list: { id: string; progress: number }[]; done: string[]; daily?: string[]; dailyDone?: string[]; resetAt?: number }
+  /** a Rift floor opens (server-rs rift.rs) */
+  | { t: 'rift'; floor: number }
   | { t: 'partyInvite'; from: string }
   | { t: 'tradeRequest'; from: string }
   /** the whole trade, after every change: your offer and the other player's */

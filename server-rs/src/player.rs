@@ -154,7 +154,7 @@ impl World {
                 if self.step_toward(pid, tx, tz, speed, dt, 2.5) {
                     self.pl_mut(pid).unwrap().intent = None;
                     self.face(pid, id);
-                    if kind == "quest" { self.open_quest(pid, id); } else { self.open_npc(pid, id); }
+                    if kind == "quest" || kind == "board" { self.open_quest(pid, id); } else { self.open_npc(pid, id); }
                 }
             }
         }

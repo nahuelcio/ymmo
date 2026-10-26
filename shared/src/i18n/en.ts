@@ -149,6 +149,8 @@ export const EN = {
   "earring_of_the_flame_lord": { "name": "Earring of the Lord of Flames", "desc": "The jewel of the Lord of Flames." },
   "necklace_of_azgaroth": { "name": "Necklace of Azgaroth", "desc": "The jewel of Azgaroth, the Devourer." },
   "necklace_of_the_war_avatar": { "name": "Necklace of the Avatar of War", "desc": "The jewel of the Avatar of War." },
+  "contract_mark": { "name": "Contract Mark", "desc": "Paid by Emberdark's contracts and the Rift. Emberdark's Cambista exchanges it for rare goods." },
+  "jewel_voucher": { "name": "Jewel Voucher", "desc": "If you kill a boss whose weekly jewel roll you have already used, it is used up on its own and gives you another roll." },
   "protect_stone": { "name": "Protection Stone", "desc": "Enchant with it: if the attempt fails, the piece goes back to +0 instead of breaking. One is used up on every attempt." },
   "ring_of_the_wastes": { "name": "Ring of the Wastes" },
   "earring_of_binding": { "name": "Earring of Binding" },
@@ -649,7 +651,21 @@ export const EN = {
    "ready": "They rest, at last. Gather your people and type /raid abyss: Azgaroth awaits you.", "doneText": "If you fall down there, do not come back like them." },
   "awakening": { "name": "The Awakening", "story": "Deep in the Abyss sleep shards of an ancient power, the same one that awakened the first heroes. Veyra can read them: with five, she can awaken in you what your specialization does not yet dare to be.",
    "offer": "Bring me 5 awakening shards. The bosses of these lands keep them: the abyssal commander, the high pyromancer, the Lord of Flames and Azgaroth.", "busy": "Five shards. The bosses do not give them up easily: bring company.",
-   "ready": "They beat in time with you. Close your eyes... and awaken.", "doneText": "You are not the one who came to Emberdark. Go and prove it." }
+   "ready": "They beat in time with you. Close your eyes... and awaken.", "doneText": "You are not the one who came to Emberdark. Go and prove it." },
+  // the daily contracts (quests.ts dailies): one story, busy and done line for all
+  ...Object.fromEntries(([
+    ["contract_abyss_hunt", "Abyss Hunt", "Forty creatures of the Abyss, any of them. The fewer climb up, the better we sleep.", "Forty fewer. Sign here."],
+    ["contract_volcanic_hunt", "Volcanic Hunt", "The Volcanic Lands fill with beasts faster than they cool. Forty, any kind.", "That lets the road breathe for a day."],
+    ["contract_commanders", "Heads of Command", "Without anyone leading them, the cultists and the knights fight worse. Five camp leaders.", "Five heads fewer. The disorder down there shows already."],
+    ["contract_bastion", "The Abyssal Bastion", "The Abyssal Bastion is full again. Clear it all, commander included.", "The Bastion is empty. For today."],
+    ["contract_forge", "The Cultists' Forge", "The Cultists' Forge burns again. Put it out: cultists, hounds and their pyromancer.", "The Forge's embers are cooling. Well done."],
+    ["contract_flame_lord", "The Lord of Flames", "The Lord of Flames has woken again. Make him sleep.", "The volcano is calm. For as long as it lasts."],
+    ["contract_azgaroth", "The Devourer", "Azgaroth feeds every night. Take your people down to the Heart of the Abyss (/raid abyss) and cut his supper short.", "The Devourer fell once more. Nobody pays better than I do for that."],
+    ["contract_rift", "Into the Depths", "The Rift has no bottom, they say. Go down to floor 10 (/rift) and tell me what you saw.", "Floor ten. Very few come back from there wanting to talk."],
+  ] as const).map(([id, name, offer, ready]) => [id, {
+    name, story: "The Intendant hands out the jobs the wall cannot leave for tomorrow. Tomorrow there will be others.",
+    offer, busy: "The contract is still open. It lapses tomorrow at midnight.", ready, doneText: "Contract closed. Come back tomorrow: there is work to spare.",
+  }])),
  },
  "npcs": {
   "trav_merchant": { "title": "Wandering Merchant", "greeting": "If the cart holds, I'll reach the next village before nightfall.", "lines": ["Cloth, spices, nails... no, I'm out of nails.", "Watch out for the wolves past the bridge.", "A coin for today's gossip. Fine, free: goblins in the hills."] },
@@ -793,6 +809,8 @@ export const EN = {
   "brunhilda": { "title": "Forgemaster", "greeting": "My forge is hungry. And so is yours, if you want real weapons." },
   "nyx": { "title": "Exorcist", "greeting": "The Abyss whispers. I answer it with seals." },
   "veyra": { "title": "Keeper of the Awakening", "greeting": "There is a power asleep in you. I can see it. Do you want to wake it?" },
+  "ember_contracts": { "title": "Intendant of Contracts", "greeting": "Today's work is on the board. Tomorrow there will be other work." },
+  "ember_exchange": { "title": "Cambista", "greeting": "I take no adena. Marks I do: they are worth what it costs to earn them." },
   "ignis": { "title": "Ash Monk", "greeting": "I worshipped the flames too. They burned me all the same." },
   "seraphel": { "title": "Fallen Paladin", "greeting": "My order fell here. I have not, yet." }
  },

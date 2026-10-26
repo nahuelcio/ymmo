@@ -695,7 +695,7 @@ const EMBER_FORT = ringFort({
     { id: 'e-2', w: 6, d: 4 }, { id: 'e-3', w: 4, d: 4 }, { id: 'e-4', w: 4, d: 4, brick: false },
     { id: 'e-5', w: 6, d: 4 }, { id: 'e-6', w: 4, d: 4 },
   ],
-  folk: ['ember_weapons', 'ember_armor', 'ember_grocer', 'ember_gate', 'ember_clan', 'varga', 'brunhilda', 'nyx', 'veyra'],
+  folk: ['ember_weapons', 'ember_armor', 'ember_grocer', 'ember_gate', 'ember_clan', 'varga', 'brunhilda', 'nyx', 'veyra', 'ember_contracts', 'ember_exchange'],
   smith: 'ember_weapons', alchemist: 'ember_grocer',
 });
 

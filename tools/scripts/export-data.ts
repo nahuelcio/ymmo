@@ -6,7 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK, SET_BONUS } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
 import { SKILLS } from '../../shared/src/data/skills';
-import { QUEST_LIST } from '../../shared/src/data/quests';
+import { dailySet, QUEST_LIST } from '../../shared/src/data/quests';
 import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
 import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
@@ -45,11 +45,11 @@ const out = {
   setBonus: SET_BONUS,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
-  quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false })),
+  quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false, daily: q.daily ?? false, rewards: q.rewards ?? [] })),
   npcs: NPCS.map((n) => ({
     id: n.id, name: n.name, kind: n.kind, x: n.x, z: n.z, ry: n.ry, shop: n.shop ?? null, craft: n.craft ?? null,
     title: n.title, titleEn: npcText(n.id, 'title', 'en'), greeting: n.greeting, greetingEn: npcText(n.id, 'greeting', 'en'),
-    lines: npcLines(n.id, 'es'), linesEn: npcLines(n.id, 'en'), road: n.road ?? null,
+    lines: npcLines(n.id, 'es'), linesEn: npcLines(n.id, 'en'), road: n.road ?? null, currency: n.currency ?? null, prices: n.prices ?? {},
   })),
   // open-country herds spawn like a small zone each (server-rs world.rs spawn_mobs)
   herds: layoutHerds().map((h) => ({ name: '', nameEn: '', x: h.x, z: h.z, r: 10, spawns: [{ mob: h.mob, count: h.count }] })),
@@ -67,6 +67,8 @@ const out = {
   gather: GATHER,
   clans: { levels: CLAN_LEVELS, cfg: CLAN, privs: CLAN_DEFAULT_PRIVS, gradeLevel: CLAN_GRADE_LEVEL, rep: CLAN_REP, skills: CLAN_SKILLS },
   legend: LEGEND,
+  // what the client's dailySet offers on a week of days: server-rs checks its daily_set picks the same (formulas.rs test)
+  dailyProbe: Array.from({ length: 7 }, (_, i) => [20000 + i, dailySet(20000 + i).map((q) => q.id)]),
   water: { cell: WATER_CELL, half: WORLD_HALF, runs: waterRuns() },
   obstacles: getObstacles().map((o) => (o.k === 'c' ? { k: 'c', x: o.x, z: o.z, r: o.r } : { k: 'b', x: o.x, z: o.z, hw: o.hw, hd: o.hd, cos: o.cos, sin: o.sin })),
 };
