@@ -291,6 +291,29 @@ impl World {
         self.refresh_heroes(month);
     }
 
+    /** The GM panel: this player is a Hero this month (or no longer is), whatever the points say, beside its line's
+     * own. Its title and aura change at once, in whatever world it is. */
+    pub fn admin_hero(&mut self, pid: u32, on: bool) {
+        let month = loot_month(self.now);
+        let (cid, name, line) = {
+            let p = self.pl(pid).unwrap();
+            // its class line; before the awakening, the specialization it has (or its class, without one)
+            let line = line_of(p.spec.as_deref()).map(String::from).or_else(|| p.spec.clone()).unwrap_or_else(|| p.cls.clone());
+            (p.char_id, p.name.clone(), line)
+        };
+        if on { self.db.add_hero(month, &line, cid, &name) } else { self.db.remove_hero(month, cid) }
+        let e = self.ents.get_mut(&pid).unwrap();
+        let p = e.player_mut().unwrap();
+        if p.hero == on { return; }
+        p.hero = on;
+        e.c.av += 1;
+        if on {
+            announce_all(&format!("¡{name} es Héroe de este mes!"), &format!("{name} is a Hero this month!"));
+        } else {
+            self.sys(pid, "Ya no sos Héroe de este mes.", "You are no longer a Hero this month.");
+        }
+    }
+
     /** A Hero chooses its aura (the character window): everyone around sees the new one. */
     pub fn choose_hero_look(&mut self, pid: u32, look: &str) {
         if !HERO_LOOKS.contains(&look) { return; }

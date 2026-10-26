@@ -101,7 +101,9 @@ export type C2S =
       /** a fort siege now, for so many minutes, or the running one over (server-rs siege.rs) */
       siege?: 'start' | 'end'; minutes?: number;
       /** choose the Olympiad's Heroes now, from this month's points (server-rs olympiad.rs) */
-      heroes?: boolean }
+      heroes?: boolean;
+      /** that session's character is a Hero this month, or no longer is */
+      hero?: { sid: number; on: boolean } }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
@@ -198,7 +200,7 @@ export type S2C =
   | { t: 'kicked' }
   /** admin window: ok is false until this socket gave the admin password */
   | { t: 'admin'; ok: false }
-  | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number }[]; logs: { t: number; err: boolean; line: string }[]; casts: { id: string; name: string; base: number; cast: number }[]; balance: { key: string; label: string; base: number; current: number; min: number; max: number }[] }
+  | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number; hero: boolean }[]; logs: { t: number; err: boolean; line: string }[]; casts: { id: string; name: string; base: number; cast: number }[]; balance: { key: string; label: string; base: number; current: number; min: number; max: number }[] }
   | { t: 'enter'; self: SelfState; inv: InvItem[]; /** the skill bars' layout kept for this character (ui/hud.ts) */ bar?: string }
   /** moved to another world (raid instance or back): forget every entity and start over */
   | { t: 'world'; self: SelfState; inv: InvItem[] }
