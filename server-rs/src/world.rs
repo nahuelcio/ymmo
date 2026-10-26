@@ -99,7 +99,24 @@ impl World {
             w.add(Ent { c, k: Kind::Npc(Npc { def, next_chatter: 0.0, fwd: true, rest_until: 0.0 }) });
         }
         w.spawn_mobs();
+        w.restore_boss_respawns();
         w
+    }
+
+    /** Bosses still down when the server last stopped stay down until their time (combat.rs kill_mob keeps it); then
+     * the dead mob's own branch of update_mob brings them back, announced as ever. */
+    fn restore_boss_respawns(&mut self) {
+        let now = self.now;
+        for (mob, at) in self.db.boss_respawns() {
+            if at <= now { continue; }
+            let ids: Vec<u32> = self.mobs.iter().copied().filter(|id| self.ents[id].mob().map_or(false, |m| m.tpl.id == mob && m.tpl.boss.unwrap_or(false))).collect();
+            for id in ids {
+                let e = self.ents.get_mut(&id).unwrap();
+                (e.c.dead, e.c.hidden) = (true, true);
+                let m = e.mob_mut().unwrap();
+                (m.hp, m.respawn_at, m.hide_at) = (0.0, at, now);
+            }
+        }
     }
 
     pub fn new_id(&mut self) -> u32 { let id = self.next_id; self.next_id += 1; id }
@@ -622,7 +639,7 @@ impl World {
         let s = &p.stats;
         let skills: Vec<&str> = d().skills_for(&p.cls, p.spec.as_deref(), p.level, &p.race, p.look.gender()).iter().map(|s| s.id.as_str()).collect();
         let buffs: Vec<Value> = p.buffs.iter().map(|b| json!({ "id": b.id, "rem": ((b.until - self.now) / 1000.0).round().max(0.0) })).collect();
-        json!({
+        let mut v = json!({
             "id": pid, "name": p.name, "race": p.race, "cls": p.cls, "spec": p.spec, "look": { "g": p.look.g.to_string(), "hs": p.look.hs, "hc": p.look.hc },
             "lvl": p.level, "xp": p.xp, "xpNeed": xp_to_next(p.level),
             "hp": p.hp.ceil(), "maxHp": s.max_hp, "mp": p.mp.floor(), "maxMp": s.max_mp, "cp": p.cp.floor(), "maxCp": s.max_cp,
@@ -632,7 +649,15 @@ impl World {
             "adena": p.adena, "karma": p.karma, "pk": p.pk, "pvp": p.pvp, "flagged": p.pvp_until > self.now, "pvpOn": p.pvp_on,
             "skills": skills, "buffs": buffs,
             "zone": match self.raid { Some(r) => r.name.clone(), None => zone_at(e.c.x, e.c.z) },
-        })
+        });
+        // past the level cap: the Legend's level, bar and free points, and the ranks spent (legend.rs)
+        let o = v.as_object_mut().unwrap();
+        o.insert("legendLvl".into(), json!(p.legend_lvl));
+        o.insert("legendXp".into(), json!(p.legend_xp));
+        o.insert("legendNeed".into(), json!(crate::formulas::legend_to_next(p.legend_lvl)));
+        o.insert("legendPts".into(), json!(p.legend_lvl - p.legend.values().sum::<i64>()));
+        o.insert("legend".into(), json!(p.legend));
+        v
     }
 
     fn send_self(&mut self, pid: u32) {

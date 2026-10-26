@@ -25,7 +25,7 @@ import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, hutDoorClosed, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
 import { UI } from './ui';
-import { glyph, setTipLevel, setTipSelf } from './ui/common';
+import { glyph, setTipLevel, setTipSelf, setTipWorn } from './ui/common';
 import { hideTip, showTipAt } from './ui/dom';
 import { ATMOS, Critters, LocalLights, Motes, Rain, rainAt, stormStrikes, tickWind } from './render/atmos';
 import { PostFX } from './render/post';
@@ -349,6 +349,7 @@ export class Game {
     this.me = enter.self;
     setTipLevel(() => this.me.lvl);
     setTipSelf(() => this.me);
+    setTipWorn(() => this.inv.filter((i) => i.s).map((i) => i.i));
     ambience(enter.self.zone);
     this.inv = enter.inv;
     this.adena = enter.self.adena;

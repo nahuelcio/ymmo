@@ -88,7 +88,7 @@ impl World {
             "equip" => if let Some(u) = id(m, "u") { self.equip(pid, u) },
             "unequip" => self.unequip(pid, &s(m, "slot")),
             "use" => if let Some(u) = id(m, "u") { self.use_item(pid, u, now) },
-            "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u, m.get("sacred").and_then(|v| v.as_bool()).unwrap_or(false)) },
+            "enchant" => if let Some(u) = id(m, "u") { self.enchant(pid, u, truthy(m, "sacred"), truthy(m, "protect")) },
             "destroy" => if let Some(u) = id(m, "u") { self.destroy_item(pid, u) },
             "buy" => if let Some(n) = id(m, "npc") { self.buy(pid, n, &s(m, "item"), num(m, "qty")) },
             "craft" => if let Some(n) = id(m, "npc") { self.craft(pid, n, &s(m, "item")) },
@@ -142,6 +142,8 @@ impl World {
             "clanWhAdena" => if let Some(n) = id(m, "npc") { self.clan_wh_adena(pid, n, num(m, "amount")) },
             "clanSkill" => if let Some(n) = id(m, "npc") { self.clan_skill(pid, n, &s(m, "skill")) },
             "chooseSpec" => self.choose_spec(pid, &s(m, "spec")),
+            "legendSpend" => self.legend_spend(pid, &s(m, "id")),
+            "legendReset" => self.legend_reset(pid),
             "respawn" => {
                 // dying in a raid sends you back to the village
                 if self.raid.is_some() { self.exit_to_town(pid) } else { self.respawn_player(pid) }

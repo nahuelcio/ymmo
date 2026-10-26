@@ -1,6 +1,6 @@
-import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, type Slot, wearLevel } from '../../../shared/src/data/items';
+import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, SET_BONUS, SET_NAME, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
-import { SKILLS } from '../../../shared/src/data/skills';
+import { type BuffMods, SKILLS } from '../../../shared/src/data/skills';
 import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
 import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
@@ -81,6 +81,53 @@ export const mwText = (b: MasterworkBonus) => [
   b.cdr && `${tx('Recarga', 'Cooldown')} -${pct(b.cdr)}`,
 ].filter(Boolean).join(', ');
 
+/**
+ * "Atq.F/Atq.M +4%, Crítico +1, Robo de vida 3%": what BuffMods add, `times` over (a Legend passive's ranks). A pair
+ * raised alike (both attacks, both defences, both regens, both speeds) reads as one.
+ */
+export function modsText(m: BuffMods, times = 1): string {
+  const up = (v?: number) => (v === undefined ? undefined : (v - 1) * times);
+  const by = (v?: number) => (v === undefined ? undefined : v * times);
+  const num = (v: number) => `${Math.round(v * 10) / 10}`;
+  const out: string[] = [];
+  const pair = (a: number | undefined, b: number | undefined, la: string, lb: string, both: string, fmt: (v: number) => string) => {
+    if (a !== undefined && a === b) out.push(`${both} ${fmt(a)}`);
+    else {
+      if (a !== undefined) out.push(`${la} ${fmt(a)}`);
+      if (b !== undefined) out.push(`${lb} ${fmt(b)}`);
+    }
+  };
+  const plusPct = (v: number) => `+${pct(v)}`;
+  pair(up(m.pAtk), up(m.mAtk), tx('Atq.F', 'P.Atk'), tx('Atq.M', 'M.Atk'), tx('Atq.F/Atq.M', 'P.Atk/M.Atk'), plusPct);
+  pair(up(m.pDef), up(m.mDef), tx('Def.F', 'P.Def'), tx('Def.M', 'M.Def'), tx('Def.F/Def.M', 'P.Def/M.Def'), plusPct);
+  if (m.maxHp !== undefined) out.push(`${tx('HP máx.', 'Max HP')} ${plusPct(up(m.maxHp)!)}`);
+  if (m.crit !== undefined) out.push(`${tx('Crítico', 'Critical')} +${num(by(m.crit)!)}`);
+  if (m.critDmg !== undefined) out.push(`${tx('Daño crítico', 'Critical damage')} ${plusPct(up(m.critDmg)!)}`);
+  if (m.accuracy !== undefined) out.push(`${tx('Precisión', 'Accuracy')} +${num(by(m.accuracy)!)}`);
+  if (m.evasion !== undefined) out.push(`${tx('Evasión', 'Evasion')} +${num(by(m.evasion)!)}`);
+  pair(up(m.atkSpd), up(m.castSpd), tx('Vel.Atq', 'Atk.Spd'), tx('Vel.Casteo', 'Cast.Spd'), tx('Vel.Atq/Casteo', 'Atk/Cast.Spd'), plusPct);
+  if (m.speed !== undefined) out.push(`${tx('Velocidad', 'Speed')} ${plusPct(up(m.speed)!)}`);
+  pair(up(m.hpRegen), up(m.mpRegen), tx('Regen. HP', 'HP regen'), tx('Regen. MP', 'MP regen'), tx('Regen. HP/MP', 'HP/MP regen'), plusPct);
+  if (m.cdr !== undefined) out.push(`${tx('Recarga', 'Cooldown')} -${pct(by(m.cdr)!)}`);
+  if (m.vampire !== undefined) out.push(`${tx('Robo de vida', 'Life steal')} ${pct(by(m.vampire)!)}`);
+  if (m.reflect !== undefined) out.push(`${tx('Reflejo de daño', 'Damage reflect')} ${pct(by(m.reflect)!)}`);
+  return out.join(', ');
+}
+
+/** The ids of what the player wears, for the set lines of item tooltips (game.ts sets it). */
+let myWorn = (): string[] => [];
+export const setTipWorn = (f: () => string[]) => (myWorn = f);
+
+/** A set piece's bonus tiers, each lit once enough of the set is worn. */
+function setLines(set: string): string[] {
+  const tiers = SET_BONUS[set];
+  if (!tiers) return [];
+  const worn = myWorn().filter((id) => ITEMS[id]?.set === set).length;
+  const name = SET_NAME[set]?.[lang] ?? set;
+  return [`<span class="tt-set">${tx(`Set ${name}`, `${name} set`)} (${Math.min(worn, 5)}/5)</span>`,
+    ...tiers.map((t) => `<span class="${worn >= t.pieces ? 'tt-up' : 'tt-dim'}">${tx(`${t.pieces} piezas`, `${t.pieces} pieces`)}: ${esc(modsText(t.mods))}</span>`)];
+}
+
 /** What a Masterwork piece gives: you, then every other race ("speed" being the class's own, attack or cast). */
 function masterworkLines(isWeapon: boolean): string[] {
   const me = mySelf();
@@ -111,6 +158,8 @@ export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw 
   if (d.type === 'weapon') lines.push(`${tx('Atq.F', 'P.Atk')} ${st('pAtk')} &nbsp; ${tx('Atq.M', 'M.Atk')} ${st('mAtk')}${d.castSpd ? ` &nbsp; ${tx('Vel.Casteo', 'Cast.Spd')} +${pct(d.castSpd)}` : ''}<br><span class="tt-dim">${WEAPON_TYPE[d.weaponType ?? 'sword']}${d.twoHanded ? tx(' · a dos manos, sin escudo', ' · two-handed, no shield') : ''}</span>`);
   if (d.type === 'armor') lines.push(`${[d.pDef && `${tx('Def.F', 'P.Def')} ${st('pDef')}`, d.mDef && `${tx('Def.M', 'M.Def')} ${st('mDef')}`, d.hp && `HP +${d.hp}`, d.mp && `MP +${d.mp}`, d.cdr && `${tx('Recarga', 'CDR')} -${Math.round(d.cdr * 100)}%`, d.block && `${tx('Bloqueo', 'Block')} ${blockPct(d, ench)}%`, d.speed && `${tx('Velocidad', 'Speed')} +${speedPct(d)}%`, d.evasion && `${tx('Evasión', 'Evasion')} +${d.evasion}`, d.atkSpd && `${tx('Vel.Atq', 'Atk.Spd')} +${pct(d.atkSpd)}`].filter(Boolean).join(' &nbsp; ')}<br><span class="tt-dim">${SLOT_NAME[d.slot!]}</span>`);
   if (d.block) lines.push(`<span class="tt-dim">${tx('Un golpe físico bloqueado hace la mitad de daño.', 'A blocked physical hit does half its damage.')}</span>`);
+  if (d.mods) lines.push(`<span class="tt-jewel">${esc(modsText(d.mods))}</span>`);
+  if (d.set) lines.push(...setLines(d.set));
   if (d.slot && mw) lines.push(...masterworkLines(d.type === 'weapon'));
   const need = wearLevel(d);
   if (d.slot && legacy) lines.push(`<span class="tt-up">${tx('Equipo heredado: sin requisito de nivel', 'Legacy gear: no level requirement')}</span>`);
