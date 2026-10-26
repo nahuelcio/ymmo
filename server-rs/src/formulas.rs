@@ -267,6 +267,32 @@ pub fn loot_week(now_ms: f64) -> i64 {
     (loot_day(now_ms) + 3).div_euclid(7)
 }
 
+/** The month a day falls in (formulas.rs loot_day; year × 12 + month - 1): the Olympiad's points and Heroes go by it,
+ * a new one on the 1st at 00:00 in Argentina. */
+pub fn loot_month(now_ms: f64) -> i64 {
+    // days to a civil date (Howard Hinnant's days_from_civil, backwards)
+    let z = loot_day(now_ms) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + if m <= 2 { 1 } else { 0 };
+    y * 12 + m - 1
+}
+
+/** When a month (loot_month) begins: its 1st at 00:00 in Argentina (ms since epoch). */
+pub fn month_start(month: i64) -> f64 {
+    let (y, m) = (month.div_euclid(12), month.rem_euclid(12) + 1);
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    (era * 146_097 + doe - 719_468) as f64 * 86_400_000.0 + ART_MS
+}
+
 /** This week's fort siege (shared/src/data/sieges.ts SIEGE): when it starts and ends (ms since epoch). The week is
  * loot_week's, the one that began on Monday, so it is Saturday 21:00 to 22:00 in Argentina. */
 pub fn siege_window(now_ms: f64) -> (f64, f64) {
@@ -788,6 +814,21 @@ mod tests {
         assert_eq!(next_day_at(midnight + 3_600_000.0), midnight + 86_400_000.0);
     }
 
+    /// The Olympiad's months turn on the 1st at 00:00, Argentina time, leap years and all.
+    #[test]
+    fn months_turn_on_the_first() {
+        let nov = 1_761_966_000_000.0; // 2025-11-01 00:00 UTC-3
+        assert_eq!(loot_month(nov), 2025 * 12 + 10);
+        assert_eq!(loot_month(nov - 1.0), 2025 * 12 + 9, "October's last minute");
+        assert_eq!(month_start(loot_month(nov)), nov);
+        assert_eq!(month_start(2024 * 12 + 2) - month_start(2024 * 12 + 1), 29.0 * 86_400_000.0, "a leap February");
+        assert_eq!(month_start(2026 * 12) - month_start(2025 * 12 + 11), 31.0 * 86_400_000.0, "December into January");
+        for m in 2020 * 12..2030 * 12 {
+            let t = month_start(m);
+            assert_eq!((loot_month(t), loot_month(t - 1.0)), (m, m - 1));
+        }
+    }
+
     /// The forts are sieged on Saturday from 21:00 to 22:00, Argentina time, the whole week long pointing at it.
     #[test]
     fn sieges_on_saturday_night() {
@@ -1078,8 +1119,8 @@ mod tests {
             assert_eq!(q.daily, data.npc(&q.npc).map_or(false, |n| n.kind == "board"), "{}: daily contracts, and only they, come from the board", q.id);
         }
         for r in data.raids.values() {
-            // a boss, or the Rift's waves
-            match &r.boss { Some(b) => mob(b, &r.id), None => assert!(r.rift, "{} has no boss", r.id) }
+            // a boss, the Rift's waves, or an Olympiad fight
+            match &r.boss { Some(b) => mob(b, &r.id), None => assert!(r.rift || r.arena, "{} has no boss", r.id) }
             if let Some(q) = &r.quest { assert!(data.quest(q).is_some(), "unknown quest {q} in {}", r.id); }
         }
         for m in crate::rift::TRASH.iter().chain(crate::rift::ELITES.iter()) { mob(m, "the Rift"); }

@@ -48,6 +48,8 @@ impl World {
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
         if self.unseen(tid) { return Some(tr(l, "Tu objetivo desapareció.", "Your target has vanished.").into()); }
         if self.sheltered(tid) { return Some(tr(l, "Tu objetivo está a salvo en una cabaña.", "Your target is safe in a hut.").into()); }
+        // an Olympiad arena: the two fight once the countdown is over, whatever their clans, flags or PvP mode
+        if self.arena.is_some() { return self.arena_refuses(l); }
         if in_town(pc.x, pc.z) || in_town(te.c.x, te.c.z) { return Some(tr(l, "No se puede atacar en una zona de paz.", "You cannot attack in a peace zone.").into()); }
         if p.party.is_some() && p.party == t.party { return Some(tr(l, "No podés atacar a alguien de tu party.", "You cannot attack a party member.").into()); }
         match crate::clans::relation(p.char_id, t.char_id) {
@@ -284,6 +286,12 @@ impl World {
             t.hp -= dmg;
         }
         let dead = t.hp <= 0.0;
+        // an Olympiad fight runs out of time on the damage each side dealt; nobody there gets flagged
+        if self.arena.is_some() {
+            if src_is_player && src != tid { self.arena_hit(src, dmg); }
+            if dead { self.kill_player(tid, src, now); }
+            return;
+        }
         if src_is_player && t_karma == 0 { if let Some(p) = self.pl_mut(src) { p.pvp_until = now + PVP_FLAG_MS; } }
         if in_tent && !dead { self.stand_up(tid); }
         if dead { self.kill_player(tid, src, now); }
@@ -493,7 +501,7 @@ impl World {
             if self.give_or_ground(pid, &j.item, 1, now) {
                 // the week's roll is written already: so is the jewel, right away, not at the next periodic save (in a
                 // raid, standing in the village, as autosave does)
-                let at = self.exit_point();
+                let at = self.exit_point(pid);
                 self.save_player(pid, at);
             }
             let name = self.pl(pid).unwrap().name.clone();
@@ -521,6 +529,8 @@ impl World {
         self.trade_cancel(tid, Some(("El comercio se canceló.".into(), "The trade has been cancelled.".into())));
         let by_player = self.pl(killer).is_some() && killer != tid;
         self.send_near(x, z, json!({ "t": "died", "id": tid, "byPlayer": by_player }));
+        // an Olympiad knockout costs nothing (no karma, XP, Legend or drop): it decides the fight
+        if self.arena.is_some() { return self.arena_ko(tid, now); }
         let (t_name, t_karma, t_flag, t_level, t_xp) = { let t = self.pl(tid).unwrap(); (t.name.clone(), t.karma, t.pvp_until > now, t.level, t.xp) };
         if by_player {
             let k_name = self.pl(killer).unwrap().name.clone();
@@ -596,7 +606,8 @@ impl World {
         let mut target = pid;
         let cur = p.target.filter(|t| self.ents.contains_key(t));
         if def.target == "friend" {
-            if let Some(t) = cur { if self.pl(t).is_some() && !self.ents[&t].c.dead { target = t; } }
+            // (never the rival in an Olympiad arena: a heal or buff picked on them lands on the caster)
+            if let Some(t) = cur { if self.pl(t).is_some() && !self.ents[&t].c.dead && (self.arena.is_none() || t == pid) { target = t; } }
         } else if def.target == "enemy" {
             let Some(t) = cur else { return self.sys(pid, "Primero elegí un objetivo.", "Select a target first.") };
             if let Some(err) = self.can_attack(pid, t, force, now) { return self.sys(pid, &err, &err); }

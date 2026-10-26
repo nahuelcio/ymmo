@@ -182,6 +182,11 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
             if let Some(tx) = hub.worlds.get(&0) { let _ = tx.send(WorldCmd::Siege { start: what == "start", minutes: m["minutes"].as_f64().unwrap_or(60.0) }); }
             log!("[admin] siege {what}");
         }
+        // the Olympiad's Heroes now, from this month's points ({ heroes: true }), for testing
+        if m["heroes"].as_bool() == Some(true) {
+            if let Some(tx) = hub.worlds.get(&0) { let _ = tx.send(WorldCmd::Heroes); }
+            log!("[admin] heroes");
+        }
         let text: String = m["announce"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(200).collect();
         if !text.is_empty() {
             for tx in hub.worlds.values() { let _ = tx.send(WorldCmd::Announce(text.clone())); }

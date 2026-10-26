@@ -9,6 +9,8 @@ export interface RaidDef {
   boss?: string;
   /** La Grieta: endless floors, a stronger wave each, paid once a day a character (server-rs rift.rs) */
   rift?: boolean;
+  /** an Olympiad fight (olympiad.ts): two characters the queue paired, nobody else; never entered with /raid */
+  arena?: boolean;
   /** arena centre (boss spawn) and where players appear */
   x: number;
   z: number;
@@ -31,6 +33,8 @@ export const RAIDS: Record<string, RaidDef> = {
   swamp: { id: 'swamp', name: 'Templo del Pantano', nameEn: 'Swamp Temple', boss: 'ssithra', x: RAID_FLOORS.swamp.x, z: RAID_FLOORS.swamp.z, entry: { x: RAID_FLOORS.swamp.x, z: RAID_FLOORS.swamp.z + 20 }, maxPlayers: 9, minLevel: 68, quest: 'ent_purge', closeAfterKill: 90000 },
   // `/raid rift` or `/grieta`: the Abyss raid's floor (each instance is its own copy), endless floors on it
   rift: { id: 'rift', name: 'La Grieta', nameEn: 'The Rift', rift: true, x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z, entry: { x: RAID_FLOORS.abyss.x, z: RAID_FLOORS.abyss.z - 20 }, maxPlayers: 9, minLevel: 76, closeAfterKill: 0 },
+  // `/olimpiada`: each fight its own copy of the Frost Throne's floor, the two fighters on either side of its middle
+  olympiad: { id: 'olympiad', name: 'Arena de la Olimpiada', nameEn: 'Olympiad Arena', arena: true, x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z, entry: { x: RAID_FLOORS.frost.x, z: RAID_FLOORS.frost.z }, maxPlayers: 2, minLevel: 76, closeAfterKill: 0 },
 };
 
 /** Boss HP multiplier for a raid of n players (a solo try is still possible, just very long). */

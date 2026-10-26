@@ -114,7 +114,9 @@ impl Db {
             // the skill bars' layout, as the client keeps it (JSON, client/src/ui/hud.ts)
             "hotbar TEXT NOT NULL DEFAULT ''",
             // past the level cap (legend.rs): Legend level, XP towards the next, and the points spent (JSON: passive -> ranks)
-            "legend_lvl INTEGER NOT NULL DEFAULT 0", "legend_xp INTEGER NOT NULL DEFAULT 0", "legend TEXT NOT NULL DEFAULT ''"] {
+            "legend_lvl INTEGER NOT NULL DEFAULT 0", "legend_xp INTEGER NOT NULL DEFAULT 0", "legend TEXT NOT NULL DEFAULT ''",
+            // the aura an Olympiad Hero chose (olympiad.rs HERO_LOOKS)
+            "hero_look TEXT NOT NULL DEFAULT 'halo'"] {
             let _ = c.execute(&format!("ALTER TABLE characters ADD COLUMN {col}"), []);
         }
         let _ = c.execute("ALTER TABLE items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0", []);
@@ -140,6 +142,11 @@ impl Db {
         // siege's start), so a restart mid-siege only brings back the forts still being fought over
         let _ = c.execute("CREATE TABLE IF NOT EXISTS fort_owner (fort TEXT PRIMARY KEY, clan_id INTEGER NOT NULL, since INTEGER NOT NULL)", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS siege_done (key INTEGER NOT NULL, fort TEXT NOT NULL, PRIMARY KEY (key, fort))", []);
+        // the Olympiad (olympiad.rs): each character's month (points, fights), the fights of each day (one rival only so
+        // many times), and each month's Heroes, one a class line
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_points (month INTEGER NOT NULL, char_id INTEGER NOT NULL, line TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_fights (id INTEGER PRIMARY KEY, day INTEGER NOT NULL, a INTEGER NOT NULL, b INTEGER NOT NULL)", []);
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, PRIMARY KEY (month, line))", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -333,6 +340,54 @@ impl Db {
     }
     pub fn siege_done(&self, key: i64, fort: &str) {
         let _ = self.c.execute("INSERT OR IGNORE INTO siege_done (key, fort) VALUES (?, ?)", params![key, fort]);
+    }
+
+    /** A character's Olympiad month: (points, wins, losses, draws), starting it with `start` points if it had none. */
+    pub fn oly_row(&self, month: i64, char_id: i64, line: &str, name: &str, start: i64) -> (i64, i64, i64, i64) {
+        let _ = self.c.execute("INSERT OR IGNORE INTO oly_points (month, char_id, line, name, points) VALUES (?, ?, ?, ?, ?)", params![month, char_id, line, name, start]);
+        self.c.query_row("SELECT points, wins, losses, draws FROM oly_points WHERE month = ? AND char_id = ?", params![month, char_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap_or((start, 0, 0, 0))
+    }
+    /** A fight's outcome for one side: its points move by `points`, and one more win, loss or draw. */
+    pub fn oly_score(&self, month: i64, char_id: i64, points: i64, win: i64, loss: i64, draw: i64) {
+        let _ = self.c.execute("UPDATE oly_points SET points = MAX(0, points + ?), wins = wins + ?, losses = losses + ?, draws = draws + ? WHERE month = ? AND char_id = ?",
+            params![points, win, loss, draw, month, char_id]);
+    }
+    /** A fight between two characters that day, and how many they had had (either way round). */
+    pub fn oly_fight(&self, day: i64, a: i64, b: i64) { let _ = self.c.execute("INSERT INTO oly_fights (day, a, b) VALUES (?, ?, ?)", params![day, a, b]); }
+    pub fn oly_fights(&self, day: i64, a: i64, b: i64) -> i64 {
+        self.c.query_row("SELECT COUNT(*) FROM oly_fights WHERE day = ?1 AND ((a = ?2 AND b = ?3) OR (a = ?3 AND b = ?2))", params![day, a, b], |r| r.get(0)).unwrap_or(0)
+    }
+    /** The month's table, best first: (name, line, points, wins, losses, draws). */
+    pub fn oly_top(&self, month: i64, n: i64) -> Vec<(String, String, i64, i64, i64, i64)> {
+        let Ok(mut st) = self.c.prepare("SELECT name, line, points, wins, losses, draws FROM oly_points WHERE month = ? ORDER BY points DESC, wins DESC, char_id ASC LIMIT ?") else { return vec![] };
+        st.query_map(params![month, n], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    /** Who may be a line's Hero after this month (enough fights and wins), best first in each line: (line, char id,
+     * name, points, wins, fights). */
+    pub fn oly_contenders(&self, month: i64, fights: i64, wins: i64) -> Vec<(String, i64, String, i64, i64, i64)> {
+        let Ok(mut st) = self.c.prepare("SELECT line, char_id, name, points, wins, wins + losses + draws AS f FROM oly_points WHERE month = ? AND wins >= ? AND wins + losses + draws >= ?
+            ORDER BY line, points DESC, wins DESC, f ASC, char_id ASC") else { return vec![] };
+        st.query_map(params![month, wins, fights], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    /** A month's Heroes: (line, char id, name). */
+    pub fn heroes(&self, month: i64) -> Vec<(String, i64, String)> {
+        let Ok(mut st) = self.c.prepare("SELECT line, char_id, name FROM heroes WHERE month = ? ORDER BY line") else { return vec![] };
+        st.query_map([month], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    pub fn set_heroes(&self, month: i64, heroes: &[(String, i64, String)]) {
+        let _ = self.c.execute("DELETE FROM heroes WHERE month = ?", [month]);
+        for (line, c, name) in heroes { let _ = self.c.execute("INSERT INTO heroes (month, line, char_id, name) VALUES (?, ?, ?, ?)", params![month, line, c, name]); }
+    }
+    pub fn is_hero(&self, char_id: i64, month: i64) -> bool {
+        self.c.query_row("SELECT 1 FROM heroes WHERE month = ? AND char_id = ?", params![month, char_id], |_| Ok(())).is_ok()
+    }
+    /** The aura a character wears when it is a Hero. */
+    pub fn hero_look(&self, char_id: i64) -> String {
+        self.c.query_row("SELECT hero_look FROM characters WHERE id = ?", [char_id], |r| r.get(0)).unwrap_or_else(|_| "halo".into())
+    }
+    pub fn set_hero_look(&self, char_id: i64, look: &str) {
+        let _ = self.c.execute("UPDATE characters SET hero_look = ? WHERE id = ?", params![look, char_id]);
     }
 
     pub fn set_boss_respawn(&self, mob: &str, at: f64) {

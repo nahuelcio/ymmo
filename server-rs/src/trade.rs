@@ -66,6 +66,7 @@ impl World {
 
     pub fn trade_request(&mut self, pid: u32, tid: u32) {
         if tid == pid { return self.sys(pid, "No podés comerciar con vos mismo.", "You cannot trade with yourself."); }
+        if self.arena.is_some() { return self.sys(pid, "En la arena de la Olimpiada no se comercia.", "There is no trading in the Olympiad arena."); }
         let Some(t) = self.pl(tid) else { return self.sys(pid, "Seleccioná a otro jugador para comerciar.", "Target another player to trade with.") };
         let (t_name, t_busy) = (t.name.clone(), t.trade.is_some() || t.pending_trade.map_or(false, |(_, until)| until > self.now));
         if self.ents[&pid].c.dead { return self.sys(pid, "No podés comerciar estando muerto.", "You cannot trade while dead."); }

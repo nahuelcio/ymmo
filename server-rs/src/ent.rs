@@ -136,6 +136,10 @@ pub struct Player {
     pub sid: u64,
     /** admin god mode: takes no damage, never runs out of HP/MP, runs twice as fast */
     pub god: bool,
+    /** an Olympiad Hero this month (olympiad.rs): its title and aura over its head */
+    pub hero: bool,
+    /** and the aura it chose to wear then (olympiad.rs HERO_LOOKS) */
+    pub hero_look: String,
     pub out: Outbox,
     pub lang: Lang,
     pub stats: Stats,

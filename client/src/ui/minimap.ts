@@ -641,7 +641,7 @@ export class Minimap {
     // hostile camps and raid lairs: the icon always, the name only close in and where it fits
     const close = zoom >= 3;
     // (the Rift is entered by command, on the Heart of the Abyss' own floor: one mark there is enough)
-    for (const r of Object.values(RAIDS).filter((r) => !r.rift)) {
+    for (const r of Object.values(RAIDS).filter((r) => !r.rift && !r.arena)) {
       const [x, y] = this.toBig(r.x, r.z);
       this.raidIcon(ctx, x, y);
       if (close) tag(lang === 'en' ? r.nameEn : r.name, x, y - 12, 11, 'italic bold');
@@ -899,7 +899,10 @@ export class Minimap {
     const self = this.g.self;
     const fort = SIEGE_FORTS.find((f) => f.name === this.g.me.zone), own = fort && this.g.sieges.owners[fort.id];
     this.zoneEl.textContent = `${zoneName(this.g.me.zone, lang)}${own ? ` · ${own.name}` : ''}`;
-    this.raidBtn.style.display = Object.values(RAIDS).some((r) => r.name === this.g.me.zone) ? '' : 'none'; // inside one, the zone is the raid's name
+    const raid = Object.values(RAIDS).find((r) => r.name === this.g.me.zone); // inside one, the zone is the raid's name
+    this.raidBtn.style.display = raid ? '' : 'none';
+    // leaving an Olympiad fight gives it up
+    this.raidBtn.title = raid?.arena ? tx('Rendirte: perdés el combate', 'Give up: you lose the fight') : tx('Salir de la raid y volver a la aldea', 'Leave the raid and return to the village');
     const clock = settings.s.dayNight ? gameClock() : '';
     if (this.clockEl.textContent !== clock) {
       this.clockEl.textContent = clock;
