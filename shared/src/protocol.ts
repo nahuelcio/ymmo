@@ -41,6 +41,31 @@ export interface ClanInfo {
   /** the fort it holds (sieges.ts SIEGE_FORTS id), and when the next siege starts (ms since epoch) */
   fort?: string | null; nextSiege?: number;
 }
+/** One change the GM makes to a character (server-rs gm.rs Edit). */
+export type CharEdit =
+  | { k: 'level' | 'xp' | 'legendLvl' | 'legendXp' | 'adena' | 'karma' | 'pk' | 'pvp' | 'clanLevel' | 'clanRep'; v: number }
+  | { k: 'spec'; v: string | null }
+  | { k: 'legendRank'; id: string; v: number }
+  | { k: 'itemAdd'; item: string; count: number; enchant: number; mw: boolean }
+  | { k: 'itemSet'; u: number; count?: number; enchant?: number; mw?: boolean }
+  | { k: 'itemRemove'; u: number }
+  | { k: 'quest'; id: string; progress: number; done: boolean }
+  | { k: 'questRemove'; id: string }
+  | { k: 'jewelRoll'; boss: string }
+  | { k: 'riftRun' }
+  | { k: 'daily'; id: string }
+  | { k: 'oly'; points: number; wins: number; losses: number; draws: number };
+/** A character as the GM's editor shows it (server-rs gm.rs sheet): who, its progress, its week and day (the bosses
+ * whose jewel it rolled, today's paid Rift run, today's contracts), its Olympiad month, clan, Hero, the GM's changes. */
+export interface CharSheet {
+  id: number; name: string; online: boolean; world: number | null; race: Race; cls: ClassType; spec: string | null;
+  level: number; xp: number; xpNeed: number; legendLvl: number; legendXp: number; legendNeed: number; legend: Record<string, number>;
+  adena: number; karma: number; pk: number; pvp: number; inv: InvItem[]; quests: { id: string; progress: number; done: boolean }[];
+  jewels: string[]; riftPaid: boolean; daily: string[];
+  oly: { points: number; wins: number; losses: number; draws: number } | null;
+  clan: { id: number; name: string; level: number; rep: number } | null;
+  hero: boolean; log: { at: number; gm: string; what: string }[];
+}
 /** A clan warehouse row (id: its row), and a logged movement (dep: a deposit). */
 export interface ClanWhItem { id: number; i: string; c: number; e: number; l?: boolean; m?: boolean }
 export interface ClanWhLog { at: number; who: string; dep: boolean; i: string; c: number; e: number }
@@ -103,7 +128,9 @@ export type C2S =
       /** choose the Olympiad's Heroes now, from this month's points (server-rs olympiad.rs) */
       heroes?: boolean;
       /** that session's character is a Hero this month, or no longer is */
-      hero?: { sid: number; on: boolean } }
+      hero?: { sid: number; on: boolean };
+      /** the character editor (server-rs gm.rs): a character's sheet, by name or id, or a change to it */
+      charGet?: { name?: string; id?: number }; charEdit?: { id: number; edit: CharEdit } }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
@@ -200,6 +227,8 @@ export type S2C =
   | { t: 'kicked' }
   /** admin window: ok is false until this socket gave the admin password */
   | { t: 'admin'; ok: false }
+  /** the GM's character editor: the character's sheet (null: none such), and how the change went */
+  | { t: 'adminChar'; sheet: CharSheet | null; msg?: string; err?: string }
   | { t: 'admin'; ok: true; uptime: number; rss: number | null; conns: number; tickMs: number; seq: number; worlds: { id: number; tick: number; max: number; players: number; ents: number }[]; players: { sid: number; name: string; level: number; world: number; queue: number; hero: boolean }[]; logs: { t: number; err: boolean; line: string }[]; casts: { id: string; name: string; base: number; cast: number }[]; balance: { key: string; label: string; base: number; current: number; min: number; max: number }[] }
   | { t: 'enter'; self: SelfState; inv: InvItem[]; /** the skill bars' layout kept for this character (ui/hud.ts) */ bar?: string }
   /** moved to another world (raid instance or back): forget every entity and start over */

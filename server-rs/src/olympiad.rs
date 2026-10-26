@@ -27,6 +27,11 @@ pub fn line_of(spec: Option<&str>) -> Option<&'static str> {
     let s = d().specs.iter().find(|s| Some(s.id.as_str()) == spec)?;
     s.parent.as_deref().and_then(|p| d().specs.iter().find(|x| x.id == p)).map(|x| x.id.as_str())
 }
+/** The line a character is ranked in for the GM panel's choices: its class line; before the awakening, the
+ * specialization it has (or its class, without one). */
+pub fn own_line(spec: Option<&str>, cls: &str) -> String {
+    line_of(spec).map(String::from).or_else(|| spec.map(String::from)).unwrap_or_else(|| cls.to_string())
+}
 /** What a fight moves: the winner takes this from the loser (olympiad.ts pointsWon: the same). */
 pub fn points_won(loser: i64) -> i64 { ((loser as f64 * d().olympiad.take).round() as i64).max(1) }
 /** A class line's name (its specialization's), in each language. */
@@ -297,9 +302,7 @@ impl World {
         let month = loot_month(self.now);
         let (cid, name, line) = {
             let p = self.pl(pid).unwrap();
-            // its class line; before the awakening, the specialization it has (or its class, without one)
-            let line = line_of(p.spec.as_deref()).map(String::from).or_else(|| p.spec.clone()).unwrap_or_else(|| p.cls.clone());
-            (p.char_id, p.name.clone(), line)
+            (p.char_id, p.name.clone(), own_line(p.spec.as_deref(), &p.cls))
         };
         if on { self.db.add_hero(month, &line, cid, &name) } else { self.db.remove_hero(month, cid) }
         let e = self.ents.get_mut(&pid).unwrap();

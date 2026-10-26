@@ -15,6 +15,7 @@ mod db;
 mod ent;
 mod formulas;
 mod gather;
+mod gm;
 mod i18n;
 mod inventory;
 mod legend;

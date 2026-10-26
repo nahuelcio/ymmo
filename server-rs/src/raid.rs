@@ -2,6 +2,7 @@
 use crate::collision::P;
 use crate::data::RaidDef;
 use crate::db::Db;
+use crate::ent::Outbox;
 use crate::i18n::Lang;
 use crate::world::{now_ms, HubEvent, Member, World, TICK_MS};
 use serde_json::Value;
@@ -27,6 +28,10 @@ pub enum WorldCmd {
     Heroes,
     /** admin panel: that session's character is a Hero this month, or no longer is (olympiad.rs) */
     Hero { sid: u64, on: bool },
+    /** admin panel's character editor (gm.rs): a character of this world's sheet, or a change to it, answered to the GM.
+     * offline: the hub found it in no world, so the main world answers from the database */
+    GmGet { char_id: i64, offline: bool, reply: Outbox },
+    GmEdit { char_id: i64, edit: crate::gm::Edit, gm: (i64, String), offline: bool, reply: Outbox },
     Shutdown,
 }
 
@@ -91,6 +96,8 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                     WorldCmd::Siege { start, minutes } => if w.raid.is_none() { w.siege_admin(start, minutes) },
                     WorldCmd::Heroes => if w.raid.is_none() { w.crown_heroes(true) },
                     WorldCmd::Hero { sid, on } => if let Some(&pid) = w.sessions.get(&sid) { w.admin_hero(pid, on) },
+                    WorldCmd::GmGet { char_id, offline, reply } => w.gm_get(char_id, id, offline, &reply),
+                    WorldCmd::GmEdit { char_id, edit, gm, offline, reply } => w.gm_edit(char_id, id, edit, gm, offline, &reply),
                     WorldCmd::Shutdown => {
                         for sid in w.sessions.keys().copied().collect::<Vec<_>>() { w.quit(sid); }
                         break;
