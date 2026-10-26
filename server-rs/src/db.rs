@@ -143,10 +143,10 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS fort_owner (fort TEXT PRIMARY KEY, clan_id INTEGER NOT NULL, since INTEGER NOT NULL)", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS siege_done (key INTEGER NOT NULL, fort TEXT NOT NULL, PRIMARY KEY (key, fort))", []);
         // the Olympiad (olympiad.rs): each character's month (points, fights), the fights of each day (one rival only so
-        // many times), and each month's Heroes, one a class line
+        // many times), and each month's Heroes: one a class line by the points, and any the GM panel names
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_points (month INTEGER NOT NULL, char_id INTEGER NOT NULL, line TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_fights (id INTEGER PRIMARY KEY, day INTEGER NOT NULL, a INTEGER NOT NULL, b INTEGER NOT NULL)", []);
-        let _ = c.execute("CREATE TABLE IF NOT EXISTS heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, PRIMARY KEY (month, line))", []);
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, by_gm INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -376,8 +376,16 @@ impl Db {
         st.query_map([month], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
     }
     pub fn set_heroes(&self, month: i64, heroes: &[(String, i64, String)]) {
-        let _ = self.c.execute("DELETE FROM heroes WHERE month = ?", [month]);
-        for (line, c, name) in heroes { let _ = self.c.execute("INSERT INTO heroes (month, line, char_id, name) VALUES (?, ?, ?, ?)", params![month, line, c, name]); }
+        // the ones the GM panel named stay
+        let _ = self.c.execute("DELETE FROM heroes WHERE month = ? AND by_gm = 0", [month]);
+        for (line, c, name) in heroes { let _ = self.c.execute("INSERT OR REPLACE INTO heroes (month, line, char_id, name) VALUES (?, ?, ?, ?)", params![month, line, c, name]); }
+    }
+    /** The GM panel names a Hero for the month (beside the line's own), or takes the title back. */
+    pub fn add_hero(&self, month: i64, line: &str, char_id: i64, name: &str) {
+        let _ = self.c.execute("INSERT OR REPLACE INTO heroes (month, line, char_id, name, by_gm) VALUES (?, ?, ?, ?, 1)", params![month, line, char_id, name]);
+    }
+    pub fn remove_hero(&self, month: i64, char_id: i64) {
+        let _ = self.c.execute("DELETE FROM heroes WHERE month = ? AND char_id = ?", params![month, char_id]);
     }
     pub fn is_hero(&self, char_id: i64, month: i64) -> bool {
         self.c.query_row("SELECT 1 FROM heroes WHERE month = ? AND char_id = ?", params![month, char_id], |_| Ok(())).is_ok()

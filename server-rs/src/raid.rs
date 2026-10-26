@@ -25,6 +25,8 @@ pub enum WorldCmd {
     Siege { start: bool, minutes: f64 },
     /** admin panel: choose the Olympiad's Heroes now, from this month's points (olympiad.rs) */
     Heroes,
+    /** admin panel: that session's character is a Hero this month, or no longer is (olympiad.rs) */
+    Hero { sid: u64, on: bool },
     Shutdown,
 }
 
@@ -88,6 +90,7 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                     }
                     WorldCmd::Siege { start, minutes } => if w.raid.is_none() { w.siege_admin(start, minutes) },
                     WorldCmd::Heroes => if w.raid.is_none() { w.crown_heroes(true) },
+                    WorldCmd::Hero { sid, on } => if let Some(&pid) = w.sessions.get(&sid) { w.admin_hero(pid, on) },
                     WorldCmd::Shutdown => {
                         for sid in w.sessions.keys().copied().collect::<Vec<_>>() { w.quit(sid); }
                         break;
