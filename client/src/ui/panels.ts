@@ -18,6 +18,7 @@ import { isTouchDevice } from './touch';
 import { touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
+import { GmCharEditor } from './gm-char';
 
 const SLOT_LABEL: Record<WornSlot, string> = { ...SLOT_NAME, ring2: SLOT_NAME.ring };
 /** Where each slot sits on the doll: [column, row] - what is worn down the left, what is held and the jewels down the right */
@@ -834,6 +835,8 @@ export class AdminPanel {
   private changed = new Set<string>();
   private balRows: { key: string; kind: string; text: string; tr: HTMLElement }[] = [];
   private siegeState!: HTMLElement;
+  private chars!: GmCharEditor;
+  private page!: (p: 'state' | 'bal' | 'chars') => void;
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('admin', 'Admin', 340, 50, 620, root);
@@ -862,6 +865,11 @@ export class AdminPanel {
       btn.textContent = tx('¿Seguro?', 'Sure?');
       setTimeout(() => { delete btn.dataset.sure; btn.textContent = label; }, 3000);
     };
+  }
+
+  /** The character editor's answer (a sheet, what a change did). */
+  char(m: Extract<S2C, { t: 'adminChar' }>) {
+    if (this.mode === 'panel') this.chars.set(m);
   }
 
   set(m: Extract<S2C, { t: 'admin' }>) {
@@ -898,21 +906,23 @@ export class AdminPanel {
     this.mode = 'panel';
     const body = this.win.body;
     body.innerHTML = '';
-    // two pages: the live status, and the balance tuner (long, with filters, so it gets its own tab)
+    // three pages: the live status, the balance tuner (long, with filters), and the character editor
     const tabs = el('div', 'adm-tabs', body);
-    const pState = el('div', '', body);
-    const pBal = el('div', '', body);
-    const btnState = el('button', 'btn small', tabs, tx('Estado', 'Status'));
-    const btnBal = el('button', 'btn small', tabs, 'Balance');
-    const show = (onBal: boolean) => {
-      pState.hidden = onBal;
-      pBal.hidden = !onBal;
-      btnState.classList.toggle('active', !onBal);
-      btnBal.classList.toggle('active', onBal);
+    const pages = { state: tx('Estado', 'Status'), bal: 'Balance', chars: tx('Personajes', 'Characters') };
+    const page = {} as Record<keyof typeof pages, { div: HTMLElement; btn: HTMLButtonElement }>;
+    for (const k of Object.keys(pages) as (keyof typeof pages)[]) {
+      page[k] = { btn: el('button', 'btn small', tabs, pages[k]), div: el('div', '', body) };
+      page[k].btn.onclick = () => this.page(k);
+    }
+    this.page = (p) => {
+      for (const [k, v] of Object.entries(page)) {
+        v.div.hidden = k !== p;
+        v.btn.classList.toggle('active', k === p);
+      }
     };
-    btnState.onclick = () => show(false);
-    btnBal.onclick = () => show(true);
-    show(false);
+    this.page('state');
+    const pState = page.state.div, pBal = page.bal.div;
+    this.chars = new GmCharEditor(page.chars.div, (extra) => this.poll(extra));
     const b = pState;
     this.stats = el('div', 'stat-grid', b);
     const godRow = el('label', 'adm-row', b);
@@ -1022,7 +1032,7 @@ export class AdminPanel {
     const key = JSON.stringify(m.players);
     if (key !== this.playersKey) {
       this.playersKey = key;
-      this.players.innerHTML = `<tr><th>${tx('Nombre', 'Name')}</th><th>${tx('Nivel', 'Level')}</th><th>${tx('Mundo', 'World')}</th><th>${tx('Cola de salida', 'Send queue')}</th><th>${tx('Héroe', 'Hero')}</th><th></th></tr>`;
+      this.players.innerHTML = `<tr><th>${tx('Nombre', 'Name')}</th><th>${tx('Nivel', 'Level')}</th><th>${tx('Mundo', 'World')}</th><th>${tx('Cola de salida', 'Send queue')}</th><th>${tx('Héroe', 'Hero')}</th><th></th><th></th></tr>`;
       for (const p of m.players.sort((a, b) => a.name.localeCompare(b.name))) {
         const tr = el('tr', '', this.players);
         el('td', '', tr, p.name || '?');
@@ -1036,6 +1046,14 @@ export class AdminPanel {
         const kick = el('button', 'btn small danger', el('td', '', tr), 'Kick');
         kick.ariaLabel = `Kick ${p.name}`;
         kick.onclick = () => this.poll({ kick: p.sid });
+        if (p.name) {
+          const edit = el('button', 'btn small', el('td', '', tr), tx('Editar', 'Edit'));
+          edit.ariaLabel = `${edit.textContent} ${p.name}`;
+          edit.onclick = () => {
+            this.page('chars');
+            this.chars.open(p.name);
+          };
+        } else el('td', '', tr);
       }
     }
 

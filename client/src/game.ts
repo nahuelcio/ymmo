@@ -705,6 +705,7 @@ export class Game {
     n.on('olyEnd', (m) => this.ui.hud.banner(m.result === 'win' ? tx(`¡Victoria! +${m.delta} puntos`, `Victory! +${m.delta} points`)
       : m.result === 'loss' ? tx(`Derrota: ${m.delta} puntos`, `Defeat: ${m.delta} points`) : tx('Empate', 'Draw'), true));
     n.on('admin', (m) => this.ui.admin.set(m));
+    n.on('adminChar', (m) => this.ui.admin.char(m));
     n.on('quests', (m) => {
       this.quests = m.list;
       this.questsDone = new Set(m.done);

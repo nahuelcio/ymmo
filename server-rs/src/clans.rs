@@ -233,6 +233,32 @@ pub fn announce_all(es: &str, en: &str) {
 }
 /** Fresh clan info to that clan's online members (its fort changed hands, siege.rs). */
 pub fn push_clan(id: u32) { let r = reg().read().unwrap(); push_id(&r, id); }
+/** The GM panel: a character's clan (id, name, level, reputation), if it has one. */
+pub fn clan_of_char(char_id: i64) -> Option<(u32, String, u8, i64)> {
+    reg().read().unwrap().of(char_id).map(|c| (c.id, c.name.clone(), c.level, c.rep))
+}
+/** The GM panel: the clan of this character at that level and/or reputation, written through and shown to its
+ * members; what changed, or why not. */
+pub fn gm_set_clan(db: &Db, char_id: i64, level: Option<i64>, rep: Option<i64>) -> Result<String, String> {
+    let max = d().clans.levels.len() as i64 - 1;
+    if level.is_some_and(|l| !(0..=max).contains(&l)) { return Err(format!("El nivel de clan va de 0 a {max}.")); }
+    if rep.is_some_and(|v| v < 0) { return Err("La reputación no puede ser negativa.".into()); }
+    let mut r = reg().write().unwrap();
+    let Some(&id) = r.by_char.get(&char_id) else { return Err("No tiene clan.".into()) };
+    let c = r.clans.get_mut(&id).unwrap();
+    let what = match (level, rep) {
+        (Some(l), _) => format!("clan {}: nivel {} → {l}", c.name, c.level),
+        (_, Some(v)) => format!("clan {}: reputación {} → {v}", c.name, c.rep),
+        _ => return Err("Nada que cambiar.".into()),
+    };
+    if let Some(l) = level { c.level = l as u8; }
+    if let Some(v) = rep { c.rep = v; }
+    db.clan_save(c.id as i64, c.leader, c.level as i64, c.rep, c.ally.map(|a| a as i64), c.invite_until);
+    push_id(&r, id);
+    drop(r);
+    changed();
+    Ok(what)
+}
 
 /** What the clan window shows (every member sees the same; each client works out what it may do). */
 fn info(r: &Clans, clan: &Clan) -> Value {

@@ -147,10 +147,46 @@ fn rss() -> Option<u64> {
     Some(s.split(' ').nth(1)?.parse::<u64>().ok()? * 4096)
 }
 
+/**
+ * The character editor (gm.rs): `charGet { name | id }` asks for a sheet, `charEdit { id, edit }` changes the
+ * character. Online, the world it is in answers (it works on the live character); offline, the hub works on the
+ * database. Either way the GM gets the sheet back.
+ */
+fn gm_route(app: &App, out: &Outbox, gm_account: i64, m: &Value) {
+    let edit = match m.get("charEdit") {
+        Some(c) => match crate::gm::Edit::parse(&c["edit"]) {
+            Some(e) => Some(e),
+            None => return crate::gm::reply(out, None, Some(Err("Ese cambio no existe.".into()))),
+        },
+        None => None,
+    };
+    let (char_id, gm_name) = {
+        let db = app.db.lock().unwrap();
+        let id = m["charEdit"]["id"].as_i64().or_else(|| m["charGet"]["id"].as_i64())
+            .or_else(|| m["charGet"]["name"].as_str().and_then(|n| db.char_by_name(n)).map(|c| c.0));
+        (id, db.account_user(gm_account))
+    };
+    let Some(char_id) = char_id else { return crate::gm::reply(out, None, Some(Err("No hay ningún personaje con ese nombre.".into()))) };
+    let gm = (gm_account, if gm_name.is_empty() { format!("cuenta {gm_account}") } else { gm_name });
+    // online: the world it is in, which has it live. Offline: the main world, from the database. A character that just
+    // left the main world was saved by it first (the same queue), so that exit save can't overwrite the change.
+    let (tx, offline) = {
+        let hub = app.hub.lock().unwrap();
+        let w = hub.sessions.values().find(|s| s.char_id == char_id && s.world.is_some()).and_then(|s| s.world);
+        (hub.worlds.get(&w.unwrap_or(crate::MAIN_WORLD)).cloned(), w.is_none())
+    };
+    let Some(tx) = tx else { return crate::gm::reply(out, None, Some(Err("Ese mundo ya no está.".into()))) };
+    let _ = tx.send(match edit {
+        Some(edit) => WorldCmd::GmEdit { char_id, edit, gm, offline, reply: out.clone() },
+        None => WorldCmd::GmGet { char_id, offline, reply: out.clone() },
+    });
+}
+
 /** { t: "admin", pass?, since?, kick?, announce? } → the server state, or ok: false until the password was given. */
 pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
     let deny = || out.text(json!({ "t": "admin", "ok": false }).to_string());
     let Some((Some(pass), start)) = CFG.get() else { return deny() };
+    let gm_account;
     let (worlds, sess, conns) = {
         let hub = &mut *app.hub.lock().unwrap();
         let Some(s) = hub.sessions.get_mut(&sid) else { return };
@@ -169,6 +205,7 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
         }
         if !s.admin { return deny(); }
         let s_world = s.world;
+        gm_account = s.account_id;
         if let Some(k) = m["kick"].as_u64() {
             if let Some(o) = hub.sessions.get(&k) { o.kick.notify_one(); log!("[admin] kicked session {k}"); }
         }
@@ -202,6 +239,7 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
         (worlds, sess, hub.sessions.len())
     };
     // past the admin check above, so only the panel reaches this
+    if m.get("charGet").is_some() || m.get("charEdit").is_some() { gm_route(app, out, gm_account, m); }
     if let Some(skill) = m["setCast"]["skill"].as_str() { set_cast(app, skill, m["setCast"]["ms"].as_f64()); }
     if let Some(key) = m["setBalance"]["key"].as_str() {
         match &m["setBalance"]["value"] {

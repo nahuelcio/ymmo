@@ -147,6 +147,9 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_points (month INTEGER NOT NULL, char_id INTEGER NOT NULL, line TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_fights (id INTEGER PRIMARY KEY, day INTEGER NOT NULL, a INTEGER NOT NULL, b INTEGER NOT NULL)", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, by_gm INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
+        // every change the GM panel's character editor made (gm.rs): who, to whom, what, when
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS gm_log (id INTEGER PRIMARY KEY, at INTEGER NOT NULL, gm_account INTEGER NOT NULL, gm TEXT NOT NULL, char_id INTEGER NOT NULL, char_name TEXT NOT NULL, what TEXT NOT NULL)", []);
+        let _ = c.execute("CREATE INDEX IF NOT EXISTS gm_log_char ON gm_log(char_id)", []);
         // a heroes table from before the GM panel (one a class line, keyed by line, no by_gm): keyed by character now,
         // its rows kept as the line's own
         let old: Option<String> = c.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'heroes'", [], |r| r.get(0)).ok();
@@ -292,6 +295,16 @@ impl Db {
         };
     }
 
+    /** A character by name, whatever the account (the GM panel): (id, account id, the name as written). */
+    pub fn char_by_name(&self, name: &str) -> Option<(i64, i64, String)> {
+        self.c.query_row("SELECT id, account_id, name FROM characters WHERE name = ? COLLATE NOCASE", [name.trim()], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).ok()
+    }
+    pub fn char_account(&self, id: i64) -> Option<i64> { self.c.query_row("SELECT account_id FROM characters WHERE id = ?", [id], |r| r.get(0)).ok() }
+    /** An account's login name (the GM panel's history says who did what). */
+    pub fn account_user(&self, id: i64) -> String { self.c.query_row("SELECT user FROM accounts WHERE id = ?", [id], |r| r.get(0)).unwrap_or_default() }
+    /** A specialization, or none (the GM panel). */
+    pub fn set_spec_opt(&self, id: i64, spec: Option<&str>) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
+
     pub fn set_spec(&self, id: i64, spec: &str) -> rusqlite::Result<usize> { self.c.execute("UPDATE characters SET spec = ? WHERE id = ?", params![spec, id]) }
 
     /** The Legend points spent (JSON: passive -> ranks): written right away, like the spec. */
@@ -389,6 +402,48 @@ impl Db {
         let _ = self.c.execute("DELETE FROM heroes WHERE month = ? AND by_gm = 0", [month]);
         for (line, c, name) in heroes { let _ = self.c.execute("INSERT OR REPLACE INTO heroes (month, line, char_id, name) VALUES (?, ?, ?, ?)", params![month, line, c, name]); }
     }
+    // ------------------------------------------------------------------ the GM panel's character editor (gm.rs)
+
+    /** The bosses whose jewel this character rolled that week. */
+    pub fn jewel_rolls(&self, char_id: i64, week: i64) -> Vec<String> {
+        let Ok(mut st) = self.c.prepare("SELECT boss FROM boss_loot WHERE char_id = ? AND week = ? ORDER BY boss") else { return vec![] };
+        st.query_map(params![char_id, week], |r| r.get(0)).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    /** That week's roll of a boss's jewel back. True if there was one. */
+    pub fn clear_jewel_roll(&self, char_id: i64, boss: &str, week: i64) -> bool {
+        self.c.execute("DELETE FROM boss_loot WHERE char_id = ? AND boss = ? AND week = ?", params![char_id, boss, week]).map_or(false, |n| n > 0)
+    }
+    pub fn rift_paid(&self, char_id: i64, day: i64) -> bool {
+        self.c.query_row("SELECT 1 FROM rift_runs WHERE char_id = ? AND day = ?", params![char_id, day], |_| Ok(())).is_ok()
+    }
+    /** That day's paid Rift run back. True if there was one. */
+    pub fn clear_rift_run(&self, char_id: i64, day: i64) -> bool {
+        self.c.execute("DELETE FROM rift_runs WHERE char_id = ? AND day = ?", params![char_id, day]).map_or(false, |n| n > 0)
+    }
+    /** A daily contract handed in that day, to take again. True if it was handed in. */
+    pub fn clear_daily(&self, char_id: i64, quest: &str, day: i64) -> bool {
+        self.c.execute("DELETE FROM daily_done WHERE char_id = ? AND quest_id = ? AND day = ?", params![char_id, quest, day]).map_or(false, |n| n > 0)
+    }
+    /** A character's Olympiad month, if it has fought in it: (points, wins, losses, draws). */
+    pub fn oly_get(&self, month: i64, char_id: i64) -> Option<(i64, i64, i64, i64)> {
+        self.c.query_row("SELECT points, wins, losses, draws FROM oly_points WHERE month = ? AND char_id = ?", params![month, char_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).ok()
+    }
+    pub fn oly_set(&self, month: i64, char_id: i64, line: &str, name: &str, (points, wins, losses, draws): (i64, i64, i64, i64)) {
+        let _ = self.c.execute("INSERT INTO oly_points (month, char_id, line, name, points, wins, losses, draws) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(month, char_id) DO UPDATE SET points = excluded.points, wins = excluded.wins, losses = excluded.losses, draws = excluded.draws",
+            params![month, char_id, line, name, points, wins, losses, draws]);
+    }
+    /** One change the GM made, for the history. */
+    pub fn gm_log(&self, gm_account: i64, gm: &str, char_id: i64, char_name: &str, what: &str) {
+        let _ = self.c.execute("INSERT INTO gm_log (at, gm_account, gm, char_id, char_name, what) VALUES (?, ?, ?, ?, ?, ?)",
+            params![crate::world::now_ms() as i64, gm_account, gm, char_id, char_name, what]);
+    }
+    /** The latest changes the GM made to a character, newest first: (at, gm, what). */
+    pub fn gm_log_recent(&self, char_id: i64, n: i64) -> Vec<(i64, String, String)> {
+        let Ok(mut st) = self.c.prepare("SELECT at, gm, what FROM gm_log WHERE char_id = ? ORDER BY id DESC LIMIT ?") else { return vec![] };
+        st.query_map(params![char_id, n], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
     /** The GM panel names a Hero for the month (beside the line's own), or takes the title back. */
     pub fn add_hero(&self, month: i64, line: &str, char_id: i64, name: &str) {
         let _ = self.c.execute("INSERT OR REPLACE INTO heroes (month, line, char_id, name, by_gm) VALUES (?, ?, ?, ?, 1)", params![month, line, char_id, name]);
