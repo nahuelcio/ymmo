@@ -55,6 +55,7 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                                     w.join_group(pid);
                                     let r = w.raid.unwrap();
                                     w.sys(pid, &format!("Entraste a {}. Escribí /raid para salir.", r.name), &format!("You entered {}. Type /raid to leave.", r.name_en));
+                                    if w.rift.is_some() { w.rift_join(pid); }
                                 } else if kind == "enter" {
                                     let (g, name) = { let p = w.pl(pid).unwrap(); (p.look.g, p.name.clone()) };
                                     w.sys(pid, &format!("¡{} a Claudi MMO, {name}! Escribí /help para ver los comandos del chat.", if g == 'f' { "Bienvenida" } else { "Bienvenido" }), &format!("Welcome to Claudi MMO, {name}! Type /help for chat commands."));

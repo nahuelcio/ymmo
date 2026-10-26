@@ -7,6 +7,10 @@ import { MOBS } from '../../shared/src/data/mobs';
 import { itemName, mobName, npcText, specName, zoneName } from '../../shared/src/i18n';
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
+import { NPCS } from '../../shared/src/data/world';
+
+/** The givers of the daily contracts (kind 'board'): their marker sums up today's contracts. */
+const BOARD_NPCS = new Set(NPCS.filter((n) => n.kind === 'board').map((n) => n.id));
 import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
 import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
 import { GATHER, isRest, isShelter, nodeById, nodeIndex, nodesNear, reachOf, shelterCentre, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
@@ -267,6 +271,10 @@ export class Game {
   adena = 0;
   quests: { id: string; progress: number }[] = [];
   questsDone = new Set<string>();
+  /** today's daily contracts, the ones handed in today, and when they change (ms since epoch; the server's clock) */
+  dailyToday: string[] = [];
+  dailyDone = new Set<string>();
+  dailyResetAt = 0;
   targetId: number | null = null;
   cooldowns = new Map<string, { end: number; dur: number; predicted?: boolean }>();
   /** round-trip time to the server (ms), measured by the server's pings */
@@ -684,10 +692,14 @@ export class Game {
     });
     n.on('error', (m) => this.sys(m.msg));
     n.on('npc', (m) => this.ui.npc.open(m));
+    n.on('rift', (m) => this.ui.hud.banner(tx(`La Grieta — Piso ${m.floor}`, `The Rift — Floor ${m.floor}`), true));
     n.on('admin', (m) => this.ui.admin.set(m));
     n.on('quests', (m) => {
       this.quests = m.list;
       this.questsDone = new Set(m.done);
+      this.dailyToday = m.daily ?? [];
+      this.dailyDone = new Set(m.dailyDone ?? []);
+      this.dailyResetAt = m.resetAt ?? 0;
       this.refreshQuestMarkers();
       this.ui.hud.setQuests(m.list);
       this.ui.npc.syncQuest(m.list);
@@ -878,15 +890,21 @@ export class Game {
     return out;
   }
 
-  /** Marker state for a quest giver (by NPC def id), also used by the minimap. */
+  /** Marker state for a quest giver (by NPC def id), also used by the minimap. The contracts' board shows the most
+   * pressing of today's contracts: one to hand in, then one to take, then one under way. */
   questMarkerFor(npcId: string): QuestMarker {
+    if (BOARD_NPCS.has(npcId)) {
+      const marks = this.dailyToday.map((id) => QUESTS[id]).filter((q) => q?.npc === npcId)
+        .map((q) => questMarker(q, this.me.lvl, this.quests.find((x) => x.id === q.id), this.dailyDone.has(q.id)));
+      return (['ready', 'available', 'active', 'soon'] as const).find((k) => marks.includes(k)) ?? null;
+    }
     const q = QUEST_BY_NPC[npcId];
     if (!q) return null;
     return questMarker(q, this.me.lvl, this.quests.find((x) => x.id === q.id), this.questsDone.has(q.id));
   }
 
   private refreshQuestMarker(c: CEnt) {
-    if (c.rec.k !== 'n' || !QUEST_BY_NPC[c.rec.npc]) return;
+    if (c.rec.k !== 'n' || !(QUEST_BY_NPC[c.rec.npc] || BOARD_NPCS.has(c.rec.npc))) return;
     if (!c.marker) {
       // outer element is positioned by CSS2DRenderer (transform); the inner one bobs
       const wrap = document.createElement('div');

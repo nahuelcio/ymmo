@@ -131,6 +131,11 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS boss_loot (char_id INTEGER NOT NULL, boss TEXT NOT NULL, week INTEGER NOT NULL, PRIMARY KEY (char_id, boss, week))", []);
         // when each overworld boss is back (ms since epoch), so a restart doesn't bring them all back at once
         let _ = c.execute("CREATE TABLE IF NOT EXISTS boss_respawn (mob TEXT PRIMARY KEY, at INTEGER NOT NULL)", []);
+        // the Rift (rift.rs): a character's paid run of the day, and each week's best floor of each party
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS rift_runs (char_id INTEGER NOT NULL, day INTEGER NOT NULL, PRIMARY KEY (char_id, day))", []);
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS rift_best (week INTEGER NOT NULL, party_key TEXT NOT NULL, names TEXT NOT NULL, floor INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (week, party_key))", []);
+        // the daily contracts each character handed in, by day (quests.rs)
+        let _ = c.execute("CREATE TABLE IF NOT EXISTS daily_done (char_id INTEGER NOT NULL, quest_id TEXT NOT NULL, day INTEGER NOT NULL, PRIMARY KEY (char_id, quest_id, day))", []);
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
@@ -275,6 +280,33 @@ impl Db {
     /** This week's roll of this boss's jewel for this character: true if it was still to take (and it is taken now). */
     pub fn take_jewel_roll(&self, char_id: i64, boss: &str, week: i64) -> bool {
         self.c.execute("INSERT OR IGNORE INTO boss_loot (char_id, boss, week) VALUES (?, ?, ?)", params![char_id, boss, week]).map_or(false, |n| n > 0)
+    }
+
+    /** This character's paid Rift run of the day: true if it was still to take (and it is taken now). */
+    pub fn take_rift_run(&self, char_id: i64, day: i64) -> bool {
+        self.c.execute("INSERT OR IGNORE INTO rift_runs (char_id, day) VALUES (?, ?)", params![char_id, day]).map_or(false, |n| n > 0)
+    }
+    /** A party's floor this week, if it is its best (ties keep the earlier time). */
+    pub fn set_rift_best(&self, week: i64, party_key: &str, names: &str, floor: i64, at: f64) {
+        let _ = self.c.execute(
+            "INSERT INTO rift_best (week, party_key, names, floor, at) VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(week, party_key) DO UPDATE SET floor = excluded.floor, at = excluded.at, names = excluded.names WHERE excluded.floor > rift_best.floor",
+            params![week, party_key, names, floor, at as i64]);
+    }
+    /** The week's deepest parties: (names, floor), deepest first, the earlier first on a tie. */
+    pub fn rift_top(&self, week: i64, n: i64) -> Vec<(String, i64)> {
+        let Ok(mut st) = self.c.prepare("SELECT names, floor FROM rift_best WHERE week = ? ORDER BY floor DESC, at ASC LIMIT ?") else { return vec![] };
+        st.query_map(params![week, n], |r| Ok((r.get(0)?, r.get(1)?))).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
+    /** The daily contracts this character handed in on that day. */
+    pub fn daily_done(&self, char_id: i64, day: i64) -> Vec<String> {
+        let Ok(mut st) = self.c.prepare("SELECT quest_id FROM daily_done WHERE char_id = ? AND day = ?") else { return vec![] };
+        st.query_map(params![char_id, day], |r| r.get(0)).map(|it| it.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+    /** A daily contract handed in today: true if it was not yet (written right away, like a jewel's roll). */
+    pub fn mark_daily_done(&self, char_id: i64, quest_id: &str, day: i64) -> bool {
+        self.c.execute("INSERT OR IGNORE INTO daily_done (char_id, quest_id, day) VALUES (?, ?, ?)", params![char_id, quest_id, day]).map_or(false, |n| n > 0)
     }
 
     /** When an overworld boss is back (ms since epoch), kept across restarts. */

@@ -62,6 +62,10 @@ pub struct World {
     pub raid: Option<&'static RaidDef>,
     pub raid_boss: Option<u32>,
     pub raid_cleared_at: f64,
+    /** a Rift instance's floor and wave (rift.rs) */
+    pub rift: Option<crate::rift::RiftState>,
+    /** the server day (formulas.rs loot_day) this world last saw: a new one resets the daily contracts (quests.rs) */
+    pub day: i64,
     /** socket session id -> player entity */
     pub sessions: HashMap<u64, u32>,
     pub events: Vec<HubEvent>,
@@ -79,10 +83,16 @@ impl World {
         let mut w = World {
             ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
+            rift: None, day: crate::formulas::loot_day(now_ms()),
             sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
         };
         if let Some((r, size)) = raid {
-            let boss = w.spawn_mob(&r.boss, r.x, r.z);
+            // the Rift has no boss: its first floor waits for its first player (rift.rs rift_join)
+            if r.rift {
+                w.rift = Some(crate::rift::RiftState::default());
+                return w;
+            }
+            let boss = w.spawn_mob(r.boss.as_deref().expect("a raid's boss"), r.x, r.z);
             let m = w.ents.get_mut(&boss).unwrap();
             m.c.ry = std::f64::consts::PI;
             let mm = m.mob_mut().unwrap();
@@ -465,6 +475,7 @@ impl World {
                     self.sys(*pid, &format!("¡Despejaste {}! Te espera un cofre junto a la fogata.", def.name), &format!("You cleared {}! A chest awaits you by the campfire.", def.name_en));
                 }
                 self.clan_rep(&winners, d().clans.rep.camp_clear, &def.name, &def.name_en);
+                self.credit_camp(&def.id, &winners);
             } else if self.camps[i].cleared && now >= self.camps[i].respawn_at && none_dead {
                 self.camps[i].cleared = false;
                 self.camps[i].contributors.clear();
@@ -482,6 +493,7 @@ impl World {
                 w.mobs.retain(|&x| x != mid);
             });
         }
+        if self.rift.is_some() { return self.rift_mob_killed(mid, now); }
         if let (Some(raid), Some(boss)) = (self.raid, self.raid_boss) {
             if boss == mid {
                 self.raid_cleared_at = now;
@@ -697,6 +709,12 @@ impl World {
         if self.tick_n % 20 == 0 {
             self.npc_chatter(now);
             self.tick_nodes(now);
+            // midnight in Argentina: a new day's contracts (quests.rs)
+            let day = crate::formulas::loot_day(now);
+            if day != self.day {
+                self.day = day;
+                self.daily_reset();
+            }
         }
         if self.tick_n % 40 == 0 {
             for pid in &self.players { if let Some(p) = self.pl(*pid) { p.send(json!({ "t": "ping", "s": now.floor(), "rtt": p.rtt.round() })) } }

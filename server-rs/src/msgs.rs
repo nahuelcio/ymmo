@@ -94,9 +94,10 @@ impl World {
             "craft" => if let Some(n) = id(m, "npc") { self.craft(pid, n, &s(m, "item")) },
             "sell" => if let (Some(n), Some(u)) = (id(m, "npc"), id(m, "u")) { self.sell(pid, n, u, num(m, "qty")) },
             "teleport" => if let Some(n) = id(m, "npc") { self.gatekeeper(pid, n, &s(m, "dest")) },
-            "questAccept" => if let Some(n) = id(m, "npc") { self.accept_quest(pid, n) },
+            // `quest`: which contract, at the board (a story giver has its one)
+            "questAccept" => if let Some(n) = id(m, "npc") { self.accept_quest(pid, n, m.get("quest").and_then(|v| v.as_str())) },
             "questTurnIn" => if let Some(n) = id(m, "npc") {
-                let xp = self.turn_in_quest(pid, n);
+                let xp = self.turn_in_quest(pid, n, m.get("quest").and_then(|v| v.as_str()));
                 if xp > 0 { self.gain_xp(pid, xp as f64); }
             },
             "chat" => self.handle_chat(pid, &s(m, "text")),

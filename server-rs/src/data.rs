@@ -253,14 +253,38 @@ pub struct SkillDef {
 pub enum Objective {
     Kill { mob: String, count: i64 },
     Collect { item: String, count: i64 },
+    /** any of these mobs (a daily contract's hunt) */
+    KillAny { mobs: Vec<String>, count: i64 },
+    /** clearing a hostile camp */
+    Camp { camp: String, count: i64 },
+    /** clearing the Rift's floor `floor`, or a deeper one (count is 1) */
+    Rift { floor: i64, count: i64 },
 }
 impl Objective {
-    pub fn count(&self) -> i64 { match self { Objective::Kill { count, .. } | Objective::Collect { count, .. } => *count } }
+    pub fn count(&self) -> i64 {
+        match self {
+            Objective::Kill { count, .. } | Objective::Collect { count, .. } | Objective::KillAny { count, .. } | Objective::Camp { count, .. } | Objective::Rift { count, .. } => *count,
+        }
+    }
 }
+
+/** How many contracts a day offers (DAILY_COUNT in shared/src/data/quests.ts). */
+pub const DAILY_COUNT: usize = 3;
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct QuestDef { pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64, /** turning it in evolves the character's specialization */ #[serde(default)] pub evolve: bool }
+pub struct QuestDef {
+    pub id: String, pub npc: String, pub name: String, pub name_en: String, pub min_level: i64, pub objective: Objective, pub xp: i64, pub adena: i64,
+    /** turning it in evolves the character's specialization */
+    #[serde(default)]
+    pub evolve: bool,
+    /** a daily contract (quests.rs daily_set): offered some days, done once a day */
+    #[serde(default)]
+    pub daily: bool,
+    /** items it pays on top of XP and adena */
+    #[serde(default)]
+    pub rewards: Vec<(String, i64)>,
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -282,6 +306,11 @@ pub struct NpcDef {
     /** travelers walk back and forth along this road segment [ax, az, bx, bz] */
     #[serde(default)]
     pub road: Option<Vec<f64>>,
+    /** a shop that sells for this item instead of adena, at `prices` (each in that item) */
+    #[serde(default)]
+    pub currency: Option<String>,
+    #[serde(default)]
+    pub prices: HashMap<String, i64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -343,7 +372,14 @@ pub struct Pos { pub x: f64, pub z: f64 }
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RaidDef { pub id: String, pub name: String, pub name_en: String, pub boss: String, pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64 }
+pub struct RaidDef {
+    pub id: String, pub name: String, pub name_en: String,
+    /** none in the Rift: its floors spawn waves instead (rift.rs) */
+    pub boss: Option<String>,
+    #[serde(default)]
+    pub rift: bool,
+    pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64,
+}
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(tag = "k")]
@@ -441,6 +477,8 @@ struct Raw {
     gather: GatherDefs,
     clans: ClansDef,
     legend: LegendCfg,
+    #[serde(rename = "dailyProbe", default)]
+    daily_probe: Vec<(i64, Vec<String>)>,
     water: WaterRaw,
 }
 
@@ -475,6 +513,8 @@ pub struct Data {
     pub gather: GatherDefs,
     pub clans: ClansDef,
     pub legend: LegendCfg,
+    /** the client's dailySet on a week of days (day, contract ids): daily_set must pick the same (a test) */
+    pub daily_probe: Vec<(i64, Vec<String>)>,
     /** the level a character needs to wear each grade (GRADE_LEVEL in shared/src/data/items.ts) */
     pub grade_level: HashMap<String, i64>,
     pub masterwork: MasterworkCfg,
@@ -493,7 +533,20 @@ impl Data {
     pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
     pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
     pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
-    pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc) }
+    /** The story quest a giver offers (the contracts' board offers daily_set's instead). */
+    pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc && !q.daily) }
+    /** The day's contracts (day: formulas.rs loot_day): the same for everyone, a shuffle of the daily pool (in data order)
+     * seeded by the day, as shared/src/data/quests.ts dailySet does it. */
+    pub fn daily_set(&self, day: i64) -> Vec<&QuestDef> {
+        let pool: Vec<&QuestDef> = self.quests.iter().filter(|q| q.daily).collect();
+        let mut idx: Vec<usize> = (0..pool.len()).collect();
+        let mut rng = crate::terrain::Mulberry32::new(day as u32);
+        for i in (1..idx.len()).rev() {
+            let j = (rng.next() * (i + 1) as f64).floor() as usize;
+            idx.swap(i, j);
+        }
+        idx.into_iter().take(DAILY_COUNT).map(|i| pool[i]).collect()
+    }
     pub fn camp(&self, id: &str) -> Option<&CampDef> { self.camps.iter().find(|c| c.id == id) }
     pub fn npc(&self, id: &str) -> Option<&NpcDef> { self.npcs.iter().find(|n| n.id == id) }
     pub fn status_flag(&self, id: &str) -> u16 { self.statuses.iter().find(|s| s.id == id).map(|s| s.flag).unwrap_or(0) }
@@ -570,6 +623,7 @@ pub fn d() -> &'static Data {
             gather: raw.gather,
             clans: raw.clans,
             legend: raw.legend,
+            daily_probe: raw.daily_probe,
             water_n: water_n,
             water_cell: raw.water.cell,
             water_half: raw.water.half,

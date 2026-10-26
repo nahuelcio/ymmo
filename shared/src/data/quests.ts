@@ -1,7 +1,19 @@
+import { CAMP_BY_ID } from './camps';
 import { ITEMS } from './items';
 import { MOBS } from './mobs';
+import { mulberry32 } from '../terrain';
 
 export type QuestStatus = 'locked' | 'available' | 'active' | 'ready' | 'done';
+
+export type Objective =
+  | { type: 'kill'; mob: string; count: number }
+  | { type: 'collect'; item: string; count: number }
+  /** any of these mobs (a daily contract's hunt); `what` names them in the tracker, as `whatEn` in English */
+  | { type: 'killAny'; mobs: string[]; what: string; whatEn: string; count: number }
+  /** clearing a hostile camp (camps.ts) `count` times */
+  | { type: 'camp'; camp: string; count: number }
+  /** clearing the Rift's floor `floor`, or a deeper one, once */
+  | { type: 'rift'; floor: number; count: 1 };
 
 export interface QuestDef {
   id: string;
@@ -13,16 +25,23 @@ export interface QuestDef {
   busy: string;
   ready: string;
   doneText: string;
-  objective: { type: 'kill'; mob: string; count: number } | { type: 'collect'; item: string; count: number };
+  objective: Objective;
   xp: number;
   adena: number;
   /** turning it in evolves the character's specialization (the third specialization, classes.ts EVOLVE_LEVEL) */
   evolve?: boolean;
+  /** a daily contract: offered on the days dailySet picks it, done once a day (server-rs quests.rs) */
+  daily?: boolean;
+  /** items it pays on top of XP and adena */
+  rewards?: [string, number][];
 }
 
 export function questSummary(q: QuestDef): string {
   const o = q.objective;
   if (o.type === 'kill') return `Matar ${o.count} × ${MOBS[o.mob].name}`;
+  if (o.type === 'killAny') return `Matar ${o.count} × ${o.what}`;
+  if (o.type === 'camp') return `Limpiar ${CAMP_BY_ID[o.camp].name}`;
+  if (o.type === 'rift') return `Superar el piso ${o.floor} de La Grieta`;
   return `Traer ${o.count} × ${ITEMS[o.item].name}`;
 }
 
@@ -43,6 +62,9 @@ export function questMarker(q: QuestDef, level: number, active: { progress: numb
 export function questMobs(q: QuestDef): string[] {
   const o = q.objective;
   if (o.type === 'kill') return [o.mob];
+  if (o.type === 'killAny') return o.mobs;
+  if (o.type === 'camp') return [CAMP_BY_ID[o.camp].leader, ...CAMP_BY_ID[o.camp].mobs.map((m) => m.mob)];
+  if (o.type === 'rift') return [];
   return Object.values(MOBS).filter((m) => m.drops.some((d) => d.item === o.item)).map((m) => m.id);
 }
 
@@ -312,8 +334,55 @@ const list: QuestDef[] = [
     busy: 'Cinco fragmentos. Los jefes no los sueltan fácil: llevá compañía.',
     ready: 'Laten al mismo ritmo que vos. Cerrá los ojos... y despertá.',
     doneText: 'Ya no sos el mismo que llegó a Brasaoscura. Andá a demostrarlo.' },
+  // Daily contracts (level 76+): Brasaoscura's Intendant of Contracts offers three a day of these (dailySet), each
+  // done once a day, paid in Contract Marks (the Cambista's currency)
+  ...dailies(),
 ];
+
+function dailies(): QuestDef[] {
+  const VOLCANIC = ['lava_salamander', 'hellhound', 'lava_golem', 'pyromancer', 'magma_drake'];
+  const ABYSS = ['abyss_knight', 'lich', 'abyss_weaver', 'abyss_drake', 'abyss_demon'];
+  const c = (id: string, name: string, objective: Objective, marks: number, offer: string, ready: string): QuestDef => ({
+    id, npc: 'ember_contracts', name, minLevel: 76, daily: true, objective, xp: 400000, adena: 150000, rewards: [['contract_mark', marks]],
+    story: 'El Intendente reparte los encargos que la muralla no puede dejar para mañana. Mañana habrá otros.',
+    offer, busy: 'El contrato sigue abierto. Mañana a medianoche se cae.', ready, doneText: 'Contrato cerrado. Volvé mañana, que trabajo sobra.',
+  });
+  return [
+    c('contract_abyss_hunt', 'Cacería en el Abismo', { type: 'killAny', mobs: ABYSS, what: 'criaturas del Abismo', whatEn: 'creatures of the Abyss', count: 40 }, 3,
+      'Cuarenta criaturas del Abismo, las que sean. Cuantas menos suban, mejor dormimos.', 'Cuarenta menos. Firmá acá.'),
+    c('contract_volcanic_hunt', 'Cacería volcánica', { type: 'killAny', mobs: VOLCANIC, what: 'criaturas volcánicas', whatEn: 'volcanic creatures', count: 40 }, 3,
+      'Las Tierras Volcánicas se llenan de bichos más rápido de lo que se enfrían. Cuarenta, cualquiera.', 'Eso alcanza para que el camino respire un día.'),
+    c('contract_commanders', 'Cabezas de mando', { type: 'killAny', mobs: ['high_pyromancer', 'abyss_commander'], what: 'élites (Sumo Piromante o Comandante Abisal)', whatEn: 'elites (High Pyromancer or Abyssal Commander)', count: 5 }, 4,
+      'Sin quien los mande, los cultistas y los caballeros pelean peor. Cinco jefes de campamento.', 'Cinco cabezas menos. Ya se nota el desorden allá abajo.'),
+    c('contract_bastion', 'El Bastión Abisal', { type: 'camp', camp: 'abyss_bastion', count: 1 }, 4,
+      'El Bastión Abisal volvió a llenarse. Limpialo entero, comandante incluido.', 'El Bastión quedó vacío. Por hoy.'),
+    c('contract_forge', 'La Forja de los Cultistas', { type: 'camp', camp: 'cult_forge', count: 1 }, 3,
+      'La Forja de los Cultistas arde otra vez. Apagala: cultistas, sabuesos y su piromante.', 'Las brasas de la Forja se enfrían. Bien hecho.'),
+    c('contract_flame_lord', 'El Señor de las Llamas', { type: 'kill', mob: 'flame_lord', count: 1 }, 4,
+      'El Señor de las Llamas despertó de nuevo. Que vuelva a dormir.', 'El volcán está tranquilo. Lo que dure.'),
+    c('contract_azgaroth', 'El Devorador', { type: 'kill', mob: 'azgaroth', count: 1 }, 6,
+      'Azgaroth se alimenta cada noche. Bajá con tu gente al Corazón del Abismo (/raid abyss) y cortale la cena.', 'El Devorador cayó otra vez. Nadie paga mejor que yo por eso.'),
+    c('contract_rift', 'Hacia el fondo', { type: 'rift', floor: 10, count: 1 }, 5,
+      'La Grieta no tiene fondo, dicen. Bajá hasta el piso 10 (/grieta) y contame qué viste.', 'Piso diez. Muy pocos vuelven de ahí con ganas de hablar.'),
+  ];
+}
 
 export const QUEST_LIST: QuestDef[] = list;
 export const QUESTS: Record<string, QuestDef> = Object.fromEntries(list.map((q) => [q.id, q]));
-export const QUEST_BY_NPC: Record<string, QuestDef> = Object.fromEntries(list.map((q) => [q.npc, q]));
+/** The quest each giver offers (a daily contract's giver, the board, offers dailySet's instead). */
+export const QUEST_BY_NPC: Record<string, QuestDef> = Object.fromEntries(list.filter((q) => !q.daily).map((q) => [q.npc, q]));
+
+/** How many contracts a day offers, from DAILY_POOL (in data order). */
+export const DAILY_COUNT = 3;
+export const DAILY_POOL: QuestDef[] = list.filter((q) => q.daily);
+/** The day's contracts (day: server-rs formulas.rs loot_day): the same for everyone, a shuffle seeded by the day, as
+ * server-rs quests.rs daily_set does it. */
+export function dailySet(day: number): QuestDef[] {
+  const rng = mulberry32(day);
+  const idx = DAILY_POOL.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return idx.slice(0, DAILY_COUNT).map((i) => DAILY_POOL[i]);
+}

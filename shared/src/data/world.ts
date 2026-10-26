@@ -93,9 +93,12 @@ export interface NpcDef {
   name: string;
   title: string;
   x: number; z: number; ry: number;
-  /** clan: the clan master (found, raise, dissolve; shared/src/data/clans.ts) */
-  kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan';
+  /** clan: the clan master (found, raise, dissolve; shared/src/data/clans.ts); board: the daily contracts (quests.ts dailySet) */
+  kind: 'shop' | 'gatekeeper' | 'talker' | 'quest' | 'clan' | 'board';
   shop?: string[];
+  /** a shop that sells for this item instead of adena, at `prices` (each in that item) */
+  currency?: string;
+  prices?: Record<string, number>;
   /** items this merchant makes to order (their recipe is ItemDef.craft) */
   craft?: string[];
   color: number;
@@ -366,6 +369,12 @@ export const NPCS: NpcDef[] = [
     greeting: 'El Abismo susurra. Yo le contesto con sellos.' },
   { id: 'veyra', name: 'Veyra', title: 'Guardiana del Despertar', ...fort('veyra'), kind: 'quest', color: 0x9a7ad8,
     greeting: 'Hay un poder dormido en vos. Lo veo. ¿Querés despertarlo?' },
+  // the daily contracts (level 76+): three a day, paid in Contract Marks, which the Cambista next to him takes
+  { id: 'ember_contracts', name: 'Aldric', title: 'Intendente de Contratos', ...fort('ember_contracts'), kind: 'board', color: 0x6a5a3a,
+    greeting: 'El trabajo de hoy está en el tablón. Mañana habrá otro.' },
+  { id: 'ember_exchange', name: 'Sabela', title: 'Cambista', ...fort('ember_exchange'), kind: 'shop', color: 0x8a7a2a,
+    currency: 'contract_mark', prices: { scroll_enchant_sacred: 120, jewel_voucher: 60 }, shop: ['scroll_enchant_sacred', 'jewel_voucher'],
+    greeting: 'Adena no acepto. Marcas sí: valen lo que cuesta ganarlas.' },
   // where the Gatekeeper drops you in each volcanic zone
   { id: 'ignis', name: 'Ignis', title: 'Monje de Ceniza', ...drop('volcanic', 6, -6), ry: Math.atan2(-6, 6), kind: 'quest', color: 0x6a5a50,
     greeting: 'Yo también adoré a las llamas. Me quemaron igual.' },

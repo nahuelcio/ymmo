@@ -24,6 +24,7 @@ mod player;
 mod quests;
 mod raid;
 mod realm;
+mod rift;
 mod terrain;
 mod trade;
 mod world;

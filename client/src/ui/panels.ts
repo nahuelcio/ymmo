@@ -376,8 +376,17 @@ export class NpcPanel {
     if (this.win.visible && this.msg) this.render();
   }
 
-  /** Keep an open quest dialog in step with the tracker. */
+  /** Keep an open quest dialog (or the contracts' board) in step with the tracker. */
   syncQuest(list: { id: string; progress: number }[]) {
+    if (this.msg?.kind === 'board' && this.win.visible) {
+      for (const q of this.msg.quests ?? []) {
+        const live = list.find((row) => row.id === q.id), def = QUESTS[q.id];
+        if (!live || !def || (q.status !== 'active' && q.status !== 'ready')) continue;
+        q.progress = live.progress;
+        q.status = live.progress >= def.objective.count ? 'ready' : 'active';
+      }
+      return this.render();
+    }
     const q = this.msg?.kind === 'quest' ? this.msg.quest : undefined;
     if (!q || !this.win.visible || (q.status !== 'active' && q.status !== 'ready')) return;
     const live = list.find((row) => row.id === q.id);
@@ -408,6 +417,10 @@ export class NpcPanel {
       this.renderQuest(m, b);
       return;
     }
+    if (m.kind === 'board') {
+      this.renderBoard(m, b);
+      return;
+    }
     if (m.kind === 'clan') {
       renderClanNpc(g, m, b);
       return;
@@ -432,13 +445,16 @@ export class NpcPanel {
       };
     }
     const list = el('div', 'shop-list', b);
+    // a shop that takes an item instead of adena (the Cambista's Marks), at its own prices
+    const cur = m.currency, have = (id: string) => g.inv.reduce((n, i) => n + (i.i === id && !i.s ? i.c : 0), 0);
     if (this.tab === 'buy') {
       for (const id of m.shop ?? []) {
         const def = ITEMS[id];
         const row = el('div', 'shop-row', list);
         itemIcon(id, row);
         const info = el('div', 'grow', row);
-        info.innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br><span class="tt-dim">${def.price} adena</span>${this.needTag(def)}`;
+        const price = cur ? `<span class="${have(cur) >= (m.prices?.[id] ?? 0) ? 'tt-dim' : 'tt-down'}">${m.prices?.[id]} × ${esc(itemName(cur, lang))}</span>` : `<span class="tt-dim">${def.price} adena</span>`;
+        info.innerHTML = `<span style="color:${def.grade ? GRADE_COLOR[def.grade] : '#ddd'}">${esc(itemName(id, lang))}</span><br>${price}${this.needTag(def)}`;
         setTip(row, () => itemTip(id));
         const qty = el('input', 'qty', row);
         qty.type = 'number';
@@ -450,7 +466,6 @@ export class NpcPanel {
       }
     } else if (this.tab === 'craft') {
       // made to order: the recipe's materials (red when you are short) and a fee
-      const have = (id: string) => g.inv.reduce((n, i) => n + (i.i === id && !i.s ? i.c : 0), 0);
       for (const id of m.craft ?? []) {
         const def = ITEMS[id], rec = def.craft;
         if (!rec) continue;
@@ -464,7 +479,8 @@ export class NpcPanel {
         btn.onclick = () => g.net.send({ t: 'craft', npc: m.npc, item: id });
       }
     } else {
-      const sellable = g.inv.filter((i) => !i.s);
+      // a currency (adena, the Marks) is nobody's to buy
+      const sellable = g.inv.filter((i) => !i.s && ITEMS[i.i]?.type !== 'currency');
       if (!sellable.length) el('div', 'tt-dim', list, tx('No tenés nada para vender.', 'You have nothing to sell.'));
       for (const it of sellable) {
         const def = ITEMS[it.i];
@@ -482,7 +498,40 @@ export class NpcPanel {
         btn.onclick = () => g.net.send({ t: 'sell', npc: m.npc, u: it.u, qty: Math.min(it.c, Math.max(1, Math.floor(+qty.value || 1))) });
       }
     }
-    el('div', 'inv-footer', b).innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span>`;
+    el('div', 'inv-footer', b).innerHTML = `<span class="adena">${g.adena.toLocaleString(fmtLoc)} Adena</span>${cur ? `<span>${have(cur).toLocaleString(fmtLoc)} × ${esc(itemName(cur, lang))}</span>` : ''}`;
+  }
+
+  /** The contracts' board: today's three, where you stand on each (take it, its progress, hand it in, done), what each
+   * pays, and how long until tomorrow's. */
+  private renderBoard(m: Extract<S2C, { t: 'npc' }>, b: HTMLElement) {
+    const left = Math.max(0, (m.resetAt ?? 0) - Date.now()), h = Math.floor(left / 3_600_000), min = Math.floor((left % 3_600_000) / 60_000);
+    el('div', 'tt-dim', b, tx(`Los contratos se renuevan en ${h} h ${min} min (medianoche).`, `The contracts change in ${h} h ${min} min (midnight).`));
+    for (const q of m.quests ?? []) {
+      const def = QUESTS[q.id];
+      if (!def) continue;
+      const card = el('div', `contract ${q.status}`, b);
+      el('div', 'section', card, questField(def, 'name', lang));
+      el('div', '', card, questSummaryL(def, lang));
+      el('div', 'npc-greet', card, `"${questLineL(def, q.status, lang)}"`);
+      if (q.status === 'active' || q.status === 'ready') {
+        el('div', '', card).innerHTML = `${tx('Progreso', 'Progress')}: <b class="${q.progress >= def.objective.count ? 'qt-ready' : ''}">${q.progress}/${def.objective.count}</b>`;
+      }
+      if (q.status !== 'done') el('div', 'tt-dim', card, this.rewardText(def));
+      if (q.status === 'available') {
+        el('button', 'btn primary', card, tx('Aceptar', 'Accept')).onclick = () => this.g.net.send({ t: 'questAccept', npc: m.npc, quest: q.id });
+      } else if (q.status === 'ready') {
+        el('button', 'btn primary', card, tx('Entregar', 'Turn in')).onclick = () => this.g.net.send({ t: 'questTurnIn', npc: m.npc, quest: q.id });
+      } else if (q.status === 'done') {
+        el('div', 'qt-ready', card, tx('Cumplido hoy', 'Done today'));
+      }
+    }
+  }
+
+  /** "Recompensa: 400.000 de XP, 150.000 de adena y 3 × Marca de Contrato" */
+  private rewardText(def: (typeof QUESTS)[string]) {
+    const items = (def.rewards ?? []).map(([id, n]) => `${n} × ${itemName(id, lang)}`);
+    const parts = [tx(`${def.xp.toLocaleString(fmtLoc)} de XP`, `${def.xp.toLocaleString(fmtLoc)} XP`), tx(`${def.adena.toLocaleString(fmtLoc)} de adena`, `${def.adena.toLocaleString(fmtLoc)} adena`), ...items];
+    return `${tx('Recompensa', 'Reward')}: ${parts.slice(0, -1).join(', ')} ${tx('y', 'and')} ${parts[parts.length - 1]}`;
   }
 
   /** " · Nv 52" after a piece that asks for a level: dim when yours is enough, red when it is not. */
@@ -502,9 +551,7 @@ export class NpcPanel {
       const row = el('div', '', b);
       row.innerHTML = `${tx('Progreso', 'Progress')}: <b class="${q.progress >= def.objective.count ? 'qt-ready' : ''}">${q.progress}/${def.objective.count}</b>`;
     }
-    if (q.status !== 'done') {
-      el('div', 'tt-dim', b, tx(`Recompensa: ${def.xp.toLocaleString(fmtLoc)} de XP y ${def.adena.toLocaleString(fmtLoc)} de adena`, `Reward: ${def.xp.toLocaleString(fmtLoc)} XP and ${def.adena.toLocaleString(fmtLoc)} adena`));
-    }
+    if (q.status !== 'done') el('div', 'tt-dim', b, this.rewardText(def));
     if (q.status === 'available') {
       el('div', 'npc-greet', b, def.story);
       const btn = el('button', 'btn primary', b, tx('Aceptar', 'Accept'));
@@ -987,6 +1034,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>A nivel 76, la misión <b>«El Despertar»</b> de Veyra, en Brasaoscura, despierta tu <b>tercera especialización</b>: el Caballero se vuelve Paladín del Fénix, el Gladiador Duelista, el Hechicero Archimago y el Clérigo Hierofante, con una habilidad nueva en el 76, el 77 y el 78.</p>
     <p>En el nivel 78 la experiencia llena la barra de <b>Leyenda</b>: cada nivel de Leyenda es un punto para una pasiva (ataque, defensa, HP, crítico, regeneración, velocidad) en Estado del Personaje. En un pueblo podés recuperar los puntos pagando adena.</p>
     <p>Cada jefe tiene su <b>joya</b> única, con un poder propio: Ent Ancestral, Ssithra, Treant Ancestral, Señor de las Llamas, Azgaroth y el Avatar de la Guerra. Tenés <b>una tirada por jefe por semana</b> (se renueva el lunes). Se pueden llevar <b>dos anillos</b>. El set Infernal completo da un <b>bonus de set</b> con 2, 4 y 5 piezas, y en Brasaoscura Cassius fabrica <b>Piedras de Protección</b>: si un encantamiento falla con una, la pieza vuelve a +0 en vez de romperse.</p>
+    <p>En Brasaoscura, <b>Aldric</b> reparte cada día tres <b>contratos</b> (cacerías, campamentos, jefes, la Grieta) que pagan <b>Marcas de Contrato</b>; <b>Sabela</b>, la Cambista, las cambia por el Pergamino Sagrado y el Vale de Tirada, que te devuelve una tirada de joya ya usada. Desde el nivel 76, <b>/grieta</b> te lleva con tu party a <b>La Grieta</b>: pisos sin fin, cada uno más fuerte. La primera corrida del día paga marcas cada 5 pisos; <b>/grieta top</b> muestra el ranking de la semana.</p>
     <p>Lo que un maestro le fabrica a un <b>enano</b> (los enanos son los artesanos) a veces sale <b class="tt-mw">Obra Maestra</b>, con el nombre en dorado, y cualquiera puede usarla. Da velocidad o recarga según la raza de quien la lleva: Vel.Atq a orcos y enanos, Vel.Casteo a elfos, menos recarga a elfos oscuros, y mitad velocidad y mitad recarga a humanos (a un místico la velocidad le llega como Vel.Casteo, a un guerrero como Vel.Atq). El arma da 6% y cada armadura o joya 1%.</p>
     <h4>Party y PvP</h4>
     <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
@@ -1038,6 +1086,7 @@ const HELP_EN = `
     <p>At level 76, Veyra's quest <b>"The Awakening"</b>, in Emberdark, awakens your <b>third specialization</b>: the Knight becomes a Phoenix Paladin, the Gladiator a Duelist, the Sorcerer an Archmage and the Cleric a Hierophant, with a new skill at 76, 77 and 78.</p>
     <p>At level 78 experience fills the <b>Legend</b> bar: every Legend level is a point for a passive (attack, defence, HP, critical, regeneration, speed) in Character Status. In a town you can take the points back for adena.</p>
     <p>Every boss has its own <b>jewel</b>, with a power of its own: the Ancient Ent, Ssithra, the Ancient Treant, the Lord of Flames, Azgaroth and the War Avatar. You get <b>one roll per boss per week</b> (renewed on Mondays). You can wear <b>two rings</b>. The full Infernal set gives a <b>set bonus</b> at 2, 4 and 5 pieces, and in Emberdark Cassius crafts <b>Protection Stones</b>: an enchant that fails with one sends the piece back to +0 instead of breaking it.</p>
+    <p>In Emberdark, <b>Aldric</b> hands out three <b>contracts</b> a day (hunts, camps, bosses, the Rift) paid in <b>Contract Marks</b>; <b>Sabela</b>, the Cambista, exchanges them for the Sacred Scroll and the Jewel Voucher, which gives a spent jewel roll back. From level 76, <b>/rift</b> takes you and your party to <b>The Rift</b>: endless floors, each one stronger. The day's first run pays Marks every 5 floors; <b>/rift top</b> shows the week's ranking.</p>
     <p>What a master crafts for a <b>dwarf</b> (dwarves are the craftsmen) sometimes comes out a <b class="tt-mw">Masterwork</b>, its name in gold, and anyone can wear it. It gives speed or cooldown as the wearer's race says: Atk.Spd to orcs and dwarves, Cast.Spd to elves, shorter cooldowns to dark elves, and half speed and half cooldown to humans (a mystic gets the speed as Cast.Spd, a fighter as Atk.Spd). The weapon gives 6% and each armor piece or jewel 1%.</p>
     <h4>Party and PvP</h4>
     <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.

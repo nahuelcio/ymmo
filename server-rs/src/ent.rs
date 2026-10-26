@@ -183,6 +183,8 @@ pub struct Player {
     /** working a node: (node, started, ends) */
     pub gather: Option<(u32, f64, f64)>,
     pub quests: Vec<(String, i64, bool)>,
+    /** the daily contracts handed in today (quests.rs; the daily_done table), emptied when the day turns */
+    pub daily_done: HashSet<String>,
     pub quest_ready_told: HashSet<String>,
     pub known: HashMap<u32, [f64; 6]>,
     pub known_av: HashMap<u32, u32>,
@@ -304,6 +306,10 @@ pub struct Mob {
     /** when this fight began (0: not fighting), and whether it has enraged */
     pub engaged_at: f64,
     pub enraged: bool,
+    /** a Rift floor's mob (rift.rs): its attack and XP times these, and none of its template's loot */
+    pub atk_scale: f64,
+    pub xp_scale: f64,
+    pub no_loot: bool,
 }
 
 /** ordered map helpers for hate/threat (insertion order, like a JS Map) */
@@ -324,9 +330,11 @@ impl Mob {
             phase: 0, haste: 1.0, special: tpl.special.clone(), summoned: false, next_attack: 0.0, respawn_at: 0.0, hide_at: 0.0,
             wander_at: 0.0, dest: None, returning: false, special_at: 0.0, camp_id: None, winding: None, home_x: x, home_z: z,
             barrage: tpl.barrage.clone(), pulse: tpl.pulse.clone(), barrage_at: 0.0, pulse_at: 0.0, engaged_at: 0.0, enraged: false,
+            atk_scale: 1.0, xp_scale: 1.0, no_loot: false,
         }
     }
-    /** Back to how it started: its own special and world raid mechanics, its own attack, no haste, no fight going on. */
+    /** Back to how it started: its own special and world raid mechanics, its own attack (a Rift floor's, scaled), no
+     * haste, no fight going on. */
     pub fn reset_fight(&mut self) {
         self.phase = 0;
         self.haste = 1.0;
@@ -339,7 +347,7 @@ impl Mob {
         self.pulse_at = 0.0;
         self.engaged_at = 0.0;
         self.enraged = false;
-        self.stats.p_atk = mob_stats(self.tpl).p_atk;
+        self.stats.p_atk = jround(mob_stats(self.tpl).p_atk * self.atk_scale);
     }
     pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
 }

@@ -3,7 +3,10 @@ use crate::admin::bal;
 use crate::data::{d, Jewel, MobDef, StatusApply};
 use crate::ent::*;
 use crate::formulas::*;
-use crate::inventory::add_item;
+use crate::inventory::take_items;
+
+/** A Jewel Voucher (shared/src/data/items.ts): a boss jewel's spent roll of the week, back once. */
+const JEWEL_VOUCHER: &str = "jewel_voucher";
 use crate::i18n::tr;
 use crate::terrain::{in_pvp_zone, in_town};
 use crate::world::{dist, World};
@@ -367,7 +370,7 @@ impl World {
     }
 
     pub fn kill_mob(&mut self, mid: u32, now: f64) {
-        let (x, z, tpl, hate, camp_id) = {
+        let (x, z, tpl, hate, camp_id, xp_scale, no_loot) = {
             let e = self.ents.get_mut(&mid).unwrap();
             e.c.dead = true;
             e.c.moving = false;
@@ -379,7 +382,7 @@ impl World {
             m.hide_at = now + 6000.0;
             m.respawn_at = now + m.tpl.respawn.unwrap_or(15000.0 + rnd() * 15000.0);
             m.threat.clear();
-            (ex, ez, m.tpl, std::mem::take(&mut m.hate), m.camp_id.clone())
+            (ex, ez, m.tpl, std::mem::take(&mut m.hate), m.camp_id.clone(), m.xp_scale, m.no_loot)
         };
         // an overworld boss keeps its time across restarts (world.rs restore_boss_respawns)
         if tpl.boss.unwrap_or(false) && self.raid.is_none() {
@@ -416,7 +419,7 @@ impl World {
             }
         }
         if total <= 0.0 { return; }
-        let base_xp = mob_xp(tpl);
+        let base_xp = mob_xp(tpl) * xp_scale;
         let mut best: Option<usize> = None;
         for (i, (_, u)) in units.iter().enumerate() {
             if best.map_or(true, |b| u.dmg > units[b].1.dmg) { best = Some(i); }
@@ -444,7 +447,8 @@ impl World {
         };
         let best_name = self.pl(best.player).map(|p| p.name.clone()).unwrap_or_default();
         self.credit_kill(&tpl.id, &damaged);
-        self.drop_loot(mid, &owners, now);
+        // a Rift floor pays by the floor, not by its mobs' own loot
+        if !no_loot { self.drop_loot(mid, &owners, now); }
         if tpl.boss.unwrap_or(false) {
             self.announce(|l| if l.en() { format!("{best_name} has slain the raid boss {}!", tpl.name_en) } else { format!("¡{best_name} derrotó al jefe {}!", tpl.name) });
         }
@@ -453,8 +457,9 @@ impl World {
 
     /**
      * A boss's jewel: each of the loot's owners who fought it (hit it, or stood by it alive, within 40 m) gets this
-     * week's one roll of it, kept in the database (formulas.rs loot_week: Monday 00:00 Argentina). A lucky one has it
-     * straight in the bag (with no room, on the ground for them alone), and the server hears of it.
+     * week's one roll of it, kept in the database (formulas.rs loot_week: Monday 00:00 Argentina); a spent roll comes
+     * back with a Jewel Voucher (Marks, at the Cambista), used up on its own. A lucky one has it straight in the bag
+     * (with no room, on the ground for them alone), and the server hears of it.
      */
     fn jewel_rolls(&mut self, boss: &MobDef, j: &Jewel, x: f64, z: f64, owners: &HashSet<u32>, damaged: &[u32], now: f64) {
         let Some(def) = d().item(&j.item) else { return };
@@ -467,24 +472,22 @@ impl World {
         for pid in ids {
             let cid = self.pl(pid).unwrap().char_id;
             if !self.db.take_jewel_roll(cid, &boss.id, week) {
-                self.sys(pid, &format!("Ya usaste esta semana tu tirada de la joya de {}.", boss.name), &format!("You have already used this week's roll for {}'s jewel.", boss.name_en));
-                continue;
+                if !take_items(self.pl_mut(pid).unwrap(), JEWEL_VOUCHER, 1) {
+                    self.sys(pid, &format!("Ya usaste esta semana tu tirada de la joya de {}.", boss.name), &format!("You have already used this week's roll for {}'s jewel.", boss.name_en));
+                    continue;
+                }
+                self.pl_mut(pid).unwrap().inv_dirty = true;
+                self.sys(pid, &format!("Usaste un Vale de Tirada: otra tirada de la joya de {}.", boss.name), &format!("You used a Jewel Voucher: another roll for {}'s jewel.", boss.name_en));
             }
             if rnd() >= chance {
-                self.sys(pid, &format!("Tu tirada semanal de la joya de {}: esta vez no hubo suerte.", boss.name), &format!("Your weekly roll for {}'s jewel: no luck this time.", boss.name_en));
+                self.sys(pid, &format!("Tu tirada de la joya de {}: esta vez no hubo suerte.", boss.name), &format!("Your roll for {}'s jewel: no luck this time.", boss.name_en));
                 continue;
             }
-            let p = self.pl_mut(pid).unwrap();
-            if add_item(p, &j.item, 1) {
+            if self.give_or_ground(pid, &j.item, 1, now) {
                 // the week's roll is written already: so is the jewel, right away, not at the next periodic save (in a
                 // raid, standing in the village, as autosave does)
                 let at = self.exit_point();
                 self.save_player(pid, at);
-            } else {
-                let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
-                let gid = self.spawn_ground(px, pz, &j.item, 1, Some([pid].into_iter().collect()), now);
-                if let Some(Kind::Item(g)) = self.ents.get_mut(&gid).map(|e| &mut e.k) { (g.owner_until, g.expire_at) = (now + 600_000.0, now + 600_000.0); }
-                self.sys(pid, "Tenés el inventario lleno: la joya quedó en el piso, a tu nombre, por 10 minutos.", "Your inventory is full: the jewel is on the ground, yours alone, for 10 minutes.");
             }
             let name = self.pl(pid).unwrap().name.clone();
             self.announce(|l| if l.en() { format!("{name} obtained the {}!", def.name_en) } else { format!("¡{name} obtuvo el {}!", def.name) });
