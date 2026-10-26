@@ -10,7 +10,7 @@ import { className, itemName, questField, questLineL, questSummaryL, raceName, s
 import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
-import { allSkillsFor, type SkillDef } from '../../../shared/src/data/skills';
+import { allSkillsFor } from '../../../shared/src/data/skills';
 import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
@@ -401,47 +401,33 @@ export class CharacterPanel {
     }
   }
 
-  /** The skills as a table (the icon, the name, MP or the level that teaches it), what each does on hover; the learned
-   * ones drag onto the bar. Then the third specialization's, still to come. */
+  /** The skills as a grid of icons, four a row: the name, what each does, its level and MP on hover; the ones still to
+   * learn dimmed; the learned ones drag onto the bar. Then the third specialization's, still to come. */
   private skills(b: HTMLElement) {
     const m = this.g.me;
-    const table = el('div', 'skill-table', b);
-    const head = el('div', 'skill-line skill-head', table);
-    el('span', '', head);
-    el('span', '', head, tx('Habilidad', 'Skill'));
-    el('span', 'skill-num', head, tx('Nivel', 'Level'));
-    el('span', 'skill-num', head, 'MP');
-    const line = (s: SkillDef, locked: boolean) => {
-      const row = el('div', `skill-line${locked ? ' locked' : ''}`, table);
-      skillIcon(s.id, row);
-      el('span', 'skill-name', row, skillName(s.id, lang));
-      el('span', 'skill-num', row, String(s.level));
-      el('span', 'skill-num', row, String(s.mp));
-      setTip(row, () => skillTip(s.id));
-      return row;
-    };
+    const grid = el('div', 'skill-grid', b);
     for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
-      const row = line(s, s.level > m.lvl);
+      const icon = skillIcon(s.id, grid);
+      icon.classList.toggle('locked', s.level > m.lvl);
+      setTip(icon, () => skillTip(s.id));
       if (m.skills.includes(s.id)) {
-        row.draggable = true;
-        row.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
-        row.ondragend = () => (this.g.ui.hud.drag = null);
-        touchBarDrag(this.g, row, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
+        icon.draggable = true;
+        icon.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
+        icon.ondragend = () => (this.g.ui.hud.drag = null);
+        touchBarDrag(this.g, icon, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
       }
     }
-    // what the spec awakens into at level 76, and how: its skills in the same table, still locked
+    // what the spec awakens into at level 76, and how: its skills in the same grid, still locked
     const evo = evolutionOf(m.spec);
     if (evo) {
-      el('div', 'section', b, tx(`Tercera especialización: ${specName(evo, lang)}`, `Third specialization: ${specName(evo, lang)}`));
-      el('div', 'tt-dim', b, `${specDesc(evo, lang)} ${tx(`Desde el nivel ${EVOLVE_LEVEL}: la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}: the quest "The Awakening" from Veyra, in Emberdark.`)}`);
-      const evoTable = el('div', 'skill-table', b);
+      const title = el('div', 'section', b, tx(`Tercera especialización: ${specName(evo, lang)}`, `Third specialization: ${specName(evo, lang)}`));
+      setTip(title, () => esc(specDesc(evo, lang)));
+      el('div', 'tt-dim', b, tx(`Desde el nivel ${EVOLVE_LEVEL}, con la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}, with the quest "The Awakening" from Veyra, in Emberdark.`));
+      const evoGrid = el('div', 'skill-grid', b);
       for (const s of allSkillsFor(m.cls, m.race, m.look.g, evo).filter((x) => x.spec === evo)) {
-        const row = el('div', 'skill-line locked', evoTable);
-        skillIcon(s.id, row);
-        el('span', 'skill-name', row, skillName(s.id, lang));
-        el('span', 'skill-num', row, String(s.level));
-        el('span', 'skill-num', row, String(s.mp));
-        setTip(row, () => skillTip(s.id));
+        const icon = skillIcon(s.id, evoGrid);
+        icon.classList.add('locked');
+        setTip(icon, () => skillTip(s.id));
       }
     }
     el('div', 'hint', b, tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',

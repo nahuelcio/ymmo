@@ -399,17 +399,12 @@ input { font: inherit; user-select: text; }
 .section { color: var(--gold); margin: 10px 0 4px; border-bottom: 1px solid #2a2618; font-family: Georgia, serif; }
 .skill-row { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
 .skill-row.locked { opacity: 0.45; }
-/* the character window's skills: a compact table (icon, name, level, MP), what each does on hover */
-.skill-table { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
-.skill-line { display: grid; grid-template-columns: 26px 1fr 40px 36px; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 3px; }
-.skill-line:hover { background: #1e1a12; }
-.skill-line.locked { opacity: 0.45; }
-.skill-line[draggable='true'] { cursor: grab; }
-.skill-line .icon { width: 24px; height: 24px; font-size: 13px; }
-.skill-head { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-.skill-head:hover { background: none; }
-.skill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skill-num { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+/* the character window's skills: icons only, four a row; the name and what each does on hover */
+.skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; justify-items: center; margin: 6px 0 8px; }
+.skill-grid .icon { width: 44px; height: 44px; font-size: 24px; }
+.skill-grid .icon:hover { border-color: var(--gold); }
+.skill-grid .icon.locked { opacity: 0.35; filter: grayscale(0.6); }
+.skill-grid .icon[draggable='true'] { cursor: grab; }
 .tab.tab-new { color: #d8a0ff; }
 
 .npc-greet { font-style: italic; color: #cfc8b0; margin-bottom: 8px; }
