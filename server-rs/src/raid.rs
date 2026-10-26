@@ -23,6 +23,8 @@ pub enum WorldCmd {
     God { sid: u64, on: bool },
     /** admin panel: a fort siege now for so many minutes, or the running one over (siege.rs) */
     Siege { start: bool, minutes: f64 },
+    /** admin panel: choose the Olympiad's Heroes now, from this month's points (olympiad.rs) */
+    Heroes,
     Shutdown,
 }
 
@@ -53,7 +55,10 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                         match w.join(member, kind, at) {
                             Some(pid) => {
                                 ever_joined = true;
-                                if w.raid.is_some() {
+                                if w.arena.is_some() {
+                                    // two rivals: no party between them (olympiad.rs)
+                                    w.arena_join(pid);
+                                } else if w.raid.is_some() {
                                     w.join_group(pid);
                                     let r = w.raid.unwrap();
                                     w.sys(pid, &format!("Entraste a {}. Escribí /raid para salir.", r.name), &format!("You entered {}. Type /raid to leave.", r.name_en));
@@ -82,6 +87,7 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                         }
                     }
                     WorldCmd::Siege { start, minutes } => if w.raid.is_none() { w.siege_admin(start, minutes) },
+                    WorldCmd::Heroes => if w.raid.is_none() { w.crown_heroes(true) },
                     WorldCmd::Shutdown => {
                         for sid in w.sessions.keys().copied().collect::<Vec<_>>() { w.quit(sid); }
                         break;

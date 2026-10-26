@@ -29,6 +29,8 @@ pub struct Member { pub sid: u64, pub account_id: i64, pub char_id: i64, pub lan
 pub enum HubEvent {
     /** /raid in the overworld: these members (already saved and removed) go into a new instance */
     EnterRaid { raid: &'static RaidDef, members: Vec<Member> },
+    /** the Olympiad's queue paired two: they (already saved and removed) go into a new arena, one on each side */
+    EnterArena { raid: &'static RaidDef, members: Vec<Member> },
     /** left a raid (saved at the village): load them back into the overworld */
     ToMain { member: Member },
     /** the session's character was saved after its socket closed */
@@ -68,6 +70,10 @@ pub struct World {
     pub day: i64,
     /** the fort sieges, run by the overworld (siege.rs) */
     pub siege: crate::siege::SiegeRun,
+    /** the Olympiad (olympiad.rs): an arena's fight; the overworld's queue, and the month it last chose Heroes for */
+    pub arena: Option<crate::olympiad::ArenaState>,
+    pub oly_queue: Vec<u32>,
+    pub oly_month: i64,
     /** socket session id -> player entity */
     pub sessions: HashMap<u64, u32>,
     pub events: Vec<HubEvent>,
@@ -85,13 +91,18 @@ impl World {
         let mut w = World {
             ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
-            rift: None, day: crate::formulas::loot_day(now_ms()), siege: Default::default(),
+            rift: None, day: crate::formulas::loot_day(now_ms()), siege: Default::default(), arena: None, oly_queue: vec![], oly_month: -1,
             sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
         };
         if let Some((r, size)) = raid {
             // the Rift has no boss: its first floor waits for its first player (rift.rs rift_join)
             if r.rift {
                 w.rift = Some(crate::rift::RiftState::default());
+                return w;
+            }
+            // an Olympiad arena holds nobody but its two fighters (olympiad.rs arena_join)
+            if r.arena {
+                w.arena = Some(Default::default());
                 return w;
             }
             let boss = w.spawn_mob(r.boss.as_deref().expect("a raid's boss"), r.x, r.z);
@@ -591,7 +602,9 @@ impl World {
                     "cl": p.clan_look.as_ref().map(|c| c.id), "cn": p.clan_look.as_ref().map(|c| c.name.clone()),
                     "cv": p.clan_look.as_ref().map(|c| c.ver), "ti": p.clan_look.as_ref().map(|c| c.title.clone()),
                     // alliance and its crest version (/crest/a<id>.png?v=<ac>)
-                    "ai": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.0), "ac": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.1) })
+                    "ai": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.0), "ac": p.clan_look.as_ref().and_then(|c| c.ally).map(|a| a.1),
+                    // an Olympiad Hero this month (olympiad.rs): a title, and the aura it chose (1 + its index in HERO_LOOKS)
+                    "he": p.hero.then(|| crate::olympiad::HERO_LOOKS.iter().position(|l| *l == p.hero_look).unwrap_or(0) + 1) })
             }
             Kind::Mob(m) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "m", "n": m.tpl.name, "l": m.tpl.level, "tpl": m.tpl.id }),
             Kind::Npc(n) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "n", "n": n.def.name, "title": n.def.title, "npc": n.def.id }),
@@ -677,6 +690,9 @@ impl World {
         o.insert("legendNeed".into(), json!(crate::formulas::legend_to_next(p.legend_lvl)));
         o.insert("legendPts".into(), json!(p.legend_lvl - p.legend.values().sum::<i64>()));
         o.insert("legend".into(), json!(p.legend));
+        // an Olympiad Hero, and the aura it wears (the character window lets it choose)
+        o.insert("hero".into(), json!(p.hero));
+        o.insert("heroLook".into(), json!(p.hero_look));
         v
     }
 
@@ -723,8 +739,18 @@ impl World {
                 self.day = day;
                 self.daily_reset();
             }
-            if self.raid.is_none() { self.siege_tick(now); }
+            if self.raid.is_none() {
+                self.siege_tick(now);
+                // a new month: its Olympiad Heroes (and on the overworld's first second, in case it was down then)
+                let month = crate::formulas::loot_month(now);
+                if month != self.oly_month {
+                    self.oly_month = month;
+                    self.crown_heroes(false);
+                }
+            }
         }
+        if self.raid.is_none() && self.tick_n % (d().olympiad.match_every / TICK_MS).max(1.0) as u64 == 0 { self.oly_match(now); }
+        if self.arena.is_some() { self.arena_tick(now); }
         if self.tick_n % 40 == 0 {
             for pid in &self.players { if let Some(p) = self.pl(*pid) { p.send(json!({ "t": "ping", "s": now.floor(), "rtt": p.rtt.round() })) } }
         }

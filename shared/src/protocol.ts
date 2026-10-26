@@ -18,6 +18,9 @@ export interface EntPlayer {
   cl?: number | null; cn?: string | null; cv?: number | null; ti?: string | null;
   /** alliance id and its crest's version (/crest/a<id>.png?v=<ac>) */
   ai?: number | null; ac?: number | null;
+  /** an Olympiad Hero this month (olympiad.ts): a title, and the aura it chose (1 + its index in render/hero-fx.ts
+   * HERO_LOOKS: 1 halo, 2 spiral) */
+  he?: number | null;
 }
 
 /** One member in the clan window. */
@@ -69,6 +72,8 @@ export interface SelfState {
   lvl: number; xp: number; xpNeed: number;
   /** past the level cap: Legend level, XP towards the next (legendNeed 0: the Legend is full), free points, ranks spent */
   legendLvl: number; legendXp: number; legendNeed: number; legendPts: number; legend: Record<string, number>;
+  /** an Olympiad Hero this month, and the aura it wears (it chooses it in the character window) */
+  hero?: boolean; heroLook?: 'halo' | 'spiral';
   hp: number; maxHp: number; mp: number; maxMp: number; cp: number; maxCp: number;
   pAtk: number; mAtk: number; pDef: number; mDef: number; acc: number; eva: number; crit: number;
   /** castSpd: cast speed in % (100 = no faster or slower than the skill's own cast time); blk: block chance in % */
@@ -94,7 +99,9 @@ export type C2S =
   /** admin window (/admin): asks for the server state; pass logs this socket in, kick/announce are the actions */
   | { t: 'admin'; pass?: string; since?: number; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null };
       /** a fort siege now, for so many minutes, or the running one over (server-rs siege.rs) */
-      siege?: 'start' | 'end'; minutes?: number }
+      siege?: 'start' | 'end'; minutes?: number;
+      /** choose the Olympiad's Heroes now, from this month's points (server-rs olympiad.rs) */
+      heroes?: boolean }
   | { t: 'logout'; token: string }
   | { t: 'createChar'; name: string; race: Race; cls: ClassType; look: Look }
   | { t: 'deleteChar'; id: number }
@@ -165,6 +172,8 @@ export type C2S =
   | { t: 'chooseSpec'; spec: Spec }
   /** past the level cap: one more rank of a Legend passive, or every point back for adena (in a town) */
   | { t: 'legendSpend'; id: string }
+  /** an Olympiad Hero's aura (render/hero-fx.ts) */
+  | { t: 'heroLook'; look: 'halo' | 'spiral' }
   | { t: 'legendReset' }
   | { t: 'respawn' }
   | { t: 'pvpMode'; on: boolean }
@@ -227,6 +236,10 @@ export type S2C =
   | { t: 'rift'; floor: number }
   /** the fort sieges (sieges.ts): the forts under siege now, who holds which, when the next one starts and, while one
    * runs, when it ends (ms since epoch) */
+  /** an Olympiad fight (olympiad.ts): the rival, and in how long it starts and ends (ms) */
+  | { t: 'oly'; vs: string; fightIn: number; endsIn: number }
+  /** how it went, and the month's points after it (delta: what it moved) */
+  | { t: 'olyEnd'; result: 'win' | 'loss' | 'draw'; points: number; delta: number }
   | { t: 'sieges'; active: string[]; owners: Record<string, { id: number; name: string }>; next: number; ends: number | null }
   | { t: 'partyInvite'; from: string }
   | { t: 'tradeRequest'; from: string }

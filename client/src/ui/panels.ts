@@ -312,6 +312,15 @@ export class CharacterPanel {
       el('span', 'stat-v', grid, String(v));
     }
     if (m.lvl >= MAX_LEVEL) this.legend(b);
+    // an Olympiad Hero chooses the aura it wears (render/hero-fx.ts)
+    if (m.hero) {
+      el('div', 'section', b, tx('Aura de Héroe', 'Hero aura'));
+      const row = el('div', 'hero-looks', b);
+      for (const [look, es, en] of [['halo', 'Halo', 'Halo'], ['spiral', 'Espiral', 'Spiral']] as const) {
+        const btn = el('button', `btn small${(m.heroLook ?? 'halo') === look ? ' active' : ''}`, row, tx(es, en));
+        btn.onclick = () => this.g.net.send({ t: 'heroLook', look });
+      }
+    }
     if (m.lvl >= SPEC_LEVEL && !m.spec) {
       el('div', 'section', b, tx('Elegí tu especialización', 'Choose your specialization'));
       // the four of level 20; their evolutions come later, with the quest "El Despertar"
@@ -1053,6 +1062,7 @@ export function createHelp(root: HTMLElement): Win {
     matar a un jugador sin flag te suma karma y te pone en <span style="color:#ff4040">rojo</span>, y a los rojos se les pueden caer objetos al morir.</p>
     <p>Para <b>comerciar</b>, seleccioná a un jugador cercano → <b>Comerciar</b> (o <code>/trade</code>). Cada uno agrega objetos y adena a su oferta: lo que se agrega no se puede sacar (para arrepentirse, se cancela), y apenas uno de los dos confirma ya nadie puede agregar nada más. Cuando confirman los dos, se intercambia todo junto.</p>
     <p><b>Asedios:</b> cada <b>sábado a las 21:00</b> los cinco fuertes (Bastión, Escama, Escarcha, Juncoverde y Brasaoscura) se asedian durante una hora. El fuerte y sus alrededores pasan a ser <b>zona PvP</b>, y junto a la hoguera aparece un <b>Guardián</b> que defiende al clan dueño y a su alianza. Si cae, el fuerte pasa al clan que más daño le hizo (nivel 3 o más, un fuerte por clan); si resiste la hora, el dueño lo conserva. Los defensores reaparecen adentro y los demás en el campamento del camino, y morir en el asedio no cuesta experiencia. El dueño cobra un <b>10%</b> de lo que se gasta en adena en las tiendas del fuerte. <code>/asedio</code> muestra los dueños y cuándo es el próximo.</p>
+    <p><b>Olimpiada:</b> desde el nivel 76 y con el Despertar hecho, <code>/olimpiada</code> te anota para pelear uno contra uno, con tu equipo, en una arena aparte. Tenés 10 segundos para prepararte y 3 minutos de combate: gana quien deja al otro fuera de combate, y si se acaba el tiempo, quien hizo más daño. Salir es perder, y nadie pierde experiencia ni objetos. El ganador le saca al otro la quinta parte de sus puntos del mes. El día 1, el que más puntos tiene en cada línea de clase es <b>Héroe</b> durante todo el mes, con título y aura dorada. <code>/olimpiada top</code> muestra la tabla y <code>/olimpiada heroes</code> los Héroes.</p>
     <h4>Ventanas</h4>
     <p><b>I</b> inventario · <b>C</b> personaje · <b>M</b> mapa · <b>H</b> ayuda · <b>O</b> opciones · <b>Enter</b> chat · <b>Esc</b> cerrar / soltar objetivo</p>
   </div>`;
@@ -1106,6 +1116,7 @@ const HELP_EN = `
     killing an unflagged player gives karma and turns you <span style="color:#ff4040">red</span>, and red players can drop items on death.</p>
     <p>To <b>trade</b>, select a nearby player → <b>Trade</b> (or <code>/trade</code>). Each of you adds items and adena to your offer: what goes in cannot come back out (cancel instead), and once either of you confirms nobody can add anything more. When both confirm, everything changes hands at once.</p>
     <p><b>Sieges:</b> every <b>Saturday at 21:00</b> (Argentina) the five forts (Dusk Bastion, Scale, Frost, Reedgreen and Emberdark) are besieged for an hour. The fort and its surroundings become a <b>PvP zone</b>, and a <b>Guardian</b> appears by the brazier to defend the owning clan and its alliance. If it falls, the fort goes to the clan that dealt it the most damage (level 3 or more, one fort per clan); if it stands the hour, the owner keeps it. Defenders come back inside, everyone else at the camp on the road, and dying in the siege costs no experience. The owner earns <b>10%</b> of the adena spent at the fort's shops. <code>/siege</code> shows the owners and when the next one is.</p>
+    <p><b>Olympiad:</b> from level 76, once awakened, <code>/olympiad</code> queues you to fight one on one, in your own gear, in an arena of your own. You get 10 seconds to get ready and 3 minutes to fight: a knockout wins, and if time runs out, the most damage dealt. Leaving loses, and nobody loses experience or items. The winner takes a fifth of the other's points for the month. On the 1st, whoever has the most points in each class line is its <b>Hero</b> for the whole month, with a title and a golden aura. <code>/olympiad top</code> shows the table and <code>/olympiad heroes</code> the Heroes.</p>
     <h4>Windows</h4>
     <p><b>I</b> inventory · <b>C</b> character · <b>M</b> map · <b>H</b> help · <b>O</b> options · <b>Enter</b> chat · <b>Esc</b> close / clear target</p>
   </div>`;

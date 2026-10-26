@@ -433,6 +433,9 @@ input { font: inherit; user-select: text; }
 .nameplate { font-size: 12px; text-align: center; text-shadow: 0 0 3px #000, 0 0 2px #000, 1px 1px 1px #000; white-space: nowrap; pointer-events: none; }
 .np-title { color: #ffd98a; font-size: 10px; letter-spacing: 0.3px; }
 .np-ptitle { color: #f0e060; font-size: 10px; }
+.hero-looks { display: flex; gap: 6px; margin: 4px 0 6px; }
+.hero-looks .btn.active { border-color: #ffd45a; color: #ffd45a; }
+.np-hero { color: #ffd45a; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-shadow: 0 0 6px rgba(255, 190, 60, 0.9); }
 .np-clan { color: #a8c8ff; font-size: 10px; }
 /* resting in a hut: up to four plates stack over its roof, a name line each */
 .np-sheltered .np-ptitle, .np-sheltered .np-clan { display: none; }

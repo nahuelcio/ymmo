@@ -27,6 +27,7 @@ import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimO
 import { CHAIN_MS, swingOf, swingTiming, windup } from './render/swings';
 import { elementOf } from './render/mobs';
 import { tickEnchantFx } from './render/enchant-fx';
+import { heroAura, heroLookOf } from './render/hero-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, hutDoorClosed, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
 import { UI } from './ui';
 import { glyph, setTipLevel, setTipSelf, setTipWorn } from './ui/common';
@@ -696,6 +697,13 @@ export class Game {
     n.on('npc', (m) => this.ui.npc.open(m));
     n.on('rift', (m) => this.ui.hud.banner(tx(`La Grieta — Piso ${m.floor}`, `The Rift — Floor ${m.floor}`), true));
     n.on('sieges', (m) => (this.sieges = m));
+    // an Olympiad fight: the rival, then the bell; how it went
+    n.on('oly', (m) => {
+      this.ui.hud.banner(tx(`Olimpiada — contra ${m.vs}`, `Olympiad — against ${m.vs}`), true);
+      setTimeout(() => this.ui.hud.banner(tx('¡A pelear!', 'Fight!'), true), m.fightIn);
+    });
+    n.on('olyEnd', (m) => this.ui.hud.banner(m.result === 'win' ? tx(`¡Victoria! +${m.delta} puntos`, `Victory! +${m.delta} points`)
+      : m.result === 'loss' ? tx(`Derrota: ${m.delta} puntos`, `Defeat: ${m.delta} points`) : tx('Empate', 'Draw'), true));
     n.on('admin', (m) => this.ui.admin.set(m));
     n.on('quests', (m) => {
       this.quests = m.list;
@@ -787,6 +795,13 @@ export class Game {
       const color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : mutual ? '#ff8a3a' : self ? '#ffffff' : '#7fc4ff';
       el.innerHTML = '';
       el.className = `nameplate np-player${self ? ' np-self' : ''}${c.shelter?.hut ? ' np-sheltered' : ''}`;
+      // an Olympiad Hero's title over everything else
+      if (r.he) {
+        const h = document.createElement('div');
+        h.className = 'np-hero';
+        h.textContent = tx('Héroe', 'Hero');
+        el.appendChild(h);
+      }
       // as in L2: the title over the name, the clan's crest before it (and here its name under it)
       if (r.ti) {
         const t = document.createElement('div');
@@ -1004,6 +1019,8 @@ export class Game {
       radius = 0.45;
     }
     root.add(model);
+    // an Olympiad Hero: golden light round the body, as it chose it (render/hero-fx.ts)
+    if (r.k === 'p' && r.he) root.add(heroAura(height, heroLookOf(r.he)));
     // generous hitbox: easier to click moving targets
     const hitR = radius * 1.25 + 0.2, hitH = height + 0.4;
     const hit = new THREE.Mesh(new THREE.CylinderGeometry(hitR, hitR, hitH, 8), HIT_MAT);

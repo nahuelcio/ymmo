@@ -378,6 +378,9 @@ pub struct RaidDef {
     pub boss: Option<String>,
     #[serde(default)]
     pub rift: bool,
+    /** an Olympiad fight: the two the queue paired, never entered with /raid (olympiad.rs) */
+    #[serde(default)]
+    pub arena: bool,
     pub x: f64, pub z: f64, pub entry: Pos, pub max_players: usize, pub min_level: i64, pub quest: Option<String>, pub close_after_kill: f64,
 }
 
@@ -450,6 +453,13 @@ pub struct SiegeDef {
     pub weekday: i64, pub hour: f64, pub minutes: f64, pub warn: Vec<f64>, pub zone: f64, pub level: u8, pub tax: f64,
     pub guardian: String, pub forts: Vec<SiegeFort>,
 }
+/** The Olympiad (shared/src/data/olympiad.ts OLYMPIAD): who fights, a fight's timing and arena, points, Heroes. */
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OlympiadDef {
+    pub min_level: i64, pub prep_ms: f64, pub fight_ms: f64, pub end_ms: f64, pub radius: f64, pub gap: f64,
+    pub match_every: f64, pub per_rival: i64, pub start_points: i64, pub take: f64, pub hero_fights: i64, pub hero_wins: i64,
+}
 /** A sieged fort: its town's centre and radius, and the camps on its roads where the attackers come back. */
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -488,6 +498,7 @@ struct Raw {
     gather: GatherDefs,
     clans: ClansDef,
     siege: SiegeDef,
+    olympiad: OlympiadDef,
     legend: LegendCfg,
     #[serde(rename = "dailyProbe", default)]
     daily_probe: Vec<(i64, Vec<String>)>,
@@ -525,6 +536,7 @@ pub struct Data {
     pub gather: GatherDefs,
     pub clans: ClansDef,
     pub siege: SiegeDef,
+    pub olympiad: OlympiadDef,
     pub legend: LegendCfg,
     /** the client's dailySet on a week of days (day, contract ids): daily_set must pick the same (a test) */
     pub daily_probe: Vec<(i64, Vec<String>)>,
@@ -636,6 +648,7 @@ pub fn d() -> &'static Data {
             gather: raw.gather,
             clans: raw.clans,
             siege: raw.siege,
+            olympiad: raw.olympiad,
             legend: raw.legend,
             daily_probe: raw.daily_probe,
             water_n: water_n,

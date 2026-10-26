@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 impl World {
     pub fn party_invite(&mut self, pid: u32, name: &str) {
         let name = name.trim();
+        if self.arena.is_some() { return self.sys(pid, "En la arena de la Olimpiada no hay parties.", "There are no parties in the Olympiad arena."); }
         let Some(tid) = self.find_player(name) else { return self.sys(pid, &format!("{name} no está conectado."), &format!("{name} is not online.")) };
         if tid == pid { return self.sys(pid, "No te podés invitar a vos mismo.", "You cannot invite yourself."); }
         let (t_name, t_party, t_pending) = { let t = self.pl(tid).unwrap(); (t.name.clone(), t.party, t.pending_invite) };

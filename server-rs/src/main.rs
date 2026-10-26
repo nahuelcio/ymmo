@@ -24,6 +24,7 @@ mod player;
 mod quests;
 mod raid;
 mod realm;
+mod olympiad;
 mod rift;
 mod siege;
 mod terrain;
@@ -131,6 +132,16 @@ async fn hub_loop(app: App, mut rx: mpsc::UnboundedReceiver<HubMsg>) {
                     for m in members {
                         if let Some(s) = hub.sessions.get_mut(&m.sid) { s.world = Some(rid); }
                         to_world(hub, rid, WorldCmd::Join { member: m, kind: "world", at: None });
+                    }
+                }
+                HubEvent::EnterArena { raid, members } => {
+                    let rid = spawn_world(&app, Some((raid, members.len())));
+                    let hub = &mut *app.hub.lock().unwrap();
+                    let half = data::d().olympiad.gap / 2.0;
+                    for (i, m) in members.into_iter().enumerate() {
+                        if let Some(s) = hub.sessions.get_mut(&m.sid) { s.world = Some(rid); }
+                        let at = collision::P { x: raid.x + if i == 0 { -half } else { half }, z: raid.z };
+                        to_world(hub, rid, WorldCmd::Join { member: m, kind: "world", at: Some(at) });
                     }
                 }
                 HubEvent::ToMain { member } => {

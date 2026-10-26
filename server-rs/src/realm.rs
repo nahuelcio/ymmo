@@ -14,6 +14,8 @@ impl World {
     /** Load a character for a socket. kind: "enter" (from the character screen) or "world" (world switch). */
     pub fn join(&mut self, m: Member, kind: &str, at: Option<P>) -> Option<u32> {
         let (row, items, quests) = self.db.load_char(m.account_id, m.char_id)?;
+        // an Olympiad fighter goes back to where it was saved, in the overworld, when the fight is over
+        if let Some(a) = self.arena.as_mut() { a.back.insert(row.id, P { x: row.x, z: row.z }); }
         let id = self.new_id();
         let at = at.or_else(|| self.raid.map(|r| {
             let a = rnd() * std::f64::consts::TAU;
@@ -30,6 +32,7 @@ impl World {
             talking_to: None, sitting: None, stand_until: 0.0, gather: None, quests, daily_done: HashSet::new(), quest_ready_told: HashSet::new(), known: HashMap::new(), known_av: HashMap::new(), last_me: String::new(), hotbar: row.hotbar,
             inv_dirty: true, next_uid: 1, inv: vec![], account_id: m.account_id, char_id: row.id, name: row.name, race: row.race, cls: row.cls, spec: row.spec,
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
+            hero: self.db.is_hero(row.id, crate::formulas::loot_month(self.now)), hero_look: self.db.hero_look(row.id),
             legend_lvl: row.legend_lvl.clamp(0, d().legend.max), legend_xp: row.legend_xp.max(0), legend: serde_json::from_str(&row.legend).unwrap_or_default(),
         };
         // worn pieces the level no longer allows (grades ask for a level since the 78 cap) go back to the bag
@@ -103,19 +106,28 @@ impl World {
         Some(Member { sid: p.sid, account_id: p.account_id, char_id: p.char_id, lang: p.lang, out: p.out })
     }
 
-    /** Where a character leaving a raid is saved: the village, never the arena's coordinates. */
-    pub fn exit_point(&self) -> Option<P> { if self.raid.is_some() { Some(self.town_point(None)) } else { None } }
+    /** Where a character leaving a raid is saved: the village, never the arena's coordinates (an Olympiad fighter: where
+     * it queued). */
+    pub fn exit_point(&self, pid: u32) -> Option<P> {
+        if let Some(back) = self.arena.as_ref().zip(self.pl(pid)).and_then(|(a, p)| a.back.get(&p.char_id)) { return Some(*back); }
+        if self.raid.is_some() { Some(self.town_point(None)) } else { None }
+    }
 
     pub fn quit(&mut self, sid: u64) {
         let Some(&pid) = self.sessions.get(&sid) else { return };
-        let at = self.exit_point();
+        self.oly_queue.retain(|&q| q != pid);
+        // dropping out of an Olympiad fight loses it
+        self.arena_leave(pid);
+        let at = self.exit_point(pid);
         if self.take_out(pid, at).is_some() { self.events.push(HubEvent::Closed); }
     }
 
     /** Raid world: leave for the overworld village. */
     pub fn exit_to_town(&mut self, pid: u32) {
         if self.raid.is_none() { return; }
-        let at = self.exit_point();
+        // leaving an Olympiad fight before it is over loses it
+        self.arena_leave(pid);
+        let at = self.exit_point(pid);
         if let Some(member) = self.take_out(pid, at) { self.events.push(HubEvent::ToMain { member }); }
     }
 
@@ -123,8 +135,8 @@ impl World {
     /// `/raid` leaves the instance you are in, or enters one: Kaim's by default, `/raid <id>` for another.
     pub fn raid_command(&mut self, pid: u32, which: &str) {
         if self.raid.is_some() { return self.exit_to_town(pid); }
-        let Some(raid) = d().raids.get(if which.is_empty() { "kaim" } else { which }) else {
-            let ids = d().raids.keys().cloned().collect::<Vec<_>>().join(", ");
+        let Some(raid) = d().raids.get(if which.is_empty() { "kaim" } else { which }).filter(|r| !r.arena) else {
+            let ids = d().raids.values().filter(|r| !r.arena).map(|r| r.id.clone()).collect::<Vec<_>>().join(", ");
             return self.sys(pid, &format!("No existe esa raid. Raids: {ids}."), &format!("No such raid. Raids: {ids}."));
         };
         if self.ents[&pid].c.dead { return; }
@@ -167,11 +179,11 @@ impl World {
     /** Staggered autosave: a few players per call instead of everyone at once every minute. */
     pub fn autosave(&mut self, now: f64) {
         let mut n = 0;
-        let at = self.exit_point();
         for pid in self.players.clone() {
             let due = self.pl(pid).map_or(false, |p| now - p.saved_at >= 60000.0);
             if !due { continue; }
             self.pl_mut(pid).unwrap().saved_at = now;
+            let at = self.exit_point(pid);
             self.save_player(pid, at);
             n += 1;
             if n >= 3 { break; }

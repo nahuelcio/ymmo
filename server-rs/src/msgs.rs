@@ -113,6 +113,9 @@ impl World {
             "tradeCancel" => {
                 let name = self.pl(pid).unwrap().name.clone();
                 let why = truthy(m, "gone").then(|| (format!("{name} se desconectó: el comercio se canceló."), format!("{name} disconnected: the trade has been cancelled.")));
+                // the socket dropped (main.rs sends this at once): nobody comes back into an instance, so an Olympiad
+                // fight is lost now, not when the character is saved
+                if why.is_some() { self.arena_leave(pid); }
                 self.trade_cancel(pid, why)
             }
             "clanGet" => self.clan_send(pid),
@@ -145,6 +148,7 @@ impl World {
             "chooseSpec" => self.choose_spec(pid, &s(m, "spec")),
             "legendSpend" => self.legend_spend(pid, &s(m, "id")),
             "legendReset" => self.legend_reset(pid),
+            "heroLook" => self.choose_hero_look(pid, &s(m, "look")),
             "respawn" => {
                 // dying in a raid sends you back to the village
                 if self.raid.is_some() { self.exit_to_town(pid) } else { self.respawn_player(pid) }
