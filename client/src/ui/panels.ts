@@ -6,11 +6,11 @@ import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, wear
 import { siegeZoneAt, withTax } from '../../../shared/src/data/sieges';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { TELEPORTS } from '../../../shared/src/data/world';
-import { className, itemName, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, specDesc, specName } from '../../../shared/src/i18n';
+import { className, itemName, questField, questLineL, questSummaryL, raceName, skillName, specDesc, specName } from '../../../shared/src/i18n';
 import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
-import { allSkillsFor } from '../../../shared/src/data/skills';
+import { allSkillsFor, type SkillDef } from '../../../shared/src/data/skills';
 import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
@@ -266,6 +266,9 @@ export class CharacterPanel {
   /** the values that change all the time, kept current where they stand: the stat grid's and the Legend bar's line */
   private statVals: HTMLElement[] = [];
   private legendBar: HTMLElement | null = null;
+  /** the page shown: the stats (with the Hero's aura and the specialization to choose), the Legend (at the level cap),
+   * the skills */
+  private tab: 'stats' | 'legend' | 'skills' = 'stats';
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('character', tx('Estado del Personaje', 'Character Status'), 16, 210, 300, root);
     this.win.onShow = () => {
@@ -340,18 +343,41 @@ export class CharacterPanel {
     if (this.legendBar) this.legendBar.textContent = this.legendBarText();
   }
 
+  /** The window: who it is, the tabs, and the page shown. */
   private build() {
     const m = this.g.me;
     const b = this.win.body;
     b.innerHTML = '';
     this.legendBar = null;
+    this.statVals = [];
     el('div', 'char-head', b).innerHTML = `<b>${esc(m.name)}</b><br><span class="tt-dim">${tx('Nv', 'Lv')} ${m.lvl} ${raceName(m.race, lang)} ${className(m.cls, lang, m.spec)}</span>`;
+    // the Legend only at the level cap, with its free points on the tab so they are not missed
+    const capped = m.lvl >= MAX_LEVEL;
+    if (this.tab === 'legend' && !capped) this.tab = 'stats';
+    const tabs = el('div', 'tabs', b);
+    const pages: [typeof this.tab, string][] = [['stats', tx('Estadísticas', 'Stats')]];
+    if (capped) pages.push(['legend', m.legendPts > 0 ? tx(`Leyenda (${m.legendPts})`, `Legend (${m.legendPts})`) : tx('Leyenda', 'Legend')]);
+    pages.push(['skills', tx('Habilidades', 'Skills')]);
+    for (const [t, label] of pages) {
+      const tb = el('button', `tab${this.tab === t ? ' active' : ''}${t === 'legend' && m.legendPts > 0 ? ' tab-new' : ''}`, tabs, label);
+      tb.onclick = () => {
+        this.tab = t;
+        this.build();
+      };
+    }
+    if (this.tab === 'legend') return this.legend(b);
+    if (this.tab === 'skills') return this.skills(b);
+    this.statsPage(b);
+  }
+
+  /** The stats, the Hero's aura to choose and, at level 20, the specialization to choose. */
+  private statsPage(b: HTMLElement) {
+    const m = this.g.me;
     const grid = el('div', 'stat-grid', b);
     this.statVals = this.stats().map(([k, v]) => {
       el('span', 'stat-k', grid, k);
       return el('span', 'stat-v', grid, String(v));
     });
-    if (m.lvl >= MAX_LEVEL) this.legend(b);
     // an Olympiad Hero chooses the aura it wears (render/hero-fx.ts)
     if (m.hero) {
       el('div', 'section', b, tx('Aura de Héroe', 'Hero aura'));
@@ -373,13 +399,29 @@ export class CharacterPanel {
         };
       }
     }
-    el('div', 'section', b, tx('Habilidades', 'Skills'));
-    const list = el('div', 'skill-list', b);
-    for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
-      const row = el('div', `skill-row${s.level > m.lvl ? ' locked' : ''}`, list);
+  }
+
+  /** The skills as a table (the icon, the name, MP or the level that teaches it), what each does on hover; the learned
+   * ones drag onto the bar. Then the third specialization's, still to come. */
+  private skills(b: HTMLElement) {
+    const m = this.g.me;
+    const table = el('div', 'skill-table', b);
+    const head = el('div', 'skill-line skill-head', table);
+    el('span', '', head);
+    el('span', '', head, tx('Habilidad', 'Skill'));
+    el('span', 'skill-num', head, tx('Nivel', 'Level'));
+    el('span', 'skill-num', head, 'MP');
+    const line = (s: SkillDef, locked: boolean) => {
+      const row = el('div', `skill-line${locked ? ' locked' : ''}`, table);
       skillIcon(s.id, row);
-      el('div', '', row).innerHTML = `<b>${esc(skillName(s.id, lang))}</b> <span class="tt-dim">${s.level > m.lvl ? tx(`se aprende en Nv ${s.level}`, `learned at Lv ${s.level}`) : `MP ${s.mp}`}</span><br><span class="tt-dim">${esc(skillDesc(s.id, lang))}</span>`;
+      el('span', 'skill-name', row, skillName(s.id, lang));
+      el('span', 'skill-num', row, String(s.level));
+      el('span', 'skill-num', row, String(s.mp));
       setTip(row, () => skillTip(s.id));
+      return row;
+    };
+    for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
+      const row = line(s, s.level > m.lvl);
       if (m.skills.includes(s.id)) {
         row.draggable = true;
         row.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
@@ -387,17 +429,18 @@ export class CharacterPanel {
         touchBarDrag(this.g, row, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
       }
     }
-    // what the spec awakens into at level 76, and how
+    // what the spec awakens into at level 76, and how: its skills in the same table, still locked
     const evo = evolutionOf(m.spec);
     if (evo) {
-      el('div', 'section', b, tx('Tercera especialización', 'Third specialization'));
-      const card = el('div', 'skill-row', b);
-      el('div', '', card).innerHTML = `<b>${esc(specName(evo, lang))}</b><br><span class="tt-dim">${esc(specDesc(evo, lang))}<br>${tx(`Desde el nivel ${EVOLVE_LEVEL}: la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}: the quest "The Awakening" from Veyra, in Emberdark.`)}</span>`;
-      const evoList = el('div', 'skill-list', b);
+      el('div', 'section', b, tx(`Tercera especialización: ${specName(evo, lang)}`, `Third specialization: ${specName(evo, lang)}`));
+      el('div', 'tt-dim', b, `${specDesc(evo, lang)} ${tx(`Desde el nivel ${EVOLVE_LEVEL}: la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}: the quest "The Awakening" from Veyra, in Emberdark.`)}`);
+      const evoTable = el('div', 'skill-table', b);
       for (const s of allSkillsFor(m.cls, m.race, m.look.g, evo).filter((x) => x.spec === evo)) {
-        const row = el('div', 'skill-row locked', evoList);
+        const row = el('div', 'skill-line locked', evoTable);
         skillIcon(s.id, row);
-        el('div', '', row).innerHTML = `<b>${esc(skillName(s.id, lang))}</b> <span class="tt-dim">${tx(`Nv ${s.level}`, `Lv ${s.level}`)}</span><br><span class="tt-dim">${esc(skillDesc(s.id, lang))}</span>`;
+        el('span', 'skill-name', row, skillName(s.id, lang));
+        el('span', 'skill-num', row, String(s.level));
+        el('span', 'skill-num', row, String(s.mp));
         setTip(row, () => skillTip(s.id));
       }
     }
