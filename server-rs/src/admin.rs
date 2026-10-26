@@ -182,6 +182,11 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
             if let Some(tx) = hub.worlds.get(&0) { let _ = tx.send(WorldCmd::Siege { start: what == "start", minutes: m["minutes"].as_f64().unwrap_or(60.0) }); }
             log!("[admin] siege {what}");
         }
+        // a player made a Hero this month, or no longer one ({ hero: { sid, on } }), in whatever world it is
+        if let (Some(k), Some(on)) = (m["hero"]["sid"].as_u64(), m["hero"]["on"].as_bool()) {
+            if let Some(tx) = hub.sessions.get(&k).and_then(|s| s.world).and_then(|w| hub.worlds.get(&w)) { let _ = tx.send(WorldCmd::Hero { sid: k, on }); }
+            log!("[admin] hero {} for session {k}", if on { "on" } else { "off" });
+        }
         // the Olympiad's Heroes now, from this month's points ({ heroes: true }), for testing
         if m["heroes"].as_bool() == Some(true) {
             if let Some(tx) = hub.worlds.get(&0) { let _ = tx.send(WorldCmd::Heroes); }
@@ -209,9 +214,10 @@ pub fn handle(app: &App, sid: u64, out: &Outbox, m: &Value) {
     let players: Vec<Value> = {
         // ponytail: one lookup per online player per poll; cache the names in Sess if this ever shows up in a profile
         let db = app.db.lock().unwrap();
+        let month = crate::formulas::loot_month(now_ms());
         sess.into_iter().map(|(sid, cid, world, queue)| {
             let (name, level) = db.c.query_row("SELECT name, level FROM characters WHERE id = ?", [cid], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))).unwrap_or_default();
-            json!({ "sid": sid, "name": name, "level": level, "world": world, "queue": queue })
+            json!({ "sid": sid, "name": name, "level": level, "world": world, "queue": queue, "hero": db.is_hero(cid, month) })
         }).collect()
     };
     let since = m["since"].as_u64().unwrap_or(0);

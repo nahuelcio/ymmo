@@ -11,7 +11,7 @@ import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
-import type { InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
+import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
 import { isTouchDevice } from './touch';
@@ -750,6 +750,7 @@ export class AdminPanel {
   /** keys whose current value differs from the base, from the last poll */
   private changed = new Set<string>();
   private balRows: { key: string; kind: string; text: string; tr: HTMLElement }[] = [];
+  private siegeState!: HTMLElement;
 
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('admin', 'Admin', 340, 50, 620, root);
@@ -761,8 +762,23 @@ export class AdminPanel {
     };
   }
 
-  private poll(extra: { pass?: string; kick?: number; announce?: string; god?: boolean; setCast?: { skill: string; ms: number | null }; setBalance?: { key: string; value: number | null } } = {}) {
+  private poll(extra: Omit<Extract<C2S, { t: 'admin' }>, 't' | 'since'> = {}) {
     this.g.net.send({ t: 'admin', since: this.since, ...extra });
+  }
+
+  /** A button that asks once more before it acts (a second click within 3 s). */
+  private sure(btn: HTMLButtonElement, act: () => void) {
+    const label = btn.textContent;
+    btn.onclick = () => {
+      if (btn.dataset.sure) {
+        delete btn.dataset.sure;
+        btn.textContent = label;
+        return act();
+      }
+      btn.dataset.sure = '1';
+      btn.textContent = tx('¿Seguro?', 'Sure?');
+      setTimeout(() => { delete btn.dataset.sure; btn.textContent = label; }, 3000);
+    };
   }
 
   set(m: Extract<S2C, { t: 'admin' }>) {
@@ -825,6 +841,20 @@ export class AdminPanel {
     this.worlds = el('table', 'adm-table', b);
     el('div', 'section', b, tx('Jugadores', 'Players'));
     this.players = el('table', 'adm-table', b);
+    // events: a fort siege now instead of Saturday's, its end, and the Olympiad's Heroes from this month's points
+    el('div', 'section', b, tx('Asedios y Olimpiada', 'Sieges and Olympiad'));
+    const ev = el('div', 'adm-row', b);
+    const mins = el('input', 'chat-input adm-mins', ev);
+    mins.type = 'number';
+    mins.min = '1';
+    mins.max = '240';
+    mins.value = '60';
+    mins.ariaLabel = tx('Minutos del asedio', 'Siege minutes');
+    el('span', 'tt-dim', ev, tx('min', 'min'));
+    el('button', 'btn small', ev, tx('Abrir asedio', 'Start a siege')).onclick = () => this.poll({ siege: 'start', minutes: Math.min(240, Math.max(1, Math.round(+mins.value) || 60)) });
+    this.sure(el('button', 'btn small danger', ev, tx('Terminar asedio', 'End the siege')), () => this.poll({ siege: 'end' }));
+    this.sure(el('button', 'btn small', ev, tx('Elegir Héroes ahora', 'Choose Heroes now')), () => this.poll({ heroes: true }));
+    this.siegeState = el('div', 'tt-dim', b);
     el('div', 'section', b, tx('Anuncio a todos', 'Announce to everyone'));
     const ann = el('form', 'adm-row', b);
     const text = el('input', 'chat-input', ann);
@@ -909,18 +939,29 @@ export class AdminPanel {
     const key = JSON.stringify(m.players);
     if (key !== this.playersKey) {
       this.playersKey = key;
-      this.players.innerHTML = `<tr><th>${tx('Nombre', 'Name')}</th><th>${tx('Nivel', 'Level')}</th><th>${tx('Mundo', 'World')}</th><th>${tx('Cola de salida', 'Send queue')}</th><th></th></tr>`;
+      this.players.innerHTML = `<tr><th>${tx('Nombre', 'Name')}</th><th>${tx('Nivel', 'Level')}</th><th>${tx('Mundo', 'World')}</th><th>${tx('Cola de salida', 'Send queue')}</th><th>${tx('Héroe', 'Hero')}</th><th></th></tr>`;
       for (const p of m.players.sort((a, b) => a.name.localeCompare(b.name))) {
         const tr = el('tr', '', this.players);
         el('td', '', tr, p.name || '?');
         el('td', '', tr, String(p.level));
         el('td', '', tr, world(p.world));
         el('td', p.queue > 50 ? 'adm-warn' : '', tr, String(p.queue));
+        // a Hero this month (the Olympiad's, or one the panel named): the title and aura on, or off
+        const hero = el('button', `btn small${p.hero ? ' active' : ''}`, el('td', '', tr), p.hero ? tx('Quitar Héroe', 'Remove Hero') : tx('Hacer Héroe', 'Make Hero'));
+        hero.ariaLabel = `${hero.textContent} ${p.name}`;
+        hero.onclick = () => this.poll({ hero: { sid: p.sid, on: !p.hero } });
         const kick = el('button', 'btn small danger', el('td', '', tr), 'Kick');
         kick.ariaLabel = `Kick ${p.name}`;
         kick.onclick = () => this.poll({ kick: p.sid });
       }
     }
+
+    // the siege as the clients know it (sieges message)
+    const sg = this.g.sieges;
+    const at = (ms: number) => new Date(ms).toLocaleString(lang === 'en' ? 'en-US' : 'es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    this.siegeState.textContent = sg.active.length
+      ? tx(`Asedio en curso: ${sg.active.length} fuertes${sg.ends ? `, termina ${at(sg.ends)}` : ''}`, `Siege on: ${sg.active.length} forts${sg.ends ? `, ends ${at(sg.ends)}` : ''}`)
+      : tx(`Sin asedio. El próximo: ${sg.next ? at(sg.next) : '—'}`, `No siege. Next: ${sg.next ? at(sg.next) : '—'}`);
 
     // rows are built once: the poll only refreshes "now", so a half-typed value survives
     if (!this.castNow.size && m.casts.length) this.buildCasts(m.casts);
