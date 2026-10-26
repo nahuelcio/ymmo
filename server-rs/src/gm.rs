@@ -412,6 +412,8 @@ impl World {
                 ent.c.av += 1;
                 let p = ent.player_mut().unwrap();
                 prog.into_player(p);
+                // a level from PVP_LEVEL on comes with PvP mode always on (combat.rs set_pvp_mode)
+                if p.level >= d().c.pvp_level { p.pvp_on = true; }
                 p.recalc();
                 (p.hp, p.mp, p.cp) = (p.hp.min(p.stats.max_hp), p.mp.min(p.stats.max_mp), p.cp.min(p.stats.max_cp));
                 p.inv_dirty = true;

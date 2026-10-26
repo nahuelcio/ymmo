@@ -1,5 +1,5 @@
 import { STATUS_IDS, STATUSES } from '../../../shared/src/status';
-import { RACES, CLASSES } from '../../../shared/src/data/classes';
+import { RACES, CLASSES, PVP_LEVEL } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
@@ -249,8 +249,8 @@ export class Hud {
     btn('help', tx('Ayuda', 'Help'), () => g.ui.help.toggle());
     btn('settings', tx('Opciones', 'Settings'), () => g.ui.settings.win.toggle());
     this.pvpBtn = el('button', 'menu-btn pvp-btn', menu, tx('PvP: NO', 'PvP: OFF'));
-    this.pvpBtn.title = tx('Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK).', 'Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted).');
-    this.pvpBtn.onclick = () => g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
+    // from PVP_LEVEL on it is always on: the button only shows it (onMe)
+    this.pvpBtn.onclick = () => g.me.lvl < PVP_LEVEL && g.net.send({ t: 'pvpMode', on: !g.me.pvpOn });
     if (this.touch) this.menuDrawer(root, menu);
     else makeMovable(menu, 'menu');
 
@@ -469,9 +469,15 @@ export class Hud {
 
   onMe() {
     const m = this.g.me;
+    const locked = m.lvl >= PVP_LEVEL;
     this.pvpBtn.textContent = m.pvpOn ? tx(' PvP: SÍ', ' PvP: ON') : tx('PvP: NO', 'PvP: OFF');
     if (m.pvpOn) this.pvpBtn.prepend(glyph('ui', 'pvp'));
+    if (locked) this.pvpBtn.append(glyph('ui', 'lock'));
     this.pvpBtn.classList.toggle('on', m.pvpOn);
+    this.pvpBtn.classList.toggle('locked', locked);
+    this.pvpBtn.title = locked
+      ? tx(`Desde el nivel ${PVP_LEVEL} el PvP queda siempre activado: podés atacar y ser atacado por otros jugadores con PvP.`, `From level ${PVP_LEVEL} on PvP mode is always on: you can attack and be attacked by other PvP players.`)
+      : tx(`Activar o desactivar el PvP (/pvp). Desactivado: nadie te puede atacar y vos no podés atacar a otros jugadores (salvo a los PK). A partir del nivel ${PVP_LEVEL} se activa solo y ya no se puede desactivar.`, `Toggle PvP mode (/pvp). Off: players cannot attack you, and you cannot attack them (PKs excepted). From level ${PVP_LEVEL} on it turns on by itself and can no longer be turned off.`);
     this.name.innerHTML = `<span class="lvl">${m.lvl}</span> ${esc(m.name)} <span class="tt-dim">${raceName(m.race, lang)} ${className(m.cls, lang, m.spec)}</span>`;
     this.cp.set(m.cp, m.maxCp);
     this.hp.set(m.hp, m.maxHp);

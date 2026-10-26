@@ -82,6 +82,8 @@ export interface SpecDef {
   charges?: number;
 }
 export const SPEC_LEVEL = 20;
+/** From this level on PvP mode is always on: it turns on by itself and can no longer be turned off (server-rs combat.rs). */
+export const PVP_LEVEL = 50;
 export const EVOLVE_LEVEL = 76;
 
 export const SPECS: Record<Spec, SpecDef> = {

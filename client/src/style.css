@@ -215,6 +215,9 @@ input { font: inherit; user-select: text; }
 .mb-key { margin-left: 5px; padding: 0 3px; font-size: 9px; color: var(--dim); border: 1px solid #3a3424; border-radius: 2px; }
 .pvp-btn { margin-left: 8px; color: var(--dim); border-style: dashed; }
 .pvp-btn.on { color: #fff; background: linear-gradient(#8a2020, #4a0d0d); border-color: #d04040; border-style: solid; }
+/* from PVP_LEVEL on it is always on: no toggle to press */
+.pvp-btn.locked, .pvp-btn.locked:hover { cursor: default; border-color: #d04040; }
+.pvp-btn.locked .gi:last-child { margin-left: 4px; opacity: 0.8; }
 .np-hp { width: 54px; height: 4px; margin: 2px auto 0; background: rgba(0,0,0,0.65); border: 1px solid rgba(0,0,0,0.9); }
 .np-hp > div { height: 100%; transition: width 0.15s; }
 .np-hp .hp-foe { background: #d83a2a; }
