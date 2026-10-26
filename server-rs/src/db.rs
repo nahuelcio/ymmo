@@ -147,6 +147,15 @@ impl Db {
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_points (month INTEGER NOT NULL, char_id INTEGER NOT NULL, line TEXT NOT NULL, name TEXT NOT NULL, points INTEGER NOT NULL, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS oly_fights (id INTEGER PRIMARY KEY, day INTEGER NOT NULL, a INTEGER NOT NULL, b INTEGER NOT NULL)", []);
         let _ = c.execute("CREATE TABLE IF NOT EXISTS heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, by_gm INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id))", []);
+        // a heroes table from before the GM panel (one a class line, keyed by line, no by_gm): keyed by character now,
+        // its rows kept as the line's own
+        let old: Option<String> = c.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'heroes'", [], |r| r.get(0)).ok();
+        if old.is_some_and(|sql| !sql.contains("by_gm")) {
+            let _ = c.execute_batch("ALTER TABLE heroes RENAME TO heroes_old;
+                CREATE TABLE heroes (month INTEGER NOT NULL, line TEXT NOT NULL, char_id INTEGER NOT NULL, name TEXT NOT NULL, by_gm INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, char_id));
+                INSERT OR IGNORE INTO heroes (month, line, char_id, name) SELECT month, line, char_id, name FROM heroes_old;
+                DROP TABLE heroes_old;");
+        }
         mark_legacy_s(&c);
         // alliance penalties (clans.rs): may not join another alliance / found one until then (ms since epoch)
         for col in ["ally_join_until INTEGER NOT NULL DEFAULT 0", "ally_found_until INTEGER NOT NULL DEFAULT 0", "adena INTEGER NOT NULL DEFAULT 0"] {
