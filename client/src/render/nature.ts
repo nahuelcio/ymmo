@@ -211,11 +211,12 @@ function material(map: THREE.Texture, mode: Mode): THREE.MeshLambertMaterial {
     const base = m.onBeforeCompile;
     m.onBeforeCompile = (sh, r) => {
       base.call(m, sh, r);
+      // same guard as color_pars_fragment, the only place vColor is declared; it's a vec4 there (r186), so take .rgb
       sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', /* glsl */ `
-        #if defined(USE_COLOR) || defined(USE_INSTANCING_COLOR)
+        #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
           float petal = smoothstep(0.04, 0.2, diffuseColor.b - diffuseColor.r);
           float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vColor * (0.35 + lum * 1.6), petal);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vColor.rgb * (0.35 + lum * 1.6), petal);
         #endif`);
     };
   }
