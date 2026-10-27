@@ -50,6 +50,8 @@ export interface CEnt {
   rig: Rig | null;
   /** level of detail by distance (render/lod.ts) */
   lod?: LodState;
+  /** its parts cast into the sun's shadow map (off while it stands outside the shadow box); unset after a remodel */
+  shadowCast?: boolean;
   /** where the model stood (root position, model offset, scale and heading) at its last matrix update */
   mwAt?: number[];
   root: THREE.Group;
@@ -162,6 +164,17 @@ function oneLine(text: string): string {
 
 /** scratch for the per-frame "did this rig move" check (game.ts frame) */
 const MW_TMP: number[] = [];
+/**
+ * Switch a model's shadow casting. Its parts are never frustum-culled (they cull as a whole entity), so outside the
+ * sun's shadow box they would be skinned into the shadow map for nothing. Parts that never cast are left alone.
+ */
+function castShadows(model: THREE.Object3D, on: boolean) {
+  model.traverse((o) => {
+    if (!(o as THREE.Mesh).isMesh) return;
+    if (on && o.userData.castOff) (o.castShadow = true), delete o.userData.castOff;
+    else if (!on && o.castShadow) (o.castShadow = false), (o.userData.castOff = true);
+  });
+}
 const FLASH_MATS = new Map<string, THREE.MeshBasicMaterial>();
 const flashMat = (o: THREE.Mesh) => {
   const k = `|${!!o.geometry.morphAttributes.position}`;
@@ -992,6 +1005,7 @@ export class Game {
     c.root.add(rig.root);
     c.rig = rig;
     c.model = rig.root;
+    c.shadowCast = undefined;
   }
 
   private buildEnt(r: EntAdd): CEnt {
@@ -2477,6 +2491,10 @@ export class Game {
       this.sphere.radius = Math.max(c.height, c.radius) + 2; // margin so shadows don't pop
       const onScreen = c === self || this.frustum.intersectsSphere(this.sphere);
       c.root.visible = onScreen;
+      if (onScreen) {
+        const casts = this.world.inShadowBox(this.sphere.center, this.sphere.radius);
+        if (casts !== c.shadowCast) castShadows(c.model, (c.shadowCast = casts));
+      }
       // hidden entities skip the per-frame matrix update of their whole tree (bones included)
       c.root.matrixWorldAutoUpdate = onScreen; // narrowed below, once we know whether it animates this frame
       c.tag.position.copy(c.root.position); // the body's height: floating when swimming

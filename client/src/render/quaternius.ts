@@ -1238,7 +1238,9 @@ export function qPlayer(o: QOpts): Rig {
       m.userData.file = file;
       m.bind(sk, p.bind);
       if (o.ears && p.morphs?.[o.ears] !== undefined) m.morphTargetInfluences![p.morphs[o.ears]] = 1;
-      m.castShadow = true;
+      // the eyes and brows sit on the head and the neck patch inside the collar: their shadow is the head's and the
+      // torso's already, so they stay out of the shadow map (three draws fewer per character there)
+      m.castShadow = !(file.startsWith('Neck_') || (file.startsWith('Head_') && p.kind !== 'skin'));
       m.frustumCulled = false; // the bounding sphere is the bind pose's; the game culls whole entities itself
       body.add(m);
       if (!/^(Head_|Neck_|Hair_)/.test(file)) worn.push(m);

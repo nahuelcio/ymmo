@@ -2,6 +2,7 @@
 // Only the index buffer is simplified (meshoptimizer); vertices, skin weights and bones are shared, so
 // a far rig still animates and looks the same, just with fewer triangles. Copies are built in the
 // background, a little per frame, and cached per part geometry (parts are shared between entities).
+// The forest's trunks use the same simplifier (simplifiedLevels; render/nature.ts, render/forestLod.ts).
 import * as THREE from 'three';
 import { MeshoptSimplifier } from 'three/examples/jsm/libs/meshopt_simplifier.module.js';
 
@@ -16,7 +17,8 @@ const MAX_ERROR = 0.02;
 const MIN_TRIS = 300;
 
 let ready = false;
-void MeshoptSimplifier.ready.then(() => (ready = true));
+/** resolves once the simplifier can run (simplifiedLevels needs it) */
+export const lodReady = MeshoptSimplifier.ready.then(() => void (ready = true));
 
 /** per source geometry: its levels (index 0 = itself), or null while queued */
 const cache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry[] | null>();
@@ -24,17 +26,24 @@ const queue: THREE.BufferGeometry[] = [];
 
 export const lodLevel = (dist: number) => (dist >= LEVELS[1].from ? 2 : dist >= LEVELS[0].from ? 1 : 0);
 
-function build(g: THREE.BufferGeometry): THREE.BufferGeometry[] {
+const build = (g: THREE.BufferGeometry) => simplifiedLevels(g, LEVELS.map(({ ratio }) => ({ ratio, error: MAX_ERROR })), MIN_TRIS);
+
+/**
+ * `g` followed by its simplified copies, one per level (each keeps about `ratio` of the triangles, moving no
+ * vertex more than `error` of the mesh's size). The copies share g's vertices; only the index is new. Stops at
+ * the first level that wouldn't shrink by a tenth. Needs lodReady.
+ */
+export function simplifiedLevels(g: THREE.BufferGeometry, levels: { ratio: number; error: number }[], minTris: number): THREE.BufferGeometry[] {
   const pos = g.attributes.position;
-  if (!g.index || g.groups.length > 1 || g.index.count / 3 < MIN_TRIS || !pos || pos.itemSize !== 3) return [g];
+  if (!g.index || g.groups.length > 1 || g.index.count / 3 < minTris || !pos || pos.itemSize !== 3) return [g];
   // positions may be quantized (meshopt / KHR_mesh_quantization): the simplifier wants plain floats
   const p = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) (p[i * 3] = pos.getX(i)), (p[i * 3 + 1] = pos.getY(i)), (p[i * 3 + 2] = pos.getZ(i));
   const idx = new Uint32Array(g.index.array);
   const out = [g];
-  for (const { ratio } of LEVELS) {
+  for (const { ratio, error } of levels) {
     const target = Math.floor((idx.length * ratio) / 3) * 3;
-    const [res] = MeshoptSimplifier.simplify(idx, p, 3, target, MAX_ERROR, ['LockBorder']);
+    const [res] = MeshoptSimplifier.simplify(idx, p, 3, target, error, ['LockBorder']);
     if (res.length >= idx.length * 0.9) break; // couldn't simplify much: not worth a level
     const lg = new THREE.BufferGeometry();
     for (const [name, a] of Object.entries(g.attributes)) lg.setAttribute(name, a); // shared, no copy
