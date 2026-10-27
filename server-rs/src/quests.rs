@@ -187,13 +187,18 @@ impl World {
             return self.sys(pid, "No se pudo guardar. Probá de nuevo.", "Could not save. Try again.");
         }
         let (lvl, race, g, cls, name) = (p.level, p.race.clone(), p.look.gender(), p.cls.clone(), p.name.clone());
-        self.pl_mut(pid).unwrap().spec = Some(evo.id.clone());
+        let p = self.pl_mut(pid).unwrap();
+        p.spec = Some(evo.id.clone());
+        p.recalc(); // the evolution's passive counts from now on
         self.ents.get_mut(&pid).unwrap().c.av += 1;
         let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(x, z, json!({ "t": "levelUp", "id": pid, "lvl": lvl, "spec": evo.id }));
         self.sys(pid, &format!("¡Despertaste! Ahora sos {}.", evo.name), &format!("You have awakened! You are now a {}.", evo.name_en));
         for sk in data.skills_for(&cls, Some(&evo.id), lvl, &race, g) {
             if sk.spec.as_deref() == Some(evo.id.as_str()) { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
+        }
+        for ps in data.passives_for(&cls, Some(&evo.id), lvl) {
+            if ps.spec.as_deref() == Some(evo.id.as_str()) { self.sys(pid, &format!("Aprendiste la pasiva {}.", ps.name), &format!("You have learned the passive {}.", ps.name_en)); }
         }
         log!("[world] {name} awakened as {}", evo.id);
     }

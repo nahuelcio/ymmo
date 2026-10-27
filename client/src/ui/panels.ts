@@ -11,9 +11,10 @@ import { lang, t as tx } from '../lang';
 
 const fmtLoc = lang === 'en' ? 'en-US' : 'es-AR';
 import { allSkillsFor } from '../../../shared/src/data/skills';
+import { passivesFor } from '../../../shared/src/data/passives';
 import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
+import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, passiveIcon, passiveTip, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
 import { isTouchDevice } from './touch';
 import { touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
@@ -394,7 +395,17 @@ export class CharacterPanel {
       for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls && !SPECS[s].parent)) {
         const card = el('div', 'skill-row', b);
         const skills = allSkillsFor(m.cls, m.race, m.look.g, sp).filter((s) => s.spec).map((s) => skillName(s.id, lang)).join(' · ');
-        el('div', '', card).innerHTML = `<b>${esc(specName(sp, lang))}</b><br><span class="tt-dim">${esc(specDesc(sp, lang))}<br>${esc(skills)}</span>`;
+        const info = el('div', '', card);
+        info.innerHTML = `<b>${esc(specName(sp, lang))}</b><br><span class="tt-dim">${esc(specDesc(sp, lang))}<br>${esc(skills)}<br>${tx('Pasivas', 'Passives')}: </span>`;
+        // each passive with its icon, and its tooltip on hover
+        const line = info.querySelector<HTMLElement>('.tt-dim')!;
+        passivesFor(m.cls, sp).filter((p) => p.spec).forEach((p, i) => {
+          if (i) line.append(' · ');
+          const tag = el('span', 'spec-passive', line);
+          glyph('skill', p.id, p.icon, tag);
+          tag.append(` ${lang === 'en' ? p.nameEn : p.name}`);
+          setTip(tag, () => passiveTip(p.id));
+        });
         el('button', 'btn primary', card, tx('Elegir', 'Choose')).onclick = () => {
           if (confirm(tx(`¿Ser ${specName(sp, lang)}? No se puede cambiar después.`, `Become a ${specName(sp, lang)}? This cannot be changed later.`))) this.g.net.send({ t: 'chooseSpec', spec: sp });
         };
@@ -403,7 +414,8 @@ export class CharacterPanel {
   }
 
   /** The skills as a grid of icons, four a row: the name, what each does, its level and MP on hover; the ones still to
-   * learn dimmed; the learned ones drag onto the bar. Then the third specialization's, still to come. */
+   * learn dimmed; the learned ones drag onto the bar. Then the passives, always on (never on the bar), and the third
+   * specialization's skills and passive, still to come. */
   private skills(b: HTMLElement) {
     const m = this.g.me;
     const grid = el('div', 'skill-grid', b);
@@ -418,6 +430,16 @@ export class CharacterPanel {
         touchBarDrag(this.g, icon, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
       }
     }
+    const passives = passivesFor(m.cls, m.spec);
+    if (passives.length) {
+      el('div', 'section', b, tx('Pasivas', 'Passives'));
+      const pGrid = el('div', 'skill-grid', b);
+      for (const p of passives) {
+        const icon = passiveIcon(p.id, pGrid);
+        icon.classList.toggle('locked', p.level > m.lvl);
+        setTip(icon, () => passiveTip(p.id));
+      }
+    }
     // what the spec awakens into at level 76, and how: its skills in the same grid, still locked
     const evo = evolutionOf(m.spec);
     if (evo) {
@@ -429,6 +451,11 @@ export class CharacterPanel {
         const icon = skillIcon(s.id, evoGrid);
         icon.classList.add('locked');
         setTip(icon, () => skillTip(s.id));
+      }
+      for (const p of passivesFor(m.cls, evo).filter((x) => x.spec === evo)) {
+        const icon = passiveIcon(p.id, evoGrid);
+        icon.classList.add('locked');
+        setTip(icon, () => passiveTip(p.id));
       }
     }
     el('div', 'hint', b, tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
@@ -1173,7 +1200,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>Cada zona tiene un campamento marcado con <i data-gi="ui/pvp"></i> en el mapa, defendido por un jefe <i data-gi="ui/crown"></i> <b>élite</b>. Si limpiás el campamento entero, aparece un <b>cofre</b> junto a la fogata para cada uno que peleó. El campamento se vuelve a llenar unos minutos después.</p>
     <h4>Zonas de caza</h4>
     <p>Praderas Ventosas (1-5) · Colinas Goblin (5-10) · Cuartel Orco (10-15) · Páramos Malditos (15-20, jefe Kaim Vanul) · Costa Abandonada (20-25) · Ruinas Hundidas (25-30) · Estepas Ardientes (30-35) · Ciudadela Orca (35-40) · Valle del Dragón (40-45) · Nido del Dragón (45-50).</p>
-    <p>A nivel 20 elegís una <b>especialización</b> en Estado del Personaje. Con un <b>pergamino de encantar</b> en la mochila, click derecho sobre un arma o armadura la sube +1: hasta +3 es seguro, después puede fallar y destruirla.</p>
+    <p>A nivel 20 elegís una <b>especialización</b> en Estado del Personaje. Cada clase tiene <b>pasivas</b>, siempre activas: una de la clase en el nivel 10, tres de la especialización en el 20, el 40 y el 60, y una más con la tercera especialización. Se aprenden solas y las ves en la pestaña Habilidades; algunas cuentan solo con escudo, arco, daga o dos espadas. Con un <b>pergamino de encantar</b> en la mochila, click derecho sobre un arma o armadura la sube +1: hasta +3 es seguro, después puede fallar y destruirla.</p>
     <p>El <b>Bastión del Ocaso</b>, por el camino del noreste o con la Guardiana del Portal, vende el set Abisal, y sus maestros <b>fabrican</b> los de Ceniza y del Dragón con los materiales que sueltan las zonas de nivel 30 a 50. Más al norte, en el cruce del Dominio del Dragón, <b>Fuerte Escama</b> (40-50) vende el set del Dragón (grado C) ya hecho.</p>
     <p>Cada <b>grado</b> de equipo pide un nivel para usarlo: D desde el 20, C desde el 40, B desde el 52, A desde el 61 y S desde el 75. El tope es el <b>nivel 78</b>, y pasando el 50 cada nivel cuesta bastante más.</p>
     <p>Desde el nivel 50, los pasos de la sierra llevan a las tierras de afuera. Por el paso del norte está el <b>Fuerte de Escarcha</b>, que vende el set Glacial (grado B): Tundra Helada (50-55) · Picos Helados (55-60, jefe Yeti Primigenio). Su raid es el <b>Trono de Escarcha</b> (<b>/raid frost</b>).</p>
@@ -1185,7 +1212,7 @@ export function createHelp(root: HTMLElement): Win {
     <p>En Brasaoscura, <b>Aldric</b> reparte cada día tres <b>contratos</b> (cacerías, campamentos, jefes, la Grieta) que pagan <b>Marcas de Contrato</b>; <b>Sabela</b>, la Cambista, las cambia por el Pergamino Sagrado y el Vale de Tirada, que te devuelve una tirada de joya ya usada. Desde el nivel 76, <b>/grieta</b> te lleva con tu party a <b>La Grieta</b>: pisos sin fin, cada uno más fuerte. La primera corrida del día paga marcas cada 5 pisos; <b>/grieta top</b> muestra el ranking de la semana.</p>
     <p>Lo que un maestro le fabrica a un <b>enano</b> (los enanos son los artesanos) a veces sale <b class="tt-mw">Obra Maestra</b>, con el nombre en dorado, y cualquiera puede usarla. Da velocidad o recarga según la raza de quien la lleva: Vel.Atq a orcos y enanos, Vel.Casteo a elfos, menos recarga a elfos oscuros, y mitad velocidad y mitad recarga a humanos (a un místico la velocidad le llega como Vel.Casteo, a un guerrero como Vel.Atq). El arma da 6% y cada armadura o joya 1%.</p>
     <h4>Party y PvP</h4>
-    <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus.
+    <p>Seleccioná a un jugador → <b>Invitar a la party</b>. Los miembros de la party comparten la XP con un bonus. El <b>Clérigo</b> le devuelve maná a otro jugador con <b>Recarga</b> (nivel 32) y a toda su party cerca con <b>Fuente de Maná</b> (nivel 63); a sí mismo, nunca.
     El PvP arranca <b>desactivado</b>: se cambia con el botón <b>PvP</b> o con <code>/pvp</code>, y los dos jugadores lo tienen que tener activado. Desde el <b>nivel 50</b> queda <b>siempre activado</b>: se prende solo y ya no se puede apagar. <b>Ctrl</b> y el autoataque (o Ctrl+Espacio) fuerza el ataque a un jugador con PvP (fuera de la aldea). Atacar te pone el flag <span style="color:#d080ff">violeta</span>;
     matar a un jugador sin flag te suma karma y te pone en <span style="color:#ff4040">rojo</span>, y a los rojos se les pueden caer objetos al morir.</p>
     <p>Para <b>comerciar</b>, seleccioná a un jugador cercano → <b>Comerciar</b> (o <code>/trade</code>). Cada uno agrega objetos y adena a su oferta: lo que se agrega no se puede sacar (para arrepentirse, se cancela), y apenas uno de los dos confirma ya nadie puede agregar nada más. Cuando confirman los dos, se intercambia todo junto.</p>
@@ -1227,7 +1254,7 @@ const HELP_EN = `
     <p>Every zone has a camp marked with <i data-gi="ui/pvp"></i> on the map, guarded by an <i data-gi="ui/crown"></i> <b>elite</b> leader. Clear the whole camp and a <b>chest</b> appears by the campfire for everyone who fought. The camp refills a few minutes later.</p>
     <h4>Hunting grounds</h4>
     <p>Windy Meadows (1-5) · Goblin Hills (5-10) · Orc Barracks (10-15) · Cursed Wastes (15-20, boss Kaim Vanul) · Forsaken Coast (20-25) · Sunken Ruins (25-30) · Burning Steppes (30-35) · Orc Citadel (35-40) · Dragon Valley (40-45) · Dragon's Nest (45-50).</p>
-    <p>At level 20 you pick a <b>specialization</b> in Character Status. With an <b>enchant scroll</b> in your bag, right-click a weapon or armor piece to raise it by +1: safe up to +3, after that it can fail and destroy the piece.</p>
+    <p>At level 20 you pick a <b>specialization</b> in Character Status. Every class has <b>passives</b>, always on: one of the class at level 10, three of the specialization at 20, 40 and 60, and one more with the third specialization. They are learned by themselves and shown in the Skills tab; some count only with a shield, a bow, a dagger or two swords. With an <b>enchant scroll</b> in your bag, right-click a weapon or armor piece to raise it by +1: safe up to +3, after that it can fail and destroy the piece.</p>
     <p>The <b>Dusk Bastion</b>, down the north-east road or through the Gatekeeper, sells the Abyssal set, and its masters <b>craft</b> the Ashforged and Dragon sets from the materials dropped in the level 30 to 50 zones. Further north, at the crossroads of the Dragon lands, <b>Scale Fort</b> (40-50) sells the Dragon set (C grade) ready-made.</p>
     <p>Each gear <b>grade</b> asks for a level: D from 20, C from 40, B from 52, A from 61 and S from 75. The cap is <b>level 78</b>, and past 50 each level takes a good deal longer.</p>
     <p>From level 50, the passes in the ridge lead to the lands beyond. Through the north pass stands <b>Frost Fort</b>, which sells the Glacial set (grade B): Frozen Tundra (50-55) · Frozen Peaks (55-60, boss Primal Yeti). Its raid is the <b>Frost Throne</b> (<b>/raid frost</b>).</p>
@@ -1239,7 +1266,7 @@ const HELP_EN = `
     <p>In Emberdark, <b>Aldric</b> hands out three <b>contracts</b> a day (hunts, camps, bosses, the Rift) paid in <b>Contract Marks</b>; <b>Sabela</b>, the Cambista, exchanges them for the Sacred Scroll and the Jewel Voucher, which gives a spent jewel roll back. From level 76, <b>/rift</b> takes you and your party to <b>The Rift</b>: endless floors, each one stronger. The day's first run pays Marks every 5 floors; <b>/rift top</b> shows the week's ranking.</p>
     <p>What a master crafts for a <b>dwarf</b> (dwarves are the craftsmen) sometimes comes out a <b class="tt-mw">Masterwork</b>, its name in gold, and anyone can wear it. It gives speed or cooldown as the wearer's race says: Atk.Spd to orcs and dwarves, Cast.Spd to elves, shorter cooldowns to dark elves, and half speed and half cooldown to humans (a mystic gets the speed as Cast.Spd, a fighter as Atk.Spd). The weapon gives 6% and each armor piece or jewel 1%.</p>
     <h4>Party and PvP</h4>
-    <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus.
+    <p>Select a player → <b>Invite to party</b>. Party members share XP with a bonus. The <b>Cleric</b> gives mana back to another player with <b>Recharge</b> (level 32) and to its whole party nearby with <b>Mana Fount</b> (level 63); never to itself.
     PvP starts <b>off</b>: toggle it with the <b>PvP</b> button or <code>/pvp</code>; both players need it on. From <b>level 50</b> it is <b>always on</b>: it turns on by itself and can no longer be turned off. Hold <b>Ctrl</b> and use auto-attack (or Ctrl+Space) to force an attack on a PvP player (outside the village). Attacking flags you <span style="color:#d080ff">purple</span>;
     killing an unflagged player gives karma and turns you <span style="color:#ff4040">red</span>, and red players can drop items on death.</p>
     <p>To <b>trade</b>, select a nearby player → <b>Trade</b> (or <code>/trade</code>). Each of you adds items and adena to your offer: what goes in cannot come back out (cancel instead), and once either of you confirms nobody can add anything more. When both confirm, everything changes hands at once.</p>

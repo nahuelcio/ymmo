@@ -10,6 +10,9 @@ export interface BuffMods {
   cdr?: number; accuracy?: number;
   /** fraction of the damage dealt that heals the dealer; fraction of the melee damage taken sent back */
   vampire?: number; reflect?: number;
+  /** multipliers: max MP; what the caster's heals and mana recharges give; how long its songs and dances last
+   * (the class passives', data/passives.ts) */
+  maxMp?: number; heal?: number; tune?: number;
 }
 
 export interface SkillDef {
@@ -22,9 +25,11 @@ export interface SkillDef {
   race?: Race;
   gender?: Gender;
   level: number;
-  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain' | 'taunt';
+  /** mana: MP given back to another player (target friend) or to the caster's party around it (target self, aoe), never
+   * to the caster */
+  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain' | 'taunt' | 'mana';
   target: 'enemy' | 'self' | 'friend';
-  /** damage multiplier for phys/magic/drain, flat heal amount for heal */
+  /** damage multiplier for phys/magic/drain, flat heal amount for heal (and MP for mana) */
   power: number;
   mp: number;
   cooldown: number; // ms
@@ -89,6 +94,7 @@ const list: SkillDef[] = [
   { id: 'divine_heal', name: 'Curación Divina', spec: 'cleric', level: 20, kind: 'heal', target: 'friend', power: 310, mp: 45, cooldown: 5000, cast: 1800, range: 20, icon: '💛', color: 0xffee66, desc: 'Recupera gran parte de la vida.' },
   { id: 'holy_shield', name: 'Escudo Sagrado', spec: 'cleric', level: 25, kind: 'buff', target: 'friend', power: 0, mp: 30, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { pDef: 1.3, mDef: 1.3 } }, icon: '🛡️', color: 0xffffaa, desc: 'Def.F y Def.M +30% durante 20 min.' },
   { id: 'smite', name: 'Castigo', spec: 'cleric', level: 30, kind: 'magic', target: 'enemy', power: 2.6, mp: 30, cooldown: 5000, cast: 1200, range: 20, status: { id: 'stun', ms: 1000 }, icon: '🌟', color: 0xfff088, desc: '260% de daño y aturde 1 s.' },
+  { id: 'recharge', name: 'Recarga', spec: 'cleric', level: 32, kind: 'mana', target: 'friend', power: 90, mp: 100, cooldown: 15000, cast: 1500, range: 20, icon: '💧', color: 0x5aa8ff, desc: 'Le devuelve maná a otro jugador (a vos no).' },
   { id: 'might', name: 'Poderío', spec: 'cleric', level: 35, kind: 'buff', target: 'friend', power: 0, mp: 35, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { pAtk: 1.2, mAtk: 1.2, atkSpd: 1.1 } }, icon: '💪', color: 0xffbb44, desc: 'Atq.F y Atq.M +20%, Vel.Atq +10% durante 20 min.' },
   { id: 'restoration', name: 'Restauración', spec: 'cleric', level: 40, kind: 'heal', target: 'friend', power: 385, mp: 70, cooldown: 7000, cast: 2000, range: 20, icon: '💗', color: 0xff99cc, desc: 'Recupera la vida casi por completo.' },
   { id: 'haste', name: 'Celeridad', spec: 'cleric', level: 45, kind: 'buff', target: 'friend', power: 0, mp: 40, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { speed: 1.2, atkSpd: 1.2 } }, icon: '🪽', color: 0xaaffee, desc: 'Velocidad y Vel.Atq +20% durante 20 min.' },
@@ -108,6 +114,7 @@ const list: SkillDef[] = [
   // Cleric 55-75
   { id: 'mass_heal', name: 'Curación en Masa', spec: 'cleric', level: 55, kind: 'heal', target: 'friend', power: 150, mp: 110, cooldown: 12000, cast: 2200, range: 20, aoe: 12, icon: '💞', color: 0xffaacc, desc: 'Recupera vida a vos o a un aliado y a la party que tenga cerca.' },
   { id: 'sanctuary', name: 'Santuario', spec: 'cleric', level: 60, kind: 'buff', target: 'friend', power: 0, mp: 50, cooldown: 10000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { pDef: 1.4, mDef: 1.4 } }, icon: '⛪', color: 0xfff0c0, desc: 'Def.F y Def.M +40% durante 20 min.' },
+  { id: 'mana_fount', name: 'Fuente de Maná', spec: 'cleric', level: 63, kind: 'mana', target: 'self', power: 60, mp: 300, cooldown: 60000, cast: 2000, range: 0, aoe: 12, icon: '⛲', color: 0x3a8aff, desc: 'Le devuelve maná a toda tu party a 12 m (a vos no).' },
   { id: 'holy_nova', name: 'Nova Sagrada', spec: 'cleric', level: 65, kind: 'magic', target: 'enemy', power: 3, mp: 70, cooldown: 14000, cast: 800, range: 2.6, aoe: 7, aoeOnSelf: true, status: { id: 'stun', ms: 1000 }, icon: '🔆', color: 0xfff4a0, desc: 'Una explosión de luz a tu alrededor: 300% de daño y aturde 1 s.' },
   { id: 'blessing_of_ages', name: 'Bendición de las Eras', spec: 'cleric', level: 70, kind: 'buff', target: 'friend', power: 0, mp: 90, cooldown: 30000, cast: 1500, range: 20, aoe: 12, buff: { dur: 1200000, mods: { pAtk: 1.2, mAtk: 1.2, atkSpd: 1.1, speed: 1.1 } }, icon: '📜', color: 0xffd88a, desc: 'Atq.F y Atq.M +20%, Vel.Atq y Velocidad +10% durante 20 min, a vos o a un aliado y a la party que tenga cerca.' },
   { id: 'divine_light', name: 'Luz Divina', spec: 'cleric', level: 75, kind: 'heal', target: 'friend', power: 720, mp: 140, cooldown: 45000, cast: 2500, range: 20, icon: '🌤️', color: 0xffffe0, desc: 'Recupera la vida por completo, aun a través de una herida.' },

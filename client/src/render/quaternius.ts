@@ -1615,9 +1615,9 @@ export function skillAnimOf(skill: string | undefined, weapon?: string): string 
   if (!skill) return undefined;
   if (SKILL_ANIM[skill]) return skill;
   if (weapon === 'bow') return '@bow';
-  // a spell by its kind: a heal, a nova around the caster, a long one (meteor, apocalypse...), any other
+  // a spell by its kind: a heal (or a mana recharge), a nova around the caster, a long one (meteor, apocalypse...), any other
   const def = SKILLS[skill];
-  if (def?.kind === 'heal') return '@heal';
+  if (def?.kind === 'heal' || def?.kind === 'mana') return '@heal';
   if (def?.kind === 'magic' || def?.kind === 'drain') return def.aoeOnSelf ? '@nova' : def.cast >= 2200 ? '@spell_long' : '@spell';
   return undefined;
 }

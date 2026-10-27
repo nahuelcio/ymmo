@@ -402,6 +402,8 @@ input { font: inherit; user-select: text; }
 .section { color: var(--gold); margin: 10px 0 4px; border-bottom: 1px solid #2a2618; font-family: Georgia, serif; }
 .skill-row { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
 .skill-row.locked { opacity: 0.45; }
+.spec-passive { white-space: nowrap; cursor: help; }
+.spec-passive .gi { color: var(--gold); }
 /* the character window's skills: icons only, four a row; the name and what each does on hover */
 .skill-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; justify-items: center; margin: 6px 0 8px; }
 .skill-grid .icon { width: 44px; height: 44px; font-size: 24px; }
@@ -464,6 +466,7 @@ input { font: inherit; user-select: text; }
 .f-hurt { color: #ff5a4a; }
 .f-crit { font-size: calc(var(--fs, 16px) * 1.45); color: #ffcf3a; text-shadow: 0 0 10px rgba(255, 170, 30, 0.9), 0 2px 0 rgba(0, 0, 0, 0.55); }
 .f-heal { color: #7dff9a; text-shadow: 0 0 8px rgba(60, 255, 120, 0.7), 0 2px 0 rgba(0, 0, 0, 0.55); }
+.f-mana { color: #7ab8ff; text-shadow: 0 0 8px rgba(70, 140, 255, 0.75), 0 2px 0 rgba(0, 0, 0, 0.55); }
 .f-miss { color: #b8b8b8; font-size: 12px; font-style: italic; -webkit-text-stroke-width: 2px; }
 .f-block { color: #d8e2f0; font-size: 13px; font-style: italic; font-weight: 700; -webkit-text-stroke-width: 2px; }
 .f-gold { color: #ffd966; font-size: 14px; -webkit-text-stroke-width: 2.5px; }

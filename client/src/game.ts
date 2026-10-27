@@ -1417,7 +1417,7 @@ export class Game {
   private onDmg(m: Extract<S2C, { t: 'dmg' }>) {
     // a player's melee blow (the basic attack's or a skill's) is shown as it lands, not as the swing starts: the server
     // sends the swing and its damage in the same tick
-    const src = this.ents.get(m.s), ms = src && !m.dot && !m.heal ? this.impactMs(src) : undefined;
+    const src = this.ents.get(m.s), ms = src && !m.dot && !m.heal && !m.mana ? this.impactMs(src) : undefined;
     const wait = ms !== undefined ? ms - (performance.now() - src!.atkAt) : 0;
     if (wait > 15 && wait < 1500) return void setTimeout(() => this.showDmg(m), wait);
     this.showDmg(m);
@@ -1438,6 +1438,11 @@ export class Game {
     if (m.heal) {
       play('heal', vol * 0.8);
       return this.floatText(t, `+${m.v}`, 'f-heal');
+    }
+    // MP given back (the cleric's Recharge, Mana Fount): blue
+    if (m.mana) {
+      play('heal', vol * 0.8);
+      return this.floatText(t, `+${m.v} MP`, 'f-mana');
     }
     this.ui.party.hit(m.s, m.v);
     if (m.dot) {
@@ -1632,6 +1637,11 @@ export class Game {
       case 'heal':
         this.fx.sparkles(t.pos.clone(), def.color, 900);
         this.fx.ring(t.pos.clone(), def.color, 1.5, 600);
+        break;
+      case 'mana':
+        // in blue, on the one it was cast on (Recharge) or widening round the caster over its party (Mana Fount)
+        this.fx.sparkles(t.pos.clone(), def.color, 900);
+        this.fx.ring(t.pos.clone(), def.color, def.aoe ?? 1.5, def.aoe ? 800 : 600);
         break;
       case 'buff':
         this.fx.ring(t.pos.clone(), def.color, 2, 800);

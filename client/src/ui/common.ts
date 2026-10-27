@@ -1,6 +1,7 @@
 import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, SET_BONUS, SET_NAME, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
 import { type BuffMods, SKILLS } from '../../../shared/src/data/skills';
+import { PASSIVES } from '../../../shared/src/data/passives';
 import { el, esc } from './dom';
 import { lang, t as tx } from '../lang';
 import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
@@ -66,6 +67,15 @@ export function skillIcon(skillId: string, parent?: HTMLElement): HTMLDivElement
   return d;
 }
 
+/** A class passive's icon, drawn as a skill's (its svg in icons/skill/): it never goes on the bar. */
+export function passiveIcon(id: string, parent?: HTMLElement): HTMLDivElement {
+  const def = PASSIVES[id];
+  const d = el('div', 'icon skill passive', parent);
+  glyph('skill', id, def?.icon ?? '?', d);
+  d.style.background = `radial-gradient(circle at 35% 30%, ${hex(def?.color ?? 0x666666)}, #14161f 85%)`;
+  return d;
+}
+
 /** The player's level, for the "requires level" line of item tooltips (game.ts sets it). */
 let myLevel = () => 0;
 export const setTipLevel = (f: () => number) => (myLevel = f);
@@ -101,6 +111,7 @@ export function modsText(m: BuffMods, times = 1): string {
   pair(up(m.pAtk), up(m.mAtk), tx('Atq.F', 'P.Atk'), tx('Atq.M', 'M.Atk'), tx('Atq.F/Atq.M', 'P.Atk/M.Atk'), plusPct);
   pair(up(m.pDef), up(m.mDef), tx('Def.F', 'P.Def'), tx('Def.M', 'M.Def'), tx('Def.F/Def.M', 'P.Def/M.Def'), plusPct);
   if (m.maxHp !== undefined) out.push(`${tx('HP máx.', 'Max HP')} ${plusPct(up(m.maxHp)!)}`);
+  if (m.maxMp !== undefined) out.push(`${tx('MP máx.', 'Max MP')} ${plusPct(up(m.maxMp)!)}`);
   if (m.crit !== undefined) out.push(`${tx('Crítico', 'Critical')} +${num(by(m.crit)!)}`);
   if (m.critDmg !== undefined) out.push(`${tx('Daño crítico', 'Critical damage')} ${plusPct(up(m.critDmg)!)}`);
   if (m.accuracy !== undefined) out.push(`${tx('Precisión', 'Accuracy')} +${num(by(m.accuracy)!)}`);
@@ -111,6 +122,8 @@ export function modsText(m: BuffMods, times = 1): string {
   if (m.cdr !== undefined) out.push(`${tx('Recarga', 'Cooldown')} -${pct(by(m.cdr)!)}`);
   if (m.vampire !== undefined) out.push(`${tx('Robo de vida', 'Life steal')} ${pct(by(m.vampire)!)}`);
   if (m.reflect !== undefined) out.push(`${tx('Reflejo de daño', 'Damage reflect')} ${pct(by(m.reflect)!)}`);
+  if (m.heal !== undefined) out.push(`${tx('Curaciones y recargas', 'Heals and recharges')} ${plusPct(up(m.heal)!)}`);
+  if (m.tune !== undefined) out.push(`${tx('Duración de canciones y danzas', 'Song and dance length')} ${plusPct(up(m.tune)!)}`);
   return out.join(', ');
 }
 
@@ -179,6 +192,16 @@ export function skillTip(skillId: string): string {
   ].filter(Boolean).join(' ');
   return `<div class="tt-title">${esc(skillName(skillId, lang))} <span class="tt-dim">${tx('Nv', 'Lv')} ${s.level}</span></div>${esc(skillDesc(skillId, lang))}<br>${need ? `<span class="tt-dim">${need}</span><br>` : ''}
     <span class="tt-dim">MP ${s.mp} · ${tx('Lanzamiento', 'Cast')} ${(s.cast / 1000).toFixed(1)} s · ${tx('Recarga', 'Cooldown')} ${(s.cooldown / 1000).toFixed(0)} s${s.range > 3 ? ` · ${tx('Alcance', 'Range')} ${s.range}` : ''}</span>`;
+}
+
+/** A class passive: always on once learned (with its weapon in hand, if it names one). */
+export function passiveTip(id: string): string {
+  const p = PASSIVES[id];
+  if (!p) return '';
+  const need = p.weapon ? { shield: tx('Con un escudo equipado.', 'With a shield equipped.'), dual: tx('Con un par de espadas equipado.', 'With a pair of swords equipped.'),
+    bow: tx('Con un arco equipado.', 'With a bow equipped.'), dagger: tx('Con una daga equipada.', 'With a dagger equipped.') }[p.weapon] : '';
+  return `<div class="tt-title">${esc(lang === 'en' ? p.nameEn : p.name)} <span class="tt-dim">${tx('Pasiva', 'Passive')} · ${tx('Nv', 'Lv')} ${p.level}</span></div>${esc(lang === 'en' ? p.descEn : p.desc)}<br>
+    <span class="tt-up">${esc(modsText(p.mods))}</span>${need ? `<br><span class="tt-dim">${need}</span>` : ''}<br><span class="tt-dim">${tx('Siempre activa: no va en la barra.', 'Always on: it does not go on the bar.')}</span>`;
 }
 
 export function bar(parent: HTMLElement, cls: string, label?: string): { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement; set(cur: number, max: number): void } {

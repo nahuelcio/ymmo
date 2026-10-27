@@ -87,3 +87,15 @@ status: frostbite <- lorc/frozen-orb (the frost_nova drawing)
 
 Added for the Campo de Huesos (same source and licence), file <- original:
 item: scroll_enchant_weapon_ng, scroll_enchant_armor_ng <- the plain scrolls' drawings (lorc/scroll-unfurled, lorc/tied-scroll)
+
+Added for the class passives and the cleric's mana skills (same source and licence), file <- original:
+skill: hardened_body <- delapouite/muscular-torso, serene_mind <- lorc/third-eye, shield_mastery <- lorc/checked-shield,
+  iron_skin <- lorc/armor-vest, retribution <- lorc/return-arrow, phoenix_flame <- lorc/burning-passion,
+  dual_mastery <- lorc/crossed-sabres, bloodlust <- lorc/bloody-sword, sonic_edge <- lorc/sonic-boom, steel_waltz <- lorc/spinning-blades,
+  bow_mastery <- lorc/bowman, hawk_eye <- lorc/hawk-emblem, light_feet <- lorc/boot-prints, lethal_shot <- lorc/target-shot,
+  dagger_mastery <- lorc/daggers, reflexes <- delapouite/body-balance, precise_strike <- lorc/target-arrows, shadow_step <- lorc/evil-moon,
+  clear_voice <- delapouite/musical-notes, singer_guard <- lorc/shield-echoes, deep_breath <- lorc/wind-hole, resonance <- lorc/resonance,
+  sure_step <- delapouite/ballerina-shoes, fierce_rhythm <- delapouite/drum, dancer_grace <- lorc/swan, endless_dance <- lorc/ouroboros,
+  arcane_affinity <- lorc/rune-stone, focus_mind <- lorc/brainstorm, mana_well <- delapouite/well, arcane_dominion <- delapouite/spell-book,
+  healing_hands <- lorc/glowing-hands, serene_faith <- lorc/candle-light, holy_aura <- lorc/holy-grail, lasting_grace <- lorc/holy-symbol,
+  recharge <- lorc/water-splash, mana_fount <- delapouite/water-fountain

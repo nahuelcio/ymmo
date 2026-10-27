@@ -26,6 +26,7 @@ Panel de admin: poné `ADMIN_PASSWORD=<8+ caracteres>` en un `.env` (o en el ent
 ## Contenido
 
 - 5 razas (Human, Elf, Dark Elf, Orc, Dwarf) × Fighter / Mystic, niveles 1–20, 6 skills por clase.
+- Pasivas por clase, siempre activas: una de la clase base (nivel 10), tres de cada especialización (20, 40, 60) y una de cada evolución (76).
 - Village of Dawn (zona segura) con Grocer, Weapon/Armor Merchant y Gatekeeper.
 - 4 zonas de caza: Windy Meadows (1-5), Goblin Hills (5-10), Orc Barracks (10-15), Cursed Wastes (15-20, raid boss Kaim Vanul).
 - Items No-Grade / D / C, drops, adena, inventario, paperdoll, tiendas (compra/venta), pociones y Scroll of Escape.

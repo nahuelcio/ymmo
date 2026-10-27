@@ -6,6 +6,7 @@ import {
   CLASSES, GENDERS, HAIR_COLORS, HAIR_STYLES, RACES, statMods, type ClassType, type Gender, type Look, type Race,
 } from '../../shared/src/data/classes';
 import { allSkillsFor } from '../../shared/src/data/skills';
+import { passivesFor } from '../../shared/src/data/passives';
 import { className, genderDesc, genderName, hairStyle, LANGS, raceDesc, raceName, skillDesc, skillName } from '../../shared/src/i18n';
 import { lang, setLang, t } from './lang';
 import { animate, playerModel } from './render/models';
@@ -17,7 +18,7 @@ import type { CharSummary } from '../../shared/src/protocol';
 import { Game } from './game';
 import { Net } from './net';
 import { el } from './ui/dom';
-import { glyph } from './ui/common';
+import { glyph, modsText } from './ui/common';
 
 const screens = document.getElementById('screens')!;
 const net = new Net();
@@ -375,6 +376,14 @@ function renderDiff(host: HTMLElement, race: Race, cls: ClassType, g: Gender) {
     glyph('skill', s.id, s.icon, row.querySelector<HTMLElement>('.ds-icon')!);
     row.querySelector('b')!.textContent = skillName(s.id, lang);
     row.querySelector('.ds-desc')!.textContent = skillDesc(s.id, lang);
+  }
+  // the class's passive (the specializations add theirs from level 20)
+  for (const p of passivesFor(cls)) {
+    const row = el('div', 'diff-skill', list);
+    row.innerHTML = `<span class="ds-icon"></span><span><b></b> <span class="tt-dim">${t('Nv', 'Lv')} ${p.level} · ${t('Pasiva', 'Passive')}</span><br><span class="tt-dim ds-desc"></span></span>`;
+    glyph('skill', p.id, p.icon, row.querySelector<HTMLElement>('.ds-icon')!);
+    row.querySelector('b')!.textContent = lang === 'en' ? p.nameEn : p.name;
+    row.querySelector('.ds-desc')!.textContent = `${lang === 'en' ? p.descEn : p.desc} ${modsText(p.mods)}.`;
   }
 }
 
