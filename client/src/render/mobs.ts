@@ -9,6 +9,7 @@ import { loadQ, qPlayer, qReady, qWeapon, tintGear, type Helm } from './quaterni
 import { addBeastAura, addFlames } from './flame-fx';
 import { kitTexture, loadV } from './village';
 import { contactPhases, crossed } from './footfalls';
+import { applySkinnedMerge, mergeRigid, planSkinnedMerge, shareSkeletons, type SkinnedMerge } from './merge';
 
 /**
  * Mob models instead of the procedural box rigs (models.ts mobModel), all CC0:
@@ -421,11 +422,31 @@ interface ClipAnim {
   wave: boolean;
 }
 
+/** per template: how its untextured skinned parts merge (render/merge.ts), planned on its first spawn */
+const mergePlans = new Map<string, SkinnedMerge[]>();
+/** per weapon: the held copy with mob materials and its plain parts merged, cloned for every mob that holds it */
+const heldWeapons = new Map<string, THREE.Object3D>();
+
+function mobWeapon(w: string): THREE.Object3D {
+  let item = heldWeapons.get(w);
+  if (!item) {
+    item = weapons[w].clone();
+    item.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      o.material = lambert(o.material as THREE.Material, undefined);
+      o.castShadow = true;
+    });
+    mergeRigid(item);
+    heldWeapons.set(w, item);
+  }
+  return item.clone();
+}
+
 function glbMob(tplId: string): Rig | null {
   const l = MOB_GLB[tplId], t = MOBS[tplId], src = l && loaded[l.model];
   if (!l || !t || !src) return null;
   const obj = cloneSkinned(src.scene);
-  const skinned: THREE.SkinnedMesh[] = [];
+  let skinned: THREE.SkinnedMesh[] = [];
   obj.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     const m = o.material as THREE.Material;
@@ -434,16 +455,15 @@ function glbMob(tplId: string): Rig | null {
     o.frustumCulled = false; // bind-pose bounds; the game culls whole entities itself
     if (o instanceof THREE.SkinnedMesh) skinned.push(o);
   });
+  // a wolf is four plain-coloured parts, each with its own copy of the same skeleton: one skeleton, and one part per
+  // material look (render/merge.ts)
+  let plan = mergePlans.get(tplId);
+  if (!plan) mergePlans.set(tplId, (plan = planSkinnedMerge(skinned)));
+  shareSkeletons(skinned);
+  skinned = applySkinnedMerge(skinned, plan);
   for (const [slot, w] of [['handslotr', l.right], ['handslotl', l.left]] as const) {
     const hand = w && weapons[w] ? obj.getObjectByName(slot) : undefined;
-    if (!hand) continue;
-    const item = weapons[w!].clone();
-    item.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      o.material = lambert(o.material as THREE.Material, undefined);
-      o.castShadow = true;
-    });
-    hand.add(item);
+    if (hand) hand.add(mobWeapon(w!));
   }
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
@@ -479,7 +499,7 @@ function glbMob(tplId: string): Rig | null {
     dispose: () => {
       mixer.stopAllAction();
       mixer.uncacheRoot(obj);
-      for (const m of skinned) m.skeleton.dispose();
+      for (const sk of new Set(skinned.map((m) => m.skeleton))) sk.dispose();
     },
   };
 }

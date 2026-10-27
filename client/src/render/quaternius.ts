@@ -6,6 +6,7 @@ import { animate, playerModel, type AnimState, type Rig } from './models';
 import { contactPhases, crossed } from './footfalls';
 import { COMBAT_MS, DEFAULT_INTERVAL, HOLD_MS, SWINGS, swingKind, swingOf, swingTiming, windup, type SwingKind } from './swings';
 import { WeaponTrail } from './trail';
+import { mergeRigid } from './merge';
 import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
 import { STAND_UP_MS } from '../../../shared/src/nodes';
 import { SKILLS } from '../../../shared/src/data/skills';
@@ -492,6 +493,8 @@ export function loadQ(): Promise<void> {
         m.material = new THREE.MeshLambertMaterial({ color, emissive, emissiveIntensity, map, side: THREE.DoubleSide });
         m.castShadow = true;
       });
+      // a hammer or a helm is up to nine plain-coloured parts: one draw (and one shadow draw) instead (render/merge.ts)
+      mergeRigid(o);
     });
     for (const clip of anims.animations) clips[clip.name] = clip;
     const famKeys = new Map<string, number>();
@@ -965,6 +968,8 @@ interface QCape {
   links: [number, number, number, number][];
   /** what the cloth may not pass through: capsules between two bones (one for a sphere), their radius in model metres */
   hit: [THREE.Object3D, THREE.Object3D, number][];
+  /** each capsule's two ends this frame, and each anchor's place: worked out once a frame (capeCloth) */
+  ends?: THREE.Vector3[]; under?: THREE.Vector3[][];
   /** for each point, the vertices of the armour or robe worn under it that stand out furthest behind round it: the
    * cloth is kept behind them as they are posed (each frame where they are, skinned), so nothing worn comes through
    * it, whatever the race, the body or the move */
@@ -1035,7 +1040,8 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
   const ground = rootPos.y + 0.02 * scale;
   // the back's outward way now, and where the armour under each point is
   const out = _air2.set(0, 0, -1).applyQuaternion(c.spine.getWorldQuaternion(_q2).multiply(c.spineRest)).normalize();
-  const under = c.anchors.map((list) => list.map(([m, k]) => m.getVertexPosition(k, new THREE.Vector3()).applyMatrix4(m.matrixWorld)));
+  const under = (c.under ??= c.anchors.map((list) => list.map(() => new THREE.Vector3())));
+  c.anchors.forEach((list, i) => list.forEach(([m, k], j) => m.getVertexPosition(k, under[i][j]).applyMatrix4(m.matrixWorld)));
   const clear = 0.018 * scale; // the points lie on the cloth's middle: its folds dip a centimetre nearer, and it has a thickness
   // the back's upward way: however the body whips round (a sword swing), the cloth never rises over the shoulders
   const up = _up.set(0, 1, 0).applyQuaternion(_q2).normalize();
@@ -1071,6 +1077,10 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
     if (jump) c.pinned[i].copy(to);
     else c.pinned[i].add(moved);
   }
+  // The capsules' ends: the bones hold still while the cloth settles, so their places are read once a frame here
+  // (updated above with the root). getWorldPosition walked every parent again on each of the solver's thousands of calls.
+  const ends = (c.ends ??= c.hit.flatMap(() => [new THREE.Vector3(), new THREE.Vector3()]));
+  c.hit.forEach(([b0, b1], j) => (ends[j * 2].setFromMatrixPosition(b0.matrixWorld), ends[j * 2 + 1].setFromMatrixPosition(b1.matrixWorld)));
   const vmax = 9 * scale; // nor moves faster than this (m/s): a pose snapping (a swing begun again) must not fling it
   const steps = Math.min(6, Math.max(1, Math.ceil(dt * 90))), h = dt / steps;
   const g = 9.8 * scale, drag = 2.4;
@@ -1108,8 +1118,8 @@ function capeCloth(c: QCape, s: AnimState, dt: number) {
       }
       for (let i = cols; i < n; i++) {
         const p = c.pos[i];
-        for (const [b0, b1, r] of c.hit) {
-          const a0 = b0.getWorldPosition(_c), a1 = b1 === b0 ? a0 : b1.getWorldPosition(_y);
+        for (let j = 0; j < c.hit.length; j++) {
+          const a0 = ends[j * 2], a1 = ends[j * 2 + 1], r = c.hit[j][2];
           _a.subVectors(a1, a0);
           const len2 = _a.lengthSq();
           const t = len2 > 1e-9 ? THREE.MathUtils.clamp(_v.subVectors(p, a0).dot(_a) / len2, 0, 1) : 0;
