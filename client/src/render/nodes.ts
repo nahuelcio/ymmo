@@ -1,14 +1,18 @@
 // World nodes on screen (shared/src/nodes.ts): a felled tree falls and leaves a stump, a mined rock shrinks to
 // rubble, a picked bush loses its berries, and all of it comes back when the server says so. Works on the
-// nature chunks' instances (render/nature.ts nodeInstances): nothing runs per frame except a fall in progress.
+// nature chunks' instances (render/nature.ts nodeInstances): nothing runs per frame except a fall in progress, and
+// the berries within the camera's reach being picked out again every BERRY_STEP metres it moves.
 import * as THREE from 'three';
 import { layoutBushes, layoutTrees } from '../../../shared/src/layout';
 import { allNodes, isRest, nodeById, nodeIndex, type NodeDef } from '../../../shared/src/nodes';
 import { heightAt } from '../../../shared/src/terrain';
 import { natureReady, nodeHooks, nodeInstances } from './nature';
+import { settings } from '../settings';
 
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 const FALL_MS = 1400;
+/** metres the camera moves before the berries in reach are picked out again */
+const BERRY_STEP = 20;
 
 interface Fall { g: THREE.Group; t0: number; axis: THREE.Vector3; pivot: THREE.Vector3 }
 
@@ -19,8 +23,16 @@ export class NodeVisuals {
   private stumps: THREE.InstancedMesh;
   private stumpSlot = new Map<number, number>();
   private freeStumps: number[] = [];
+  /**
+   * The berries drawn: only the bushes within reach of the camera (nearBerries), out of every fruit
+   * bush in the world (berryAll, a matrix each, HIDDEN once picked). All 1430 drew every frame, wherever you were.
+   */
   private berries: THREE.InstancedMesh;
+  private berryAll: Float32Array;
   private berrySlot = new Map<number, number>();
+  private berryAt = new THREE.Vector3(Infinity, 0, 0);
+  private berryReach = 0;
+  private berryDirty = true;
   private falls: Fall[] = [];
 
   constructor(private scene: THREE.Scene) {
@@ -33,6 +45,7 @@ export class NodeVisuals {
     }
     this.stumps.castShadow = this.stumps.receiveShadow = true;
     this.stumps.frustumCulled = false;
+    this.stumps.count = 0; // only up to the highest slot in use is drawn (showStump)
     // berries: a cluster of red drops on every fruit bush
     const parts: THREE.BufferGeometry[] = [];
     for (let k = 0; k < 7; k++) {
@@ -43,14 +56,16 @@ export class NodeVisuals {
     // only over the textured bushes (the procedural fallback scatters its own, elsewhere)
     const bushes = layoutBushes(), fruit = natureReady() ? allNodes().filter((n) => n.kind === 'bush') : [];
     this.berries = new THREE.InstancedMesh(berryGeo, new THREE.MeshLambertMaterial({ color: 0xc0283c, emissive: 0x300008 }), fruit.length);
+    this.berryAll = new Float32Array(fruit.length * 16);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
     fruit.forEach((n, i) => {
       const b = bushes[nodeIndex(n)];
       const sc = b.sc * 0.9;
-      this.berries.setMatrixAt(i, m.compose(p.set(b.x, b.h, b.z), q.setFromAxisAngle(UP, b.rot), s.set(sc, sc, sc)));
+      m.compose(p.set(b.x, b.h, b.z), q.setFromAxisAngle(UP, b.rot), s.set(sc, sc, sc)).toArray(this.berryAll, i * 16);
       this.berrySlot.set(n.id, i);
     });
-    this.berries.computeBoundingSphere();
+    this.berries.count = 0;
+    this.berries.frustumCulled = false; // all of them lie around the camera
     this.berries.castShadow = false;
     // a felled/mined node whose tile streamed back in shows its fresh instances: knock it down again (no animation)
     nodeHooks.built = (ids) => {
@@ -110,7 +125,32 @@ export class NodeVisuals {
     if (i === undefined) return;
     const bushes = layoutBushes(), b = bushes[nodeIndex(n)];
     const sc = b.sc * 0.9;
-    setAt(this.berries, i, on ? new THREE.Matrix4().compose(new THREE.Vector3(b.x, b.h, b.z), new THREE.Quaternion().setFromAxisAngle(UP, b.rot), new THREE.Vector3(sc, sc, sc)) : HIDDEN);
+    (on ? new THREE.Matrix4().compose(new THREE.Vector3(b.x, b.h, b.z), new THREE.Quaternion().setFromAxisAngle(UP, b.rot), new THREE.Vector3(sc, sc, sc)) : HIDDEN).toArray(this.berryAll, i * 16);
+    this.berryDirty = true;
+  }
+
+  /**
+   * Draw the berries within reach of the camera at `p`: its far plane, plus BERRY_STEP for the metres it may move
+   * before the next pick. Past the far plane nothing shows anyway.
+   */
+  private nearBerries(p: THREE.Vector3) {
+    const reach = settings.s.viewDistance + 80 + BERRY_STEP; // game.ts: camera.far = viewDistance + 80
+    if (!this.berryDirty && reach === this.berryReach && this.berryAt.distanceToSquared(p) < BERRY_STEP * BERRY_STEP) return;
+    this.berryDirty = false;
+    this.berryReach = reach;
+    this.berryAt.copy(p);
+    const all = this.berryAll, out = this.berries.instanceMatrix.array;
+    let n = 0;
+    for (let i = 0; i < all.length; i += 16) {
+      if ((all[i + 12] - p.x) ** 2 + (all[i + 14] - p.z) ** 2 > reach * reach) continue;
+      for (let k = 0; k < 16; k++) out[n * 16 + k] = all[i + k];
+      n++;
+    }
+    this.berries.count = n;
+    this.berries.visible = n > 0;
+    this.berries.instanceMatrix.clearUpdateRanges();
+    this.berries.instanceMatrix.addUpdateRange(0, n * 16);
+    this.berries.instanceMatrix.needsUpdate = true;
   }
 
   private showStump(n: NodeDef, on: boolean) {
@@ -128,6 +168,9 @@ export class NodeVisuals {
       this.freeStumps.push(i);
       setAt(this.stumps, i, HIDDEN);
     }
+    let top = -1;
+    for (const i of this.stumpSlot.values()) top = Math.max(top, i);
+    this.stumps.count = top + 1;
   }
 
   /** A copy of the tree that tips over away from the woodcutter and sinks out of sight. */
@@ -153,8 +196,9 @@ export class NodeVisuals {
     this.falls.push({ g: holder, t0: performance.now(), axis: new THREE.Vector3(Math.cos(dir), 0, Math.sin(dir)), pivot });
   }
 
-  /** Per frame, only while a tree is falling. */
-  update() {
+  /** Per frame: the berries around the camera at `p`, and a tree while it falls. */
+  update(p?: THREE.Vector3) {
+    if (p) this.nearBerries(p);
     if (!this.falls.length) return;
     const now = performance.now();
     this.falls = this.falls.filter((f) => {

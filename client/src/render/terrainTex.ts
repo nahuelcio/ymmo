@@ -40,68 +40,86 @@ varying vec2 vSplatB;
 varying vec3 vTexWorld;
 varying vec3 vTexNormal;
 
-vec4 terrainSample(vec2 p, int layer) {
+// Explicit gradients (dx, dy: the screen derivatives of p): FRAG_MAIN reads only the layers present at a pixel, and a
+// texture read inside such a branch can't take its mip level from its neighbours.
+vec4 terrainSample(vec2 p, vec2 dx, vec2 dy, int layer) {
   float s = uTexScale[layer];
-  vec4 a = texture(uTerrainTex, vec3(p * s, float(layer)));
+  vec4 a = textureGrad(uTerrainTex, vec3(p * s, float(layer)), dx * s, dy * s);
 #ifdef TERRAIN_TEX_HQ
   // a second, rotated and larger sample of the same layer breaks up the visible repetition
-  vec2 q = mat2(0.8, -0.6, 0.6, 0.8) * p * s * 0.37 + 0.5;
-  vec4 b = texture(uTerrainTex, vec3(q, float(layer)));
+  const mat2 TURN = mat2(0.8, -0.6, 0.6, 0.8);
+  vec2 q = TURN * p * s * 0.37 + 0.5;
+  vec4 b = textureGrad(uTerrainTex, vec3(q, float(layer)), TURN * dx * s * 0.37, TURN * dy * s * 0.37);
   a = mix(a, b, 0.4);
   a.r = uTexMean[layer] + (a.r - uTexMean[layer]) * 1.35; // restore the contrast lost by averaging
 #endif
   return a;
 }
 
-vec4 terrainRock(vec3 wp, vec3 n) {
+vec4 terrainRock(vec3 wp, vec3 dx, vec3 dy, vec3 n) {
 #ifdef TERRAIN_TEX_HQ
   // triplanar: cliffs get the rock projected from the side instead of stretched from above
   vec3 w = pow(abs(n), vec3(4.0));
   w /= (w.x + w.y + w.z);
   float s = uTexScale[2];
-  return texture(uTerrainTex, vec3(wp.zy * s, 2.0)) * w.x
-       + terrainSample(wp.xz, 2) * w.y
-       + texture(uTerrainTex, vec3(wp.xy * s, 2.0)) * w.z;
+  // on gentle slopes a side projection weighs under a thousandth: not read
+  vec4 r = terrainSample(wp.xz, dx.xz, dy.xz, 2) * w.y;
+  if (w.x > 0.001) r += textureGrad(uTerrainTex, vec3(wp.zy * s, 2.0), dx.zy * s, dy.zy * s) * w.x;
+  if (w.z > 0.001) r += textureGrad(uTerrainTex, vec3(wp.xy * s, 2.0), dx.xy * s, dy.xy * s) * w.z;
+  return r;
 #else
-  return terrainSample(wp.xz, 2);
+  return terrainSample(wp.xz, dx.xz, dy.xz, 2);
 #endif
 }
 `;
 
 const FRAG_MAIN = /* glsl */ `
-float texBump;
+float texBump = 0.0;
 {
-  vec2 p = vTexWorld.xz;
-  vec4 s0 = terrainSample(p, 0);
-  vec4 s1 = terrainSample(p, 1);
-  vec4 s2 = terrainRock(vTexWorld, normalize(vTexNormal));
-  vec4 s3 = terrainSample(p, 3);
-  vec4 s4 = terrainSample(p, 4);
-  vec4 s5 = terrainSample(p, 5);
-  float w0 = vSplatA.x, w1 = vSplatA.y, w2 = vSplatA.z, w3 = vSplatA.w, w4 = vSplatB.x, w5 = vSplatB.y;
-  // height blend: a layer wins where its weight plus its texel height is highest
-  const float D = 0.3;
-  float h0 = w0 > 0.001 ? w0 + s0.g * D : 0.0;
-  float h1 = w1 > 0.001 ? w1 + s1.g * D : 0.0;
-  float h2 = w2 > 0.001 ? w2 + s2.g * D : 0.0;
-  float h3 = w3 > 0.001 ? w3 + s3.g * D : 0.0;
-  float h4 = w4 > 0.001 ? w4 + s4.g * D : 0.0;
-  float h5 = w5 > 0.001 ? w5 + s5.g * D : 0.0;
-  float top = max(max(max(h0, h1), max(h2, h3)), max(h4, h5)) - D;
-  float b0 = max(h0 - top, 0.0), b1 = max(h1 - top, 0.0), b2 = max(h2 - top, 0.0);
-  float b3 = max(h3 - top, 0.0), b4 = max(h4 - top, 0.0), b5 = max(h5 - top, 0.0);
-  float bs = b0 + b1 + b2 + b3 + b4 + b5 + 1e-5;
-  // brightness relative to each layer's mean, so the average ground colour stays what it was
-  float lum = (b0 * s0.r / uTexMean[0] + b1 * s1.r / uTexMean[1] + b2 * s2.r / uTexMean[2]
-             + b3 * s3.r / uTexMean[3] + b4 * s4.r / uTexMean[4] + b5 * s5.r / uTexMean[5]) / bs;
-  float tint = (b0 * s0.b + b1 * s1.b + b2 * s2.b + b3 * s3.b + b4 * s4.b + b5 * s5.b) / bs;
-  // fade out with distance: far away the texels only shimmer
+  // fade out with distance: far away the texels only shimmer (past the fade they change nothing: nothing is read)
   float k = uTexStrength * (1.0 - smoothstep(180.0, 420.0, length(vViewPosition)));
-  lum = 1.0 + (lum - 1.0) * uTexContrast;
-  vec3 detail = lum * (vec3(1.0) + (tint - 0.5) * vec3(0.2, 0.12, -0.1));
-  diffuseColor.rgb *= mix(vec3(1.0), detail, k);
-  // relief depth in world units, bumped into the normal after <normal_fragment_maps>
-  texBump = (b0 * s0.g + b1 * s1.g + b2 * s2.g + b3 * s3.g + b4 * s4.g + b5 * s5.g) / bs * k * 0.06;
+  vec3 dwx = dFdx(vTexWorld), dwy = dFdy(vTexWorld);
+  if (k > 0.0) {
+    vec2 p = vTexWorld.xz, dx = dwx.xz, dy = dwy.xz;
+    float w0 = vSplatA.x, w1 = vSplatA.y, w2 = vSplatA.z, w3 = vSplatA.w, w4 = vSplatB.x, w5 = vSplatB.y;
+    // only the layers present here are read (most pixels have one or two of the six)
+    vec4 s0 = w0 > 0.001 ? terrainSample(p, dx, dy, 0) : vec4(0.0);
+    vec4 s1 = w1 > 0.001 ? terrainSample(p, dx, dy, 1) : vec4(0.0);
+    vec4 s2 = w2 > 0.001 ? terrainRock(vTexWorld, dwx, dwy, normalize(vTexNormal)) : vec4(0.0);
+    vec4 s3 = w3 > 0.001 ? terrainSample(p, dx, dy, 3) : vec4(0.0);
+    vec4 s4 = w4 > 0.001 ? terrainSample(p, dx, dy, 4) : vec4(0.0);
+    vec4 s5 = w5 > 0.001 ? terrainSample(p, dx, dy, 5) : vec4(0.0);
+    // height blend: a layer wins where its weight plus its texel height is highest
+    const float D = 0.3;
+    float h0 = w0 > 0.001 ? w0 + s0.g * D : 0.0;
+    float h1 = w1 > 0.001 ? w1 + s1.g * D : 0.0;
+    float h2 = w2 > 0.001 ? w2 + s2.g * D : 0.0;
+    float h3 = w3 > 0.001 ? w3 + s3.g * D : 0.0;
+    float h4 = w4 > 0.001 ? w4 + s4.g * D : 0.0;
+    float h5 = w5 > 0.001 ? w5 + s5.g * D : 0.0;
+    float top = max(max(max(h0, h1), max(h2, h3)), max(h4, h5)) - D;
+    // where every present layer is thin (top < 0) an absent one still gets a share of the blend: read it then
+    if (top < 0.0) {
+      if (w0 <= 0.001) s0 = terrainSample(p, dx, dy, 0);
+      if (w1 <= 0.001) s1 = terrainSample(p, dx, dy, 1);
+      if (w2 <= 0.001) s2 = terrainRock(vTexWorld, dwx, dwy, normalize(vTexNormal));
+      if (w3 <= 0.001) s3 = terrainSample(p, dx, dy, 3);
+      if (w4 <= 0.001) s4 = terrainSample(p, dx, dy, 4);
+      if (w5 <= 0.001) s5 = terrainSample(p, dx, dy, 5);
+    }
+    float b0 = max(h0 - top, 0.0), b1 = max(h1 - top, 0.0), b2 = max(h2 - top, 0.0);
+    float b3 = max(h3 - top, 0.0), b4 = max(h4 - top, 0.0), b5 = max(h5 - top, 0.0);
+    float bs = b0 + b1 + b2 + b3 + b4 + b5 + 1e-5;
+    // brightness relative to each layer's mean, so the average ground colour stays what it was
+    float lum = (b0 * s0.r / uTexMean[0] + b1 * s1.r / uTexMean[1] + b2 * s2.r / uTexMean[2]
+               + b3 * s3.r / uTexMean[3] + b4 * s4.r / uTexMean[4] + b5 * s5.r / uTexMean[5]) / bs;
+    float tint = (b0 * s0.b + b1 * s1.b + b2 * s2.b + b3 * s3.b + b4 * s4.b + b5 * s5.b) / bs;
+    lum = 1.0 + (lum - 1.0) * uTexContrast;
+    vec3 detail = lum * (vec3(1.0) + (tint - 0.5) * vec3(0.2, 0.12, -0.1));
+    diffuseColor.rgb *= mix(vec3(1.0), detail, k);
+    // relief depth in world units, bumped into the normal after <normal_fragment_maps>
+    texBump = (b0 * s0.g + b1 * s1.g + b2 * s2.g + b3 * s3.g + b4 * s4.g + b5 * s5.g) / bs * k * 0.06;
+  }
 }
 `;
 
