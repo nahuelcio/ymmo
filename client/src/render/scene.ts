@@ -12,6 +12,7 @@ import { settings } from '../settings';
 import { ATMOS, cloudCover, sunPhase, sway, waterMaterial, type LightSource } from './atmos';
 import { TerrainTextures, type TerrainTexQuality } from './terrainTex';
 import { WaterReflection } from './reflect';
+import { ForestLod, inShadowBox } from './forestLod';
 import { addSurface, setPropTextures, updatePropTextures, type Precompile, type Surface } from './propTex';
 
 const SKY = 0xa9c6e0;
@@ -265,6 +266,8 @@ export interface WorldScene {
   /** a lightning strike lights up the whole sky for a moment; power 0..1 (weaker the farther it fell) */
   flashSky(power: number): void;
   follow(p: THREE.Vector3): void;
+  /** a sphere reaches into the sun's shadow box (anything outside it would draw into the shadow map for nothing) */
+  inShadowBox(p: THREE.Vector3, r: number): boolean;
   /** ground textures: off, low or high (render/terrainTex.ts) */
   setTextureQuality(q: TerrainTexQuality): void;
   /** sampler anisotropy for the GLTF colour maps (setting textureAniso) */
@@ -371,8 +374,12 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
 
+  // trunks drawn simpler far away, and only what stands in the sun's shadow box casts (render/forestLod.ts)
+  const forestLod = new ForestLod();
+  if (opts.renderer) forestLod.attach(opts.renderer);
+  scene.add(forestLod.casters);
   // terrain tiles and their trees/rocks/bushes stream in around the player (streamTiles); the start town's are built now
-  const tiles = streamTiles();
+  const tiles = streamTiles(forestLod);
   const terrain = tiles.terrain;
   tiles.update(new THREE.Vector3(TOWN.x, 0, TOWN.z), (scene.fog as THREE.Fog).far);
   const terrainTex = new TerrainTextures(terrain, tiles.plain, opts.maxAnisotropy ?? 1, opts.precompile);
@@ -384,7 +391,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
   scene.add(water);
   // the volcano's lava churns on the water's clock
   scene.add(buildLava(waterFancy.uniforms.time as { value: number }));
-  const grass = natureReady() ? lazyDetail(natureDetailCell, NATURE_DETAIL_DRAWS) : lazyDetail(makeDetailCell(), DETAIL_PER_CELL * 5);
+  const grass = natureReady() ? lazyDetail(natureDetailCell, NATURE_DETAIL_DRAWS, forestLod) : lazyDetail(makeDetailCell(), DETAIL_PER_CELL * 5, forestLod);
   const detail = grass.group;
   scene.add(detail);
   const solids = [mergeStatic(buildTown()), buildVillage(), mergeStatic(buildZoneProps())];
@@ -512,6 +519,7 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       flashAt = performance.now();
       flashPow = Math.min(1, power);
     },
+    inShadowBox: (p, r) => inShadowBox(sun, p, r),
     follow(p) {
       // snap to whole shadow texels in light space: the map then moves in steps, so edges don't shimmer while walking
       const L = ATMOS.lightDir;
@@ -528,14 +536,17 @@ export function createWorldScene(opts: { maxAnisotropy?: number; precompile?: Pr
       // chunk visibility only changes after a few steps (or a new view distance): don't re-check every frame
       const reachNow = (scene.fog as THREE.Fog).far;
       const moved = lastCull.distanceToSquared(p);
-      if (moved < 4 && lastReach === reachNow && lastDetail === detail.visible && !grassLeft && !tilesLeft) return;
-      lastCull.copy(p);
-      lastReach = reachNow;
-      lastDetail = detail.visible;
-      // grass and flowers only around the player (still building some: come back next frame)
-      if (detail.visible) grassLeft = !grass.update(p, moved > 60 * 60);
-      // terrain/forest tiles: build what came into range (a few ms a frame), drop what fell far behind
-      tilesLeft = !tiles.update(p, reachNow);
+      if (moved >= 4 || lastReach !== reachNow || lastDetail !== detail.visible || grassLeft || tilesLeft) {
+        lastCull.copy(p);
+        lastReach = reachNow;
+        lastDetail = detail.visible;
+        // grass and flowers only around the player (still building some: come back next frame)
+        if (detail.visible) grassLeft = !grass.update(p, moved > 60 * 60);
+        // terrain/forest tiles: build what came into range (a few ms a frame), drop what fell far behind
+        tilesLeft = !tiles.update(p, reachNow);
+      }
+      // after the culling above, so a tile or grass cell shows with its levels and its shadow on the same frame
+      forestLod.update(p, sun);
     },
   };
 }
@@ -614,7 +625,7 @@ export function tilesWithin(x: number, z: number, r: number): { cx: number; cz: 
  * update() builds the tiles under the player at once (spawn, teleport) and the rest within a few ms a frame,
  * nearest first. False while some are left to build.
  */
-function streamTiles() {
+function streamTiles(casting: ForestLod) {
   const terrain = new THREE.Group(), forest = new THREE.Group();
   terrain.name = 'terrain';
   const plain = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -652,7 +663,7 @@ function streamTiles() {
           const idx = buckets.get(k) ?? { trees: [], rocks: [], bushes: [] };
           t.trees = natureReady() ? natureTile(idx) : fallbackTile(idx);
           // the group is frozen (no per-frame matrix pass): the meshes sit at the origin, so their matrices already are right
-          for (const m of t.trees) (m.matrixAutoUpdate = false), forest.add(m);
+          for (const m of t.trees) (m.matrixAutoUpdate = false), forest.add(m), casting.add(m);
         }
       }
       // fog hides everything past its far end
@@ -664,7 +675,7 @@ function streamTiles() {
       if (t.ground) terrain.remove(t.ground), t.ground.geometry.dispose();
       if (t.trees) {
         dropNodeInstances(t.trees);
-        for (const m of t.trees) forest.remove(m), (m as THREE.InstancedMesh).dispose(); // instance buffers; geometry/material are shared
+        for (const m of t.trees) casting.remove(m), forest.remove(m), (m as THREE.InstancedMesh).dispose(); // instance buffers; geometry/material are shared
       }
       live.delete(k);
     }
@@ -1048,7 +1059,7 @@ const DETAIL_PER_CELL = 520;
  * (all at once after a jump: spawning, teleports) and lets go of the ones left 200 m behind; a cell comes back
  * exactly as it was (detailCells gives each its seed).
  */
-function lazyDetail(build: (x0: number, z0: number, seed: number) => THREE.Object3D[], draws: number) {
+function lazyDetail(build: (x0: number, z0: number, seed: number) => THREE.Object3D[], draws: number, casting: ForestLod) {
   const SHOW = 95, KEEP = 200, PER_CALL = 2;
   const group = new THREE.Group();
   const cells = detailCells(DETAIL_CHUNK, draws), built = new Map<number, THREE.Object3D[]>();
@@ -1062,11 +1073,11 @@ function lazyDetail(build: (x0: number, z0: number, seed: number) => THREE.Objec
         if (left-- <= 0) return void (done = false);
         built.set(i, (meshes = build(c.x0, c.z0, c.seed)));
         // the group is frozen (no per-frame matrix pass): the meshes sit at the origin, so their matrices already are right
-        for (const m of meshes) (m.matrixAutoUpdate = false), group.add(m);
+        for (const m of meshes) (m.matrixAutoUpdate = false), group.add(m), casting.add(m);
       }
       if (!meshes) return;
       if (Math.max(dx, dz) > KEEP) {
-        for (const m of meshes) group.remove(m), (m as THREE.InstancedMesh).dispose(); // frees the instance buffers; geometry and material are shared
+        for (const m of meshes) casting.remove(m), group.remove(m), (m as THREE.InstancedMesh).dispose(); // frees the instance buffers; geometry and material are shared
         built.delete(i);
       } else for (const m of meshes) m.visible = near;
     });

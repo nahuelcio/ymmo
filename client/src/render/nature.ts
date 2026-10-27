@@ -7,6 +7,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { biomeWeight, heightAt, valueNoise, mulberry32, regionAt, TOWN, TOWN_HEIGHT, WORLD_HALF } from '../../../shared/src/terrain';
 import { fertile, layoutBushes, roadDist, layoutRocks, layoutTown, layoutTrees, ROADS, spotHash, zoneOf } from '../../../shared/src/layout';
 import { sway } from './atmos';
+import { TRUNK_LEVELS } from './forestLod';
+import { lodReady, simplifiedLevels } from './lod';
 import { NODE_BASE, nodeById } from '../../../shared/src/nodes';
 
 const PIECES = [
@@ -93,7 +95,8 @@ function seeThrough(m: THREE.Material) {
   };
 }
 
-interface Prim { geo: THREE.BufferGeometry; mat: THREE.MeshLambertMaterial }
+/** lods: a trunk's simplified copies (index 0 = geo), drawn by distance (render/forestLod.ts) */
+interface Prim { geo: THREE.BufferGeometry; mat: THREE.MeshLambertMaterial; lods?: THREE.BufferGeometry[] }
 const prims = new Map<string, Prim[]>();
 const mats = new Map<string, THREE.MeshLambertMaterial>();
 const texByFile = new Map<string, THREE.Texture>();
@@ -241,6 +244,14 @@ export function loadNature(): Promise<void> {
       if (!name.startsWith('Rock')) ground(list);
       prims.set(name, list);
     });
+    // The pack's trunks are finely tessellated: a quarter of their triangles keeps every vertex within a few cm. Leaves
+    // are separate cards (two triangles each) and can't be simplified without thinning the crowns: they stay as they are.
+    await lodReady;
+    for (const piece of [...PINES, ...GREENS, ...AUTUMN, ...DEAD])
+      for (const p of prims.get(piece) ?? []) if (!p.mat.alphaTest) {
+        const lods = simplifiedLevels(p.geo, TRUNK_LEVELS, 300);
+        if (lods.length > 1) p.lods = lods;
+      }
     ready = prims.size === PIECES.length && [...prims.values()].every((l) => l.length > 0);
   })());
 }
@@ -272,6 +283,7 @@ function chunked(items: Item[], chunk: number, cell?: { cx: number; cz: number }
         l.push({ mesh, i });
       }
     });
+    if (prim.lods) mesh.userData.lods = prim.lods;
     mesh.castShadow = true;
     // ponytail: cutout foliage casts shadows but does not receive them: leaf cards shadowing each other stamped crisp dark leaf blotches all over the crowns. Upgrade path: soft per-tree shading instead.
     mesh.receiveShadow = !prim.mat.alphaTest;
