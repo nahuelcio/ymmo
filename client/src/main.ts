@@ -404,7 +404,12 @@ function previewRenderer(host: HTMLElement, get: () => { race: Race; cls: ClassT
   const t0 = performance.now();
   const rebuild = () => (key = ''); // an armour set came in (render/quaternius.ts loads them when first worn)
   addEventListener('gear-loaded', rebuild);
-  renderer.setAnimationLoop(() => {
+  // 60 fps, paced like the game's (game.ts frame): on a 120-165 Hz screen the turning model drew two or three times as often
+  const step = 1000 / 60;
+  let last = 0;
+  renderer.setAnimationLoop((now) => {
+    if (now - last < step - 1) return;
+    last = Math.max(last + step, now - step);
     const { race, cls, look } = get();
     const k = `${race}|${cls}|${look.g}|${look.hs}|${look.hc}`;
     if (k !== key) {

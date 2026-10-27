@@ -926,9 +926,12 @@ export class Minimap {
     // everything built or planted is drawn as shapes on top, so it stays crisp at any zoom
     const seen = (x: number, y: number, m = 6) => x > -m && y > -m && x < W + m && y < W + m;
     ctx.fillStyle = 'rgba(24, 62, 30, 0.8)';
+    // seen(x, y) in world units, without an array per tree: the world has ~13k of them and most are far off the map
+    const lim = (W / 2 + 6) / scale;
     for (const t of layoutTrees()) {
-      const [x, y] = toC(t.x, t.z);
-      if (!seen(x, y)) continue;
+      const dx = t.x - px, dz = t.z - pz;
+      if (dx <= -lim || dx >= lim || dz <= -lim || dz >= lim) continue;
+      const x = dx * scale + W / 2, y = dz * scale + W / 2;
       ctx.beginPath();
       ctx.arc(x, y, Math.max(0.9, 1.1 * t.sc * scale), 0, Math.PI * 2);
       ctx.fill();

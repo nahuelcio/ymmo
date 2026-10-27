@@ -104,7 +104,9 @@ uniform float uRelief;
 varying vec3 vPropWorld;
 varying vec3 vPropNormal;
 
-vec4 propPlane(vec2 uv) { return texture(PROP_SAMPLER, vec3(uv * PROP_SCALE, PROP_LAYER)); }
+// explicit gradients (dx, dy: the plane's screen derivatives): FRAG_MAIN reads planes inside branches, where a
+// texture read can't take its mip level from its neighbours
+vec4 propPlane(vec2 uv, vec2 dx, vec2 dy) { return textureGrad(PROP_SAMPLER, vec3(uv * PROP_SCALE, PROP_LAYER), dx * PROP_SCALE, dy * PROP_SCALE); }
 #endif
 `;
 
@@ -115,28 +117,35 @@ const FRAG_MAIN = /* glsl */ `
 #ifdef PROP_TEX
 float propBump = 0.0;
 {
-  vec3 n = normalize(vPropNormal), p = vPropWorld, a = abs(n);
+  // past the fade the texture changes nothing: nothing is read there
+  float k = uPropStrength * (1.0 - smoothstep(70.0, 180.0, length(vViewPosition)));
+  vec3 n = normalize(vPropNormal), p = vPropWorld, a = abs(n), dpx = dFdx(p), dpy = dFdy(p);
+  if (k > 0.0) {
 #ifdef PROP_VERTICAL_GRAIN
-  vec2 ux = p.yz, uz = p.yx;
+    vec2 ux = p.yz, uz = p.yx, xdx = dpx.yz, xdy = dpy.yz, zdx = dpx.yx, zdy = dpy.yx;
 #else
-  vec2 ux = p.zy, uz = p.xy;
+    vec2 ux = p.zy, uz = p.xy, xdx = dpx.zy, xdy = dpy.zy, zdx = dpx.xy, zdy = dpy.xy;
 #endif
-  vec2 uy = p.xz;
+    vec2 uy = p.xz, ydx = dpx.xz, ydy = dpy.xz;
 #ifdef PROP_SIDES_ONLY
-  a.y = (a.x + a.z) < 0.15 ? 1.0 : 0.0; // only flat tops fall back to the top plane
+    a.y = (a.x + a.z) < 0.15 ? 1.0 : 0.0; // only flat tops fall back to the top plane
 #endif
 #ifdef PROP_TEX_HQ
-  vec3 w = pow(a, vec3(4.0));
-  w /= (w.x + w.y + w.z + 1e-5);
-  vec4 t = propPlane(ux) * w.x + propPlane(uy) * w.y + propPlane(uz) * w.z;
+    vec3 w = pow(a, vec3(4.0));
+    w /= (w.x + w.y + w.z + 1e-5);
+    // a plane weighing under a thousandth is not read: a flat face reads one plane instead of three
+    vec4 t = vec4(0.0);
+    if (w.x > 0.001) t += propPlane(ux, xdx, xdy) * w.x;
+    if (w.y > 0.001) t += propPlane(uy, ydx, ydy) * w.y;
+    if (w.z > 0.001) t += propPlane(uz, zdx, zdy) * w.z;
 #else
-  vec4 t = a.x >= a.y && a.x >= a.z ? propPlane(ux) : a.z >= a.y ? propPlane(uz) : propPlane(uy);
+    vec4 t = a.x >= a.y && a.x >= a.z ? propPlane(ux, xdx, xdy) : a.z >= a.y ? propPlane(uz, zdx, zdy) : propPlane(uy, ydx, ydy);
 #endif
-  float lum = 1.0 + (t.r / PROP_MEAN[int(PROP_LAYER)] - 1.0) * PROP_CONTRAST;
-  vec3 detail = lum * (vec3(1.0) + (t.b - 0.5) * vec3(0.08, 0.05, -0.05));
-  float k = uPropStrength * (1.0 - smoothstep(70.0, 180.0, length(vViewPosition)));
-  diffuseColor.rgb *= mix(vec3(1.0), detail, k);
-  propBump = t.g * k * (0.01 / PROP_SCALE); // relief depth in world units, ~1% of the tile
+    float lum = 1.0 + (t.r / PROP_MEAN[int(PROP_LAYER)] - 1.0) * PROP_CONTRAST;
+    vec3 detail = lum * (vec3(1.0) + (t.b - 0.5) * vec3(0.08, 0.05, -0.05));
+    diffuseColor.rgb *= mix(vec3(1.0), detail, k);
+    propBump = t.g * k * (0.01 / PROP_SCALE); // relief depth in world units, ~1% of the tile
+  }
 }
 #endif
 `;

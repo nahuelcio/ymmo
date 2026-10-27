@@ -2678,7 +2678,7 @@ export class Game {
     }
     this.fx.p.setShade(0.25 + 0.75 * ATMOS.day);
     this.fx.update(this.self?.pos);
-    this.nodes.update();
+    this.nodes.update(this.camera.position);
     tickLod();
     this.ui.update(now);
     this.renderer.info.reset();

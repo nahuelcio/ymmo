@@ -33,41 +33,71 @@ class GTAO extends GTAOPass {
   }
 }
 
-/** Sharpen, white balance, saturation, contrast and vignette in one cheap full-screen pass. */
-const GradeShader = {
-  uniforms: {
-    tDiffuse: { value: null as THREE.Texture | null },
-    texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
-    saturation: { value: 1 },
-    contrast: { value: 1 },
-    vignette: { value: 0.3 },
-    warmth: { value: 0 },
-    sharpen: { value: 0 },
-  },
-  vertexShader: /* glsl */ `
-    varying vec2 vUv;
-    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: /* glsl */ `
-    uniform sampler2D tDiffuse;
-    uniform vec2 texel;
-    uniform float saturation, contrast, vignette, warmth, sharpen;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      if (sharpen > 0.0) {
-        vec3 n = texture2D(tDiffuse, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(texel.x, 0.0)).rgb
-               + texture2D(tDiffuse, vUv + vec2(0.0, texel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, texel.y)).rgb;
-        c.rgb += (c.rgb * 4.0 - n) * sharpen * 0.5;
+/**
+ * OutputPass (tone mapping and the sRGB encoding) followed by the grade: sharpen, white balance, saturation, contrast
+ * and vignette. One full-screen pass where there were two, so the screen is read and written once less. The sharpen's
+ * four neighbours go through the same tone mapping and encoding the output pass gave them before.
+ */
+class GradedOutputPass extends OutputPass {
+  constructor() {
+    super();
+    // the material reads this same uniforms object
+    Object.assign(this.uniforms, {
+      texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) },
+      saturation: { value: 1 },
+      contrast: { value: 1 },
+      vignette: { value: 0.3 },
+      warmth: { value: 0 },
+      sharpen: { value: 0 },
+    });
+    this.material.fragmentShader = /* glsl */ `
+      precision highp float;
+      uniform sampler2D tDiffuse;
+      uniform vec2 texel;
+      uniform float saturation, contrast, vignette, warmth, sharpen;
+      #include <tonemapping_pars_fragment>
+      #include <colorspace_pars_fragment>
+      varying vec2 vUv;
+      // what OutputPass wrote (three's OutputShader): tone mapped, then encoded
+      vec3 outputOf(vec2 uv) {
+        vec3 c = texture2D(tDiffuse, uv).rgb;
+        #ifdef LINEAR_TONE_MAPPING
+          c = LinearToneMapping(c);
+        #elif defined(REINHARD_TONE_MAPPING)
+          c = ReinhardToneMapping(c);
+        #elif defined(CINEON_TONE_MAPPING)
+          c = CineonToneMapping(c);
+        #elif defined(ACES_FILMIC_TONE_MAPPING)
+          c = ACESFilmicToneMapping(c);
+        #elif defined(AGX_TONE_MAPPING)
+          c = AgXToneMapping(c);
+        #elif defined(NEUTRAL_TONE_MAPPING)
+          c = NeutralToneMapping(c);
+        #elif defined(CUSTOM_TONE_MAPPING)
+          c = CustomToneMapping(c);
+        #endif
+        #ifdef SRGB_TRANSFER
+          c = sRGBTransferOETF(vec4(c, 1.0)).rgb;
+        #endif
+        return c;
       }
-      c.rgb *= vec3(1.0 + warmth * 0.12, 1.0 + warmth * 0.03, 1.0 - warmth * 0.12);
-      float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-      c.rgb = mix(vec3(l), c.rgb, saturation);
-      c.rgb = (c.rgb - 0.5) * contrast + 0.5;
-      vec2 d = vUv - 0.5;
-      c.rgb *= 1.0 - vignette * smoothstep(0.25, 0.75, dot(d, d) * 2.0);
-      gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
-    }`,
-};
+      void main() {
+        vec4 c = vec4(outputOf(vUv), texture2D(tDiffuse, vUv).a);
+        if (sharpen > 0.0) {
+          vec3 n = outputOf(vUv + vec2(texel.x, 0.0)) + outputOf(vUv - vec2(texel.x, 0.0))
+                 + outputOf(vUv + vec2(0.0, texel.y)) + outputOf(vUv - vec2(0.0, texel.y));
+          c.rgb += (c.rgb * 4.0 - n) * sharpen * 0.5;
+        }
+        c.rgb *= vec3(1.0 + warmth * 0.12, 1.0 + warmth * 0.03, 1.0 - warmth * 0.12);
+        float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+        c.rgb = mix(vec3(l), c.rgb, saturation);
+        c.rgb = (c.rgb - 0.5) * contrast + 0.5;
+        vec2 d = vUv - 0.5;
+        c.rgb *= 1.0 - vignette * smoothstep(0.25, 0.75, dot(d, d) * 2.0);
+        gl_FragColor = vec4(clamp(c.rgb, 0.0, 1.0), c.a);
+      }`;
+  }
+}
 
 const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colorGrade', 'godRays', 'tiltShift', 'volumetric', 'shadows'];
 
@@ -78,7 +108,7 @@ const PIPE_KEYS: (keyof Settings)[] = ['antialias', 'bloom', 'ao', 'fxaa', 'colo
 export class PostFX {
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
-  private grade: ShaderPass | null = null;
+  private grade: GradedOutputPass | null = null;
   private fxaa: ShaderPass | null = null;
   private rays: ShaderPass | null = null;
   private tilt: ShaderPass | null = null;
@@ -123,11 +153,9 @@ export class PostFX {
       this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), s.bloomStrength, 0.4, 0.82);
       c.addPass(this.bloom);
     }
-    c.addPass(new OutputPass());
-    if (s.colorGrade) {
-      this.grade = new ShaderPass(GradeShader);
-      c.addPass(this.grade);
-    }
+    // the grade rides in the output pass (one full-screen pass for both)
+    if (s.colorGrade) c.addPass((this.grade = new GradedOutputPass()));
+    else c.addPass(new OutputPass());
     if (s.tiltShift) {
       this.tilt = new ShaderPass(TiltShader);
       c.addPass(this.tilt);
