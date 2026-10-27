@@ -238,7 +238,6 @@ export class Minimap {
   private wheelAt = 0;
   private routePts: { x: number; z: number }[] = [];
   private routeAt = 0;
-  private raidBtn: HTMLButtonElement;
   /** the player's arrows, pointing where the camera looks (face, every frame) and the last transform each was given */
   private mmFace!: SVGSVGElement;
   private bigFace!: SVGSVGElement;
@@ -287,15 +286,6 @@ export class Minimap {
     const zout = el('button', 'btn small', zoom, '−');
     zout.onclick = () => (this.viewR = Math.min(300, this.viewR / 0.75));
     this.canvas.onclick = () => this.toggleMap();
-    // leaving a raid is the /raid chat command; a second click confirms, so a stray one mid-fight doesn't throw you out
-    const leave = tx('Salir', 'Leave'), sure = tx('¿Seguro?', 'Sure?');
-    this.raidBtn = el('button', 'btn small mm-raid', box, leave);
-    this.raidBtn.title = tx('Salir de la raid y volver a la aldea', 'Leave the raid and return to the village');
-    this.raidBtn.onclick = () => {
-      if (this.raidBtn.textContent === sure) g.net.send({ t: 'chat', text: '/raid' });
-      else setTimeout(() => (this.raidBtn.textContent = leave), 3000);
-      this.raidBtn.textContent = this.raidBtn.textContent === sure ? leave : sure;
-    };
 
     // The overview is already RES px (~2 m). Squashing it into 512 and smoothing made the whole map soft.
     // fits .win-body (max-height 100vh - 120, 8px padding) with the hint line: a scrollbar would toggle
@@ -899,10 +889,6 @@ export class Minimap {
     const self = this.g.self;
     const fort = SIEGE_FORTS.find((f) => f.name === this.g.me.zone), own = fort && this.g.sieges.owners[fort.id];
     this.zoneEl.textContent = `${zoneName(this.g.me.zone, lang)}${own ? ` · ${own.name}` : ''}`;
-    const raid = Object.values(RAIDS).find((r) => r.name === this.g.me.zone); // inside one, the zone is the raid's name
-    this.raidBtn.style.display = raid ? '' : 'none';
-    // leaving an Olympiad fight gives it up
-    this.raidBtn.title = raid?.arena ? tx('Rendirte: perdés el combate', 'Give up: you lose the fight') : tx('Salir de la raid y volver a la aldea', 'Leave the raid and return to the village');
     const clock = settings.s.dayNight ? gameClock() : '';
     if (this.clockEl.textContent !== clock) {
       this.clockEl.textContent = clock;

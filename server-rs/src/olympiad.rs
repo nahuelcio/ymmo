@@ -230,7 +230,7 @@ impl World {
         self.arena_end(winner, "ko", now);
     }
 
-    /** A fighter leaves (Salir, /raid, a dropped connection) before it is over: the other wins. */
+    /** A fighter leaves (a Scroll of Escape, /unstuck, a dropped connection) before it is over: the other wins. */
     pub fn arena_leave(&mut self, pid: u32) {
         let now = self.now;
         let Some(a) = self.arena.as_ref() else { return };

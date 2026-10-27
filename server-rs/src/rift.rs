@@ -48,7 +48,7 @@ impl World {
             self.sys(pid, "Ya hiciste tu corrida con premio hoy: esta cuenta solo para el ranking.", "You have had today's paid run: this one counts for the ranking only.");
         }
         if first {
-            self.sys(pid, "La Grieta: cada piso trae enemigos más fuertes. Escribí /raid para salir.", "The Rift: every floor brings stronger enemies. Type /raid to leave.");
+            self.sys(pid, "La Grieta: cada piso trae enemigos más fuertes. Para salir: un Pergamino de Escape o /unstuck.", "The Rift: every floor brings stronger enemies. To leave: a Scroll of Escape or /unstuck.");
             let now = self.now;
             self.later(now + NEXT_FLOOR_MS, |w, _| w.rift_floor());
         }

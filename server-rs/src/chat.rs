@@ -39,10 +39,9 @@ impl World {
                 }
                 "unstuck" => {
                     if self.ents[&pid].c.dead { return; }
-                    if self.arena.is_some() { return self.sys(pid, "En la arena no hay escape: escribí /raid para rendirte.", "There is no escape from the arena: type /raid to give up."); }
                     let now = self.now;
                     self.pl_mut(pid).unwrap().escape_at = now + 10000.0;
-                    self.sys(pid, "En 10 segundos volvés a la aldea...", "You will be returned to the village in 10 seconds...");
+                    self.escape_notice(pid, 10);
                 }
                 "raid" => self.raid_command(pid, &arg.to_lowercase()),
                 // the Rift: in with the party (out, inside it), or the week's ranking
@@ -61,8 +60,8 @@ impl World {
                     self.set_pvp_mode(pid, on);
                 }
                 "help" => self.sys(pid,
-                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck, /pvp [on|off] (obligatorio desde el nivel 50), /dance, /raid [nest|frost|swamp|abyss] (entrar o salir de una raid con tu party: la de Kaim, /raid nest para el Nido del Dragón, /raid frost para el Trono de Escarcha, /raid swamp para el Templo del Pantano, /raid abyss para el Corazón del Abismo), /grieta (La Grieta, desde nivel 76), /grieta top (su ranking de la semana), /asedio (quién tiene cada fuerte y cuándo es el próximo asedio), /olimpiada (anotarte o salir de la cola de la Olimpiada), /olimpiada top, /olimpiada heroes",
-                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck, /pvp [on|off] (always on from level 50), /dance, /raid [nest|frost|swamp|abyss] (enter or leave a raid with your party: Kaim's, /raid nest for the Dragon's Nest, /raid frost for the Frost Throne, /raid swamp for the Swamp Temple, /raid abyss for the Heart of the Abyss), /rift (the Rift, from level 76), /rift top (its ranking this week), /siege (who holds each fort, and when the next siege is), /olympiad (join or leave the Olympiad queue), /olympiad top, /olympiad heroes"),
+                    "Chat: !grito  #party  \"nombre susurro. Comandos: /invite nombre, /leave, /w nombre mensaje, /who, /loc, /unstuck (volver a la aldea en 10 s; en una instancia, salir de ella), /pvp [on|off] (obligatorio desde el nivel 50), /dance, /raid [nest|frost|swamp|abyss] (entrar a una raid con tu party: la de Kaim, /raid nest para el Nido del Dragón, /raid frost para el Trono de Escarcha, /raid swamp para el Templo del Pantano, /raid abyss para el Corazón del Abismo), /grieta (La Grieta, desde nivel 76), /grieta top (su ranking de la semana), /asedio (quién tiene cada fuerte y cuándo es el próximo asedio), /olimpiada (anotarte o salir de la cola de la Olimpiada), /olimpiada top, /olimpiada heroes",
+                    "Chat: !shout  #party  \"name whisper. Commands: /invite name, /leave, /w name msg, /who, /loc, /unstuck (back to the village in 10 s; in an instance, out of it), /pvp [on|off] (always on from level 50), /dance, /raid [nest|frost|swamp|abyss] (enter a raid with your party: Kaim's, /raid nest for the Dragon's Nest, /raid frost for the Frost Throne, /raid swamp for the Swamp Temple, /raid abyss for the Heart of the Abyss), /rift (the Rift, from level 76), /rift top (its ranking this week), /siege (who holds each fort, and when the next siege is), /olympiad (join or leave the Olympiad queue), /olympiad top, /olympiad heroes"),
                 _ => self.sys(pid, &format!("No existe el comando /{cmd}. Escribí /help."), &format!("Unknown command /{cmd}. Type /help.")),
             }
             return;

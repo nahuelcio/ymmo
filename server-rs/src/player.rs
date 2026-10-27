@@ -41,6 +41,8 @@ impl World {
 
         if p.escape_at > 0.0 && now >= p.escape_at {
             p.escape_at = 0.0;
+            // out of an instance (a raid, the Rift, the arena) to the overworld, never to the instance's own copy of the village
+            if self.raid.is_some() { return self.exit_to_town(pid); }
             let pt = self.town_point(Some(pid));
             self.teleport(pid, pt.x, pt.z);
             return;

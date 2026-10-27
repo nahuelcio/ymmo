@@ -131,10 +131,23 @@ impl World {
         if let Some(member) = self.take_out(pid, at) { self.events.push(HubEvent::ToMain { member }); }
     }
 
-    /** /raid: in a raid it leaves; in the overworld it takes the caller (and the whole party) into a new instance. */
-    /// `/raid` leaves the instance you are in, or enters one: Kaim's by default, `/raid <id>` for another.
+    /** What /unstuck and a Scroll of Escape say: in an instance they take you out of it, out of the arena losing the fight. */
+    pub fn escape_notice(&self, pid: u32, secs: u32) {
+        match self.raid {
+            _ if self.arena.is_some() => self.sys(pid, &format!("En {secs} segundos salís de la arena y perdés el combate..."), &format!("In {secs} seconds you will leave the arena and lose the fight...")),
+            Some(r) => self.sys(pid, &format!("En {secs} segundos salís de {} y volvés a la aldea...", r.name), &format!("In {secs} seconds you will leave {} and return to the village...", r.name_en)),
+            None => self.sys(pid, &format!("En {secs} segundos volvés a la aldea..."), &format!("You will be returned to the village in {secs} seconds...")),
+        }
+    }
+
+    /** /raid: in the overworld it takes the caller (and the whole party) into a new instance. Inside one it is refused: the
+     * only ways out are dying, a Scroll of Escape and /unstuck (player.rs update_player). */
+    /// `/raid` enters an instance: Kaim's by default, `/raid <id>` for another.
     pub fn raid_command(&mut self, pid: u32, which: &str) {
-        if self.raid.is_some() { return self.exit_to_town(pid); }
+        if let Some(r) = self.raid {
+            return self.sys(pid, &format!("Ya estás en {}. Para salir: un Pergamino de Escape, /unstuck, o morir.", r.name),
+                &format!("You are already in {}. To leave: a Scroll of Escape, /unstuck, or dying.", r.name_en));
+        }
         let Some(raid) = d().raids.get(if which.is_empty() { "kaim" } else { which }).filter(|r| !r.arena) else {
             let ids = d().raids.values().filter(|r| !r.arena).map(|r| r.id.clone()).collect::<Vec<_>>().join(", ");
             return self.sys(pid, &format!("No existe esa raid. Raids: {ids}."), &format!("No such raid. Raids: {ids}."));
