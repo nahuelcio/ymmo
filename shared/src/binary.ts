@@ -107,7 +107,7 @@ export function encodeC2S(m: C2S): ArrayBuffer | null {
 // Combat events, the other hot path (server-rs/src/binary.rs encode_event), decoded back into the JSON
 // message they stand for:
 //   atk: u8 2, u32 s, u32 tg
-//   dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot, 16 blocked)
+//   dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot, 16 blocked, 32 mana)
 //   fx:  u8 4, u32 s, u32 tg, u8 len, skill (utf-8)
 export const EV_ATK = 2, EV_DMG = 3, EV_FX = 4;
 const utf8 = new TextDecoder();
@@ -125,6 +125,7 @@ export function decodeEvent(buf: ArrayBuffer): Extract<S2C, { t: 'atk' | 'dmg' |
     if (f & 4) m.heal = true;
     if (f & 8) m.dot = true;
     if (f & 16) m.blk = true;
+    if (f & 32) m.mana = true;
     return m;
   }
   if (k === EV_FX && v.byteLength >= 10) {

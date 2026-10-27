@@ -17,6 +17,9 @@ pub struct Stats {
     /** a critical hit's damage on top of its x2 (1: plain), the share of the damage dealt that heals (vampire), and of
      * the melee damage taken that goes back to whoever dealt it (reflect): the songs' and dances' */
     pub crit_dmg: f64, pub vampire: f64, pub reflect: f64,
+    /** how much more the caster's heals and mana recharges give, and how much longer its songs and dances last (1:
+     * plain; the class passives') */
+    pub heal_power: f64, pub tune_dur: f64,
 }
 
 pub const BASE_SPEED: f64 = 6.0;
@@ -141,6 +144,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let (mut bp, mut bpd, mut bm, mut bmd, mut bs, mut ba, mut bc) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
     let (mut b_crit, mut b_eva, mut b_acc, mut b_cdr, mut b_vamp, mut b_refl) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let (mut b_hp, mut b_hpr, mut b_mpr, mut b_cd) = (1.0, 1.0, 1.0, 1.0);
+    let (mut b_mp, mut b_heal, mut b_tune) = (1.0, 1.0, 1.0);
     for b in buffs {
         b_crit += b.crit.unwrap_or(0.0);
         b_eva += b.evasion.unwrap_or(0.0);
@@ -152,6 +156,9 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         b_hpr *= b.hp_regen.unwrap_or(1.0);
         b_mpr *= b.mp_regen.unwrap_or(1.0);
         b_cd *= b.crit_dmg.unwrap_or(1.0);
+        b_mp *= b.max_mp.unwrap_or(1.0);
+        b_heal *= b.heal.unwrap_or(1.0);
+        b_tune *= b.tune.unwrap_or(1.0);
         bp *= b.p_atk.unwrap_or(1.0);
         bpd *= b.p_def.unwrap_or(1.0);
         bm *= b.m_atk.unwrap_or(1.0);
@@ -162,7 +169,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     }
     let lvl = (level - 1) as f64;
     let max_hp = jround(((cb("baseHp", c.base_hp) + cb("hpLvl", c.hp_lvl) * lvl) * r.hp + hp_bonus) * b_hp);
-    let max_mp = jround((cb("baseMp", c.base_mp) + cb("mpLvl", c.mp_lvl) * lvl) * r.mp + mp_bonus);
+    let max_mp = jround(((cb("baseMp", c.base_mp) + cb("mpLvl", c.mp_lvl) * lvl) * r.mp + mp_bonus) * b_mp);
     let max_cp = jround(max_hp * c.cp_ratio);
     let mystic = cls == "mystic";
     Stats {
@@ -183,6 +190,7 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         cdr: (cdr_sum + b_cdr).min(0.5), // ponytail: flat cap, half of every skill's recharge at most
         block,
         crit_dmg: b_cd, vampire: b_vamp.min(0.5), reflect: b_refl.min(0.5),
+        heal_power: b_heal, tune_dur: b_tune,
     }
 }
 
@@ -203,6 +211,8 @@ pub fn mob_stats(m: &MobDef) -> Stats {
         evasion: 30.0 + l,
         crit: 3.0,
         crit_dmg: 1.0,
+        heal_power: 1.0,
+        tune_dur: 1.0,
         ..Default::default()
     }
 }
@@ -330,8 +340,15 @@ pub fn legend_mods(ranks: &std::collections::HashMap<String, i64>) -> BuffMods {
         mul(&mut out.max_hp, m.max_hp, r); mul(&mut out.hp_regen, m.hp_regen, r); mul(&mut out.mp_regen, m.mp_regen, r); mul(&mut out.crit_dmg, m.crit_dmg, r);
         add(&mut out.crit, m.crit, r); add(&mut out.evasion, m.evasion, r); add(&mut out.cdr, m.cdr, r); add(&mut out.accuracy, m.accuracy, r);
         add(&mut out.vampire, m.vampire, r); add(&mut out.reflect, m.reflect, r);
+        mul(&mut out.max_mp, m.max_mp, r); mul(&mut out.heal, m.heal, r); mul(&mut out.tune, m.tune, r);
     }
     out
+}
+
+/** The class passives a character has learned and that count right now (a `weapon` one only while `holds` it: "shield",
+ * "dual", "bow", "dagger"), as buffs that never run out (shared/src/data/passives.ts). */
+pub fn passive_mods(cls: &str, spec: Option<&str>, level: i64, holds: impl Fn(&str) -> bool) -> Vec<&'static BuffMods> {
+    d().passives_for(cls, spec, level).into_iter().filter(|p| p.weapon.as_deref().map_or(true, &holds)).map(|p| &p.mods).collect()
 }
 
 pub fn mob_xp(m: &MobDef) -> f64 { jround((25.0 * (m.level as f64).powf(1.9) + 5.0) * mob_mult(m, "hpMult", m.hp_mult).powf(0.85)) }
@@ -1173,5 +1190,104 @@ mod tests {
         // the cooldown cut still caps at 50%
         let ring = &d().items["ring_of_swiftness"];
         assert!((compute_stats("darkelf", "mystic", 10, &[(ring, 0, true); 11], &[], "m").cdr - 0.5).abs() < 1e-9);
+    }
+
+    /// The class passives: one for each base class at 10, three for each specialization at 20, 40 and 60, one for each
+    /// evolution at 76 (which keeps its parent's), ids of their own, and the weapons they may ask for.
+    #[test]
+    fn passives_by_class_and_level() {
+        let data = d();
+        let mut ids = std::collections::HashSet::new();
+        for p in &data.passives {
+            assert!(ids.insert(p.id.as_str()), "{}: twice", p.id);
+            assert!(data.skill(&p.id).is_none(), "{}: a skill's id", p.id);
+            assert!(p.cls.is_some() != p.spec.is_some(), "{}: a class's or a specialization's", p.id);
+            assert!(p.weapon.as_deref().map_or(true, |w| ["shield", "dual", "bow", "dagger"].contains(&w)), "{}: {:?}", p.id, p.weapon);
+        }
+        let levels = |cls: &str, spec: Option<&str>, own: Option<&str>| -> Vec<i64> {
+            data.passives_for(cls, spec, 78).iter().filter(|p| p.spec.as_deref() == own).map(|p| p.level).collect()
+        };
+        for cls in ["fighter", "mystic"] { assert_eq!(levels(cls, None, None), [10], "{cls}"); }
+        for s in &data.specs {
+            let own = levels(&s.base, Some(&s.id), Some(&s.id));
+            match &s.parent {
+                None => assert_eq!(own, [20, 40, 60], "{}", s.id),
+                Some(parent) => {
+                    assert_eq!(own, [76], "{}", s.id);
+                    // and its parent's three, and its class's
+                    assert_eq!(data.passives_for(&s.base, Some(&s.id), 78).len(), 5, "{} keeps {parent}'s", s.id);
+                }
+            }
+        }
+        // learned by level: a knight at 19 has only the fighter's, at 20 the first of its own too
+        assert_eq!(data.passives_for("fighter", Some("knight"), 19).len(), 1);
+        assert_eq!(data.passives_for("fighter", Some("knight"), 20).len(), 2);
+    }
+
+    /// A passive counts once learned, and one that asks for a weapon only while it is in hand: a knight's shield.
+    #[test]
+    fn passives_count_with_their_weapon() {
+        let stats = |lvl: i64, shield: bool| {
+            let mods = passive_mods("fighter", Some("knight"), lvl, |w| w == "shield" && shield);
+            compute_stats("human", "fighter", lvl, &[], &mods, "m")
+        };
+        let plain = compute_stats("human", "fighter", 20, &[], &passive_mods("fighter", None, 20, |_| true), "m");
+        assert!((stats(20, true).p_def / plain.p_def - 1.06).abs() < 0.02, "shield mastery: {} / {}", stats(20, true).p_def, plain.p_def);
+        assert_eq!(stats(20, false).p_def, plain.p_def, "no shield, no mastery");
+        assert_eq!(stats(19, true).p_def, compute_stats("human", "fighter", 19, &[], &passive_mods("fighter", None, 19, |_| true), "m").p_def);
+        // the fighter's own from 10: HP +5%
+        let hp = |lvl: i64| compute_stats("human", "fighter", lvl, &[], &passive_mods("fighter", None, lvl, |_| true), "m").max_hp;
+        let bare = |lvl: i64| compute_stats("human", "fighter", lvl, &[], &[], "m").max_hp;
+        assert_eq!(hp(9), bare(9));
+        assert!((hp(10) / bare(10) - 1.05).abs() < 0.01);
+        // the mystic's: MP +5%
+        let mp = |mods: &[&BuffMods]| compute_stats("elf", "mystic", 10, &[], mods, "m").max_mp;
+        assert!((mp(&passive_mods("mystic", None, 10, |_| true)) / mp(&[]) - 1.05).abs() < 0.01);
+    }
+
+    /// The healers' passives make heals and recharges give more, the singers' and dancers' make their tunes last longer:
+    /// a hierophant +8% twice, a sword muse 25% and then 20% more (half again in all), a spectral dancer the same.
+    #[test]
+    fn heal_power_and_tune_duration() {
+        let s = |cls: &str, spec: &str| compute_stats("human", cls, 78, &[], &passive_mods(cls, Some(spec), 78, |_| true), "m");
+        assert!((s("mystic", "cleric").heal_power - 1.08).abs() < 1e-9);
+        assert!((s("mystic", "hierophant").heal_power - 1.08 * 1.08).abs() < 1e-9);
+        assert!((s("fighter", "swordsinger").tune_dur - 1.25).abs() < 1e-9);
+        assert!((s("fighter", "sword_muse").tune_dur - 1.5).abs() < 1e-9);
+        assert!((s("fighter", "spectral_dancer").tune_dur - 1.5).abs() < 1e-9);
+        // nobody else's
+        assert_eq!(s("mystic", "sorcerer").heal_power, 1.0);
+        assert_eq!(s("fighter", "knight").tune_dur, 1.0);
+        // every song and dance is marked as one
+        for k in d().skills.iter().filter(|k| k.kind == "buff" && (k.id.starts_with("song_") || k.id.starts_with("dance_"))) { assert!(k.tune.is_some(), "{}", k.id); }
+    }
+
+    /// The cleric's mana: Recharge gives a same-level mystic back a fair share of its MP, twice to five times what it
+    /// costs (its cost is flat, what it gives grows with M.Atk), and Mana Fount a smaller share to each of the party, about
+    /// its cost to each; neither is a heal (no band in heals_stay_a_share_of_hp).
+    #[test]
+    fn recharges_stay_a_share_of_mp() {
+        let data = d();
+        let robe = ["circlet", "robe", "gloves", "greaves", "shoes", "cape", "ring", "earring", "necklace", "staff"];
+        let mage = |lvl: i64, s: &str| {
+            let eq: Vec<(&ItemDef, i64, bool)> = robe.iter().map(|k| (data.item(&format!("{s}_{k}")).unwrap(), 0, false)).collect();
+            compute_stats("human", "mystic", lvl, &eq, &passive_mods("mystic", Some("cleric"), lvl, |_| true), "m")
+        };
+        let bands = [("recharge", 0.12, 0.35, 1.5, 6.0), ("mana_fount", 0.06, 0.2, 0.5, 1.5)];
+        for k in data.skills.iter().filter(|k| k.kind == "mana") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
+        for (lvl, s) in [(32, "ashforged"), (40, "dragon"), (51, "dragon"), (60, "glacial"), (63, "glacial"), (74, "emerald"), (78, "infernal")] {
+            let m = mage(lvl, s);
+            let mut line = format!("lvl {lvl} {s:>9}: MP {:4}, M.Atk {:4} |", m.max_mp, m.m_atk);
+            for &(id, lo, hi, cost_lo, cost_hi) in &bands {
+                let k = data.skill(id).unwrap();
+                if k.level > lvl { continue; }
+                let got = heal_amount(k.power, m.m_atk) * m.heal_power;
+                let (share, per_mp) = (got / m.max_mp, got / k.mp);
+                line += &format!(" {id} {got:.0} ({:.0}%, x{per_mp:.1})", 100.0 * share);
+                assert!((lo..=hi).contains(&share), "level {lvl}: {id} gives {:.0}% of a mystic's MP", 100.0 * share);
+                assert!((cost_lo..=cost_hi).contains(&per_mp), "level {lvl}: {id} gives {per_mp:.1}x its cost");
+            }
+            println!("{line}");
+        }
     }
 }

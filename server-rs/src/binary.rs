@@ -52,7 +52,7 @@ pub fn decode_c2s(b: &[u8]) -> Option<serde_json::Value> {
 
 /** Combat events, the other hot path (same layouts as shared/src/binary.ts):
  *    atk: u8 2, u32 s, u32 tg
- *    dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot, 16 blocked)
+ *    dmg: u8 3, u32 s, u32 tg, f64 v, u8 flags (1 crit, 2 miss, 4 heal, 8 dot, 16 blocked, 32 mana)
  *    fx:  u8 4, u32 s, u32 tg, u8 len, skill (utf-8)
  *  Anything else (or an unexpected shape) stays JSON: returns None. */
 pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
@@ -62,7 +62,7 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
     let obj = v.as_object()?;
     let kind = match t {
         "atk" if obj.len() == 3 => EV_ATK,
-        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot" | "blk")) => EV_DMG,
+        "dmg" if obj.keys().all(|k| matches!(k.as_str(), "t" | "s" | "tg" | "v" | "crit" | "miss" | "heal" | "dot" | "blk" | "mana")) => EV_DMG,
         "fx" if obj.len() == 4 => EV_FX,
         _ => return None,
     };
@@ -73,7 +73,7 @@ pub fn encode_event(v: &serde_json::Value) -> Option<Vec<u8>> {
     b.extend_from_slice(&tg.to_le_bytes());
     if kind == 3 {
         b.extend_from_slice(&v.get("v")?.as_f64()?.to_le_bytes());
-        b.push(flag("crit") as u8 | (flag("miss") as u8) << 1 | (flag("heal") as u8) << 2 | (flag("dot") as u8) << 3 | (flag("blk") as u8) << 4);
+        b.push(flag("crit") as u8 | (flag("miss") as u8) << 1 | (flag("heal") as u8) << 2 | (flag("dot") as u8) << 3 | (flag("blk") as u8) << 4 | (flag("mana") as u8) << 5);
     } else if kind == 4 {
         let sk = v.get("skill")?.as_str()?.as_bytes();
         if sk.len() > 255 { return None; }

@@ -12,6 +12,7 @@ import { CAMPS } from '../../shared/src/data/camps';
 import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, PVP_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
 import { RAIDS } from '../../shared/src/data/raids';
 import { LEGEND } from '../../shared/src/data/legend';
+import { PASSIVES } from '../../shared/src/data/passives';
 import { CLAN, CLAN_DEFAULT_PRIVS, CLAN_GRADE_LEVEL, CLAN_LEVELS, CLAN_REP, CLAN_SKILLS } from '../../shared/src/data/clans';
 import { SIEGE, SIEGE_FORTS } from '../../shared/src/data/sieges';
 import { OLYMPIAD } from '../../shared/src/data/olympiad';
@@ -71,6 +72,7 @@ const out = {
   siege: { ...SIEGE, forts: SIEGE_FORTS.map((f) => ({ ...f, nameEn: zoneName(f.name, 'en') })) },
   olympiad: OLYMPIAD,
   legend: LEGEND,
+  passives: Object.values(PASSIVES).map(({ id, name, nameEn, cls, spec, level, weapon, mods }) => ({ id, name, nameEn, cls, spec, level, weapon, mods })),
   // what the client's dailySet offers on a week of days: server-rs checks its daily_set picks the same (formulas.rs test)
   dailyProbe: Array.from({ length: 7 }, (_, i) => [20000 + i, dailySet(20000 + i).map((q) => q.id)]),
   water: { cell: WATER_CELL, half: WORLD_HALF, runs: waterRuns() },

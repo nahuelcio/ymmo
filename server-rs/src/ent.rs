@@ -1,7 +1,7 @@
 //! Entities (port of server/src/world/entities.ts).
 use crate::collision::P;
 use crate::data::{d, Barrage, BuffMods, MobDef, Pulse, Special};
-use crate::formulas::{compute_stats, gear_mods, jround, legend_mods, mob_stats, Stats};
+use crate::formulas::{compute_stats, gear_mods, jround, legend_mods, mob_stats, passive_mods, Stats};
 use crate::i18n::Lang;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -245,8 +245,11 @@ impl Player {
         let data = d();
         let eq: Vec<_> = self.inv.iter().filter(|i| i.s.is_some()).filter_map(|i| Some((data.item(&i.i)?, i.e, i.m))).collect();
         let mut bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
-        // and, as buffs that never run out: what the worn gear adds (a boss jewel, a set's bonus) and the Legend's passives
+        // and, as buffs that never run out: what the worn gear adds (a boss jewel, a set's bonus), the class passives (a
+        // shield's, a weapon's while it is worn) and the Legend's
         bm.extend(gear_mods(&eq));
+        let (weapon, shield) = (self.weapon_type(), self.inv.iter().any(|i| i.s.as_deref() == Some("shield")));
+        bm.extend(passive_mods(&self.cls, self.spec.as_deref(), self.level, |w| if w == "shield" { shield } else { weapon == Some(w) }));
         let legend = legend_mods(&self.legend);
         bm.push(&legend);
         self.stats = compute_stats(&self.race, &self.cls, self.level, &eq, &bm, self.look.gender());

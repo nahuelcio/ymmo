@@ -324,6 +324,9 @@ impl World {
             for sk in d().skills_for(&cls, spec.as_deref(), lvl, &race, g) {
                 if sk.level == lvl { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
             }
+            for ps in d().passives_for(&cls, spec.as_deref(), lvl) {
+                if ps.level == lvl { self.sys(pid, &format!("Aprendiste la pasiva {}.", ps.name), &format!("You have learned the passive {}.", ps.name_en)); }
+            }
             if lvl == d().c.spec_level && spec.is_none() {
                 self.sys(pid, "Ya podés elegir una especialización: abrí Estado del Personaje.", "You can now choose a specialization: open Character Status.");
             }
@@ -360,11 +363,16 @@ impl World {
             return self.sys(pid, "No se pudo guardar. Probá de nuevo.", "Could not save. Try again.");
         }
         let (lvl, race, g, cls) = (p.level, p.race.clone(), p.look.gender(), p.cls.clone());
-        self.pl_mut(pid).unwrap().spec = Some(def.id.clone());
+        let p = self.pl_mut(pid).unwrap();
+        p.spec = Some(def.id.clone());
+        p.recalc(); // its passives count from now on
         self.ents.get_mut(&pid).unwrap().c.av += 1;
         self.sys(pid, &format!("Ahora sos {}.", def.name), &format!("You are now a {}.", def.name_en));
         for sk in data.skills_for(&cls, Some(&def.id), lvl, &race, g) {
             if sk.spec.is_some() { self.sys(pid, &format!("Aprendiste {}.", sk.name), &format!("You have learned {}.", sk.name_en)); }
+        }
+        for ps in data.passives_for(&cls, Some(&def.id), lvl) {
+            if ps.spec.is_some() { self.sys(pid, &format!("Aprendiste la pasiva {}.", ps.name), &format!("You have learned the passive {}.", ps.name_en)); }
         }
     }
 
@@ -620,6 +628,15 @@ impl World {
             if let Some(err) = self.can_attack(pid, t, force, now) { return self.sys(pid, &err, &err); }
             target = t;
         }
+        // mana never goes back to its caster: Recharge needs another player, Mana Fount someone of the party near
+        if def.kind == "mana" {
+            if def.target == "friend" && target == pid {
+                return self.sys(pid, &format!("{} solo le devuelve maná a otro jugador.", def.name), &format!("{} only gives mana back to another player.", def.name_en));
+            }
+            if def.target == "self" && self.party_around(pid, pid, def.aoe).is_empty() {
+                return self.sys(pid, "No hay nadie de tu party cerca.", "Nobody of your party is near.");
+            }
+        }
         self.pl_mut(pid).unwrap().intent = Some(Intent::Skill { skill: def.id.clone(), target, force });
     }
 
@@ -728,8 +745,8 @@ impl World {
                 }
             }
             "heal" => {
-                let m_atk = self.pl(pid).unwrap().stats.m_atk;
-                let amount = heal_amount(def.power, m_atk);
+                let s = &self.pl(pid).unwrap().stats;
+                let amount = heal_amount(def.power, s.m_atk) * s.heal_power;
                 // a wounded body (the War Avatar's blows) gets half of it
                 for ally in self.party_around(pid, target, def.aoe) {
                     let mul = self.ents.get(&ally).map_or(1.0, |e| e.c.heal_mul(now));
@@ -759,13 +776,30 @@ impl World {
                     }
                 }
             }
+            "mana" => {
+                // MP back, as much as a heal of that power and the healer's passives would give: to the player it was cast
+                // on (Recharge) or to the party round the caster (Mana Fount), never to the caster; no wound halves it
+                let s = &self.pl(pid).unwrap().stats;
+                let amount = heal_amount(def.power, s.m_atk) * s.heal_power;
+                let to: Vec<u32> = if def.target == "self" { self.party_around(pid, pid, def.aoe) } else { vec![target] };
+                for ally in to.into_iter().filter(|&a| a != pid) {
+                    let Some(a) = self.pl_mut(ally) else { continue };
+                    let before = a.mp;
+                    a.mp = (a.mp + amount).min(a.stats.max_mp);
+                    let msg = json!({ "t": "dmg", "s": pid, "tg": ally, "v": jround(a.mp - before), "mana": true });
+                    self.send(pid, msg.clone());
+                    self.send(ally, msg);
+                }
+            }
             "buff" => {
                 if def.vanish.unwrap_or(false) { self.vanish(pid, def.buff.as_ref().map_or(8000.0, |b| b.dur)); }
                 let Some(buff) = &def.buff else { return };
+                // a song or a dance lasts longer from a singer or a dancer who has the passive for it
+                let dur = buff.dur * if def.tune.is_some() { self.pl(pid).unwrap().stats.tune_dur } else { 1.0 };
                 for tg in std::iter::once(target).chain(self.party_around(pid, target, def.aoe)) {
                     let Some(t) = self.pl_mut(tg) else { continue };
                     t.buffs.retain(|b| b.id != def.id);
-                    t.buffs.push(Buff { id: def.id.clone(), until: now + buff.dur, mods: buff.mods.clone() });
+                    t.buffs.push(Buff { id: def.id.clone(), until: now + dur, mods: buff.mods.clone() });
                     t.recalc();
                     self.sys(tg, &format!("Recibiste {}.", def.name), &format!("{} has been applied.", def.name_en));
                 }

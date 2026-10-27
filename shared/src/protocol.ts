@@ -239,7 +239,7 @@ export type S2C =
   | { t: 'inv'; items: InvItem[]; adena: number }
   | { t: 'target'; id: number | null }
   /** res: a stun or slow that did not land (it was resisted) */
-  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean; res?: boolean; /** caught on the target's shield (already halved) */ blk?: boolean }
+  | { t: 'dmg'; s: number; tg: number; v: number; crit?: boolean; miss?: boolean; heal?: boolean; dot?: boolean; res?: boolean; /** caught on the target's shield (already halved) */ blk?: boolean; /** MP given back (a Recharge), not HP */ mana?: boolean }
   | { t: 'atk'; s: number; tg: number }
   | { t: 'cast'; s: number; tg: number; skill: string; dur: number }
   /** s's cast (or a mob's special attack) stopped before it went off: cancelled, stunned, dead... */

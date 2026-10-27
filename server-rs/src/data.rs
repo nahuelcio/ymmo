@@ -111,6 +111,21 @@ pub struct LegendPassive { pub id: String, pub name: String, pub name_en: String
 #[serde(rename_all = "camelCase")]
 pub struct LegendCfg { pub max: i64, pub reset_cost: i64, pub passives: Vec<LegendPassive> }
 
+/** A class passive (shared/src/data/passives.ts): a base class's or a specialization's, learned at its level, always on
+ * while its weapon ("shield", "dual", "bow", "dagger") is equipped, if it names one. */
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PassiveDef {
+    pub id: String,
+    pub name: String,
+    pub name_en: String,
+    pub cls: Option<String>,
+    pub spec: Option<String>,
+    pub level: i64,
+    pub weapon: Option<String>,
+    pub mods: BuffMods,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct Recipe { pub mats: Vec<(String, i64)>, pub adena: i64 }
 
@@ -213,6 +228,10 @@ pub struct BuffMods {
     /** fraction of the damage dealt that heals the dealer, of the melee damage taken that goes back */
     pub vampire: Option<f64>,
     pub reflect: Option<f64>,
+    /** multipliers: max MP, what the caster's heals and mana recharges give, how long its songs and dances last */
+    pub max_mp: Option<f64>,
+    pub heal: Option<f64>,
+    pub tune: Option<f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -249,6 +268,8 @@ pub struct SkillDef {
     /** Force charges it gives (99: all) and that it needs and spends */
     pub charge: Option<u32>,
     pub spend: Option<u32>,
+    /** a song ("song") or a dance ("dance"): its buff lasts the caster's tune_dur times longer */
+    pub tune: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -503,6 +524,7 @@ struct Raw {
     siege: SiegeDef,
     olympiad: OlympiadDef,
     legend: LegendCfg,
+    passives: Vec<PassiveDef>,
     #[serde(rename = "dailyProbe", default)]
     daily_probe: Vec<(i64, Vec<String>)>,
     water: WaterRaw,
@@ -541,6 +563,8 @@ pub struct Data {
     pub siege: SiegeDef,
     pub olympiad: OlympiadDef,
     pub legend: LegendCfg,
+    /** the class passives, in data order */
+    pub passives: Vec<PassiveDef>,
     /** the client's dailySet on a week of days (day, contract ids): daily_set must pick the same (a test) */
     pub daily_probe: Vec<(i64, Vec<String>)>,
     /** the level a character needs to wear each grade (GRADE_LEVEL in shared/src/data/items.ts) */
@@ -601,6 +625,17 @@ impl Data {
             && s.race.as_deref().map_or(true, |r| r == race) && s.gender.as_deref().map_or(true, |g| g == gender)
     }
 
+    /** The passives a character of this class and specialization (an evolution keeps its parent's) has learned by this
+     * level, weapon or not (passivesFor() in shared/src/data/passives.ts, but only the learned ones). */
+    pub fn passives_for(&self, cls: &str, spec: Option<&str>, level: i64) -> Vec<&PassiveDef> {
+        let parent = spec.and_then(|sp| self.spec(sp)).and_then(|d| d.parent.as_deref());
+        self.passives.iter().filter(|p| p.level <= level && match (&p.cls, &p.spec) {
+            (Some(c), _) => c == cls,
+            (None, Some(s)) => Some(s.as_str()) == spec || Some(s.as_str()) == parent,
+            _ => false,
+        }).collect()
+    }
+
     /** skillsFor(): learned skills, sorted by level (stable, data order otherwise) */
     pub fn skills_for(&self, cls: &str, spec: Option<&str>, level: i64, race: &str, gender: &str) -> Vec<&SkillDef> {
         let mut v: Vec<&SkillDef> = self.skills.iter().filter(|s| self.skill_available(s, cls, spec, race, gender) && s.level <= level).collect();
@@ -653,6 +688,7 @@ pub fn d() -> &'static Data {
             siege: raw.siege,
             olympiad: raw.olympiad,
             legend: raw.legend,
+            passives: raw.passives,
             daily_probe: raw.daily_probe,
             water_n: water_n,
             water_cell: raw.water.cell,
