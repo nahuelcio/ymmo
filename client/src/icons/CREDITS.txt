@@ -99,3 +99,9 @@ skill: hardened_body <- delapouite/muscular-torso, serene_mind <- lorc/third-eye
   arcane_affinity <- lorc/rune-stone, focus_mind <- lorc/brainstorm, mana_well <- delapouite/well, arcane_dominion <- delapouite/spell-book,
   healing_hands <- lorc/glowing-hands, serene_faith <- lorc/candle-light, holy_aura <- lorc/holy-grail, lasting_grace <- lorc/holy-symbol,
   recharge <- lorc/water-splash, mana_fount <- delapouite/water-fountain
+
+Added for the character window's Actions tab (same source and licence), file <- original:
+ui: dance <- delapouite/maracas, sit <- lorc/meditation, invite <- delapouite/team-upgrade, leave <- delapouite/exit-door,
+  trade <- delapouite/shaking-hands, whisper <- delapouite/chat-bubble, who <- delapouite/three-friends,
+  loc <- delapouite/position-marker, unstuck <- delapouite/village, raid <- lorc/dragon-head, rift <- lorc/vortex,
+  siege <- delapouite/siege-tower, olympiad <- lorc/laurels, ranking <- delapouite/podium

@@ -8,6 +8,7 @@ import { inPvpZone, NPCS } from '../../../shared/src/data/world';
 import { siegeZoneAt } from '../../../shared/src/data/sieges';
 import { conColor, F_PURPLE, F_RED, type Game } from '../game';
 import { bar, glyph, hydrate, itemIcon, itemTip, skillIcon, skillTip } from './common';
+import { actionIcon, actionTip, isPlayerAction, runAction } from './actions';
 import { el, esc, hideTip, setTip } from './dom';
 import { makeMovable, onLayoutReset, resetLayout, uiScale } from './movable';
 import { hudFocus, isTouchDevice, setHudFocus } from './touch';
@@ -16,7 +17,9 @@ import { keyLabel, settings, type Action } from '../settings';
 import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
-export type Slot = { type: 'skill' | 'item'; id: string } | null;
+/** a skill, a consumable, or one of the character window's actions (ui/actions.ts: a chat command or the auto-attack) */
+export type Slot = { type: 'skill' | 'item' | 'action'; id: string } | null;
+const same = (a: Slot, b: Slot) => !!a && !!b && a.type === b.type && a.id === b.id;
 /** The main bar (ten slots, then the attack and roll buttons) and two extra ones above it, twelve slots each: as wide. */
 const SIZE = [10, 12, 12];
 const BARS = SIZE.length;
@@ -555,15 +558,16 @@ export class Hud {
       setTip(s, () => {
         const sl = this.st?.bars[b][i];
         if (!sl) return '';
-        return sl.type === 'skill' ? skillTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
+        return sl.type === 'skill' ? skillTip(sl.id) : sl.type === 'action' ? actionTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
       });
       out.push(s);
     }
     return out;
   }
 
-  /** Drop on slot i of bar b: another slot's content (the two swap), or a skill or item - already on a bar somewhere
-   * else, that slot takes what was here. The desktop's drag and drop and the touch drag (ui/bardrag.ts) both land here. */
+  /** Drop on slot i of bar b: another slot's content (the two swap), or a skill, item or action - already on a bar
+   * somewhere else, that slot takes what was here. The desktop's drag and drop and the touch drag (ui/bardrag.ts) both
+   * land here. */
   placeOnBar(b: number, i: number, d: { from?: { b: number; i: number }; slot?: Slot }) {
     const bars = this.st?.bars;
     if (!bars) return;
@@ -571,7 +575,7 @@ export class Hud {
     if (d.from) [bars[d.from.b][d.from.i], bars[b][i]] = [here, bars[d.from.b][d.from.i]];
     else if (d.slot) {
       for (const row of bars) {
-        const at = row.findIndex((x) => x?.id === d.slot!.id);
+        const at = row.findIndex((x) => same(x, d.slot!));
         if (at >= 0) row[at] = here;
       }
       bars[b][i] = d.slot;
@@ -596,9 +600,12 @@ export class Hud {
       // each bar padded or cut to its size (bars 2-3 were ten slots wide before)
       const bars = Array.from({ length: BARS }, (_, b) => Array.from({ length: SIZE[b] }, (_, i) => {
         const s = v.bars![b]?.[i];
-        // auto-attack used to sit on the bar: free the slot an old layout still gives it; and a skill no longer in the
-        // game (the gladiator's before its dual-sword kit)
-        return s && (s.type === 'skill' || s.type === 'item') && typeof s.id === 'string' && (s.type === 'item' || SKILLS[s.id]) ? { type: s.type, id: s.id } : null;
+        // auto-attack used to sit on the bar as its own type: free the slot an old layout still gives it (it comes back
+        // as an action, placed by hand); and a skill or action no longer in the game (the gladiator's before its
+        // dual-sword kit)
+        if (!s || typeof s.id !== 'string') return null;
+        const ok = s.type === 'item' || (s.type === 'skill' && SKILLS[s.id]) || (s.type === 'action' && isPlayerAction(s.id));
+        return ok ? { type: s.type, id: s.id } : null;
       }));
       const flags = (a: unknown, n: number) => Array.from({ length: n }, (_, k) => Array.isArray(a) && !!a[k]);
       return { v: 2, bars, known: Array.isArray(v.known) ? v.known.filter((k) => typeof k === 'string') : [], shown: flags(v.shown, BARS - 1), collapsed: flags(v.collapsed, BARS - 1) };
@@ -681,7 +688,7 @@ export class Hud {
       if (st.known.includes(h.id)) continue;
       st.known.push(h.id);
       const free = st.bars[0].indexOf(null);
-      if (free >= 0 && !st.bars.some((row) => row.some((x) => x?.id === h.id))) st.bars[0][free] = h;
+      if (free >= 0 && !st.bars.some((row) => row.some((x) => same(x, h)))) st.bars[0][free] = h;
       added = true;
     }
     if (added) return this.saveBar();
@@ -709,7 +716,7 @@ export class Hud {
       // a consumable that ran out keeps its place, greyed out
       s.classList.toggle('spent', sl?.type === 'item' && this.itemCount(sl.id) === 0);
       if (!sl) return;
-      const ic = sl.type === 'skill' ? skillIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
+      const ic = sl.type === 'skill' ? skillIcon(sl.id) : sl.type === 'action' ? actionIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
       s.prepend(ic);
       el('div', 'cd', s);
       el('span', 'cd-num', s);
@@ -721,6 +728,12 @@ export class Hud {
     if (!sl) return;
     // a bar out of sight does nothing (touch: only the page on show is)
     if (b > 0 && (this.touch ? b !== this.page : !this.st!.shown[b - 1] || this.st!.collapsed[b - 1])) return;
+    // an action has no cooldown of its own (the auto-attack keeps to its swing by itself)
+    if (sl.type === 'action') {
+      this.slotEls[b][i].classList.add('pressed');
+      setTimeout(() => this.slotEls[b][i].classList.remove('pressed'), 120);
+      return runAction(this.g, sl.id);
+    }
     // still cooling down for real (not a client guess): shake the slot instead of asking the server
     const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
     const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
@@ -756,15 +769,20 @@ export class Hud {
   update(now: number) {
     // cooldown overlays
     const held = this.g.inv.find((it) => it.s === 'weapon'), wielded = held ? ITEMS[held.i]?.weaponType : undefined;
+    // the swing: the auto-attack button's sweep, and the auto-attack's on a bar
+    const self = this.g.self, swing = 60000 / Math.max(1, this.g.me.atkSpd);
+    const arem = self && self.atkAt > 0 ? swing - (now - self.atkAt) : 0;
     this.slotEls.forEach((els, b) => els.forEach((s, i) => {
       const sl = this.st?.bars[b][i];
       if (!sl) return;
       const ov = s.querySelector('.cd') as HTMLDivElement | null;
       if (!ov) return;
-      const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
-      const rem = cd ? cd.end - now : 0, dur = cd?.dur ?? 1;
+      // an action has no cooldown: the auto-attack shows its swing, as its button does (with no seconds)
+      const act = sl.type === 'action';
+      const cd = act ? undefined : this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
+      const rem = cd ? cd.end - now : act && sl.id === 'attack' ? arem : 0, dur = cd?.dur ?? swing;
       ov.style.height = rem > 0 ? `${(rem / dur) * 100}%` : '0';
-      const num = s.querySelector('.cd-num'), left = rem > 950 ? String(Math.ceil(rem / 1000)) : '';
+      const num = s.querySelector('.cd-num'), left = rem > 950 && !act ? String(Math.ceil(rem / 1000)) : '';
       if (num && num.textContent !== left) num.textContent = left;
       const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
@@ -776,8 +794,6 @@ export class Hud {
       // the skill pressed during the cast, waiting to go when it ends
       s.classList.toggle('queued', sl.type === 'skill' && sl.id === this.g.queuedSkill && !!this.g.castBar?.skill);
     }));
-    const self = this.g.self, swing = 60000 / Math.max(1, this.g.me.atkSpd);
-    const arem = self && self.atkAt > 0 ? swing - (now - self.atkAt) : 0;
     this.atkCd.style.height = arem > 0 ? `${(arem / swing) * 100}%` : '0';
     const dcd = this.g.cooldowns.get('dash');
     const drem = dcd ? dcd.end - now : 0;
