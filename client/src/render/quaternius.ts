@@ -43,6 +43,12 @@ const tusks: Partial<Record<Gender, THREE.Mesh>> = {};
 const clips: Record<string, THREE.AnimationClip> = {};
 /** the moments (0..1) the feet land in Jog_Fwd_Loop, measured once it loads */
 let jogSteps: number[] = [0, 0.5];
+/** Where an archer's feet stand planted (plantFeet), in the armature's space, [left, right]: each foot, its turn, its
+ * toes' turn and which way it points (where the knee goes over it). Measured once the clips load, for each body. */
+interface Stance { pos: THREE.Vector3[]; rot: THREE.Quaternion[]; ball: THREE.Quaternion[]; toe: THREE.Vector3[] }
+const bowStance: Partial<Record<Gender, Stance>> = {};
+/** Where a bow hangs on the back (backSlot), in spine_03's space. */
+let bowSlot: THREE.Matrix4 | null = null;
 /**
  * Helmets modelled in Fiend directly in the head bone's space, at real size ([up, forward, scale] stay
  * for nudging): the head spans x ±0.09, y 0..0.21 and z -0.09..0.13 from that bone.
@@ -546,7 +552,7 @@ export function loadQ(): Promise<void> {
     armature.m!.getObjectByName('spine_01')?.traverse((b) => upper.add(b.name));
     const half = (clip: THREE.AnimationClip, name: string, top: boolean) =>
       new THREE.AnimationClip(name, clip.duration, clip.tracks.filter((t) => upper.has(THREE.PropertyBinding.parseTrackName(t.name).nodeName) === top));
-    for (const n of SWING_CLIPS) if (clips[n]) clips[n + UPPER] = half(clips[n], n + UPPER, true);
+    for (const n of [...SWING_CLIPS, ...BOW_SHOT]) if (clips[n]) clips[n + UPPER] = half(clips[n], n + UPPER, true);
     if (clips.Jog_Fwd_Loop) clips[JOG_LEGS] = half(clips.Jog_Fwd_Loop, JOG_LEGS, false);
     // heads.glb names everything `<m|f>__part`; its skeletons are the same 65 joints, so the pieces bind to ours
     // the bones at rest, for measuring the body and the tunic's collar (neckline)
@@ -572,8 +578,66 @@ export function loadQ(): Promise<void> {
     // when the feet land in the jog, for the footsteps (render/footfalls.ts), measured on a spare copy of the bones
     const spare = armature.m!.clone(true);
     if (clips.Jog_Fwd_Loop) jogSteps = contactPhases(spare, clips.Jog_Fwd_Loop, ['foot_l', 'foot_r'].map((n) => spare.getObjectByName(n)!));
+    if (clips.Idle_Loop && clips.KK_Bow_Idle) for (const g of ['m', 'f'] as const) bowStance[g] = stanceOf(armature[g]!.clone(true));
+    if (clips.Idle_Loop) bowSlot = backSlot(armature.m!.clone(true));
     ready = true;
   })());
+}
+
+/**
+ * An archer's planted stance, on a spare copy of a body's bones: the idle's open stance (the left foot ahead, the feet a
+ * shoulder's width and more apart, both flat), a little wider, and moved part of the way back under the bow clips'
+ * hips, which stand further back than the idle's (it stands in this stance in the idle too).
+ */
+function stanceOf(spare: THREE.Object3D): Stance {
+  const mixer = new THREE.AnimationMixer(spare);
+  const pose = (clip: THREE.AnimationClip) => {
+    mixer.stopAllAction();
+    mixer.clipAction(clip).play();
+    mixer.setTime(0);
+    spare.updateMatrixWorld(true);
+  };
+  pose(clips.KK_Bow_Idle);
+  const inv = spare.matrixWorld.clone().invert(), turn = spare.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const at = (n: string) => spare.getObjectByName(n)!.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+  const hips = at('pelvis');
+  pose(clips.Idle_Loop);
+  const idle = at('pelvis');
+  const st: Stance = { pos: [], rot: [], ball: [], toe: [] };
+  for (const side of ['l', 'r']) {
+    // (the armature stands x to its left, z ahead)
+    const p = at(`foot_${side}`);
+    p.x = hips.x + (p.x - idle.x) * BOW_STANCE_WIDE;
+    p.z += (hips.z - idle.z) * BOW_STANCE_BACK;
+    st.pos.push(p);
+    st.toe.push(at(`ball_${side}`).sub(at(`foot_${side}`)).setY(0).normalize());
+    st.rot.push(turn.clone().multiply(spare.getObjectByName(`foot_${side}`)!.getWorldQuaternion(new THREE.Quaternion())));
+    st.ball.push(spare.getObjectByName(`ball_${side}`)!.quaternion.clone());
+  }
+  mixer.stopAllAction();
+  mixer.uncacheRoot(spare);
+  return st;
+}
+
+/** Where a bow hangs on the back (slingBow), set on a spare copy of the male body standing in the idle and carried on
+ * spine_03 from there: flat against the back, clear of a cape, the upper limb over the left shoulder (the hand that
+ * takes it), the grip turned to the side (towards the right shoulder, so the top clears the head) and the string
+ * across the other way. */
+function backSlot(spare: THREE.Object3D): THREE.Matrix4 {
+  const mixer = new THREE.AnimationMixer(spare);
+  mixer.clipAction(clips.Idle_Loop).play();
+  mixer.setTime(0);
+  spare.updateMatrixWorld(true);
+  const chest = spare.getObjectByName('spine_03')!;
+  // (the armature stands x to its left, y up, z ahead)
+  const x = new THREE.Vector3(-Math.cos(BOW_SLUNG), Math.sin(BOW_SLUNG), 0), y = new THREE.Vector3(Math.sin(BOW_SLUNG), Math.cos(BOW_SLUNG), 0);
+  const at = chest.getWorldPosition(new THREE.Vector3()).applyMatrix4(spare.matrixWorld.clone().invert()).add(new THREE.Vector3(0, BOW_BACK[0], BOW_BACK[1]))
+    .addScaledVector(x, BOW_BACK[2]);
+  const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, new THREE.Vector3().crossVectors(x, y)));
+  const slot = chest.matrixWorld.clone().invert().multiply(spare.matrixWorld).multiply(new THREE.Matrix4().compose(at, turn, new THREE.Vector3(1, 1, 1)));
+  mixer.stopAllAction();
+  mixer.uncacheRoot(spare);
+  return slot;
 }
 
 /**
@@ -715,11 +779,20 @@ interface BowArms {
   root: THREE.Object3D; head: THREE.Object3D; string?: BowString;
   /** what turns the archer side-on as it draws: the spine's three bones, and the neck turning the head back to the mark */
   spine: THREE.Object3D[]; neck: THREE.Object3D;
-  /** what holds the bow in the fist (attach's anchor), its turn as the hand carries it, and how far it is held upright */
-  grip?: THREE.Object3D; gripRest: THREE.Quaternion; hold: number;
+  /** what holds the bow in the fist (attach's anchor), its turn and place as the hand carries it, and how far it is held
+   * upright */
+  grip?: THREE.Object3D; gripRest: THREE.Quaternion; gripPos: THREE.Vector3; hold: number;
+  /** how far it is slung on the back (slingBow: 1 on the back, 0 in the hand), and whether it can be: not over a cape,
+   * which keeps it in the hand */
+  sling: number; back: boolean;
   /** how far the bow stands upright in the fist (0: carried along the body), eased so it turns rather than flips */
   up: number;
-  uaL: THREE.Object3D; laL: THREE.Object3D; handL: THREE.Object3D; uaR: THREE.Object3D; laR: THREE.Object3D; handR: THREE.Object3D; w: number }
+  /** how far it is held in both hands on the run (carryGrip, carryString), eased */
+  carry: number;
+  uaL: THREE.Object3D; laL: THREE.Object3D; handL: THREE.Object3D; uaR: THREE.Object3D; laR: THREE.Object3D; handR: THREE.Object3D; w: number;
+  /** the legs, [left, right], planted in the body's stance (plantFeet) while it stands with the bow; the armature it is
+   * measured in */
+  arm: THREE.Object3D; thigh: THREE.Object3D[]; calf: THREE.Object3D[]; foot: THREE.Object3D[]; ball: THREE.Object3D[]; stance?: Stance }
 const _aq = new THREE.Quaternion(), _aq2 = new THREE.Quaternion(), _aq3 = new THREE.Quaternion(), _av = new THREE.Vector3(), _av2 = new THREE.Vector3();
 const _fwd = new THREE.Vector3(), _left = new THREE.Vector3(), _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3();
 /** Turn `bone` so that the way to its child `tip` points along the world direction `dir`, `w` of the way. */
@@ -797,31 +870,40 @@ const _tgt = new THREE.Vector3(), _pole = new THREE.Vector3(), _head = new THREE
  * right-handed archer does: the chest turns away, the bow shoulder towards the mark and the head turned back to it. The
  * bow arm goes straight out at the mark; the other hand takes the string at the bow and draws it back to the jaw, under
  * the cheekbone, the elbow behind the shoulder in line with the arrow; holds; and lets go, slipping back past the ear.
- * Held drawn while a skill is aimed. Eases in and out.
+ * Held drawn while a skill is aimed. Eases in and out. On the run, with nothing to shoot, both hands hold it (carryGrip,
+ * carryString); standing, sitting or swimming out of a fight, it hangs on the back (slingBow), or stays in the hand
+ * over a cape.
  */
 function aimBow(q: QAnim, b: BowArms, s: AnimState, dt: number, clip: { drawn: number; up: number } | null = null) {
+  const down = s.deadAge >= 0 || s.swimming || (s.sitAge ?? -1) >= 0;
+  // in both hands on the run (none of the bow clips there), let go of as a shot starts
+  b.carry += ((!clip && s.moving && !down ? 1 : 0) - b.carry) * Math.min(1, dt * 8);
+  // slung on the back out of a fight (not over a cape), unless it runs; taken in hand quicker than put away, as a shot
+  // needs it at once (fallen, it stays where it was)
+  if (s.deadAge < 0) {
+    const back = b.back && !s.casting && !(s.atkAge < COMBAT_MS) && (!s.moving || down);
+    b.sling = THREE.MathUtils.clamp(b.sling + (back ? dt / BOW_SLING_S[0] : -dt / BOW_SLING_S[1]), 0, 1);
+  }
+  b.root.getWorldQuaternion(_aq3);
+  const fwd = _fwd.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize();
+  const left = _left.set(fwd.z, 0, -fwd.x); // facing +z, the left hand is on +x
   // a bow clip plays the arms (KayKit's idle, draw, aim and release): the bow only turns upright in the fist as the arm
   // raises it (and back down as it lowers), its string drawn by the hand
   if (clip) {
     b.w = 0;
     b.hold += (1 - b.hold) * Math.min(1, dt * 6);
     b.up += (clip.up - b.up) * Math.min(1, dt * 10);
-    b.root.getWorldQuaternion(_aq3);
-    holdBow(b, _fwd.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize(), b.up);
+    placeBow(q, b, fwd, b.carry, b.up);
     return pullString(b, clip.drawn);
   }
   hold(q, [...b.spine, b.neck, b.head, b.uaL, b.laL, b.uaR, b.laR]);
   const shot = s.atkAge < ATK_MS ? s.atkAge / ATK_MS : -1;
-  const down = s.deadAge >= 0 || s.swimming || (s.sitAge ?? -1) >= 0;
   const want = down ? 0 : s.casting || shot >= 0 ? 1 : 0;
   b.w += (want - b.w) * Math.min(1, dt * 10);
   b.hold += ((down ? 0 : 1) - b.hold) * Math.min(1, dt * 6);
-  b.root.getWorldQuaternion(_aq3);
-  const fwd = _fwd.set(0, 0, 1).applyQuaternion(_aq3).setY(0).normalize();
-  const left = _left.set(fwd.z, 0, -fwd.x); // facing +z, the left hand is on +x
   if (b.w < 0.01) {
-    straightBowArm(b, b.hold);
-    holdBow(b, fwd);
+    straightBowArm(b, b.hold * (1 - b.sling));
+    placeBow(q, b, fwd, b.carry);
     return pullString(b, 0);
   }
   const phase = s.casting ? 0.5 : Math.max(0, shot);
@@ -852,9 +934,111 @@ function aimBow(q: QAnim, b: BowArms, s: AnimState, dt: number, clip: { drawn: n
   // the drawing elbow behind the shoulder, a little up and out: in line with the arrow
   bodyDir(_pole, fwd, left, -0.35, 0.3, -1);
   reach(b.uaR, b.laR, b.handR, anchor, _pole, b.w);
-  straightBowArm(b, b.hold * (1 - b.w));
-  holdBow(b, fwd);
+  straightBowArm(b, b.hold * (1 - b.w) * (1 - b.sling));
+  placeBow(q, b, fwd, b.carry * (1 - b.w));
   pullString(b, b.w * drawn * (1 - loosed));
+}
+/**
+ * Where the bow is this frame, after the arms: in both hands on the run (`c` of the way: the left on the grip, then the
+ * right on the string once the bow is there), turned in the fist (holdBow) and as far on its way to the back as it is
+ * slung, the left hand going up over the shoulder to put it there or take it.
+ */
+function placeBow(q: QAnim, b: BowArms, fwd: THREE.Vector3, c: number, up?: number) {
+  const cf = carryGrip(q, b, fwd, c);
+  slingReach(q, b, fwd);
+  holdBow(b, fwd, up, c, cf);
+  slingBow(b);
+  carryString(q, b, cf, c);
+}
+const _cs = new THREE.Vector3(), _cf = new THREE.Vector3(), _cl = new THREE.Vector3(), _cg = new THREE.Vector3(), _cn = new THREE.Vector3();
+/**
+ * The bow held in both hands on the run, `c` of the way: low and well out before the belly, slanting up across the body,
+ * the left hand on the grip (here) and the right on the string (carryString), as with an arrow nocked. The hands ride
+ * the chest as it bobs and follow some of the shoulders' swing, so the bow rocks with the stride. Returns which way
+ * the chest is taken to face (the bow is turned to it).
+ */
+function carryGrip(q: QAnim, b: BowArms, fwd: THREE.Vector3, c: number): THREE.Vector3 {
+  if (c < 0.01) return fwd;
+  hold(q, [b.uaL, b.laL, b.uaR, b.laR]);
+  const sc = b.root.getWorldScale(_cs).y;
+  // the shoulders' turn (the left one ahead: the chest turned right), some of it followed
+  b.uaL.updateWorldMatrix(true, false);
+  b.uaR.updateWorldMatrix(true, false);
+  const sh = _cs.setFromMatrixPosition(b.uaL.matrixWorld).sub(_cg.setFromMatrixPosition(b.uaR.matrixWorld));
+  const twist = Math.atan2(sh.dot(fwd), sh.dot(_cl.set(fwd.z, 0, -fwd.x)));
+  const cf = _cf.copy(fwd).applyAxisAngle(UP, -twist * BOW_SWAY), cl = _cl.set(cf.z, 0, -cf.x);
+  // the grip out before the belly, a little to the left, riding the chest
+  b.spine[2].updateWorldMatrix(true, false);
+  const grip = _cg.setFromMatrixPosition(b.spine[2].matrixWorld).addScaledVector(cf, BOW_CARRY[0] * sc).addScaledVector(cl, BOW_CARRY[1] * sc);
+  grip.y += BOW_CARRY[2] * sc;
+  reach(b.uaL, b.laL, b.handL, grip, bodyDir(_d1, cf, cl, 1, -0.6, -0.3), c);
+  return cf;
+}
+/** The right hand on the string's middle as the bow is carried (carryGrip, `c` of the way, the chest facing `cf`), the
+ * wrist a little behind it (the plain bow has none: behind the grip); the elbow down by the side, the forearm reaching
+ * ahead to it. */
+function carryString(q: QAnim, b: BowArms, cf: THREE.Vector3, c: number) {
+  if (c < 0.01) return;
+  const sc = b.root.getWorldScale(_cs).y, st = b.string, nock = _cn;
+  if (st) {
+    st.node.updateWorldMatrix(true, false);
+    nock.copy(st.top).lerp(st.bottom, 0.5).applyMatrix4(st.node.matrixWorld);
+  } else {
+    b.handL.updateWorldMatrix(true, false);
+    nock.setFromMatrixPosition(b.handL.matrixWorld).addScaledVector(cf, -0.1 * sc);
+  }
+  nock.addScaledVector(cf, -BOW_NOCK_WRIST * sc);
+  reach(b.uaR, b.laR, b.handR, nock, bodyDir(_d1, cf, _cl.set(cf.z, 0, -cf.x), -0.6, -1, -0.2), c);
+}
+const _wp = new THREE.Vector3(), _wp2 = new THREE.Vector3(), _ws = new THREE.Vector3(), _wq = new THREE.Quaternion(), _wq2 = new THREE.Quaternion(),
+  _wm = new THREE.Matrix4();
+/** The left hand up over its shoulder while the bow is slung or taken from the back (BowArms.sling between 0 and 1),
+ * most at the middle of the way. */
+function slingReach(q: QAnim, b: BowArms, fwd: THREE.Vector3) {
+  const w = Math.sin(Math.PI * THREE.MathUtils.smoothstep(b.sling, 0, 1)) * 0.9;
+  if (w < 0.01) return;
+  hold(q, [b.uaL, b.laL]);
+  const sc = b.root.getWorldScale(_cs).y, left = _cl.set(fwd.z, 0, -fwd.x);
+  b.uaL.updateWorldMatrix(true, false);
+  const over = _cg.setFromMatrixPosition(b.uaL.matrixWorld).addScaledVector(fwd, -0.05 * sc).addScaledVector(left, -0.03 * sc);
+  over.y += 0.15 * sc;
+  reach(b.uaL, b.laL, b.handL, over, bodyDir(_d1, fwd, left, 0.7, 0.3, 0.6), w);
+}
+/** The bow as far on its way from the hand (where holdBow put it) to the back (bowSlot, on spine_03) as it is slung. */
+function slingBow(b: BowArms) {
+  const g = b.grip, k = THREE.MathUtils.smoothstep(b.sling, 0, 1);
+  if (!g || !bowSlot || k < 0.001) return;
+  g.updateWorldMatrix(true, false);
+  g.matrixWorld.decompose(_wp, _wq, _ws);
+  b.spine[2].updateWorldMatrix(true, false);
+  _wm.multiplyMatrices(b.spine[2].matrixWorld, bowSlot).decompose(_wp2, _wq2, _ws);
+  _wp.lerp(_wp2, k);
+  _wq.slerp(_wq2, k);
+  // back into the hand's space (the bow keeps its size)
+  g.position.copy(_wp.applyMatrix4(_wm.copy(g.parent!.matrixWorld).invert()));
+  g.quaternion.copy(g.parent!.getWorldQuaternion(_aq).invert().multiply(_wq));
+}
+const _ft = new THREE.Vector3(), _fp = new THREE.Vector3(), _fq = new THREE.Quaternion();
+/**
+ * An archer's feet planted in its stance (Stance) while it stands with the bow and shoots, `w` of the way, whatever the
+ * bow clips do with them (KayKit's draw steps the back foot away up on its toes, and its release back again): open,
+ * flat, each knee over its foot. The hips and all above stay the clip's.
+ */
+function plantFeet(q: QAnim, b: BowArms, w: number) {
+  const st = b.stance;
+  if (!st || w < 0.01) return;
+  hold(q, [...b.thigh, ...b.calf, ...b.foot, ...b.ball]);
+  b.arm.updateWorldMatrix(true, false);
+  const turn = b.arm.getWorldQuaternion(_fq);
+  for (let i = 0; i < 2; i++) {
+    b.arm.localToWorld(_ft.copy(st.pos[i]));
+    _fp.copy(st.toe[i]).applyQuaternion(turn);
+    // twice: a stocky body is wider than it is tall (QOpts.bulk), which the turns land off by a little the first time
+    for (let k = 0; k < 2; k++) reach(b.thigh[i], b.calf[i], b.foot[i], _ft, _fp, w);
+    const foot = b.foot[i], world = _aq.copy(turn).multiply(st.rot[i]);
+    foot.quaternion.slerp(foot.parent!.getWorldQuaternion(_aq2).invert().multiply(world), w);
+    b.ball[i].quaternion.slerp(st.ball[i], w);
+  }
 }
 /** The bow arm carried straight, the forearm in line with the upper arm (the clips bend the elbow, a running one most),
  * `k` of the way; the upper arm keeps its own swing. */
@@ -870,12 +1054,14 @@ const _bx = new THREE.Vector3(), _by = new THREE.Vector3(), _bz = new THREE.Vect
  * How the bow sits in the fist, whatever way the clip turns the hand: carried (standing, running) it lies along the
  * body, one limb ahead a little lower than the other behind, its back to the ground and its string on top; drawn it
  * stands upright, its back towards where the archer faces and the string towards the archer; between the two as the
- * draw comes and goes. Fallen, sitting or swimming it goes with the hand again.
+ * draw comes and goes. In both hands on the run (`carry` of the way, the chest's ahead `cf`) it slants across the body.
+ * Fallen, sitting or swimming it goes with the hand again.
  */
-function holdBow(b: BowArms, fwd: THREE.Vector3, up = (b.up += (b.w - b.up) * 0.25)) {
+function holdBow(b: BowArms, fwd: THREE.Vector3, up = (b.up += (b.w - b.up) * 0.25), carry = 0, cf = fwd) {
   const g = b.grip;
   if (!g) return;
   g.quaternion.copy(b.gripRest);
+  g.position.copy(b.gripPos);
   if (b.hold < 0.01) return;
   g.parent!.updateWorldMatrix(true, false);
   // carried: the bow's Y (its limbs) along fwd, dipping forward; its X (its back) down
@@ -890,6 +1076,15 @@ function holdBow(b: BowArms, fwd: THREE.Vector3, up = (b.up += (b.w - b.up) * 0.
     _bz.crossVectors(fwd, _by);
     _bq2.setFromRotationMatrix(_bm.makeBasis(fwd, _by, _bz));
     _bq.slerp(_bq2, up);
+  }
+  if (carry > 0.001) {
+    // in both hands: its X (its back) ahead, its Y leaning over from upright to the right shoulder and back towards it,
+    // the string towards the archer
+    _bx.set(cf.z, 0, -cf.x); // the left
+    _by.set(0, Math.cos(BOW_CANT), 0).addScaledVector(_bx, -Math.sin(BOW_CANT)).multiplyScalar(Math.cos(BOW_LEAN)).addScaledVector(cf, -Math.sin(BOW_LEAN));
+    _bx.copy(cf).addScaledVector(_by, -cf.dot(_by)).normalize();
+    _bz.crossVectors(_bx, _by);
+    _bq.slerp(_bq2.setFromRotationMatrix(_bm.makeBasis(_bx, _by, _bz)), carry);
   }
   g.quaternion.slerp(g.parent!.getWorldQuaternion(_aq).invert().multiply(_bq), b.hold);
 }
@@ -1518,7 +1713,7 @@ export function qPlayer(o: QOpts): Rig {
     a.play();
   }
   // driven by the entity's own clock (swing, death, sitting down and getting up)
-  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit', 'KK_Sit_Floor_Down', 'KK_Sit_Floor_StandUp', ...DRIVEN_SKILL_CLIPS, ...SWING_CLIPS, ...SWING_CLIPS.map((n) => n + UPPER)]) if (acts[n]) acts[n].timeScale = 0;
+  for (const n of ['Sword_Attack', 'Punch_Jab', 'Death01', 'Sitting_Enter', 'Sitting_Exit', 'KK_Sit_Floor_Down', 'KK_Sit_Floor_StandUp', ...DRIVEN_SKILL_CLIPS, ...SWING_CLIPS, ...[...SWING_CLIPS, ...BOW_SHOT].map((n) => n + UPPER)]) if (acts[n]) acts[n].timeScale = 0;
   root.scale.setScalar(o.scale);
   body.scale.set(o.bulk, 1, o.bulk);
   // a streak behind each blade as it swings (not a bow's)
@@ -1532,7 +1727,8 @@ export function qPlayer(o: QOpts): Rig {
         la: byName.lowerarm_r, hand: byName.hand_r } : undefined,
       bow: o.bow ? { root, head: byName.Head, spine: ['spine_01', 'spine_02', 'spine_03'].map((n) => byName[n]), neck: byName.neck_01,
         string: o.inHand ? bowString(o.inHand) : undefined, grip: o.inHand?.parent ?? undefined,
-        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), hold: 1, up: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0 } : undefined },
+        gripRest: o.inHand?.parent?.quaternion.clone() ?? new THREE.Quaternion(), gripPos: o.inHand?.parent?.position.clone() ?? new THREE.Vector3(), hold: 1, sling: o.cape ? 0 : 1, back: !o.cape, up: 0, carry: 0, uaL: byName.upperarm_l, laL: byName.lowerarm_l, handL: byName.hand_l, uaR: byName.upperarm_r, laR: byName.lowerarm_r, handR: byName.hand_r, w: 0,
+        arm, thigh: [byName.thigh_l, byName.thigh_r], calf: [byName.calf_l, byName.calf_r], foot: [byName.foot_l, byName.foot_r], ball: [byName.ball_l, byName.ball_r], stance: bowStance[o.g] } : undefined },
     dispose: () => {
       skeletons.forEach((s) => s.dispose());
       trails.forEach((t) => t.dispose());
@@ -1658,6 +1854,22 @@ function bowDrawn(clip: string, t: number): number | null {
 const BOW_LOOSE_MS = 380, BOW_REL_SPEED = 1.35;
 /** How far an archer turns side-on at full draw (radians: ~65°), the chest away from the mark. */
 const BOW_TURN = 1.13;
+/** The clips an archer stands in, its feet planted (plantFeet): the idle (the bow on its back) and the bow's; and those
+ * it shoots with: on the run, their upper body over the jog's legs. */
+const BOW_STANDING = ['Idle_Loop', 'KK_Bow_Idle', 'KK_Bow_Draw', 'KK_Bow_Aim', 'KK_Bow_Release', 'KK_Bow_Draw_Up', 'KK_Bow_Release_Up'];
+const BOW_SHOT = ['KK_Bow_Draw', 'KK_Bow_Release'];
+/** How much wider than the idle's the archer's planted stance is, side to side, and how much of the way back under the
+ * bow clips' hips it stands (stanceOf). */
+const BOW_STANCE_WIDE = 1.2, BOW_STANCE_BACK = 0.5;
+/** The bow in both hands on the run (carryGrip): where the grip is from the chest (ahead, to the left, up: metres at
+ * the rig's scale), how far the bow leans over from upright towards the right shoulder and its top back towards it, the
+ * bottom out ahead of the knees (radians), how much of the shoulders' swing it follows, and how far behind the string
+ * the drawing hand's wrist is. */
+const BOW_CARRY = [0.4, 0.04, -0.34], BOW_CANT = 0.9, BOW_LEAN = 0.25, BOW_SWAY = 0.35, BOW_NOCK_WRIST = 0.06;
+/** The bow on the back (backSlot): its grip from the chest bone (up, ahead, and out to the side it faces, about half
+ * the string's distance so the bow sits centred: metres, standing in the idle), how far it leans over from upright
+ * towards the left shoulder (radians), and how long it takes to sling it and to take it in hand (s). */
+const BOW_BACK = [-0.05, -0.2, 0.07], BOW_SLUNG = 0.6, BOW_SLING_S = [0.6, 0.3];
 /** What basicSwing picked: the clip (its time already set) and whether the blade is mid-blow. */
 const _swing = { clip: '', blow: false };
 /**
@@ -1767,6 +1979,12 @@ export function animateQ(q: QAnim, s: AnimState): number {
     q.acts[cur].time = s.atkAge < BOW_LOOSE_MS ? BOW_NOCK + (s.atkAge / BOW_LOOSE_MS) * (1.0 - BOW_NOCK)
       : Math.min(((s.atkAge - BOW_LOOSE_MS) / 1000) * BOW_REL_SPEED, clips.KK_Bow_Release.duration - 0.02);
     bowAt = bowDrawn(cur, q.acts[cur].time);
+    // on the run: the shot's upper body, the legs running on under it (as a blow struck on the run)
+    if (s.moving && q.acts[cur + UPPER] && q.acts[JOG_LEGS]) {
+      q.acts[cur + UPPER].time = q.acts[cur].time;
+      cur += UPPER;
+      cur2 = JOG_LEGS;
+    }
   } else if (q.swing && !s.atkAnim && s.atkAge < COMBAT_MS && basicSwing(q, s)) {
     // the basic attack (swings.ts): basicSwing set the clip and its time
     // (a skill with its own animation and no blow - a buff, a dodge, a guard - swings nothing as it goes off)
@@ -1787,8 +2005,9 @@ export function animateQ(q: QAnim, s: AnimState): number {
   }
   // a clip this build's animation file lacks (an old cached copy, a trimmed pack): the plain pose instead of no pose
   if (!q.acts[cur]) cur = s.moving && !s.swimming ? 'Jog_Fwd_Loop' : 'Idle_Loop';
-  // an archer standing still keeps KayKit's bow stance: its release ends in it, so a shot settles back without a snap
-  if (cur === 'Idle_Loop' && q.bow && q.acts.KK_Bow_Idle) (cur = 'KK_Bow_Idle'), (bowAt = 0);
+  // an archer standing still in a fight keeps KayKit's bow stance: its release ends in it, so a shot settles back
+  // without a snap. Out of one the bow is on its back (aimBow) and the arms rest
+  if (cur === 'Idle_Loop' && q.bow && q.acts.KK_Bow_Idle && (s.casting || s.atkAge < COMBAT_MS)) (cur = 'KK_Bow_Idle'), (bowAt = 0);
   const k = Math.min(1, dt * 14);
   for (const n in q.acts) {
     // a fading clip is cut to exactly 0 near the end: the mixer skips sampling clips at zero weight,
@@ -1808,6 +2027,8 @@ export function animateQ(q: QAnim, s: AnimState): number {
   for (const b of q.heldNow) b.quaternion.copy(q.held.get(b)!);
   q.heldNow.length = 0;
   q.mixer.update(dt);
+  // an archer standing with the bow keeps its feet where they are, as much as the bow clips play
+  if (q.bow) plantFeet(q, q.bow, Math.min(1, BOW_STANDING.reduce((k, n) => k + (q.w[n] ?? 0), 0)));
   if (q.skirt) swingSkirt(q.skirt);
   // the jog's clock runs at any weight: a foot lands when it passes one of the clip's landing moments
   // (its legs alone under a blow struck on the run keep the same clock: both started together and run at the same pace)
@@ -1815,7 +2036,7 @@ export function animateQ(q: QAnim, s: AnimState): number {
   const steps = jog && legs > 0.5 ? crossed(jog0 / jog.getClip().duration, jog.time / jog.getClip().duration, jogSteps) : 0;
   if (q.dagger) stabGrip(q.dagger, Math.max(...DAGGER_THRUSTS.map((n) => q.w[n] ?? 0)));
   for (const t of q.trails) t.update(blow, dt);
-  if (q.bow) aimBow(q, q.bow, s, dt, bowAt === null ? null : { drawn: bowAt, up: bowUp(cur, q.acts[cur]?.time ?? 0) });
+  if (q.bow) aimBow(q, q.bow, s, dt, bowAt === null ? null : { drawn: bowAt, up: bowUp(cur.replace(UPPER, ''), q.acts[cur]?.time ?? 0) });
   if (q.cape) capeCloth(q.cape, s, dt);
   return steps;
 }
