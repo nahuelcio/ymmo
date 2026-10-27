@@ -2,7 +2,7 @@ import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type Masterwor
 import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
 import { type BuffMods, SKILLS } from '../../../shared/src/data/skills';
 import { PASSIVES } from '../../../shared/src/data/passives';
-import { el, esc } from './dom';
+import { el, esc, hideTip } from './dom';
 import { lang, t as tx } from '../lang';
 import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
 export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), shield: tx('Escudo', 'Shield'), chest: tx('Torso', 'Chest'), cape: tx('Capa', 'Cape'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet'), amulet: tx('Collar', 'Necklace'), earring: tx('Pendiente', 'Earring'), ring: tx('Anillo', 'Ring') };
@@ -202,6 +202,19 @@ export function passiveTip(id: string): string {
     bow: tx('Con un arco equipado.', 'With a bow equipped.'), dagger: tx('Con una daga equipada.', 'With a dagger equipped.') }[p.weapon] : '';
   return `<div class="tt-title">${esc(lang === 'en' ? p.nameEn : p.name)} <span class="tt-dim">${tx('Pasiva', 'Passive')} · ${tx('Nv', 'Lv')} ${p.level}</span></div>${esc(lang === 'en' ? p.descEn : p.desc)}<br>
     <span class="tt-up">${esc(modsText(p.mods))}</span>${need ? `<br><span class="tt-dim">${need}</span>` : ''}<br><span class="tt-dim">${tx('Siempre activa: no va en la barra.', 'Always on: it does not go on the bar.')}</span>`;
+}
+
+/** Touch screens get no hover tooltips: a tap shows the same `html` (trusted markup) in a sheet at the bottom, as the
+ * bag's item sheet does. One at a time; Close or a touch anywhere else closes it. */
+let sheet: HTMLDivElement | null = null;
+const closeSheet = () => (sheet?.remove(), (sheet = null));
+addEventListener('pointerdown', (e) => sheet && !sheet.contains(e.target as Node) && closeSheet());
+export function tipSheet(html: string) {
+  closeSheet();
+  hideTip();
+  sheet = el('div', 'ctx-menu sheet', document.body);
+  el('div', 'sheet-info', sheet).innerHTML = html;
+  el('button', 'sheet-close', sheet, tx('Cerrar', 'Close')).onclick = closeSheet;
 }
 
 export function bar(parent: HTMLElement, cls: string, label?: string): { root: HTMLDivElement; fill: HTMLDivElement; text: HTMLSpanElement; set(cur: number, max: number): void } {

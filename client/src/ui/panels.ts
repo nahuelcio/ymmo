@@ -14,7 +14,7 @@ import { allSkillsFor } from '../../../shared/src/data/skills';
 import { passivesFor } from '../../../shared/src/data/passives';
 import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protocol';
 import type { Game } from '../game';
-import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, passiveIcon, passiveTip, skillIcon, skillTip, SLOT_NAME, speedPct } from './common';
+import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, passiveIcon, passiveTip, skillIcon, skillTip, SLOT_NAME, speedPct, tipSheet } from './common';
 import { isTouchDevice } from './touch';
 import { touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
@@ -415,14 +415,19 @@ export class CharacterPanel {
 
   /** The skills as a grid of icons, four a row: the name, what each does, its level and MP on hover; the ones still to
    * learn dimmed; the learned ones drag onto the bar. Then the passives, always on (never on the bar), and the third
-   * specialization's skills and passive, still to come. */
+   * specialization's skills and passive, still to come. Phones get no hover: a tap shows the same in a sheet. */
   private skills(b: HTMLElement) {
     const m = this.g.me;
+    const touch = isTouchDevice();
+    const tip = (e: HTMLElement, html: () => string) => {
+      setTip(e, html);
+      if (touch) e.onclick = () => tipSheet(html()); // the tap a long press (a drag to the bar) ends in never gets here
+    };
     const grid = el('div', 'skill-grid', b);
     for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
       const icon = skillIcon(s.id, grid);
       icon.classList.toggle('locked', s.level > m.lvl);
-      setTip(icon, () => skillTip(s.id));
+      tip(icon, () => skillTip(s.id));
       if (m.skills.includes(s.id)) {
         icon.draggable = true;
         icon.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
@@ -437,29 +442,32 @@ export class CharacterPanel {
       for (const p of passives) {
         const icon = passiveIcon(p.id, pGrid);
         icon.classList.toggle('locked', p.level > m.lvl);
-        setTip(icon, () => passiveTip(p.id));
+        tip(icon, () => passiveTip(p.id));
       }
     }
     // what the spec awakens into at level 76, and how: its skills in the same grid, still locked
     const evo = evolutionOf(m.spec);
     if (evo) {
       const title = el('div', 'section', b, tx(`Tercera especialización: ${specName(evo, lang)}`, `Third specialization: ${specName(evo, lang)}`));
-      setTip(title, () => esc(specDesc(evo, lang)));
+      tip(title, () => esc(specDesc(evo, lang)));
       el('div', 'tt-dim', b, tx(`Desde el nivel ${EVOLVE_LEVEL}, con la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}, with the quest "The Awakening" from Veyra, in Emberdark.`));
       const evoGrid = el('div', 'skill-grid', b);
       for (const s of allSkillsFor(m.cls, m.race, m.look.g, evo).filter((x) => x.spec === evo)) {
         const icon = skillIcon(s.id, evoGrid);
         icon.classList.add('locked');
-        setTip(icon, () => skillTip(s.id));
+        tip(icon, () => skillTip(s.id));
       }
       for (const p of passivesFor(m.cls, evo).filter((x) => x.spec === evo)) {
         const icon = passiveIcon(p.id, evoGrid);
         icon.classList.add('locked');
-        setTip(icon, () => passiveTip(p.id));
+        tip(icon, () => passiveTip(p.id));
       }
     }
-    el('div', 'hint', b, tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
-      'Drag a skill onto the bar to place it. On the bar: drag a slot onto another to swap them, right click to empty it.'));
+    el('div', 'hint', b, touch
+      ? tx('Tocá una habilidad para ver qué hace. Para ubicarla, mantenela presionada y arrastrala a la barra.',
+        'Tap a skill to see what it does. To place it, hold it and drag it onto the bar.')
+      : tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
+        'Drag a skill onto the bar to place it. On the bar: drag a slot onto another to swap them, right click to empty it.'));
   }
 }
 
