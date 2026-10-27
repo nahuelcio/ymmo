@@ -397,7 +397,7 @@ export class CharacterPanel {
         const skills = allSkillsFor(m.cls, m.race, m.look.g, sp).filter((s) => s.spec).map((s) => skillName(s.id, lang)).join(' · ');
         const info = el('div', '', card);
         info.innerHTML = `<b>${esc(specName(sp, lang))}</b><br><span class="tt-dim">${esc(specDesc(sp, lang))}<br>${esc(skills)}<br>${tx('Pasivas', 'Passives')}: </span>`;
-        // each passive with its icon, and its tooltip on hover
+        // each passive with its icon, and its tooltip on hover (phones: in a sheet, on a tap)
         const line = info.querySelector<HTMLElement>('.tt-dim')!;
         passivesFor(m.cls, sp).filter((p) => p.spec).forEach((p, i) => {
           if (i) line.append(' · ');
@@ -405,6 +405,7 @@ export class CharacterPanel {
           glyph('skill', p.id, p.icon, tag);
           tag.append(` ${lang === 'en' ? p.nameEn : p.name}`);
           setTip(tag, () => passiveTip(p.id));
+          if (isTouchDevice()) tag.onclick = () => tipSheet(passiveTip(p.id));
         });
         el('button', 'btn primary', card, tx('Elegir', 'Choose')).onclick = () => {
           if (confirm(tx(`¿Ser ${specName(sp, lang)}? No se puede cambiar después.`, `Become a ${specName(sp, lang)}? This cannot be changed later.`))) this.g.net.send({ t: 'chooseSpec', spec: sp });
