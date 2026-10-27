@@ -826,15 +826,17 @@ def limb(ob, name, L=None):
     if name == 'gloves':  # Tripo: the cuff up (+Y), fingers down, the back of the hand to the front (+X)
         g = np.stack([-g[:, 1], g[:, 0], g[:, 2]], 1)
     elif name == 'feet':
-        # the concept may show the boot from the side: its toe is where the sole reaches furthest from under the shaft
+        # the concept may show the boot from any side, and Tripo turns it some way off its axes: the sole's long axis,
+        # pointed at the toe (where the sole reaches furthest from under the shaft), goes onto +Z, the way the reference
+        # body's feet point. Its toe snapped to the nearest axis instead, a boot turned 20 degrees came out toed in
         lo, hi = g.min(0), g.max(0)
         sole, shaft = g[g[:, 1] < lo[1] + 0.12 * (hi[1] - lo[1])], g[g[:, 1] > lo[1] + 0.6 * (hi[1] - lo[1])]
         c = (shaft.min(0) + shaft.max(0)) / 2
-        toe = max(((sole[:, k].max() - c[k], k, 1.0) for k in (0, 2)), key=lambda t: t[0])
-        toe = max(toe, *((c[k] - sole[:, k].min(), k, -1.0) for k in (0, 2)), key=lambda t: t[0])
-        v = np.zeros(3)
-        v[toe[1]] = toe[2]
-        t = math.atan2(-v[0], v[2])  # about Y, the toe onto +Z
+        xz = sole[:, [0, 2]] - c[[0, 2]]
+        v = np.linalg.eigh(np.cov((xz - xz.mean(0)).T))[1][:, -1]  # (x, z)
+        if -(xz @ v).min() > (xz @ v).max():
+            v = -v
+        t = math.atan2(-v[0], v[1])  # about Y, the toe onto +Z
         g = np.stack([g[:, 0] * math.cos(t) + g[:, 2] * math.sin(t), g[:, 1], -g[:, 0] * math.sin(t) + g[:, 2] * math.cos(t)], 1)
     else:
         g = turn(g)
