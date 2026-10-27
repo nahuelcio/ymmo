@@ -7,6 +7,7 @@
 // A Hero chooses its look in the character window (ui/panels.ts). The dev gallery shows them side by side: ?fx=1&hero=1
 // (render/fx-gallery.ts).
 import * as THREE from 'three';
+import { GLOW_BLEND } from './enchant-fx';
 
 /** halo: the column of light and glints round it; spiral: glints in three arms winding up the body, over a fainter
  * column. The order is the player record's `he` (1 + the index): server-rs olympiad.rs HERO_LOOKS keeps the same. */
@@ -81,10 +82,11 @@ function materials(look: HeroLook, trail: boolean) {
         // light running up the body, in slow wavering bands
         float flow = 0.65 + 0.35 * sin(vUv.y * 11.0 - uTime * 2.6 + sin(vUv.x * 6.0 + uTime) * 1.2);
         float a = shape * flow * uPower * 0.3;
-        gl_FragColor = vec4(uColor * a, 1.0);
+        // as much alpha as light (GLOW_BLEND): at 1 everywhere the plane cut a box out of the sun's shafts
+        gl_FragColor = vec4(uColor * a, min(a, 1.0));
       }`,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    ...GLOW_BLEND,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
@@ -157,10 +159,10 @@ function materials(look: HeroLook, trail: boolean) {
         float glow = vTail > 0.5 ? exp(-r2 * 3.5) : exp(-r2 * 7.0) + 0.35 * exp(-r2 * 2.0);
         float a = glow * vTwinkle * 1.3;
         if (a < 0.01) discard;
-        gl_FragColor = vec4(mix(uColor, uEmber, vWarm) * a, 1.0);
+        gl_FragColor = vec4(mix(uColor, uEmber, vWarm) * a, min(a, 1.0));
       }`,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    ...GLOW_BLEND,
     depthWrite: false,
   });
   m = { halo, sparks, geo };

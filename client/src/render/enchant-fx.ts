@@ -28,6 +28,14 @@ export function enchantLook(level: number) {
 
 /** One clock for every enchanted weapon, and the drawing buffer's height (for the sparks' size on screen). */
 const shared = { uTime: { value: 0 }, uViewH: { value: 800 } };
+
+/**
+ * Additive, as THREE.AdditiveBlending, but with the alpha the shader writes added as it is: a glow writes only as much
+ * alpha as it has light. The sun's light shafts (atmos.ts GodRaysShader) take alpha 0 for sky, so a glow at alpha 1
+ * over its whole plane cut a box out of them round the weapon (and round a Hero, hero-fx.ts).
+ */
+export const GLOW_BLEND = { blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor } as const;
+
 export function tickEnchantFx(seconds: number, viewHeight: number) {
   shared.uTime.value = seconds;
   shared.uViewH.value = viewHeight;
@@ -75,10 +83,10 @@ function materials(level: number) {
         // light running up the blade
         float flow = 0.75 + 0.25 * sin(vUv.y * 14.0 - uTime * 6.0);
         float a = (halo * 0.55 + core) * ends * flow * uPower;
-        gl_FragColor = vec4(uColor * a + vec3(core * ends * uPower * 0.6), 1.0);
+        gl_FragColor = vec4(uColor * a + vec3(core * ends * uPower * 0.6), min(a, 1.0));
       }`,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    ...GLOW_BLEND,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
@@ -122,10 +130,10 @@ function materials(level: number) {
         float glow = exp(-r2 * 6.0);
         float a = glow * vTwinkle * 1.6;
         if (a < 0.01) discard;
-        gl_FragColor = vec4(uColor * a, 1.0);
+        gl_FragColor = vec4(uColor * a, min(a, 1.0));
       }`,
     transparent: true,
-    blending: THREE.AdditiveBlending,
+    ...GLOW_BLEND,
     depthWrite: false,
   });
   m = { beam, sparks, geo };
