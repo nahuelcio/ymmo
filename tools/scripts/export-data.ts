@@ -9,7 +9,7 @@ import { SKILLS } from '../../shared/src/data/skills';
 import { dailySet, QUEST_LIST } from '../../shared/src/data/quests';
 import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
-import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
+import { CLASSES, GENDERS, RACES, START_ADENA, MAX_LEVEL, PVP_LEVEL, SPEC_LEVEL, SPECS, HAIR_STYLES, HAIR_COLORS } from '../../shared/src/data/classes';
 import { RAIDS } from '../../shared/src/data/raids';
 import { LEGEND } from '../../shared/src/data/legend';
 import { CLAN, CLAN_DEFAULT_PRIVS, CLAN_GRADE_LEVEL, CLAN_LEVELS, CLAN_REP, CLAN_SKILLS } from '../../shared/src/data/clans';
@@ -36,7 +36,7 @@ function waterRuns(): [number, number, number][] {
 }
 
 const out = {
-  constants: { PLAYABLE_HALF, SWIM_SPEED, STAND_UP_MS, SIT_REGEN, TENT_REGEN, HUT_REGEN, HUT_CAP, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
+  constants: { PLAYABLE_HALF, SWIM_SPEED, STAND_UP_MS, SIT_REGEN, TENT_REGEN, HUT_REGEN, HUT_CAP, WALK_RADIUS, START_ADENA, MAX_LEVEL, SPEC_LEVEL, PVP_LEVEL, HAIR_STYLES: HAIR_STYLES.length, HAIR_COLORS: HAIR_COLORS.length },
   town: { ...TOWN, nameEn: zoneName(TOWN.name, 'en') },
   towns: TOWNS.map((t) => ({ ...t, nameEn: zoneName(t.name, 'en') })),
   wild: { name: 'Tierras Salvajes', nameEn: zoneName('Tierras Salvajes', 'en') },

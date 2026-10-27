@@ -29,7 +29,7 @@ Panel de admin: poné `ADMIN_PASSWORD=<8+ caracteres>` en un `.env` (o en el ent
 - Village of Dawn (zona segura) con Grocer, Weapon/Armor Merchant y Gatekeeper.
 - 4 zonas de caza: Windy Meadows (1-5), Goblin Hills (5-10), Orc Barracks (10-15), Cursed Wastes (15-20, raid boss Kaim Vanul).
 - Items No-Grade / D / C, drops, adena, inventario, paperdoll, tiendas (compra/venta), pociones y Scroll of Escape.
-- Chat (local, `!` shout, `#` party, `"nombre` whisper, `/help`), party con XP compartida, PvP con flag púrpura y karma (PK rojo, drop al morir).
+- Chat (local, `!` shout, `#` party, `"nombre` whisper, `/help`), party con XP compartida, PvP con flag púrpura y karma (PK rojo, drop al morir), obligatorio desde el nivel 50.
 
 ## Controles
 

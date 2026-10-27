@@ -18,12 +18,15 @@ const PVP_OFF_COOLDOWN: f64 = 10000.0;
 fn is_fighter(w: &World, id: u32) -> bool { w.ents.get(&id).map_or(false, |e| e.is_fighter()) }
 
 impl World {
-    /** Turn PvP mode on/off. Can't hide from a fight: turning off needs 10 s out of combat and no flag. */
+    /** Turn PvP mode on/off. Can't hide from a fight: turning off needs 10 s out of combat and no flag. From PVP_LEVEL on
+     * it is always on (it turns on at join and on reaching that level). */
     pub fn set_pvp_mode(&mut self, pid: u32, on: bool) {
         let now = self.now;
         let p = self.pl(pid).unwrap();
         if p.pvp_on == on { return; }
         if !on {
+            let lvl = d().c.pvp_level;
+            if p.level >= lvl { return self.sys(pid, &format!("Desde el nivel {lvl} el PvP no se puede desactivar."), &format!("From level {lvl} on, PvP mode cannot be turned off.")); }
             if p.karma > 0 { return self.sys(pid, "No podés desactivar el PvP mientras tengas karma.", "You cannot disable PvP while you have karma."); }
             if p.pvp_until > now || now - p.last_combat < PVP_OFF_COOLDOWN {
                 return self.sys(pid, "No podés desactivar el PvP en combate o con flag. Esperá unos segundos.", "You cannot disable PvP while in combat or flagged. Wait a few seconds.");
@@ -323,6 +326,10 @@ impl World {
             }
             if lvl == d().c.spec_level && spec.is_none() {
                 self.sys(pid, "Ya podés elegir una especialización: abrí Estado del Personaje.", "You can now choose a specialization: open Character Status.");
+            }
+            if lvl == d().c.pvp_level {
+                self.pl_mut(pid).unwrap().pvp_on = true;
+                self.sys(pid, &format!("Llegaste al nivel {lvl}: desde ahora el PvP queda activado para siempre."), &format!("You reached level {lvl}: from now on PvP mode stays on for good."));
             }
         }
         let p = self.pl_mut(pid).unwrap();

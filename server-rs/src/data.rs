@@ -30,6 +30,9 @@ pub struct Constants {
     pub max_level: i64,
     #[serde(rename = "SPEC_LEVEL")]
     pub spec_level: i64,
+    /** from this level on PvP mode is always on (combat.rs set_pvp_mode) */
+    #[serde(rename = "PVP_LEVEL")]
+    pub pvp_level: i64,
     #[serde(rename = "HAIR_STYLES")]
     pub hair_styles: i64,
     #[serde(rename = "HAIR_COLORS")]
