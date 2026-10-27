@@ -1,7 +1,8 @@
 import { CLASSES, EVOLVE_LEVEL, evolutionOf, MAX_LEVEL, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
 import { LEGEND } from '../../../shared/src/data/legend';
 import { makeMovable } from './movable';
-import { foldable } from './hud';
+import { foldable, type Slot } from './hud';
+import { ACTION_GROUPS, actionIcon, actionTip, PLAYER_ACTIONS } from './actions';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, wearLevel, WORN_SLOTS, type WornSlot } from '../../../shared/src/data/items';
 import { siegeZoneAt, withTax } from '../../../shared/src/data/sieges';
 import { QUESTS } from '../../../shared/src/data/quests';
@@ -269,8 +270,8 @@ export class CharacterPanel {
   private statVals: HTMLElement[] = [];
   private legendBar: HTMLElement | null = null;
   /** the page shown: the stats (with the Hero's aura and the specialization to choose), the Legend (at the level cap),
-   * the skills */
-  private tab: 'stats' | 'legend' | 'skills' = 'stats';
+   * the skills, the actions (chat commands and the auto-attack) */
+  private tab: 'stats' | 'legend' | 'skills' | 'actions' = 'stats';
   constructor(private g: Game, root: HTMLElement) {
     this.win = new Win('character', tx('Estado del Personaje', 'Character Status'), 16, 210, 300, root);
     this.win.onShow = () => {
@@ -359,7 +360,7 @@ export class CharacterPanel {
     const tabs = el('div', 'tabs', b);
     const pages: [typeof this.tab, string][] = [['stats', tx('Estadísticas', 'Stats')]];
     if (capped) pages.push(['legend', m.legendPts > 0 ? tx(`Leyenda (${m.legendPts})`, `Legend (${m.legendPts})`) : tx('Leyenda', 'Legend')]);
-    pages.push(['skills', tx('Habilidades', 'Skills')]);
+    pages.push(['skills', tx('Habilidades', 'Skills')], ['actions', tx('Acciones', 'Actions')]);
     for (const [t, label] of pages) {
       const tb = el('button', `tab${this.tab === t ? ' active' : ''}${t === 'legend' && m.legendPts > 0 ? ' tab-new' : ''}`, tabs, label);
       tb.onclick = () => {
@@ -369,6 +370,7 @@ export class CharacterPanel {
     }
     if (this.tab === 'legend') return this.legend(b);
     if (this.tab === 'skills') return this.skills(b);
+    if (this.tab === 'actions') return this.actions(b);
     this.statsPage(b);
   }
 
@@ -414,27 +416,32 @@ export class CharacterPanel {
     }
   }
 
+  /** A tooltip on hover. Phones get no hover: a tap shows the same in a sheet. */
+  private tip(e: HTMLElement, html: () => string) {
+    setTip(e, html);
+    if (isTouchDevice()) e.onclick = () => tipSheet(html()); // the tap a long press (a drag to the bar) ends in never gets here
+  }
+
+  /** Dragged onto a bar it puts `slot` there; `ghost` is the icon that follows a finger (phones: a long press and a drag). */
+  private toBar(icon: HTMLElement, slot: NonNullable<Slot>, ghost: () => HTMLElement) {
+    icon.draggable = true;
+    icon.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot }));
+    icon.ondragend = () => (this.g.ui.hud.drag = null);
+    touchBarDrag(this.g, icon, () => slot, ghost);
+  }
+
   /** The skills as a grid of icons, four a row: the name, what each does, its level and MP on hover; the ones still to
    * learn dimmed; the learned ones drag onto the bar. Then the passives, always on (never on the bar), and the third
    * specialization's skills and passive, still to come. Phones get no hover: a tap shows the same in a sheet. */
   private skills(b: HTMLElement) {
     const m = this.g.me;
     const touch = isTouchDevice();
-    const tip = (e: HTMLElement, html: () => string) => {
-      setTip(e, html);
-      if (touch) e.onclick = () => tipSheet(html()); // the tap a long press (a drag to the bar) ends in never gets here
-    };
     const grid = el('div', 'skill-grid', b);
     for (const s of allSkillsFor(m.cls, m.race, m.look.g, m.spec)) {
       const icon = skillIcon(s.id, grid);
       icon.classList.toggle('locked', s.level > m.lvl);
-      tip(icon, () => skillTip(s.id));
-      if (m.skills.includes(s.id)) {
-        icon.draggable = true;
-        icon.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot: { type: 'skill', id: s.id } }));
-        icon.ondragend = () => (this.g.ui.hud.drag = null);
-        touchBarDrag(this.g, icon, () => ({ type: 'skill', id: s.id }), () => skillIcon(s.id)); // phones: a long press and a drag
-      }
+      this.tip(icon, () => skillTip(s.id));
+      if (m.skills.includes(s.id)) this.toBar(icon, { type: 'skill', id: s.id }, () => skillIcon(s.id));
     }
     const passives = passivesFor(m.cls, m.spec);
     if (passives.length) {
@@ -443,25 +450,25 @@ export class CharacterPanel {
       for (const p of passives) {
         const icon = passiveIcon(p.id, pGrid);
         icon.classList.toggle('locked', p.level > m.lvl);
-        tip(icon, () => passiveTip(p.id));
+        this.tip(icon, () => passiveTip(p.id));
       }
     }
     // what the spec awakens into at level 76, and how: its skills in the same grid, still locked
     const evo = evolutionOf(m.spec);
     if (evo) {
       const title = el('div', 'section', b, tx(`Tercera especialización: ${specName(evo, lang)}`, `Third specialization: ${specName(evo, lang)}`));
-      tip(title, () => esc(specDesc(evo, lang)));
+      this.tip(title, () => esc(specDesc(evo, lang)));
       el('div', 'tt-dim', b, tx(`Desde el nivel ${EVOLVE_LEVEL}, con la misión «El Despertar» de Veyra, en Brasaoscura.`, `From level ${EVOLVE_LEVEL}, with the quest "The Awakening" from Veyra, in Emberdark.`));
       const evoGrid = el('div', 'skill-grid', b);
       for (const s of allSkillsFor(m.cls, m.race, m.look.g, evo).filter((x) => x.spec === evo)) {
         const icon = skillIcon(s.id, evoGrid);
         icon.classList.add('locked');
-        tip(icon, () => skillTip(s.id));
+        this.tip(icon, () => skillTip(s.id));
       }
       for (const p of passivesFor(m.cls, evo).filter((x) => x.spec === evo)) {
         const icon = passiveIcon(p.id, evoGrid);
         icon.classList.add('locked');
-        tip(icon, () => passiveTip(p.id));
+        this.tip(icon, () => passiveTip(p.id));
       }
     }
     el('div', 'hint', b, touch
@@ -469,6 +476,25 @@ export class CharacterPanel {
         'Tap a skill to see what it does. To place it, hold it and drag it onto the bar.')
       : tx('Arrastrá una habilidad a la barra para ubicarla. En la barra: arrastrá un casillero sobre otro para intercambiarlos, click derecho para vaciarlo.',
         'Drag a skill onto the bar to place it. On the bar: drag a slot onto another to swap them, right click to empty it.'));
+  }
+
+  /** The chat commands any player has and the auto-attack (ui/actions.ts), a grid of icons per section, each dragging
+   * onto the bar as a skill does: there a click, a tap or the slot's key uses it. */
+  private actions(b: HTMLElement) {
+    ACTION_GROUPS.forEach((title, k) => {
+      el('div', 'section', b, title);
+      const grid = el('div', 'skill-grid', b);
+      for (const a of PLAYER_ACTIONS.filter((x) => x.group === k)) {
+        const icon = actionIcon(a.id, grid);
+        this.tip(icon, () => actionTip(a.id));
+        this.toBar(icon, { type: 'action', id: a.id }, () => actionIcon(a.id));
+      }
+    });
+    el('div', 'hint', b, isTouchDevice()
+      ? tx('Tocá una acción para ver qué hace. Para ubicarla, mantenela presionada y arrastrala a la barra.',
+        'Tap an action to see what it does. To place it, hold it and drag it onto the bar.')
+      : tx('Arrastrá una acción a la barra para usarla con un clic o con la tecla del casillero, igual que si escribieras el comando.',
+        'Drag an action onto the bar to use it with a click or the slot\'s key, the same as typing the command.'));
   }
 }
 
