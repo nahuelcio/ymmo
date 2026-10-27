@@ -530,9 +530,9 @@ impl World {
                 let secs = (raid.close_after_kill / 1000.0).round();
                 let tpl = self.ents[&mid].mob().unwrap().tpl;
                 self.announce(|l| if l.en() {
-                    format!("{} has fallen! The raid is cleared. Type /raid to leave (the lair closes in {secs} s).", tpl.name_en)
+                    format!("{} has fallen! The raid is cleared. To leave: a Scroll of Escape or /unstuck (the lair closes in {secs} s).", tpl.name_en)
                 } else {
-                    format!("¡{} cayó! Raid completada. Escribí /raid para salir (la guarida se cierra en {secs} s).", tpl.name)
+                    format!("¡{} cayó! Raid completada. Para salir: un Pergamino de Escape o /unstuck (la guarida se cierra en {secs} s).", tpl.name)
                 });
                 self.later(now + raid.close_after_kill, |w, _| {
                     for pid in w.players.clone() { w.exit_to_town(pid); }

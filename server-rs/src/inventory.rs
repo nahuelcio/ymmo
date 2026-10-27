@@ -179,9 +179,8 @@ impl World {
         }
         if u.escape.unwrap_or(false) {
             if p.escape_at > 0.0 { return; }
-            if self.arena.is_some() { return self.sys(pid, "En la arena no hay escape: escribí /raid para rendirte.", "There is no escape from the arena: type /raid to give up."); }
             self.pl_mut(pid).unwrap().escape_at = now + 3000.0;
-            self.sys(pid, "En 3 segundos volvés a la aldea...", "You will be returned to the village in 3 seconds...");
+            self.escape_notice(pid, 3);
         }
         let wound = self.ents[&pid].c.heal_mul(now);
         let p = self.pl_mut(pid).unwrap();

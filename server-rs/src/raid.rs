@@ -68,7 +68,7 @@ pub fn run_world(id: u32, raid: Option<(&'static RaidDef, usize)>, rx: Receiver<
                                 } else if w.raid.is_some() {
                                     w.join_group(pid);
                                     let r = w.raid.unwrap();
-                                    w.sys(pid, &format!("Entraste a {}. Escribí /raid para salir.", r.name), &format!("You entered {}. Type /raid to leave.", r.name_en));
+                                    w.sys(pid, &format!("Entraste a {}. Para salir: un Pergamino de Escape o /unstuck.", r.name), &format!("You entered {}. To leave: a Scroll of Escape or /unstuck.", r.name_en));
                                     if w.rift.is_some() { w.rift_join(pid); }
                                 } else if kind == "enter" {
                                     let (g, name) = { let p = w.pl(pid).unwrap(); (p.look.g, p.name.clone()) };
