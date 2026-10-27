@@ -456,8 +456,10 @@ impl World {
 
     pub fn drop_loot(&mut self, mid: u32, owners: &HashSet<u32>, now: f64) {
         let (mx, mz, tpl) = { let e = &self.ents[&mid]; (e.c.x, e.c.z, e.mob().unwrap().tpl) };
-        // auto-loot goes through the normal pickup, so a full bag leaves the item on the ground
+        // auto-loot goes through the normal pickup, so a full bag leaves the item on the ground; nothing to drop (a raid's
+        // adds carry no adena) leaves nothing, not an empty pile
         let drop = |w: &mut World, item: &str, count: i64| {
+            if count <= 0 { return; }
             let gid = w.spawn_ground(mx, mz, item, count, Some(owners.clone()), now);
             if let Some(p) = w.auto_looter(mx, mz, owners) { w.pickup(p, gid, now); }
         };
