@@ -20,6 +20,9 @@ pub struct Stats {
     /** how much more the caster's heals and mana recharges give, and how much longer its songs and dances last (1:
      * plain; the class passives') */
     pub heal_power: f64, pub tune_dur: f64,
+    /** the share of the damage taken that goes to the summoner's servitors (Transferir Dolor), and how much stronger the
+     * summoner's servitors are (its passives; 1: plain) */
+    pub transfer: f64, pub pet_power: f64,
 }
 
 pub const BASE_SPEED: f64 = 6.0;
@@ -145,7 +148,10 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
     let (mut b_crit, mut b_eva, mut b_acc, mut b_cdr, mut b_vamp, mut b_refl) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let (mut b_hp, mut b_hpr, mut b_mpr, mut b_cd) = (1.0, 1.0, 1.0, 1.0);
     let (mut b_mp, mut b_heal, mut b_tune) = (1.0, 1.0, 1.0);
+    let (mut b_transfer, mut b_pet) = (0.0, 1.0);
     for b in buffs {
+        b_transfer += b.transfer.unwrap_or(0.0);
+        b_pet *= b.pet.unwrap_or(1.0);
         b_crit += b.crit.unwrap_or(0.0);
         b_eva += b.evasion.unwrap_or(0.0);
         b_acc += b.accuracy.unwrap_or(0.0);
@@ -191,6 +197,58 @@ pub fn compute_stats(race: &str, cls: &str, level: i64, equipped: &[(&ItemDef, i
         block,
         crit_dmg: b_cd, vampire: b_vamp.min(0.5), reflect: b_refl.min(0.5),
         heal_power: b_heal, tune_dur: b_tune,
+        transfer: b_transfer.min(0.9), pet_power: b_pet,
+    }
+}
+
+/**
+ * A summoner's servitor at its owner's level: a same-level mob's curves (mob_stats) times the servitor's own
+ * multipliers and its owner's passives (`power`), and its magic on the attack curve, which mobs have none of; then the
+ * buffs on it, as a player's (compute_stats). Pinned by servitors_hold_their_own.
+ */
+pub fn pet_stats(s: &crate::data::ServitorDef, level: i64, power: f64, buffs: &[&BuffMods]) -> Stats {
+    let l = level as f64;
+    let m = |k: &str, v: f64| bal(&format!("pet.{}.{k}", s.id), v) * power;
+    let atk = 4.0 + 3.0 * l + l.powi(3) / 180.0;
+    let def = (30.0 + 3.0 * l) * m("defMult", s.def_mult);
+    let (mut hp, mut mp, mut pa, mut ma, mut pd, mut md) = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0);
+    let (mut sp, mut asp, mut csp, mut crit, mut eva, mut hpr, mut mpr) = (1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0);
+    for b in buffs {
+        hp *= b.max_hp.unwrap_or(1.0);
+        mp *= b.max_mp.unwrap_or(1.0);
+        pa *= b.p_atk.unwrap_or(1.0);
+        ma *= b.m_atk.unwrap_or(1.0);
+        pd *= b.p_def.unwrap_or(1.0);
+        md *= b.m_def.unwrap_or(1.0);
+        sp *= b.speed.unwrap_or(1.0);
+        asp *= b.atk_spd.unwrap_or(1.0);
+        csp *= b.cast_spd.unwrap_or(1.0);
+        crit += b.crit.unwrap_or(0.0);
+        eva += b.evasion.unwrap_or(0.0);
+        hpr *= b.hp_regen.unwrap_or(1.0);
+        mpr *= b.mp_regen.unwrap_or(1.0);
+    }
+    let max_hp = jround((50.0 + 15.0 * l + 1.5 * l * l) * m("hpMult", s.hp_mult) * hp);
+    let max_mp = jround((30.0 + 8.0 * l) * m("mpMult", s.mp_mult) * mp);
+    Stats {
+        max_hp, max_mp,
+        p_atk: jround(atk * m("atkMult", s.atk_mult) * pa),
+        m_atk: jround(atk * m("matkMult", s.matk_mult) * ma),
+        p_def: jround(def * pd),
+        m_def: jround(def * md),
+        accuracy: 80.0 + l,
+        evasion: 30.0 + l + eva,
+        crit: 5.0 + crit,
+        atk_interval: jround(s.atk_interval / asp),
+        cast_mul: 1.0 / csp,
+        speed: s.speed * sp,
+        hp_regen: (max_hp * 0.008 + 0.5) * hpr,
+        mp_regen: (max_mp * 0.015 + 0.3) * mpr,
+        crit_dmg: 1.0,
+        heal_power: 1.0,
+        tune_dur: 1.0,
+        pet_power: 1.0,
+        ..Default::default()
     }
 }
 
@@ -964,7 +1022,8 @@ mod tests {
         let bands = [("heal", 0.25, 0.35), ("greater_heal", 0.5, 0.7), ("divine_heal", 0.7, 0.9), ("mass_heal", 0.35, 0.45),
                      ("restoration", 0.85, 1.15), ("miracle", 1.3, 1.7), ("divine_light", 1.8, 2.2), ("grand_miracle", 0.9, 1.1),
                      ("last_stand", 0.4, 0.6), ("rebirth", 0.9, 1.1), ("second_wind", 0.15, 0.3)];
-        for k in data.skills.iter().filter(|k| k.kind == "heal") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
+        // (a servitor's heal, target pet, gives back a share of its own max HP: its power is that share, in %)
+        for k in data.skills.iter().filter(|k| k.kind == "heal" && k.target != "pet") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
         for (lvl, s) in [(20, "abyssal"), (30, "ashforged"), (39, "ashforged"), (40, "dragon"), (51, "dragon"), (52, "glacial"), (60, "glacial"),
                          (61, "emerald"), (74, "emerald"), (75, "infernal"), (78, "infernal")] {
             let (tank, mage) = (build("fighter", lvl, s, &plate), build("mystic", lvl, s, &robe));
@@ -1224,6 +1283,20 @@ mod tests {
         assert_eq!(data.passives_for("fighter", Some("knight"), 20).len(), 2);
     }
 
+    /** A specialization open to some races only names races of its class, and its evolution is open to the same ones. */
+    #[test]
+    fn spec_races() {
+        let data = d();
+        for s in &data.specs {
+            for r in s.races.iter().flatten() {
+                assert!(data.races.get(r).is_some_and(|rd| rd.classes.contains(&s.base)), "{}: a {r} can't be a {}", s.id, s.base);
+            }
+            if let Some(parent) = s.parent.as_deref().and_then(|p| data.spec(p)) { assert_eq!(s.races, parent.races, "{} and {}", s.id, parent.id); }
+        }
+        let summoner = data.spec("summoner").unwrap();
+        assert!(!summoner.open_to("orc") && summoner.open_to("darkelf") && data.spec("sorcerer").unwrap().open_to("orc"));
+    }
+
     /// A passive counts once learned, and one that asks for a weapon only while it is in hand: a knight's shield.
     #[test]
     fn passives_count_with_their_weapon() {
@@ -1274,7 +1347,7 @@ mod tests {
             compute_stats("human", "mystic", lvl, &eq, &passive_mods("mystic", Some("cleric"), lvl, |_| true), "m")
         };
         let bands = [("recharge", 0.12, 0.35, 1.5, 6.0), ("mana_fount", 0.06, 0.2, 0.5, 1.5)];
-        for k in data.skills.iter().filter(|k| k.kind == "mana") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
+        for k in data.skills.iter().filter(|k| k.kind == "mana" && k.target != "pet") { assert!(bands.iter().any(|b| b.0 == k.id), "{}: give it a band here", k.id); }
         for (lvl, s) in [(32, "ashforged"), (40, "dragon"), (51, "dragon"), (60, "glacial"), (63, "glacial"), (74, "emerald"), (78, "infernal")] {
             let m = mage(lvl, s);
             let mut line = format!("lvl {lvl} {s:>9}: MP {:4}, M.Atk {:4} |", m.max_mp, m.m_atk);

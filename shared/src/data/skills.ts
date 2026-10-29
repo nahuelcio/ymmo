@@ -13,6 +13,9 @@ export interface BuffMods {
   /** multipliers: max MP; what the caster's heals and mana recharges give; how long its songs and dances last
    * (the class passives', data/passives.ts) */
   maxMp?: number; heal?: number; tune?: number;
+  /** the share of the damage taken that goes to the summoner's servitors instead (Transferir Dolor); a multiplier on the
+   * servitors' stats (the summoner's passives, server-rs formulas.rs pet_stats) */
+  transfer?: number; pet?: number;
 }
 
 export interface SkillDef {
@@ -26,10 +29,12 @@ export interface SkillDef {
   gender?: Gender;
   level: number;
   /** mana: MP given back to another player (target friend) or to the caster's party around it (target self, aoe), never
-   * to the caster */
-  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain' | 'taunt' | 'mana';
-  target: 'enemy' | 'self' | 'friend';
-  /** damage multiplier for phys/magic/drain, flat heal amount for heal (and MP for mana) */
+   * to the caster. summon: calls the servitor `summon` (data/servitors.ts) */
+  kind: 'phys' | 'magic' | 'heal' | 'buff' | 'drain' | 'taunt' | 'mana' | 'summon';
+  /** pet: the caster's own servitors (all of them in range); owner: a servitor's skill on its summoner (data/servitors.ts PET_SKILLS) */
+  target: 'enemy' | 'self' | 'friend' | 'pet' | 'owner';
+  /** damage multiplier for phys/magic/drain, flat heal amount for heal (and MP for mana); on the servitor (target pet), the
+   * share of its max HP (MP) a heal (mana) gives back, in % */
   power: number;
   mp: number;
   cooldown: number; // ms
@@ -52,6 +57,8 @@ export interface SkillDef {
   vanish?: boolean;
   /** a song (the swordsinger's) or a dance (the bladedancer's): how it is cast and what it looks like */
   tune?: 'song' | 'dance';
+  /** the servitor a summon calls (data/servitors.ts SERVITORS) */
+  summon?: string;
   icon: string;
   color: number;
   desc: string;
@@ -128,6 +135,27 @@ const list: SkillDef[] = [
   { id: 'divine_grace', name: 'Gracia Divina', spec: 'hierophant', level: 76, kind: 'buff', target: 'friend', power: 0, mp: 120, cooldown: 60000, cast: 1500, range: 20, aoe: 12, buff: { dur: 300000, mods: { pAtk: 1.15, mAtk: 1.15, pDef: 1.2, mDef: 1.2, speed: 1.1, castSpd: 1.15 } }, icon: '👼', color: 0xfff8d0, desc: 'Atq.F y Atq.M +15%, Def.F y Def.M +20%, Velocidad +10% y Vel.Casteo +15% durante 5 min, a vos o a un aliado y a la party que tenga cerca.' },
   { id: 'sacred_judgment', name: 'Juicio Sagrado', spec: 'hierophant', level: 77, kind: 'magic', target: 'enemy', power: 4.2, mp: 110, cooldown: 20000, cast: 1500, range: 20, aoe: 8, status: { id: 'stun', ms: 1500 }, icon: '✴️', color: 0xffe060, desc: '420% de daño al objetivo y a los que tiene cerca, y los aturde 1,5 s.' },
   { id: 'grand_miracle', name: 'Gran Milagro', spec: 'hierophant', level: 78, kind: 'heal', target: 'friend', power: 360, mp: 200, cooldown: 120000, cast: 2800, range: 20, aoe: 14, icon: '😇', color: 0xffffff, desc: 'Recupera la vida por completo a vos o a un aliado y a toda la party que tenga cerca.' },
+  // Invocador -> Señor Arcano (L2's Warlock, Elemental Summoner and Phantom Summoner): servitors at its side (one, two from
+  // level 40, three from 70: data/servitors.ts SERVITOR_SLOTS), the skills that keep them going (on all of them at once),
+  // and a few curses of its own
+  { id: 'summon_war_wolf', name: 'Invocar Lobo de Guerra', spec: 'summoner', level: 20, kind: 'summon', target: 'self', power: 0, mp: 60, cooldown: 10000, cast: 4000, range: 0, summon: 'war_wolf', icon: '🐺', color: 0x7a8ab8, desc: 'Invoca un Lobo de Guerra: aguanta los golpes, muerde con fuerza y atrae a los enemigos.' },
+  { id: 'servitor_heal', name: 'Curar Servitor', spec: 'summoner', level: 22, kind: 'heal', target: 'pet', power: 25, mp: 30, cooldown: 4000, cast: 1500, range: 20, icon: '💚', color: 0x66ee88, desc: 'Le devuelve a tus servitores el 25% de su vida.' },
+  { id: 'wind_shackle', name: 'Grillete de Viento', spec: 'summoner', level: 25, kind: 'magic', target: 'enemy', power: 1.4, mp: 25, cooldown: 8000, cast: 1000, range: 20, status: { id: 'slow', ms: 5000 }, icon: '⛓️', color: 0xa8e0ff, desc: 'Cadenas de viento: 140% de daño y ralentiza 5 s.' },
+  { id: 'servitor_shield', name: 'Escudo del Servitor', spec: 'summoner', level: 30, kind: 'buff', target: 'pet', power: 0, mp: 30, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { pDef: 1.3, mDef: 1.3 } }, icon: '🛡️', color: 0x9ab8e8, desc: 'Def.F y Def.M +30% a tus servitores durante 20 min.' },
+  { id: 'servitor_recharge', name: 'Recargar Servitor', spec: 'summoner', level: 32, kind: 'mana', target: 'pet', power: 30, mp: 40, cooldown: 12000, cast: 1500, range: 20, icon: '💧', color: 0x5aa8ff, desc: 'Le devuelve a tus servitores el 30% de su maná.' },
+  { id: 'summon_mirage', name: 'Invocar Espejismo', spec: 'summoner', level: 35, kind: 'summon', target: 'self', power: 0, mp: 80, cooldown: 10000, cast: 4000, range: 0, summon: 'mirage', icon: '🦄', color: 0x7ad0ff, desc: 'Invoca a Espejismo, un unicornio de agua que ataca con magia desde lejos.' },
+  { id: 'servitor_haste', name: 'Celeridad del Servitor', spec: 'summoner', level: 40, kind: 'buff', target: 'pet', power: 0, mp: 40, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { atkSpd: 1.2, castSpd: 1.2, speed: 1.15 } }, icon: '🪽', color: 0xaaffee, desc: 'Vel.Atq y vel. de casteo +20% y velocidad +15% a tus servitores durante 20 min.' },
+  { id: 'death_spike', name: 'Púa Mortal', spec: 'summoner', level: 45, kind: 'magic', target: 'enemy', power: 3.4, mp: 45, cooldown: 8000, cast: 1400, range: 20, icon: '🦴', color: 0xd8d0c0, desc: 'Una púa de hueso que atraviesa al objetivo. 340% de daño.' },
+  { id: 'summon_soulless', name: 'Invocar Sin Alma', spec: 'summoner', level: 50, kind: 'summon', target: 'self', power: 0, mp: 100, cooldown: 10000, cast: 4000, range: 0, summon: 'soulless', icon: '👻', color: 0x7ac87a, desc: 'Invoca a un Sin Alma, un espectro que envenena a grupos enteros y les roba la vida.' },
+  { id: 'transfer_pain', name: 'Transferir Dolor', spec: 'summoner', level: 52, kind: 'buff', target: 'self', power: 0, mp: 40, cooldown: 30000, cast: 500, range: 0, buff: { dur: 120000, mods: { transfer: 0.35 } }, icon: '🔗', color: 0xc06a8a, desc: 'Durante 2 min, el 35% del daño que recibís lo reciben tus servitores que estén a menos de 30 m, repartido entre ellos.' },
+  { id: 'curse_poison', name: 'Maldición: Veneno', spec: 'summoner', level: 55, kind: 'magic', target: 'enemy', power: 2.4, mp: 50, cooldown: 10000, cast: 1200, range: 20, status: { id: 'poison', ms: 10000, dot: 0.35 }, icon: '☠️', color: 0x7ac83a, desc: '240% de daño y veneno durante 10 s.' },
+  { id: 'summon_seraphim', name: 'Invocar Serafín', spec: 'summoner', level: 60, kind: 'summon', target: 'self', power: 0, mp: 120, cooldown: 10000, cast: 4000, range: 0, summon: 'seraphim', icon: '🕊️', color: 0xfff0b0, desc: 'Invoca al Serafín, un unicornio de luz que te cura y te bendice.' },
+  { id: 'servitor_empower', name: 'Fortalecer Servitor', spec: 'summoner', level: 65, kind: 'buff', target: 'pet', power: 0, mp: 50, cooldown: 60000, cast: 800, range: 20, buff: { dur: 30000, mods: { pDef: 1.8, mDef: 1.8, speed: 0.2 } }, icon: '🗿', color: 0xb0a890, desc: 'Def.F y Def.M +80% a tus servitores durante 30 s, pero casi no se pueden mover.' },
+  { id: 'servitor_might', name: 'Poder del Servitor', spec: 'summoner', level: 70, kind: 'buff', target: 'pet', power: 0, mp: 50, cooldown: 8000, cast: 1200, range: 20, buff: { dur: 1200000, mods: { pAtk: 1.25, mAtk: 1.25 } }, icon: '💪', color: 0xffbb44, desc: 'Atq.F y Atq.M +25% a tus servitores durante 20 min.' },
+  { id: 'spectral_lance', name: 'Lanza Espectral', spec: 'summoner', level: 75, kind: 'magic', target: 'enemy', power: 5, mp: 110, cooldown: 20000, cast: 2200, range: 20, status: { id: 'slow', ms: 4000 }, icon: '🔱', color: 0x9a8aff, desc: 'Una lanza de espíritus: 500% de daño y ralentiza 4 s.' },
+  { id: 'summon_spectral_lord', name: 'Invocar Señor Espectral', spec: 'arcana_lord', level: 76, kind: 'summon', target: 'self', power: 0, mp: 150, cooldown: 10000, cast: 4000, range: 0, summon: 'spectral_lord', icon: '💀', color: 0xb0a0ff, desc: 'Invoca al Señor Espectral, un coloso de ultratumba que pelea como un jefe.' },
+  { id: 'servitor_greater_heal', name: 'Gran Curación del Servitor', spec: 'arcana_lord', level: 77, kind: 'heal', target: 'pet', power: 70, mp: 90, cooldown: 30000, cast: 1800, range: 20, icon: '💖', color: 0x88ffaa, desc: 'Le devuelve a tus servitores el 70% de su vida.' },
+  { id: 'servitor_awaken', name: 'Despertar del Servitor', spec: 'arcana_lord', level: 78, kind: 'buff', target: 'pet', power: 0, mp: 100, cooldown: 120000, cast: 500, range: 20, buff: { dur: 30000, mods: { pAtk: 1.5, mAtk: 1.5, atkSpd: 1.3, castSpd: 1.3 } }, icon: '🌟', color: 0xffe070, desc: 'Atq.F y Atq.M +50%, Vel.Atq y vel. de casteo +30% a tus servitores durante 30 s.' },
   // Gladiator (a sword in each hand: every skill asks for a pair) and its evolution, the Duelist. As in L2, the sonic
   // skills spend the Force charges that Concentración Sónica (and its hits) build up
   { id: 'sonic_focus', name: 'Concentración Sónica', spec: 'gladiator', level: 20, kind: 'buff', target: 'self', power: 0, mp: 8, cooldown: 1500, cast: 600, range: 0, charge: 1, weapon: 'dual', icon: '🔵', color: 0x6ab8ff, desc: 'Concentrás tu fuerza: +1 carga.' },

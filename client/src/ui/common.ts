@@ -1,10 +1,11 @@
 import { ENCHANT, enchanted, GRADE_COLOR, ITEMS, masterworkBonus, type MasterworkBonus, SET_BONUS, SET_NAME, type Slot, wearLevel } from '../../../shared/src/data/items';
 import { RACES, type ClassType, type Race } from '../../../shared/src/data/classes';
-import { type BuffMods, SKILLS } from '../../../shared/src/data/skills';
+import type { BuffMods } from '../../../shared/src/data/skills';
+import { anySkill, PET_SKILLS, SERVITORS, summonOf } from '../../../shared/src/data/servitors';
 import { PASSIVES } from '../../../shared/src/data/passives';
 import { el, esc, hideTip } from './dom';
 import { lang, t as tx } from '../lang';
-import { itemDesc, itemName, raceName, skillDesc, skillName } from '../../../shared/src/i18n';
+import { itemDesc, itemName, raceName, servitorName, skillDesc, skillName } from '../../../shared/src/i18n';
 export const SLOT_NAME: Record<Slot, string> = { head: tx('Cabeza', 'Head'), weapon: tx('Arma', 'Weapon'), shield: tx('Escudo', 'Shield'), chest: tx('Torso', 'Chest'), cape: tx('Capa', 'Cape'), gloves: tx('Guantes', 'Gloves'), legs: tx('Piernas', 'Legs'), feet: tx('Pies', 'Feet'), amulet: tx('Collar', 'Necklace'), earring: tx('Pendiente', 'Earring'), ring: tx('Anillo', 'Ring') };
 export const WEAPON_TYPE: Record<string, string> = { sword: tx('Espada', 'Sword'), staff: tx('Báculo', 'Staff'), blunt: tx('Contundente', 'Blunt'), axe: tx('Hacha', 'Axe'), spear: tx('Lanza', 'Spear'), dagger: tx('Daga', 'Dagger') };
 
@@ -59,8 +60,9 @@ export function itemIcon(itemId: string, parent?: HTMLElement, count?: number, e
   return d;
 }
 
+/** A skill's icon: a player's, or a servitor's (data/servitors.ts PET_SKILLS). */
 export function skillIcon(skillId: string, parent?: HTMLElement): HTMLDivElement {
-  const def = SKILLS[skillId];
+  const def = anySkill(skillId);
   const d = el('div', 'icon skill', parent);
   glyph('skill', skillId, def?.icon ?? '?', d);
   d.style.background = `radial-gradient(circle at 35% 30%, ${hex(def?.color ?? 0x666666)}, #14161f 85%)`;
@@ -124,6 +126,8 @@ export function modsText(m: BuffMods, times = 1): string {
   if (m.reflect !== undefined) out.push(`${tx('Reflejo de daño', 'Damage reflect')} ${pct(by(m.reflect)!)}`);
   if (m.heal !== undefined) out.push(`${tx('Curaciones y recargas', 'Heals and recharges')} ${plusPct(up(m.heal)!)}`);
   if (m.tune !== undefined) out.push(`${tx('Duración de canciones y danzas', 'Song and dance length')} ${plusPct(up(m.tune)!)}`);
+  if (m.transfer !== undefined) out.push(`${tx('Daño que va al servitor', 'Damage to the servitor')} ${pct(by(m.transfer)!)}`);
+  if (m.pet !== undefined) out.push(`${tx('Servitor', 'Servitor')} ${plusPct(up(m.pet)!)}`);
   return out.join(', ');
 }
 
@@ -183,9 +187,15 @@ export function itemTip(itemId: string, count = 1, ench = 0, legacy = false, mw 
 }
 
 export function skillTip(skillId: string): string {
-  const s = SKILLS[skillId];
+  const s = anySkill(skillId);
   if (!s) return '';
+  // a servitor's own skill: whose it is, and what it aims at (its MP is the servitor's)
+  const own = PET_SKILLS[skillId] ? Object.values(SERVITORS).find((sv) => sv.skills.includes(skillId)) : undefined;
+  const summon = summonOf(skillId);
   const need = [
+    own ? tx(`Habilidad de ${servitorName(own.id, lang)}: la usa tu servitor, con su maná.`, `${servitorName(own.id, lang)}'s skill: your servitor uses it, with its own MP.`) : '',
+    summon ? tx(`Tiene tu nivel y sube con vos. Un servitor a la vez: invocar otro retira al que tengas.`, `It has your level and grows with you. One servitor at a time: summoning another sends yours away.`) : '',
+    s.target === 'pet' ? tx('Sobre tu servitor.', 'On your servitor.') : '',
     s.weapon === 'bow' ? tx('Requiere un arco.', 'Needs a bow.') : s.weapon === 'dagger' ? tx('Requiere una daga.', 'Needs a dagger.') : s.weapon === 'dual' ? tx('Requiere un par de espadas.', 'Needs a pair of swords.') : '',
     s.spend ? tx(`Gasta ${s.spend} ${s.spend === 1 ? 'carga' : 'cargas'} de fuerza.`, `Spends ${s.spend} Force ${s.spend === 1 ? 'charge' : 'charges'}.`) : '',
     s.charge ? (s.charge >= 99 ? tx('Llena las cargas de fuerza.', 'Fills the Force charges.') : tx(`Junta ${s.charge} ${s.charge === 1 ? 'carga' : 'cargas'} de fuerza.`, `Gathers ${s.charge} Force ${s.charge === 1 ? 'charge' : 'charges'}.`)) : '',

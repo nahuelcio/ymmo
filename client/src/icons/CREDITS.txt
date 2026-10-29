@@ -105,3 +105,19 @@ ui: dance <- delapouite/maracas, sit <- lorc/meditation, invite <- delapouite/te
   trade <- delapouite/shaking-hands, whisper <- delapouite/chat-bubble, who <- delapouite/three-friends,
   loc <- delapouite/position-marker, unstuck <- delapouite/village, raid <- lorc/dragon-head, rift <- lorc/vortex,
   siege <- delapouite/siege-tower, olympiad <- lorc/laurels, ranking <- delapouite/podium
+
+Added for the summoner, its servitors and their orders (same source and licence), file <- original:
+skill: servitor_heal <- lorc/paw-heart, wind_shackle <- lorc/crossed-chains, servitor_shield <- lorc/edged-shield,
+  servitor_recharge <- lorc/potion-ball, summon_mirage <- delapouite/unicorn,
+  servitor_haste <- delapouite/running-shoe, death_spike <- lorc/spine-arrow, summon_soulless <- lorc/ghost,
+  transfer_pain <- lorc/linked-rings, curse_poison <- lorc/skull-bolt, summon_seraphim <- lorc/winged-emblem,
+  servitor_empower <- lorc/stone-sphere, spectral_lance <- lorc/barbed-spear,
+  summon_spectral_lord <- lorc/crowned-skull, servitor_awaken <- lorc/fire-ray, summoner_bond <- lorc/chained-heart,
+  quick_recycle <- lorc/recycle, anti_magic <- lorc/magic-shield, summon_mastery <- lorc/pentagram-rose,
+  wolf_bite <- lorc/fangs-circle, water_lance <- lorc/water-bolt, whirlpool <- lorc/wave-crest,
+  toxic_smoke <- lorc/gas-mask, shadow_touch <- lorc/evil-hand, seraph_blessing <- lorc/feathered-wing,
+  healing_light <- lorc/star-prominences, aegis <- lorc/winged-shield, spectral_strike <- lorc/ghost-ally,
+  spectral_pact <- delapouite/contract, summon_war_wolf <- lorc/werewolf, servitor_might <- lorc/strong,
+  servitor_greater_heal <- delapouite/first-aid-kit, wolf_howl <- lorc/moon-claws, abyss_cry <- lorc/terror
+ui: pet_follow <- lorc/footprint, pet_stay <- lorc/anchor, pet_stop <- delapouite/stop-sign,
+  pet_dismiss <- lorc/teleport

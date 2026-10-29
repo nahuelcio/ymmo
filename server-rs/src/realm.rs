@@ -34,6 +34,7 @@ impl World {
             level: row.level.min(d().c.max_level), xp: row.xp, hp: row.hp, mp: row.mp, cp: row.cp, adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
             hero: self.db.is_hero(row.id, crate::formulas::loot_month(self.now)), hero_look: self.db.hero_look(row.id),
             legend_lvl: row.legend_lvl.clamp(0, d().legend.max), legend_xp: row.legend_xp.max(0), legend: serde_json::from_str(&row.legend).unwrap_or_default(),
+            pets: vec![],
         };
         // worn pieces the level no longer allows (grades ask for a level since the 78 cap) go back to the bag
         let mut took_off: Vec<&'static str> = vec![];
@@ -52,6 +53,10 @@ impl World {
         if let Some(r) = self.raid { c.ry = (r.x - x).atan2(r.z - z); }
         self.add(Ent { c, k: Kind::Player(Box::new(p)) });
         self.sessions.insert(m.sid, id);
+        // their servitors came along from the other world (take_out), as they were, those they may still have
+        for pc in m.pets {
+            if self.can_summon(id, &pc.def) { self.summon_pet(id, &pc.def, Some((pc.hp, pc.mp))); }
+        }
         let p = self.pl(id).unwrap();
         p.send(json!({ "t": kind, "self": self.self_state(id), "inv": p.inv, "bar": p.hotbar }));
         self.clan_online(id, kind == "enter");
@@ -101,9 +106,12 @@ impl World {
         self.stand_up(pid); // frees the seat
         let (cid, lvl) = { let p = self.pl(pid).unwrap(); (p.char_id, p.level) };
         self.clan_offline(cid, lvl);
+        // the servitors go along (into the other world: join), or with them out of the game (quit drops them)
+        let pets = self.pet_carry(pid);
+        self.dismiss_pets(pid, false);
         let Ent { k: Kind::Player(p), .. } = self.remove(pid)? else { return None };
         self.sessions.remove(&p.sid);
-        Some(Member { sid: p.sid, account_id: p.account_id, char_id: p.char_id, lang: p.lang, out: p.out })
+        Some(Member { sid: p.sid, account_id: p.account_id, char_id: p.char_id, lang: p.lang, out: p.out, pets })
     }
 
     /** Where a character leaving a raid is saved: the village, never the arena's coordinates (an Olympiad fighter: where

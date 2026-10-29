@@ -155,6 +155,10 @@ impl World {
             let p = self.pl_mut(pid).unwrap();
             (p.hp, p.mp, p.cp) = (p.stats.max_hp, p.stats.max_mp, p.stats.max_cp);
         }
+        // a summoner's servitors fight whole too
+        for id in self.pets_of(pid) {
+            if let Some(pt) = self.ents.get_mut(&id).and_then(|e| e.pet_mut()) { (pt.hp, pt.mp) = (pt.stats.max_hp, pt.stats.max_mp); }
+        }
         let o = &d().olympiad;
         let Some(a) = self.arena.as_mut() else { return };
         a.fighters.push(Fighter { pid, char_id: cid, name, line: line_of(spec.as_deref()).unwrap_or("").into(), dmg: 0.0 });
@@ -201,7 +205,7 @@ impl World {
     pub fn arena_tick(&mut self, now: f64) {
         let Some(r) = self.raid else { return };
         let o = &d().olympiad;
-        for pid in self.players.clone() {
+        for pid in self.players.iter().chain(&self.pets).copied().collect::<Vec<_>>() {
             let (x, z) = { let c = &self.ents[&pid].c; (c.x, c.z) };
             let dist = (x - r.x).hypot(z - r.z);
             if dist > o.radius {
@@ -350,7 +354,7 @@ impl World {
 mod tests {
     use super::*;
 
-    /// The arena is its own instance on a floor of its own; eight lines, one for each specialization awakened into;
+    /// The arena is its own instance on a floor of its own; nine lines, one for each specialization awakened into;
     /// a win takes a fifth of the loser's points, never nothing.
     #[test]
     fn lines_points_and_arena() {
@@ -359,7 +363,7 @@ mod tests {
         assert!(r.arena && r.boss.is_none() && r.max_players == 2 && r.min_level == o.min_level);
         assert!(o.gap / 2.0 < o.radius, "both start inside the circle");
         let lines: std::collections::HashSet<_> = d().specs.iter().filter_map(|s| line_of(Some(&s.id))).collect();
-        assert_eq!(lines.len(), 8, "a line for each specialization that awakens");
+        assert_eq!(lines.len(), 9, "a line for each specialization that awakens");
         assert_eq!(line_of(Some("knight")), None, "not awakened yet");
         assert_eq!(line_of(Some("phoenix_knight")), Some("knight"));
         assert_eq!((points_won(20), points_won(3), points_won(1)), (4, 1, 1));

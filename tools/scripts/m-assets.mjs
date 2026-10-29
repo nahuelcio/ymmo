@@ -6,6 +6,8 @@
 //   tools/art/blender/creatures.py into "<Mob Models>/glb" first (werewolf_sf.glb, yeti_sf.glb)
 //   KayKit Character Pack: Skeletons 1.1 (Kay Lousberg): the four skeletons and their weapons
 //   KayKit Character Animations 1.1 (Kay Lousberg): the Rig_Medium clips the skeletons share
+//   The summoner's servitors (AI_SERVITORS, made with Tripo): set onto those mobs' own skeletons by
+//   tools/art/blender/servitors.py into a folder first (ai_<name>.glb)
 // Usage: node tools/scripts/m-assets.mjs <unzipped pack dir>... [--only=werewolf,yeti,skeletons]
 //   --only: rebuild just those outputs (the other packs need not be there); CREDITS.txt is always written
 // Keeps only the clips the game plays (the skeletons' retargeted onto one armature), names each scene after its model,
@@ -38,6 +40,15 @@ const CREATURES = {
   forest: { file: 'forest.glb', clips: { Idle: 'Idle', Walk: 'Walk', Attack: 'Attack', Dying: 'Death' } },
 };
 const ANIMAL_CLIPS = ['Idle', 'Walk', 'Gallop', 'Eating', 'Attack', 'Attack_Headbutt', 'Death'];
+/** output -> the clips it keeps, its donor's (the soulless's and the spectral lord's KayKit's, which servitors.py put in
+ * their files; the spectral lord's from KayKit's own Rig_Medium files too) */
+const AI_SERVITORS = {
+  ai_war_wolf: ['Idle', 'Gallop', 'Attack', 'Death'],
+  ai_mirage: ['Idle', 'Gallop', 'Attack_Headbutt', 'Death'],
+  ai_seraphim: ['Idle', 'Gallop', 'Attack_Headbutt', 'Death'],
+  ai_soulless: ['Skeletons_Idle', 'Running_A', 'Melee_1H_Attack_Chop', 'Ranged_Magic_Spellcasting'],
+  ai_spectral_lord: ['Idle_A', 'Running_A', 'Melee_Unarmed_Attack_Punch_A', 'Death_A', 'Ranged_Magic_Spellcasting'],
+};
 const SKELETONS = ['Skeleton_Warrior', 'Skeleton_Minion', 'Skeleton_Rogue', 'Skeleton_Mage'];
 const WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Staff', 'Skeleton_Shield_Large_A', 'Skeleton_Shield_Small_A'];
 /** Rig_Medium animation file -> clips kept from it */
@@ -127,6 +138,23 @@ for (const [out, { file, clips }] of Object.entries(CREATURES)) {
   finish(f, `${out}.glb`);
 }
 
+// --- the summoner's servitors: as the creatures, but their glow map kept (their runes, eyes and ghost fire)
+for (const [out, clips] of Object.entries(AI_SERVITORS)) {
+  if (!want(out)) continue;
+  const f = tmp(`${out}.glb`);
+  trim(find(new RegExp(`[\\\\/]${out}\\.glb$`)), f, { name: out, clips });
+  editGlb(f, (g) => {
+    for (const m of g.materials ?? []) {
+      for (const k of ['normalTexture', 'occlusionTexture']) delete m[k];
+      if (m.pbrMetallicRoughness) delete m.pbrMetallicRoughness.metallicRoughnessTexture;
+    }
+  });
+  gt(`prune "${f}" "${f}" --keep-leaves`);
+  gt(`resample "${f}" "${f}" --tolerance 0.001`);
+  texture(f);
+  finish(f, `${out}.glb`);
+}
+
 // --- skeletons: a file each (merged into one, three.js would rename the repeated bones hips_1, hips_2...)
 const glbOf = (name) => {
   let src = find(new RegExp(`[\\\\/]${name}\\.(glb|gltf)$`));
@@ -192,6 +220,12 @@ werewolf.glb: based on "werewolf" (sketchfab.com/3d-models/werewolf-2dd83cb880f0
   clips added (retargeted from Quaternius' Universal Animation Library, CC0)
 yeti.glb: based on "Yeti" (sketchfab.com/3d-models/yeti-daa4e743128f44c7859c5c34588518a7) by orioltron
   (sketchfab.com/orioltron): rigged onto the werewolf's skeleton, moving with its clips
+
+The summoner's servitors, made for this game: their meshes and textures generated with Tripo AI (tripo3d.ai, paid API:
+ours to use and change; spec tools/art/ai/servitors.json), each set in Blender (tools/art/blender/servitors.py) onto the
+skeleton of a mob above, to move with its clips:
+ai_war_wolf.glb on wolf.glb's; ai_mirage.glb and ai_seraphim.glb on horse.glb's; ai_soulless.glb and ai_spectral_lord.glb
+  on skeleton_mage.glb's (with KayKit Character Animations 1.1 clips). Each skeleton is moved to its model's build.
 
 Regenerate with tools/scripts/m-assets.mjs.
 `);

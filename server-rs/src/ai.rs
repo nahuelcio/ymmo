@@ -14,6 +14,8 @@ impl World {
         match self.ents.get(&pid) {
             // (a vanished player, or one gone into a hut, is lost to it: it turns on someone else or goes home)
             Some(e) if e.player().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH && !self.unseen(pid) && !self.sheltered(pid) && !self.spares(mid, pid),
+            // a summoner's servitor (pet.rs): fought like a player, its owner's side spared by a Guardian with them
+            Some(e) if e.pet().is_some() => !e.c.dead && !in_town(e.c.x, e.c.z) && (e.c.x - hx).hypot(e.c.z - hz) <= LEASH && !self.spares(mid, pid),
             _ => false,
         }
     }

@@ -7,9 +7,9 @@ import { contactPhases, crossed } from './footfalls';
 import { COMBAT_MS, DEFAULT_INTERVAL, HOLD_MS, SWINGS, swingKind, swingOf, swingTiming, windup, type SwingKind } from './swings';
 import { WeaponTrail } from './trail';
 import { mergeRigid } from './merge';
-import { HAIR_STYLES, RACES, type Gender, type Race } from '../../../shared/src/data/classes';
+import { HAIR_STYLES, RACES, specOpenTo, type Gender, type Race } from '../../../shared/src/data/classes';
 import { STAND_UP_MS } from '../../../shared/src/nodes';
-import { SKILLS } from '../../../shared/src/data/skills';
+import { anySkill, SERVITORS } from '../../../shared/src/data/servitors';
 
 /**
  * Player characters built from the Quaternius modular kits (CC0): an outfit piece per
@@ -1823,9 +1823,11 @@ export function skillAnimOf(skill: string | undefined, weapon?: string): string 
   if (!skill) return undefined;
   if (SKILL_ANIM[skill]) return skill;
   if (weapon === 'bow') return '@bow';
-  // a spell by its kind: a heal (or a mana recharge), a nova around the caster, a long one (meteor, apocalypse...), any other
-  const def = SKILLS[skill];
+  // a spell by its kind: a heal (or a mana recharge), a nova around the caster, a long one (meteor, apocalypse, a
+  // summoning...), any other
+  const def = anySkill(skill);
   if (def?.kind === 'heal' || def?.kind === 'mana') return '@heal';
+  if (def?.kind === 'summon') return '@spell_long';
   if (def?.kind === 'magic' || def?.kind === 'drain') return def.aoeOnSelf ? '@nova' : def.cast >= 2200 ? '@spell_long' : '@spell';
   return undefined;
 }
@@ -2047,6 +2049,19 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   const bar = document.createElement('div');
   bar.style.cssText = 'position:fixed;top:8px;left:8px;z-index:10;display:flex;gap:6px;flex-wrap:wrap';
   host.append(bar);
+  // names under the rigs' feet (the summoners'), and a line of text at the bottom
+  const labels = document.createElement('div');
+  labels.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;font:12px sans-serif;color:#dfe9f5';
+  host.append(labels);
+  let tags: { rig: Rig; tag: HTMLElement }[] = [];
+  const label = (rig: Rig, text: string) => {
+    const tag = document.createElement('div');
+    tag.textContent = text;
+    tag.style.cssText = 'position:absolute;transform:translate(-50%,2px);white-space:nowrap;text-shadow:0 1px 2px #000';
+    labels.append(tag);
+    tags.push({ rig, tag });
+  };
+  const LEGEND_PX = 44;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x1a2230);
@@ -2060,13 +2075,54 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 80);
   const p = new URLSearchParams(location.search);
   const zoom = Number(p.get('zoom')) || 1;
+  let tier = p.get('tier') ?? 'NG';
+  // Invocadores: every race that can be a summoner, both genders, each with all the servitors called up on an arc behind
+  // it, in a grid seen from above (a row per gender, or on a narrow screen a row per race). The servitors are mob
+  // models (render/servitors.ts), loaded the first time.
+  const CASTERS = (Object.keys(RACES) as Race[]).filter((r) => RACES[r].classes.includes('mystic') && specOpenTo('summoner', r));
+  const PETS = Object.values(SERVITORS).sort((a, b) => a.level - b.level).map((s) => s.id);
+  const GROUP_X = 8.5, GROUP_Z = 7;
+  // the row per gender when the room between the buttons and the legend is wide enough for it to come out bigger
+  const casterGrid = () => (innerWidth / Math.max(1, innerHeight - bar.offsetHeight - LEGEND_PX) >= 1.7 ? CASTERS.length : 2);
+  let casterCols = casterGrid(), summons: typeof import('./servitors') | null = null;
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight);
     cam.aspect = innerWidth / innerHeight;
-    const d = 15 / zoom / Math.min(1, cam.aspect / 1.7);
-    const y = Number(p.get('y')) || 1.1;
-    cam.position.set(Number(p.get('x')) || 0, y + 0.2 + d * 0.08, d);
-    cam.lookAt(Number(p.get('x')) || 0, y, 0);
+    if (tier === 'Invocadores') {
+      // all of the grid in view between the buttons and the legend (?pitch= degrees, 40): its corners projected, the
+      // camera moved and pulled back until they fit
+      const rows = (CASTERS.length * 2) / casterCols, pitch = ((Number(p.get('pitch')) || 40) * Math.PI) / 180;
+      const w = (casterCols - 1) * GROUP_X + 8, depth = (rows - 1) * GROUP_Z + 6;
+      const top = 1 - (2 * (bar.offsetHeight + 12)) / innerHeight, bottom = (2 * LEGEND_PX) / innerHeight - 1;
+      const at = new THREE.Vector3(Number(p.get('x')) || 0, 0.8, 0), up = new THREE.Vector3(0, Math.cos(pitch), -Math.sin(pitch)), c = new THREE.Vector3();
+      const aim = (d: number) => {
+        cam.position.set(at.x, at.y + d * Math.sin(pitch), at.z + d * Math.cos(pitch));
+        cam.lookAt(at);
+        cam.far = d + 60;
+        cam.updateMatrixWorld();
+        cam.updateProjectionMatrix();
+      };
+      let d = 30;
+      for (let n = 0; n < 8; n++) {
+        aim(d);
+        let xm = 0, lo = Infinity, hi = -Infinity;
+        for (const x of [-w / 2, w / 2]) for (const y of [0, 2.8]) for (const z of [-depth / 2, depth / 2]) {
+          c.set(x, y, z).project(cam);
+          xm = Math.max(xm, Math.abs(c.x));
+          lo = Math.min(lo, c.y);
+          hi = Math.max(hi, c.y);
+        }
+        at.addScaledVector(up, ((hi + lo) / 2 - (top + bottom) / 2) * d * Math.tan(Math.PI / 12));
+        d *= Math.max(xm / 0.95, (hi - lo) / (top - bottom));
+      }
+      aim(d / zoom);
+    } else {
+      const d = 15 / zoom / Math.min(1, cam.aspect / 1.7);
+      const y = Number(p.get('y')) || 1.1;
+      cam.position.set(Number(p.get('x')) || 0, y + 0.2 + d * 0.08, d);
+      cam.lookAt(Number(p.get('x')) || 0, y, 0);
+      cam.far = 80;
+    }
     cam.updateProjectionMatrix();
   };
   resize();
@@ -2117,12 +2173,14 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     Coronas: [null, null, null, null, null, null, null],
     // every cape side by side, over a set's plate or robe (see it from behind: ?ry=3.14)
     Capas: [null, null, null, null, null, null, null, null],
+    // the summoners with their servitors (see CASTERS above), in the mystic's D robe
+    Invocadores: ['staff_of_life', 'karmian_tunic', 'karmian_hat', null, 'karmian_stockings', null],
   };
   const HELMETS = ['leather_cap', 'brigandine_helm', 'karmian_hat', 'full_plate_helmet', 'demons_circlet', 'abyssal_helm', 'ashforged_helm', 'dragon_helm', 'glacial_helm', 'emerald_helm', 'infernal_helm'];
   const STATES: Record<string, Partial<AnimState>> = { Idle: {}, Correr: { moving: true }, Atacar: {}, Castear: { casting: true }, Sentar: { sitAge: 5000 },
     'Sentar suelo': { floorSit: true }, 'Preparar golpe': { casting: true, castMove: 'strike', castAge: 5000 },
     'Alzar arma': { casting: true, castMove: 'raise', castAge: 5000 }, 'Danzar (habilidad)': { casting: true, castMove: 'dance', castAge: 5000 }, Morir: {} };
-  let tier = p.get('tier') ?? 'NG', state = p.get('state') ?? 'Idle', since = performance.now();
+  let state = p.get('state') ?? 'Idle', since = performance.now();
   const spin = !p.has('still'), ry = Number(p.get('ry')) || 0;
   let rigs: Rig[] = [];
   const build = () => {
@@ -2130,7 +2188,41 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
       scene.remove(r.root);
       r.dispose?.();
     }
+    labels.replaceChildren();
+    tags = [];
     const [w, chest, ...eq] = TIERS[tier] ?? TIERS.NG;
+    if (tier === 'Invocadores') {
+      casterCols = casterGrid();
+      const wide = casterCols > 2, rows = (CASTERS.length * 2) / casterCols;
+      rigs = [];
+      CASTERS.forEach((race, i) => (['m', 'f'] as const).forEach((g, j) => {
+        const gx = ((wide ? i : j) - (casterCols - 1) / 2) * GROUP_X, gz = ((rows - 1) / 2 - (wide ? j : i)) * GROUP_Z;
+        const me = playerModel(race, 'mystic', w, chest, { g, hs: (i + j) % HAIR_STYLES.length, hc: 0 }, eq);
+        me.root.position.set(gx, 0, gz + 1.6);
+        rigs.push(me);
+        label(me, `${RACES[race].name} · ${g === 'f' ? 'Invocadora' : 'Invocador'}`);
+        // the wolf on the left to the spectral lord on the right (named once, in the legend)
+        if (summons) PETS.forEach((id, k) => {
+          const a = Math.PI * (0.08 + (0.84 * k) / (PETS.length - 1)), sv = summons!.servitorModel(id);
+          sv.root.position.set(gx - Math.cos(a) * 3.2, 0, gz + 0.4 - Math.sin(a) * 2.2);
+          rigs.push(sv);
+        });
+      }));
+      for (const r of rigs) scene.add(r.root);
+      const legend = document.createElement('div');
+      const lv = PETS.map((id) => SERVITORS[id].level);
+      legend.textContent = `De izquierda a derecha: ${PETS.map((id) => SERVITORS[id].name).join(' · ')}. Se invocan desde los niveles ${lv.slice(0, -1).join(', ')} y ${lv.at(-1)}, y tienen siempre el de su invocador.`;
+      legend.style.cssText = 'position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:max-content;max-width:96vw;text-align:center;text-shadow:0 1px 2px #000';
+      labels.append(legend);
+      if (!summons) {
+        void Promise.all([import('./servitors'), import('./mobs').then((m) => m.loadMobs()), import('./village').then((v) => v.loadV()).catch(() => {})])
+          .then(([s]) => {
+            summons = s;
+            if (tier === 'Invocadores') build();
+          });
+      }
+      return;
+    }
     if (tier === 'Arcos' || tier === 'Dagas' || tier === 'Duales') {
       const race = (p.get('race') ?? 'human') as Race, g = p.get('g') === 'f' ? 'f' : 'm';
       const sets = ['abyssal', 'ashforged', 'dragon', 'glacial', 'emerald', 'infernal'];
@@ -2231,12 +2323,13 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     b.onclick = fn;
     bar.appendChild(b);
   };
-  for (const name in TIERS) btn(name, () => { tier = name; build(); });
+  for (const name in TIERS) btn(name, () => { tier = name; build(); resize(); });
   addEventListener('gear-loaded', build);
   // ?slow=0.25: time at a quarter of its pace, to see a cape's motion frame by frame
   const slow = Number(p.get('slow')) || 1, clock = () => performance.now() * slow;
   for (const name in STATES) btn(name, () => { state = name; since = clock(); });
   build();
+  resize(); // again, now that the buttons take their room
 
   // ?walk=6: running, the rigs go forward at that speed (m/s) for real, the camera with them, as in the game (a cape
   // trails in still air, not in the wind it gets running in place)
@@ -2247,6 +2340,7 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
   const fixedStep = Number(p.get('step')) || 0;
   since = clock();
   let last = clock();
+  const tagAt = new THREE.Vector3();
   renderer.setAnimationLoop(() => {
     const now = clock(), age = now - since, dt = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -2283,6 +2377,11 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
         })()),
       });
     });
+    for (const { rig, tag } of tags) {
+      tagAt.setFromMatrixPosition(rig.root.matrixWorld).project(cam);
+      tag.style.left = `${(tagAt.x + 1) * 50}%`;
+      tag.style.top = `${(1 - tagAt.y) * 50}%`;
+    }
     renderer.render(scene, cam);
   });
 
@@ -2293,5 +2392,6 @@ export async function mountQuaterniusPreview(host: HTMLElement): Promise<() => v
     renderer.dispose();
     renderer.domElement.remove();
     bar.remove();
+    labels.remove();
   };
 }

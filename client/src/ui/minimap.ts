@@ -1019,9 +1019,11 @@ export class Minimap {
       }
       if (c.rec.k === 'm') ctx.fillStyle = c.flags & F_DEAD ? '#555' : '#ff5544';
       else if (c.rec.k === 'p') ctx.fillStyle = partyIds.has(c.id) ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
+      // a servitor: a smaller dot in its owner's colour (ours in green, as the party)
+      else if (c.rec.k === 's') ctx.fillStyle = c.rec.o === this.g.me.id || partyIds.has(c.rec.o) ? '#66ff88' : c.flags & F_RED ? '#ff2222' : '#66aaff';
       else ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(x, y, c.rec.k === 'i' ? 1.2 : 2.5, 0, Math.PI * 2);
+      ctx.arc(x, y, c.rec.k === 'i' ? 1.2 : c.rec.k === 's' ? 1.8 : 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
     // darken toward the rim so the round frame reads as a lens

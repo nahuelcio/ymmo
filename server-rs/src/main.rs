@@ -26,6 +26,7 @@ mod quests;
 mod raid;
 mod realm;
 mod olympiad;
+mod pet;
 mod rift;
 mod siege;
 mod terrain;
@@ -87,7 +88,7 @@ struct App {
 static NEXT_SID: AtomicU64 = AtomicU64::new(1);
 
 fn member(sid: u64, s: &Sess, char_id: i64) -> Member {
-    Member { sid, account_id: s.account_id, char_id, lang: s.lang, out: s.out.clone() }
+    Member { sid, account_id: s.account_id, char_id, lang: s.lang, out: s.out.clone(), pets: vec![] }
 }
 
 fn send(out: &Outbox, v: Value) { out.text(v.to_string()); }

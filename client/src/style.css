@@ -127,6 +127,20 @@ input { font: inherit; user-select: text; }
 .buff.flag.pvp-zone { border-color: #e0482a; color: #ff7a5a; background: #2a0c08; }
 
 .party { position: absolute; left: 10px; top: 118px; width: 200px; padding: 6px 8px; }
+/* the summoner's servitors (ui/hud.ts): their window where the party's goes, a row each, which moves down under it while
+   they are out; the one the orders go to marked */
+.pet-frame { position: absolute; left: 10px; top: 118px; width: 200px; padding: 5px 8px 6px; cursor: pointer; }
+.pet-row { padding: 1px 4px 2px; margin: 0 -4px; border-left: 2px solid transparent; }
+.pet-row + .pet-row { margin-top: 4px; }
+.pet-row.sel { border-left-color: #e8c060; background: rgba(232, 192, 96, 0.08); }
+.pet-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.has-pet .party { top: calc(122px + 48px * var(--pets, 1)); }
+.pet-tabs:empty { display: none; }
+/* its panel (ui/servitor.ts): the skills' cooldown sweep, as a bar slot's */
+.pet-head { margin-bottom: 4px; }
+.pet-skill { position: relative; }
+.pet-skill .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.7); z-index: 1; pointer-events: none; }
+.pet-skill.nomp .icon, .slot.nopet .icon { filter: grayscale(1) brightness(0.6); }
 .quest-tracker { position: absolute; right: 10px; top: 240px; width: 180px; padding: 6px 8px; }
 .qt-bar { height: 3px; margin-top: 3px; background: #08090d; border-radius: 2px; overflow: hidden; }
 .qt-bar > div { height: 100%; background: var(--cp); }
@@ -449,6 +463,8 @@ input { font: inherit; user-select: text; }
 .hero-looks .btn.active { border-color: #ffd45a; color: #ffd45a; }
 .np-hero { color: #ffd45a; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; text-shadow: 0 0 6px rgba(255, 190, 60, 0.9); }
 .np-clan { color: #a8c8ff; font-size: 10px; }
+.np-pet { font-size: 11px; }
+.np-owner { color: #b8c4d8; font-size: 10px; }
 /* resting in a hut: up to four plates stack over its roof, a name line each */
 .np-sheltered .np-ptitle, .np-sheltered .np-clan { display: none; }
 .crest { width: 16px; height: 12px; image-rendering: pixelated; vertical-align: -1px; margin-right: 3px; border: 1px solid rgba(0,0,0,0.6); }

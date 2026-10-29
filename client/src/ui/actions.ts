@@ -6,6 +6,7 @@ import { OLYMPIAD } from '../../../shared/src/data/olympiad';
 import { QUESTS } from '../../../shared/src/data/quests';
 import { RAIDS } from '../../../shared/src/data/raids';
 import { questField } from '../../../shared/src/i18n';
+import type { PetOrder } from '../../../shared/src/protocol';
 import type { Game } from '../game';
 import { lang, t as tx } from '../lang';
 import { keyLabel, settings } from '../settings';
@@ -124,7 +125,21 @@ export const PLAYER_ACTIONS: PlayerAction[] = [
     desc: () => tx('Escribe en el chat quién tiene cada fuerte y cuándo es el próximo asedio.', 'Writes who holds each fort, and when the next siege is, to the chat.') },
 ];
 
-const BY_ID = new Map(PLAYER_ACTIONS.map((a) => [a.id, a]));
+/** A summoner's orders to their servitor (server-rs pet.rs pet_command): its panel lists them (ui/servitor.ts), and they
+ * go on the bars as the player's actions do. */
+const pet = (id: PetOrder, icon: string, color: number, name: string, desc: () => string): PlayerAction =>
+  ({ id: `pet_${id}`, icon, color, group: -1, name, desc, run: (g) => g.petOrder(id) });
+export const PET_ACTIONS: PlayerAction[] = [
+  pet('attack', 'attack', 0xffaa44, tx('Atacar', 'Attack'), () => tx('Tu servitor elegido ataca a tu objetivo y sigue peleando con él. Con Ctrl, fuerza el ataque a un jugador.',
+    'Your chosen servitor attacks your target and keeps fighting it. Hold Ctrl to force an attack on a player.')),
+  pet('follow', 'pet_follow', 0x4a9a6a, tx('Seguir', 'Follow'), () => tx('Tu servitor elegido deja lo que hace y te sigue.', 'Your chosen servitor drops what it is doing and follows you.')),
+  pet('stay', 'pet_stay', 0x4a7ab0, tx('Quedarse', 'Stay'), () => tx('Tu servitor elegido se queda donde está y no se defiende solo. Si le ordenás atacar, vuelve ahí después.',
+    'Your chosen servitor stays where it is and does not fight back on its own. Told to attack, it comes back there afterwards.')),
+  pet('stop', 'pet_stop', 0x8a6a4a, tx('Detener', 'Stop'), () => tx('Tu servitor elegido deja de pelear y de lanzar habilidades.', 'Your chosen servitor stops fighting and casting.')),
+  pet('dismiss', 'pet_dismiss', 0x8a4a3a, tx('Retirar', 'Dismiss'), () => tx('Tu servitor elegido se va. Para volver a tenerlo, lo tenés que invocar de nuevo.', 'Your chosen servitor leaves. To have it again you must summon it again.')),
+];
+
+const BY_ID = new Map([...PLAYER_ACTIONS, ...PET_ACTIONS].map((a) => [a.id, a]));
 export const isPlayerAction = (id: string) => BY_ID.has(id);
 
 /** An action's icon, drawn as a skill's. */
@@ -140,7 +155,7 @@ export function actionIcon(id: string, parent?: HTMLElement): HTMLDivElement {
 export function actionTip(id: string): string {
   const a = BY_ID.get(id);
   if (!a) return '';
-  const how = a.cmd ?? keyLabel(settings.s.keys.attack);
+  const how = a.cmd ?? (a.id === 'attack' ? keyLabel(settings.s.keys.attack) : '');
   return `<div class="tt-title">${esc(a.name)}${how ? ` <span class="tt-dim">${esc(how)}</span>` : ''}</div>${a.desc()}`;
 }
 

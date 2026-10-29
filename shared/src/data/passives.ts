@@ -100,6 +100,15 @@ const list: PassiveDef[] = [
     desc: 'Una luz te protege.', descEn: 'A light protects you.' },
   { id: 'lasting_grace', name: 'Gracia Perdurable', nameEn: 'Lasting Grace', spec: 'hierophant', level: 76, mods: { heal: 1.08, cdr: 0.04 }, icon: '✨', color: 0xfff8d0,
     desc: 'Tus curaciones y recargas rinden otro 8% más, y tus habilidades se recargan antes.', descEn: 'Your heals and recharges give another 8%, and your skills come back sooner.' },
+  // Summoner and Arcana Lord
+  { id: 'summoner_bond', name: 'Vínculo del Invocador', nameEn: "Summoner's Bond", spec: 'summoner', level: 20, mods: { pet: 1.08 }, icon: '🔗', color: 0x9a8aff,
+    desc: 'Tus servitores son un 8% más fuertes: vida, maná, ataque y defensa.', descEn: 'Your servitors are 8% stronger: health, mana, attack and defence.' },
+  { id: 'quick_recycle', name: 'Reciclaje Rápido', nameEn: 'Quick Recycle', spec: 'summoner', level: 40, mods: { cdr: 0.05 }, icon: '♻️', color: 0x8ad0a0,
+    desc: 'Tus habilidades se recargan un 5% antes.', descEn: 'Your skills come back 5% sooner.' },
+  { id: 'anti_magic', name: 'Antimagia', nameEn: 'Anti Magic', spec: 'summoner', level: 60, mods: { mDef: 1.06, maxHp: 1.03 }, icon: '🧿', color: 0x7a9aff,
+    desc: 'La magia enemiga te hace menos daño.', descEn: 'Enemy magic hurts you less.' },
+  { id: 'summon_mastery', name: 'Maestría de la Invocación', nameEn: 'Summoning Mastery', spec: 'arcana_lord', level: 76, mods: { pet: 1.12, mAtk: 1.03 }, icon: '🌀', color: 0xb0a0ff,
+    desc: 'Tus servitores son otro 12% más fuertes, y tu magia también crece.', descEn: 'Your servitors are another 12% stronger, and your magic grows too.' },
 ];
 
 export const PASSIVES: Record<string, PassiveDef> = Object.fromEntries(list.map((p) => [p.id, p]));

@@ -81,6 +81,7 @@ impl Edit {
 /** A character's progress, wherever it lives (a live Player, or its database rows). */
 #[derive(Clone, Debug)]
 pub struct Prog {
+    pub race: String,
     pub cls: String,
     pub level: i64,
     pub xp: i64,
@@ -100,7 +101,7 @@ pub struct Prog {
 impl Prog {
     fn of_player(p: &Player) -> Prog {
         Prog {
-            cls: p.cls.clone(), level: p.level, xp: p.xp, spec: p.spec.clone(), legend_lvl: p.legend_lvl, legend_xp: p.legend_xp, legend: p.legend.clone(),
+            race: p.race.clone(), cls: p.cls.clone(), level: p.level, xp: p.xp, spec: p.spec.clone(), legend_lvl: p.legend_lvl, legend_xp: p.legend_xp, legend: p.legend.clone(),
             adena: p.adena, karma: p.karma, pk: p.pk, pvp: p.pvp, inv: p.inv.clone(), next_uid: p.next_uid, quests: p.quests.clone(),
         }
     }
@@ -145,6 +146,7 @@ pub fn apply(p: &mut Prog, e: &Edit) -> Result<String, String> {
             if let Some(id) = s {
                 let Some(sp) = d().spec(id) else { return Err("No existe esa especialización.".into()) };
                 if sp.base != p.cls { return Err(format!("{} no es de su clase.", sp.name)); }
+                if !sp.open_to(&p.race) { return Err(format!("{} no es para su raza.", sp.name)); }
             }
             let old = spec_name(p.spec.as_deref());
             p.spec = s.clone();
@@ -334,7 +336,7 @@ fn offline(db: &Db, char_id: i64) -> Option<(Who, Prog, crate::db::CharRow)> {
     let (row, items, quests) = db.load_char(account, char_id)?;
     let inv: Vec<InvItem> = items.into_iter().enumerate().map(|(n, (i, c, s, e, l, m))| InvItem { u: n as u32 + 1, i, c, s, e, l, m }).collect();
     let prog = Prog {
-        cls: row.cls.clone(), level: row.level, xp: row.xp, spec: row.spec.clone(), legend_lvl: row.legend_lvl, legend_xp: row.legend_xp,
+        race: row.race.clone(), cls: row.cls.clone(), level: row.level, xp: row.xp, spec: row.spec.clone(), legend_lvl: row.legend_lvl, legend_xp: row.legend_xp,
         legend: serde_json::from_str(&row.legend).unwrap_or_default(), adena: row.adena, karma: row.karma, pk: row.pk, pvp: row.pvp,
         next_uid: inv.len() as u32 + 1, inv, quests,
     };
@@ -418,6 +420,14 @@ impl World {
                 (p.hp, p.mp, p.cp) = (p.hp.min(p.stats.max_hp), p.mp.min(p.stats.max_mp), p.cp.min(p.stats.max_cp));
                 p.inv_dirty = true;
                 crate::quests::send_quests(p);
+                // the servitors its new specialization or level no longer allows go away, and those past as many as it
+                // may have out (the ones out longest first)
+                let pets = self.pets_of(pid);
+                for &id in &pets {
+                    if self.ents[&id].pet().is_some_and(|pt| !self.can_summon(pid, &pt.def.id)) { self.dismiss_pet(pid, id, true); }
+                }
+                let (left, slots) = (self.pets_of(pid), d().pet_slots(self.pl(pid).unwrap().level));
+                for &id in left.iter().take(left.len().saturating_sub(slots)) { self.dismiss_pet(pid, id, true); }
                 let at = self.exit_point(pid);
                 self.save_player(pid, at);
                 if spec != spec0 { let _ = self.db.set_spec_opt(char_id, spec.as_deref()); }
@@ -449,7 +459,7 @@ mod tests {
 
     fn knight() -> Prog {
         Prog {
-            cls: "fighter".into(), level: 40, xp: 10, spec: Some("knight".into()), legend_lvl: 0, legend_xp: 0, legend: HashMap::new(),
+            race: "human".into(), cls: "fighter".into(), level: 40, xp: 10, spec: Some("knight".into()), legend_lvl: 0, legend_xp: 0, legend: HashMap::new(),
             adena: 100, karma: 0, pk: 0, pvp: 0, inv: vec![InvItem { u: 1, i: "healing_potion".into(), c: 5, s: None, e: 0, l: false, m: false }], next_uid: 2, quests: vec![],
         }
     }
@@ -476,6 +486,12 @@ mod tests {
         apply(&mut p, &Edit::Spec(Some("phoenix_knight".into()))).unwrap();
         apply(&mut p, &Edit::Spec(None)).unwrap();
         assert_eq!(p.spec, None);
+        // the summoner, and its awakening, are no orc's
+        let mut orc = Prog { race: "orc".into(), cls: "mystic".into(), spec: None, ..knight() };
+        assert!(apply(&mut orc, &Edit::Spec(Some("summoner".into()))).is_err() && apply(&mut orc, &Edit::Spec(Some("arcana_lord".into()))).is_err());
+        apply(&mut orc, &Edit::Spec(Some("sorcerer".into()))).unwrap();
+        orc.race = "darkelf".into();
+        apply(&mut orc, &Edit::Spec(Some("summoner".into()))).unwrap();
         let id = d().legend.passives[0].id.clone();
         assert!(apply(&mut p, &Edit::LegendRank(id.clone(), 1)).is_err(), "no Legend level for it");
         apply(&mut p, &Edit::LegendLvl(2)).unwrap();
