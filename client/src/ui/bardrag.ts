@@ -9,6 +9,15 @@ import { isTouchDevice } from './touch';
 /** how long the finger has to rest before it picks the thing up, and how far it may move meanwhile (else: a scroll) */
 const HOLD_MS = 300, SLOP = 10;
 
+/** Dragged onto a bar it puts `slot` there; `ghost` is the icon that follows a finger (phones: a long press and a
+ * drag). The character window's skills and actions, and the servitor's panel (ui/servitor.ts). */
+export function toBar(g: Game, icon: HTMLElement, slot: NonNullable<Slot>, ghost: () => HTMLElement) {
+  icon.draggable = true;
+  icon.ondragstart = () => (hideTip(), (g.ui.hud.drag = { slot }));
+  icon.ondragend = () => (g.ui.hud.drag = null);
+  touchBarDrag(g, icon, () => slot, ghost);
+}
+
 /** Make `el` draggable to the bar by touch: `slot()` is what it puts there (none: not draggable now), `icon()` the
  * picture that follows the finger. Desktops keep the native drag and drop. */
 export function touchBarDrag(g: Game, el: HTMLElement, slot: () => Slot, icon: () => HTMLElement) {

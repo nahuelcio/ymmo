@@ -73,6 +73,8 @@ impl World {
                 p.intent = Some(Intent::Attack { id: tid, force });
             }
             "skill" => self.request_skill(pid, &s(m, "skill"), truthy(m, "force"), now),
+            // an order to one of our servitors (pet.rs)
+            "pet" => if !dead { self.pet_command(pid, &s(m, "do"), &s(m, "skill"), truthy(m, "force"), id(m, "id")) },
             "pickup" => {
                 let Some(gid) = id(m, "id") else { return };
                 if !dead && matches!(self.ents.get(&gid).map(|e| &e.k), Some(Kind::Item(_))) { self.pl_mut(pid).unwrap().intent = Some(Intent::Pickup { id: gid }); }
@@ -157,7 +159,7 @@ impl World {
             "hotbar" => {
                 // the client's own layout: only kept, never read here; small, and JSON
                 let data = s(m, "data");
-                if data.len() > 4096 || serde_json::from_str::<Value>(&data).is_err() { return; }
+                if data.len() > 8192 || serde_json::from_str::<Value>(&data).is_err() { return; }
                 let p = self.pl_mut(pid).unwrap();
                 if p.hotbar != data {
                     p.hotbar = data;

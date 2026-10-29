@@ -47,6 +47,13 @@ impl World {
             if self.spares(tid, pid) { return Some(tr(l, "El Guardián defiende a tu clan: no lo podés atacar.", "The Guardian defends your clan: you cannot attack it.").into()); }
             return None;
         }
+        // a servitor: never your own, never in a peace zone, otherwise as its owner
+        if let Some(pt) = te.pet() {
+            if pt.owner == pid { return Some(tr(l, "No podés atacar a tu propio servitor.", "You cannot attack your own servitor.").into()); }
+            if in_town(pc.x, pc.z) || in_town(te.c.x, te.c.z) { return Some(tr(l, "No se puede atacar en una zona de paz.", "You cannot attack in a peace zone.").into()); }
+            if !self.ents.contains_key(&pt.owner) { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()); }
+            return self.can_attack(pid, pt.owner, force, now);
+        }
         let Some(t) = te.player() else { return Some(tr(l, "Objetivo inválido.", "Invalid target.").into()) };
         if tid == pid { return Some(tr(l, "No te podés atacar a vos mismo.", "You cannot attack yourself.").into()); }
         if self.unseen(tid) { return Some(tr(l, "Tu objetivo desapareció.", "Your target has vanished.").into()); }
@@ -69,18 +76,25 @@ impl World {
         Some(tr(l, "Mantené Ctrl y usá el autoataque para forzar el ataque a otro jugador.", "Hold Ctrl and use auto-attack to force an attack on another player.").into())
     }
 
-    fn def_stats(&self, id: u32) -> (f64, f64, f64) {
+    pub fn def_stats(&self, id: u32) -> (f64, f64, f64) {
         match &self.ents[&id].k {
             Kind::Player(p) => (p.stats.p_def, p.stats.m_def, p.stats.evasion),
             Kind::Mob(m) => (m.stats.p_def, m.stats.m_def, m.stats.evasion),
+            Kind::Pet(p) => (p.stats.p_def, p.stats.m_def, p.stats.evasion),
             _ => (1.0, 1.0, 0.0),
         }
     }
 
-    fn send_miss(&self, src: u32, t: u32) {
+    pub fn send_miss(&self, src: u32, t: u32) {
         let msg = json!({ "t": "dmg", "s": src, "tg": t, "v": 0, "miss": true });
-        self.send(src, msg.clone());
-        self.send(t, msg);
+        self.send_both(src, t, msg);
+    }
+
+    /** A combat line to the two it concerns: each, or the owner of each that is a servitor (once, when it is the same). */
+    pub fn send_both(&self, src: u32, t: u32, msg: serde_json::Value) {
+        let (a, b) = (self.owner_of(src), self.owner_of(t));
+        if let Some(a) = a { self.send(a, msg.clone()); }
+        if let Some(b) = b.filter(|&b| Some(b) != a) { self.send(b, msg); }
     }
 
     pub fn auto_attack(&mut self, pid: u32, tid: u32, now: f64) {
@@ -107,7 +121,7 @@ impl World {
 
     /** A melee blow on a player under a reflect (Canción de la Venganza) sends part of it back to who dealt it. It goes back
      * as damage over time does (`dot`), so it is neither reflected again nor drunk by a vampire. */
-    fn reflect(&mut self, tid: u32, src: u32, dmg: f64, now: f64) {
+    pub fn reflect(&mut self, tid: u32, src: u32, dmg: f64, now: f64) {
         let r = self.pl(tid).map_or(0.0, |p| p.stats.reflect);
         if r <= 0.0 || src == tid || self.ents.get(&src).map_or(true, |e| e.c.dead) || self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
         let back = reflected(dmg, r);
@@ -124,10 +138,12 @@ impl World {
         self.send_near(x, z, json!({ "t": "atk", "s": mid, "tg": tid }));
         let m = self.ents[&mid].mob().unwrap();
         let (acc, crit_c, p_atk, on_hit) = (m.stats.accuracy, m.stats.crit, m.stats.p_atk, m.tpl.on_hit.clone());
-        let t = self.pl(tid).unwrap();
-        if t.dodge_until > now || rnd() > hit_chance(acc, t.stats.evasion) { return self.send_miss(mid, tid); }
+        // a player (rolling out of the way dodges it), or a summoner's servitor
+        let dodging = self.pl(tid).is_some_and(|t| t.dodge_until > now);
+        let (p_def, _, eva) = self.def_stats(tid);
+        if dodging || rnd() > hit_chance(acc, eva) { return self.send_miss(mid, tid); }
         let crit = rnd() * 100.0 < crit_c;
-        let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, t.stats.p_def, 1.0, crit));
+        let (dmg, blk) = self.blocked(tid, phys_damage(p_atk, p_def, 1.0, crit));
         self.apply_damage(mid, tid, dmg, now, crit, false, blk);
         self.reflect(tid, mid, dmg, now);
         if let Some(oh) = on_hit.filter(|_| !blk) { // a blow caught on the shield leaves no poison or bleed
@@ -153,6 +169,8 @@ impl World {
                     (true, false)
                 }
                 Kind::Mob(m) => (false, m.winding.take().is_some()),
+                // a servitor's cast stops as a player's, and the skill it was walking to cast with it
+                Kind::Pet(p) => { p.skill = None; (false, p.casting.take().is_some()) }
                 _ => (false, false),
             };
             // a stun cuts a cast (no damage, no cost) and a mob's special attack, its warning circle and slam too
@@ -191,17 +209,15 @@ impl World {
     fn skill_status(&mut self, pid: u32, tg: u32, sa: &StatusApply, hit: f64, now: f64) {
         if matches!(sa.id.as_str(), "stun" | "slow") {
             let base = sa.chance.unwrap_or(if sa.id == "stun" { 0.6 } else { 0.8 });
-            let att = self.pl(pid).map_or(1, |p| p.level);
+            let att = self.level_of(pid);
             let (lvl, boss) = match self.ents.get(&tg).map(|e| &e.k) {
                 Some(Kind::Player(p)) => (p.level, false),
                 Some(Kind::Mob(m)) => (m.tpl.level, m.tpl.boss.unwrap_or(false)),
+                Some(Kind::Pet(p)) => (p.level, false),
                 _ => return,
             };
             if rnd() >= land_chance(base, att, lvl, boss) {
-                let msg = json!({ "t": "dmg", "s": pid, "tg": tg, "v": 0, "res": true });
-                self.send(pid, msg.clone());
-                self.send(tg, msg);
-                return;
+                return self.send_both(pid, tg, json!({ "t": "dmg", "s": pid, "tg": tg, "v": 0, "res": true }));
             }
         }
         self.apply_status(pid, tg, sa, hit, now);
@@ -237,6 +253,18 @@ impl World {
         if self.pl(tid).is_some_and(|p| p.god) || self.sheltered(tid) { return; }
         // a fort's Guardian and the side it defends never hurt each other (an area blow, a bleed left behind)
         if self.spares(tid, src) || self.spares(src, tid) { return; }
+        // Transferir Dolor: part of a blow on a summoner lands on their servitors instead, shared among those near
+        let mut dmg = dmg;
+        let share = self.pl(tid).map_or(0.0, |p| p.stats.transfer);
+        let near: Vec<u32> = if share > 0.0 { self.pets_of(tid).into_iter().filter(|&pet| pet != src && dist(&self.ents[&pet].c, &self.ents[&tid].c) <= 30.0).collect() } else { vec![] };
+        if !near.is_empty() {
+            let part = jround(dmg * share / near.len() as f64);
+            if part > 0.0 {
+                dmg -= part * near.len() as f64;
+                for pet in near { self.apply_damage(src, pet, part, now, false, true, false); }
+                if self.ents.get(&tid).map_or(true, |e| e.c.dead) { return; }
+            }
+        }
         // a vampire dealer (Danza del Vampiro) drinks part of a blow it lands (not of damage over time); a wound halves it
         if !dot && src != tid {
             let mul = self.ents.get(&src).map_or(1.0, |e| e.c.heal_mul(now));
@@ -247,20 +275,21 @@ impl World {
         let mut msg = json!({ "t": "dmg", "s": src, "tg": tid, "v": dmg, "crit": crit });
         if dot { msg["dot"] = json!(true); }
         if blk { msg["blk"] = json!(true); }
+        // who dealt it: a player, or the summoner whose servitor did (their blows count as theirs: the kill, the flag)
+        let owner = self.owner_of(src);
         let src_player = self.pl(src).map(|p| p.cls == "fighter");
-        if let Some(_) = src_player {
-            let p = self.pl_mut(src).unwrap();
-            p.send(msg.clone());
-            p.last_combat = now;
-        }
-        if tid != src { self.send(tid, msg); }
+        if let Some(_) = src_player { self.pl_mut(src).unwrap().last_combat = now; }
+        if let Some(p) = self.ents.get_mut(&src).and_then(|e| e.pet_mut()) { p.last_combat = now; }
+        self.send_both(src, tid, msg);
 
         if self.ents[&tid].mob().is_some() {
-            if let Some(fighter) = src_player {
+            if let Some(owner) = owner {
                 // a Guardian keeps count of each clan's damage: the most takes the fort (siege.rs)
-                if let Some(fort) = self.ents[&tid].mob().unwrap().guard { self.siege_hit(fort, src, dmg); }
+                if let Some(fort) = self.ents[&tid].mob().unwrap().guard { self.siege_hit(fort, owner, dmg); }
+                let fighter = src_player.unwrap_or(false);
                 let m = self.ents.get_mut(&tid).unwrap().mob_mut().unwrap();
-                map_add(&mut m.hate, src, dmg);
+                // the kill (XP, loot, quests) is the owner's; the mob fights whoever hit it, the servitor included
+                map_add(&mut m.hate, owner, dmg);
                 map_add(&mut m.threat, src, dmg * if fighter { 1.3 } else { 1.0 });
                 if m.target.is_none() || m.returning {
                     m.returning = false;
@@ -273,8 +302,11 @@ impl World {
             return;
         }
 
+        if self.ents[&tid].pet().is_some() { return self.pet_hurt(src, tid, dmg, now); }
+
         // player target
-        let src_is_player = src_player.is_some();
+        let src_is_player = owner.is_some();
+        let src = owner.unwrap_or(src);
         let t = self.pl_mut(tid).unwrap();
         t.last_combat = now;
         t.gather = None; // a hit breaks off felling / mining / picking
@@ -355,7 +387,7 @@ impl World {
     pub fn choose_spec(&mut self, pid: u32, spec: &str) {
         let data = d();
         let p = self.pl(pid).unwrap();
-        let Some(def) = data.spec(spec).filter(|s| s.parent.is_none() && s.base == p.cls && p.spec.is_none() && p.level >= data.c.spec_level) else {
+        let Some(def) = data.spec(spec).filter(|s| s.parent.is_none() && s.base == p.cls && s.open_to(&p.race) && p.spec.is_none() && p.level >= data.c.spec_level) else {
             return self.sys(pid, "No podés elegir esa especialización.", "You cannot choose that specialization.");
         };
         if let Err(e) = self.db.set_spec(p.char_id, &def.id) {
@@ -540,6 +572,8 @@ impl World {
             (e.c.x, e.c.z)
         };
         self.stop_cast(tid, false, now);
+        // a summoner's servitors go with them
+        self.dismiss_pets(tid, true);
         // a trade in progress ends with nothing changing hands, before anything drops
         self.trade_cancel(tid, Some(("El comercio se canceló.".into(), "The trade has been cancelled.".into())));
         let by_player = self.pl(killer).is_some() && killer != tid;
@@ -627,9 +661,16 @@ impl World {
             let Some(t) = cur else { return self.sys(pid, "Primero elegí un objetivo.", "Select a target first.") };
             if let Some(err) = self.can_attack(pid, t, force, now) { return self.sys(pid, &err, &err); }
             target = t;
+        } else if def.target == "pet" {
+            // the caster's own servitors (Curar Servitor, its shields...): cast at the nearest, it reaches all of them in range
+            let pc = &self.ents[&pid].c;
+            let Some(pet) = self.pets_of(pid).into_iter().min_by(|a, b| dist(&self.ents[a].c, pc).total_cmp(&dist(&self.ents[b].c, pc))) else {
+                return self.sys(pid, "No tenés un servitor invocado.", "You have no servitor out.");
+            };
+            target = pet;
         }
         // mana never goes back to its caster: Recharge needs another player, Mana Fount someone of the party near
-        if def.kind == "mana" {
+        if def.kind == "mana" && def.target != "pet" {
             if def.target == "friend" && target == pid {
                 return self.sys(pid, &format!("{} solo le devuelve maná a otro jugador.", def.name), &format!("{} only gives mana back to another player.", def.name_en));
             }
@@ -710,40 +751,10 @@ impl World {
         let (px, pz) = { let c = &self.ents[&pid].c; (c.x, c.z) };
         self.send_near(px, pz, json!({ "t": "fx", "s": pid, "tg": target, "skill": def.id }));
         match def.kind.as_str() {
-            "phys" | "magic" | "drain" => {
-                let mut targets = vec![target];
-                if let Some(aoe) = def.aoe {
-                    let (cx, cz) = if def.aoe_on_self.unwrap_or(false) { (px, pz) } else { let c = &self.ents[&target].c; (c.x, c.z) };
-                    for id in self.near(cx, cz, aoe) {
-                        if id != target && self.ents[&id].mob().is_some() && !self.ents[&id].c.dead { targets.push(id); }
-                    }
-                }
-                for tg in targets {
-                    if !self.ents.contains_key(&tg) { continue; }
-                    let (p_def, m_def, eva) = self.def_stats(tg);
-                    let st = self.pl(pid).unwrap().stats.clone();
-                    if def.kind == "phys" {
-                        if rnd() > hit_chance(st.accuracy + 10.0, eva) { self.send_miss(pid, tg); continue; }
-                        let crit = rnd() * 100.0 < st.crit;
-                        // a stab in the back
-                        let back = def.behind.filter(|_| { let t = &self.ents[&tg].c; is_behind(px, pz, t.x, t.z, t.ry) }).unwrap_or(1.0);
-                        let (dmg, blk) = self.blocked(tg, with_crit_dmg(phys_damage(st.p_atk, p_def, def.power * back, crit), crit, st.crit_dmg));
-                        self.apply_damage(pid, tg, dmg, now, crit, false, blk);
-                        if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
-                    } else {
-                        let crit = rnd() < 0.05;
-                        let dmg = with_crit_dmg(magic_damage(st.m_atk, m_def, def.power, crit), crit, st.crit_dmg);
-                        self.apply_damage(pid, tg, dmg, now, crit, false, false);
-                        if let Some(sa) = &def.status { self.skill_status(pid, tg, sa, dmg, now); }
-                        if def.kind == "drain" && !self.ents[&pid].c.dead {
-                            let heal = jround(dmg * 0.5 * self.ents[&pid].c.heal_mul(now));
-                            let p = self.pl_mut(pid).unwrap();
-                            p.hp = (p.hp + heal).min(p.stats.max_hp);
-                            p.send(json!({ "t": "dmg", "s": pid, "tg": pid, "v": heal, "heal": true }));
-                        }
-                    }
-                }
-            }
+            "phys" | "magic" | "drain" => self.skill_hits(pid, def, target, now),
+            // the caster's servitors (target pet): every one of them in range (pet.rs tend_pets)
+            "heal" | "mana" | "buff" if def.target == "pet" => self.tend_pets(pid, def, target, now),
+            "summon" => if let Some(sv) = def.summon.as_deref() { self.summon_pet(pid, sv, None) },
             "heal" => {
                 let s = &self.pl(pid).unwrap().stats;
                 let amount = heal_amount(def.power, s.m_atk) * s.heal_power;
@@ -767,14 +778,7 @@ impl World {
                 let msg = json!({ "t": "dmg", "s": pid, "tg": target, "v": jround(after - before), "heal": true });
                 self.send(pid, msg.clone());
                 if target != pid { self.send(target, msg); }
-                // healers draw aggro from everything fighting the one they healed
-                if is_player {
-                    let (tx, tz) = { let c = &self.ents[&target].c; (c.x, c.z) };
-                    for id in self.near(tx, tz, 40.0) {
-                        let fighting = self.ents[&id].mob().map_or(false, |m| !self.ents[&id].c.dead && map_get(&m.threat, target).is_some());
-                        if fighting { self.add_threat(id, pid, (after - before) * 0.5); }
-                    }
-                }
+                if is_player { self.heal_aggro(pid, target, after - before); }
             }
             "mana" => {
                 // MP back, as much as a heal of that power and the healer's passives would give: to the player it was cast
@@ -807,18 +811,77 @@ impl World {
             "taunt" => {
                 // everything around the target turns on you, and keeps a grudge
                 let (tx, tz) = { let c = &self.ents[&target].c; (c.x, c.z) };
-                for id in self.near(tx, tz, def.aoe.unwrap_or(6.0)) {
-                    let dead = self.ents[&id].c.dead;
-                    let Some(m) = self.ents.get_mut(&id).and_then(|e| e.mob_mut()) else { continue };
-                    if dead || m.returning { continue; }
-                    let top = m.threat.iter().fold(0.0f64, |a, e| a.max(e.1));
-                    map_set(&mut m.threat, pid, top * 1.2 + 100.0);
-                    if map_get(&m.hate, pid).is_none() { m.hate.push((pid, 0.0)); }
-                    m.target = Some(pid);
-                    m.taunt_until = now + 4000.0;
-                }
+                self.taunt(pid, tx, tz, def.aoe.unwrap_or(6.0), now);
             }
             _ => {}
+        }
+    }
+
+    /** Everything around (x, z) turns on `src` for 4 s and keeps a grudge: a player's taunt, a servitor's howl (the
+     * grudge, the kill's share, is its owner's). */
+    pub fn taunt(&mut self, src: u32, x: f64, z: f64, r: f64, now: f64) {
+        let owner = self.owner_of(src).unwrap_or(src);
+        for id in self.near(x, z, r) {
+            let dead = self.ents[&id].c.dead;
+            let Some(m) = self.ents.get_mut(&id).and_then(|e| e.mob_mut()) else { continue };
+            if dead || m.returning { continue; }
+            let top = m.threat.iter().fold(0.0f64, |a, e| a.max(e.1));
+            map_set(&mut m.threat, src, top * 1.2 + 100.0);
+            if map_get(&m.hate, owner).is_none() { m.hate.push((owner, 0.0)); }
+            m.target = Some(src);
+            m.taunt_until = now + 4000.0;
+        }
+    }
+
+    /** Healers draw aggro from everything fighting the one they healed (a player, or a servitor). */
+    pub fn heal_aggro(&mut self, healer: u32, target: u32, healed: f64) {
+        let (tx, tz) = { let c = &self.ents[&target].c; (c.x, c.z) };
+        for id in self.near(tx, tz, 40.0) {
+            let fighting = self.ents[&id].mob().map_or(false, |m| !self.ents[&id].c.dead && map_get(&m.threat, target).is_some());
+            if fighting { self.add_threat(id, healer, healed * 0.5); }
+        }
+    }
+
+    /**
+     * A damage skill's hits (phys, magic, drain) from `src`, a player or a servitor: on its target, and with an area on
+     * the mobs around it (or around the caster, aoe_on_self). Each one rolled on the caster's stats as they are.
+     */
+    pub fn skill_hits(&mut self, src: u32, def: &crate::data::SkillDef, target: u32, now: f64) {
+        let (px, pz) = { let c = &self.ents[&src].c; (c.x, c.z) };
+        let mut targets = vec![target];
+        if let Some(aoe) = def.aoe {
+            let (cx, cz) = if def.aoe_on_self.unwrap_or(false) { (px, pz) } else { let c = &self.ents[&target].c; (c.x, c.z) };
+            for id in self.near(cx, cz, aoe) {
+                if id != target && self.ents[&id].mob().is_some() && !self.ents[&id].c.dead { targets.push(id); }
+            }
+        }
+        for tg in targets {
+            if !self.ents.contains_key(&tg) { continue; }
+            let (p_def, m_def, eva) = self.def_stats(tg);
+            let Some(st) = self.stats_of(src) else { return };
+            if def.kind == "phys" {
+                if rnd() > hit_chance(st.accuracy + 10.0, eva) { self.send_miss(src, tg); continue; }
+                let crit = rnd() * 100.0 < st.crit;
+                // a stab in the back
+                let back = def.behind.filter(|_| { let t = &self.ents[&tg].c; is_behind(px, pz, t.x, t.z, t.ry) }).unwrap_or(1.0);
+                let (dmg, blk) = self.blocked(tg, with_crit_dmg(phys_damage(st.p_atk, p_def, def.power * back, crit), crit, st.crit_dmg));
+                self.apply_damage(src, tg, dmg, now, crit, false, blk);
+                if let Some(sa) = &def.status { self.skill_status(src, tg, sa, dmg, now); }
+            } else {
+                let crit = rnd() < 0.05;
+                let dmg = with_crit_dmg(magic_damage(st.m_atk, m_def, def.power, crit), crit, st.crit_dmg);
+                self.apply_damage(src, tg, dmg, now, crit, false, false);
+                if let Some(sa) = &def.status { self.skill_status(src, tg, sa, dmg, now); }
+                if def.kind == "drain" && self.ents.get(&src).is_some_and(|e| !e.c.dead) {
+                    let heal = jround(dmg * 0.5 * self.ents[&src].c.heal_mul(now));
+                    match &mut self.ents.get_mut(&src).unwrap().k {
+                        Kind::Player(p) => p.hp = (p.hp + heal).min(p.stats.max_hp),
+                        Kind::Pet(p) => p.hp = (p.hp + heal).min(p.stats.max_hp),
+                        _ => {}
+                    }
+                    self.send_both(src, src, json!({ "t": "dmg", "s": src, "tg": src, "v": heal, "heal": true }));
+                }
+            }
         }
     }
 }

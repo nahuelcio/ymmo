@@ -3,7 +3,7 @@
 // quests. It also covers its week and day (jewel rolls, the Rift's paid run, today's contracts), its Olympiad month and
 // its clan. Every change goes to the server and comes back as the character's fresh sheet; nothing is redrawn between
 // sheets, so a half-typed value survives the panel's polling.
-import { SPECS, type Spec } from '../../../shared/src/data/classes';
+import { SPECS, specOpenTo, type Spec } from '../../../shared/src/data/classes';
 import { CLAN_LEVELS } from '../../../shared/src/data/clans';
 import { ITEMS } from '../../../shared/src/data/items';
 import { LEGEND } from '../../../shared/src/data/legend';
@@ -112,7 +112,7 @@ export class GmCharEditor {
     const spec = el('select', 'chat-input gm-in gm-wide', specRow);
     spec.ariaLabel = tx('Especialización', 'Specialization');
     el('option', '', spec, tx('— ninguna —', '— none —')).value = '';
-    for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === c.cls)) {
+    for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === c.cls && specOpenTo(s, c.race))) {
       const o = el('option', '', spec, `${specName(sp, lang)}${SPECS[sp].parent ? ` (${tx('despertar', 'awakened')})` : ''}`);
       o.value = sp;
     }

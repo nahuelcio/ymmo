@@ -757,7 +757,145 @@ export const SKILL_VFX: Record<string, Vfx> = {
     f.motes(feet(s), color, 1200, { n: 16, r: 0.8, spin: 1.5, rise: 1.5, size: 0.9 });
     f.dome(feet(s), color, 1.1, 800);
   },
+
+  // ---- summoner: the summons open a circle at its feet; its servitor's heals and blessings land on the servitor
+  summon_war_wolf: summoning,
+  summon_mirage: summoning,
+  summon_soulless: summoning,
+  summon_seraphim: summoning,
+  summon_spectral_lord: ({ f, s, color }) => {
+    summoning({ f, s, t: s, color, aoe: 6 });
+    later(300, () => f.pillar(feet(s), 0x6a4ac8, 1400, 8));
+    f.smoke(feet(s), 1.6, 1600, 0x241a3a, 8);
+  },
+  servitor_heal: ({ f, t, color }) => {
+    f.ring(feet(t), color, 1.3, 600);
+    f.motes(feet(t), color, 1000, { n: 14, r: 0.9, spin: 2, rise: 1.8, size: 0.8, cell: 'glow' });
+  },
+  servitor_greater_heal: ({ f, t, color }) => {
+    f.pillar(feet(t), color, 900, 4);
+    f.ring(feet(t), color, 1.8, 800);
+    f.motes(feet(t), 0xffffff, 1300, { n: 22, r: 1.1, spin: 2, rise: 2.6 });
+  },
+  servitor_recharge: ({ f, t, color }) => {
+    f.sparkles(feet(t), color, 900);
+    f.ring(feet(t), color, 1.3, 600);
+  },
+  servitor_shield: ({ f, t, color }) => {
+    f.dome(feet(t), color, 1.4, 1000);
+    f.rune(feet(t), 1.1, color, 900);
+  },
+  servitor_haste: ({ f, t, color }) => {
+    f.motes(feet(t), color, 900, { n: 16, r: 0.9, spin: 12, rise: 0.4, cell: 'glow' });
+    f.p.emit({ cell: 'streak', n: 10, at: feet(t), shape: 'disc', r: 0.6, up: 4, size: 0.3, life: 420, color: 0xffffff, bright: 1.3, stretch: 0.05 });
+  },
+  servitor_empower: ({ f, t, color }) => {
+    f.dome(feet(t), color, 1.6, 1400);
+    f.debris(feet(t), 0x8a8070, 10, 1.2);
+    f.ring(feet(t), color, 2, 700);
+  },
+  servitor_might: ({ f, t, color }) => {
+    f.ring(feet(t), color, 1.3, 400);
+    later(120, () => f.ring(feet(t), color, 2, 500));
+    f.p.emit({ cell: 'burst', n: 1, at: chest(t), size: [0.8, 2], life: 400, color, bright: 1.4 });
+  },
+  servitor_awaken: ({ f, t, color }) => {
+    f.pillar(feet(t), color, 1200, 6);
+    f.p.emit({ cell: 'halo', n: 1, at: chest(t), size: [1.2, 3], life: 800, color, bright: 1.5 });
+    f.motes(feet(t), color, 1200, { n: 20, r: 1.2, spin: 5, rise: 2.4, cell: 'flare' });
+  },
+  transfer_pain: ({ f, s, color }) => {
+    f.rune(feet(s), 1.2, color, 1100);
+    f.motes(chest(s, 0.5), color, 1000, { n: 10, r: 0.7, spin: 4, rise: 0.4, cell: 'glow' });
+  },
+  wind_shackle: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 300, 0.25);
+    later(300, () => {
+      f.ring(feet(t), color, 1.2, 700);
+      f.motes(feet(t), 0xffffff, 800, { n: 14, r: 0.6, spin: 10, rise: 0.5, cell: 'glow' }); // the chains of wind whirling
+    });
+  },
+  death_spike: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 260, 0.3, 'dark');
+    later(260, () => {
+      f.shards(chest(t), 0xe8e0d0, 8, 0.8, 500);
+      f.burst(chest(t), color, 0.9, 320);
+    });
+  },
+  curse_poison: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 320, 0.28, 'dark');
+    later(320, () => {
+      f.smoke(chest(t, 0.4), 0.7, 1400, 0x3a6a1a, 6);
+      f.motes(feet(t), color, 1200, { n: 12, r: 0.6, spin: 1, rise: 1.6, cell: 'glow' });
+    });
+  },
+  spectral_lance: ({ f, s, t, color }) => {
+    f.beam(at(s), at(t), color, 500);
+    later(250, () => {
+      f.burst(chest(t), color, 1.3, 450);
+      f.motes(feet(t), 0xd8d0ff, 900, { n: 16, r: 0.7, spin: 3, rise: 2.4 });
+    });
+  },
+
+  // ---- the servitors' own (data/servitors.ts PET_SKILLS)
+  wolf_bite: ({ f, s, t, color }) => {
+    f.slash(chest(t, 0.5), chest(s, 0.5), color, 1.1);
+    f.burst(chest(t, 0.5), BLOOD, 0.7, 300);
+  },
+  wolf_howl: ({ f, s, color, aoe }) => {
+    f.ring(feet(s), color, aoe, 600);
+    later(150, () => f.ring(feet(s), color, aoe * 0.6, 500));
+  },
+  water_lance: ({ f, s, t, color }) => {
+    f.projectile(chest(s), at(t), color, 300, 0.32, 'ice');
+    later(300, () => f.burst(chest(t), color, 1, 380));
+  },
+  whirlpool: ({ f, t, color, aoe }) => {
+    f.ring(feet(t), color, aoe, 800);
+    f.motes(feet(t), color, 1100, { n: 20, r: aoe * 0.6, spin: 8, rise: 0.6, cell: 'glow' });
+  },
+  toxic_smoke: ({ f, t, color, aoe }) => {
+    f.smoke(feet(t), aoe * 0.5, 1800, 0x4a7a2a, 9);
+    f.ring(feet(t), color, aoe, 700);
+  },
+  shadow_touch: ({ f, s, t, color }) => {
+    f.beam(at(t), at(s), color, 800);
+    f.motes(feet(t), color, 800, { n: 10, r: 0.5, spin: 4, rise: 2 });
+  },
+  seraph_blessing: ({ f, t, color }) => {
+    f.p.emit({ cell: 'halo', n: 1, at: above(head(t), 0.3), size: [0.8, 1.6], life: 900, color, bright: 1.3, fadeIn: 0.2 });
+    f.motes(feet(t), color, 1100, { n: 14, r: 0.8, spin: 1.5, rise: 2 });
+  },
+  healing_light: ({ f, t, color }) => {
+    f.ring(head(t), color, 0.9, 700);
+    f.motes(above(head(t), 0.5), color, 1000, { n: 14, r: 0.8, spin: 1, rise: 0, fall: 1.4, cell: 'glow' });
+  },
+  aegis: ({ f, t, color }) => {
+    f.dome(feet(t), color, 1.4, 1000);
+    f.ring(feet(t), HOLY, 1.5, 600);
+  },
+  spectral_strike: ({ f, s, t, color }) => {
+    f.slash(chest(t), chest(s), color, 1.6);
+    f.burst(chest(t), color, 1.1, 380);
+  },
+  abyss_cry: ({ f, s, t, color, aoe }) => {
+    f.ring(feet(s), color, aoe, 700);
+    f.flash(chest(s, 0.5), color, 1.2);
+    f.stun(head(t), 1600);
+  },
+  spectral_pact: ({ f, t, color }) => {
+    f.rune(feet(t), 1.2, color, 1000);
+    f.p.emit({ cell: 'burst', n: 1, at: chest(t), size: [0.8, 2.2], life: 450, color, bright: 1.4 });
+  },
 };
+
+/** A summoner's call: a circle opens at its feet and a column of the servitor's colour rises from it. */
+function summoning({ f, s, color }: VfxCtx) {
+  f.rune(feet(s), 1.8, color, 1400);
+  f.ring(feet(s), color, 2.2, 800);
+  later(200, () => f.pillar(feet(s), color, 900, 4));
+  f.motes(feet(s), color, 1300, { n: 20, r: 1.4, spin: 3, rise: 2.6 });
+}
 
 /** Where a sonic wave lands: a ring of force bursting outwards, white at its heart. */
 function sonicBurst(f: FxManager, p: THREE.Vector3, color: number, size: number) {

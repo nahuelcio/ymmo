@@ -3,15 +3,16 @@ import { applyLod, tickLod, type LodState } from './render/lod';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { ITEMS } from '../../shared/src/data/items';
 import { SKILLS } from '../../shared/src/data/skills';
+import { anySkill, PET_SKILLS, SERVITORS } from '../../shared/src/data/servitors';
 import { MOBS } from '../../shared/src/data/mobs';
-import { itemName, mobName, npcText, specName, zoneName } from '../../shared/src/i18n';
+import { itemName, mobName, npcText, servitorName, specName, zoneName } from '../../shared/src/i18n';
 import { lang, t as tx } from './lang';
 import { QUEST_BY_NPC, QUESTS, questMarker, questMobs, type QuestMarker } from '../../shared/src/data/quests';
 import { NPCS } from '../../shared/src/data/world';
 
 /** The givers of the daily contracts (kind 'board'): their marker sums up today's contracts. */
 const BOARD_NPCS = new Set(NPCS.filter((n) => n.kind === 'board').map((n) => n.id));
-import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type S2C, type SelfState } from '../../shared/src/protocol';
+import { F_CASTING, F_DEAD, F_GATHER, F_MOVING, F_PVP, F_SITTING, type EntAdd, type EntUpd, type InvItem, type PetOrder, type PetState, type S2C, type SelfState } from '../../shared/src/protocol';
 import { biomeWeight, heightAt, isDeep, isDeepCell, smoothstep, SWIM_SPEED, WATER_LEVEL } from '../../shared/src/terrain';
 import { GATHER, isRest, isShelter, nodeById, nodeIndex, nodesNear, reachOf, shelterCentre, STAND_UP_MS, type NodeDef } from '../../shared/src/nodes';
 import { layoutRocks, layoutTrees, layoutZoneProps } from '../../shared/src/layout';
@@ -26,6 +27,7 @@ import { GENERIC_VFX, SKILL_VFX } from './render/skill-fx';
 import { animate, itemModel, mobModel, npcModel, playerModel, rimLit, skillAnimOf, skillImpactMs, skillStrikes, type Rig } from './render/models';
 import { CHAIN_MS, swingOf, swingTiming, windup } from './render/swings';
 import { elementOf } from './render/mobs';
+import { servitorModel } from './render/servitors';
 import { tickEnchantFx } from './render/enchant-fx';
 import { heroAura, heroLookOf } from './render/hero-fx';
 import { BRAZIER_FIRES, createWorldScene, footingAt, hutDoorClosed, lightSources, tentDoorClosed, type WorldScene } from './render/scene';
@@ -281,6 +283,8 @@ export class Game {
   private shelters = new Map<number, { door: THREE.Object3D; zzz: CSS2DObject; slots: (number | undefined)[] }>();
   hitboxes: THREE.Object3D[] = [];
   me: SelfState;
+  /** the servitor our orders go to (this.pet), picked on its frame, in its panel or with a click on it */
+  petSel: number | null = null;
   inv: InvItem[];
   adena = 0;
   quests: { id: string; progress: number }[] = [];
@@ -655,7 +659,7 @@ export class Game {
     });
     onSync('cast', (m) => m.s, (m) => {
       const s = this.ents.get(m.s);
-      const def = SKILLS[m.skill];
+      const def = anySkill(m.skill);
       if (s) (s.castSkill = m.skill), (s.castAt = performance.now());
       if (s && def) this.castFx.set(m.s, this.fx.sparkles(s.pos.clone(), def.color, Math.max(400, m.dur)));
       if (s && def && m.dur > 250) play('cast', this.near(s));
@@ -682,7 +686,8 @@ export class Game {
     });
     n.on('levelUp', (m) => {
       const e = this.ents.get(m.id);
-      if (e) play('levelUp', this.near(e));
+      // a servitor levels up with its owner: the glow on it too, the sound once (its owner's)
+      if (e && e.rec.k !== 's') play('levelUp', this.near(e));
       if (e) this.vfx('levelup', e);
       if (m.id === this.me.id) this.ui.hud.banner(m.spec ? tx(`¡Despertaste! ${specName(m.spec, lang)}`, `Awakened! ${specName(m.spec, lang)}`) : tx(`¡Nivel ${m.lvl}!`, `Level ${m.lvl}!`), true);
     });
@@ -879,6 +884,24 @@ export class Game {
       el.appendChild(n);
       this.addHpBar(c);
       this.addStatusIcons(c);
+    } else if (r.k === 's') {
+      // a summoner's servitor: its name and level, whose it is under it; coloured as its owner's flags
+      el.innerHTML = '';
+      const mine = r.o === this.me.id;
+      el.className = `nameplate np-pet${mine ? ' np-pet-mine' : ''}`;
+      const n = document.createElement('div');
+      n.textContent = `${servitorName(r.tpl, lang)} `;
+      n.style.color = c.flags & F_RED ? '#ff4040' : c.flags & F_PURPLE ? '#d080ff' : mine ? '#a8f0b8' : '#a8d0ff';
+      const l = document.createElement('span');
+      l.className = 'np-lvl';
+      l.textContent = `${tx('Nv', 'Lv')} ${r.l}`;
+      n.appendChild(l);
+      const o = document.createElement('div');
+      o.className = 'np-owner';
+      o.textContent = tx(`de ${r.on}`, `${r.on}'s`);
+      el.append(n, o);
+      this.addHpBar(c);
+      this.addStatusIcons(c);
     } else if (r.k === 'n') {
       el.innerHTML = '';
       el.className = 'nameplate np-npc';
@@ -1016,6 +1039,7 @@ export class Game {
     if (r.k === 'p') rig = playerModel(r.race, r.cls, r.w, r.a, r.lk, r.eq ?? [], r.we ?? 0);
     else if (r.k === 'm') rig = mobModel(r.tpl);
     else if (r.k === 'n') rig = npcModel(r.npc);
+    else if (r.k === 's') rig = servitorModel(r.tpl);
     if (rig) {
       model = rig.root;
       rimLit(rig.root);
@@ -1346,7 +1370,7 @@ export class Game {
 
   /** What a player, mob or NPC is called (as its nameplate says). */
   private nameOf(c: CEnt): string {
-    return c.rec.k === 'm' ? mobName(c.rec.tpl, lang) : c.rec.k === 'p' || c.rec.k === 'n' ? c.rec.n : '';
+    return c.rec.k === 'm' ? mobName(c.rec.tpl, lang) : c.rec.k === 's' ? servitorName(c.rec.tpl, lang) : c.rec.k === 'p' || c.rec.k === 'n' ? c.rec.n : '';
   }
 
   /** Esc (or a tap on the cast bar): our cast stops here at once and on the server, its MP and cooldown spent all the same. */
@@ -1507,7 +1531,7 @@ export class Game {
    * for a bow, a staff or wand, or bare hands. */
   /** The animation a skill plays (render/quaternius.ts SKILL_ANIM): its own, or the bow's draw and loose for a bow's shot. */
   private skillAnim(skill: string | undefined) {
-    const def = skill ? SKILLS[skill] : undefined;
+    const def = skill ? anySkill(skill) : undefined;
     return def ? skillAnimOf(skill, def.weapon === 'bow' && def.kind === 'phys' ? 'bow' : undefined) : undefined;
   }
   private meleeWeapon(c: CEnt) {
@@ -1551,7 +1575,7 @@ export class Game {
   /** What a body does with its weapon while it casts (render/quaternius.ts animateQ): a melee fighter readies it for a
    * physical skill's blow, and raises it for a fighter's buff or taunt; anything else (a spell) is cast with the free hand. */
   private castMove(c: CEnt): 'strike' | 'raise' | 'dance' | undefined {
-    const def = c.castSkill ? SKILLS[c.castSkill] : undefined;
+    const def = c.castSkill ? anySkill(c.castSkill) : undefined;
     if (def?.tune === 'dance') return 'dance'; // a bladedancer dances its dances
     if (!def || !this.meleeWeapon(c)) return undefined;
     if (def.kind === 'phys') return 'strike';
@@ -1591,7 +1615,7 @@ export class Game {
     if (skill === 'escape') return this.vfx('escape', s);
     if (skill === 'charge') return this.vfx('charge', s); // a pair of swords' hit gathered a Force charge
     if (skill === 'dance') return void (s.danceUntil = performance.now() + 10000); // /dance: until they move, fight or it runs out
-    const def = SKILLS[skill];
+    const def = anySkill(skill);
     if (def) s.castSkill = undefined;
     // a skill with its own animation plays its blow from where its cast held it (SKILL_ANIM: the dagger's, the shield's,
     // the bow's); any other melee skill lands with a blow, already wound up by the cast: a dagger stabs, the rest cut
@@ -1732,7 +1756,11 @@ export class Game {
   isHostile(c: CEnt): boolean {
     if (c.flags & F_DEAD) return false;
     if (c.rec.k === 'm') return true;
-    if (c.rec.k !== 'p' || c.id === this.me.id) return false;
+    // a servitor: ours or our party's never, anyone else's as its owner (it carries their flags)
+    if (c.rec.k === 's') {
+      const o = c.rec.o;
+      if (o === this.me.id || this.ui.party.members?.some((m) => m.id === o)) return false;
+    } else if (c.rec.k !== 'p' || c.id === this.me.id) return false;
     if (c.flags & F_RED) return this.me.pvpOn;
     return this.me.pvpOn && (c.flags & F_PVP) !== 0 && (c.flags & F_PURPLE) !== 0;
   }
@@ -2010,6 +2038,36 @@ export class Game {
     if (it) this.net.send({ t: 'use', u: it.u });
   }
 
+  /** Our servitors out (SelfState.pets), the one out longest first. */
+  get pets(): PetState[] {
+    return this.me.pets ?? [];
+  }
+
+  /** The servitor our orders go to: the one picked last (its frame, its panel, a click on it), else the one out longest. */
+  get pet(): PetState | undefined {
+    return this.pets.find((p) => p.id === this.petSel) ?? this.pets[0];
+  }
+
+  /** Our orders go to this servitor now: its row marked, its panel showing it. */
+  pickPet(id: number) {
+    this.petSel = id;
+    this.ui.hud.refreshPet();
+    this.ui.servitor.refresh();
+  }
+
+  /** An order to one of our servitors (its panel and the bars: ui/servitor.ts, ui/actions.ts PET_ACTIONS): attack our
+   * target, follow, stay, stop, go away (the one picked: this.pet), or one of its skills (the one that knows it). Sent at
+   * an enemy with none picked, it gets the one the auto-attack would pick (unless it is fighting already: then its skill
+   * goes at what it fights). */
+  petOrder(what: PetOrder, skill?: string) {
+    const pet = (what === 'skill' && this.pets.find((p) => SERVITORS[p.def]?.skills.includes(skill ?? ''))) || this.pet;
+    if (!pet) return this.sys(tx('No tenés un servitor invocado.', 'You have no servitor out.'));
+    const cur = this.targetId !== null ? this.ents.get(this.targetId) : undefined;
+    const enemy = what === 'attack' || (what === 'skill' && PET_SKILLS[skill ?? '']?.target === 'enemy' && !pet.fighting);
+    if (enemy && settings.s.autoTarget && !(cur && (this.isHostile(cur) || (cur.rec.k === 'p' && this.ctrl)))) this.ensureEnemyTarget();
+    this.net.send({ t: 'pet', do: what, ...(skill && { skill }), force: this.ctrl, id: pet.id });
+  }
+
   nextTarget() {
     const self = this.self;
     if (!self) return;
@@ -2071,13 +2129,17 @@ export class Game {
       hideTip();
       this.nodeTip = false;
     };
-    // a second click (or tap) on the same monster or enemy player, quick as a double click: attack it
+    // a second click (or tap) on the same monster or enemy player, quick as a double click: attack it; on our own
+    // servitor, its panel (its actions and its skills)
     let lastHit = { id: -1, at: 0 };
     const clickEnt = (c: CEnt) => {
       const now = performance.now(), again = c.id === lastHit.id && now - lastHit.at < 500;
       lastHit = { id: again ? -1 : c.id, at: now }; // a third click starts over
       this.interact(c);
-      if (again && this.isHostile(c)) this.attackTarget();
+      const mine = c.rec.k === 's' && c.rec.o === this.me.id;
+      if (mine) this.pickPet(c.id); // our orders go to it now
+      if (again && mine) this.ui.servitor.open();
+      else if (again && this.isHostile(c)) this.attackTarget();
     };
     el.addEventListener('pointerleave', dropNodeTip);
     el.addEventListener('pointerdown', (e) => {

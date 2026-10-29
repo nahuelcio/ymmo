@@ -68,10 +68,12 @@ export const CLASSES: Record<ClassType, ClassDef> = {
  * Specialization picked once at SPEC_LEVEL: the base class stays, the spec adds its own skills. At EVOLVE_LEVEL the
  * quest "El Despertar" (shared/src/data/quests.ts) turns it into its evolution (`parent`), which keeps its skills.
  */
-export type Spec = 'knight' | 'gladiator' | 'archer' | 'assassin' | 'swordsinger' | 'bladedancer' | 'sorcerer' | 'cleric' | 'phoenix_knight' | 'duelist' | 'sharpshooter' | 'shade'
-  | 'sword_muse' | 'spectral_dancer' | 'archmage' | 'hierophant';
+export type Spec = 'knight' | 'gladiator' | 'archer' | 'assassin' | 'swordsinger' | 'bladedancer' | 'sorcerer' | 'cleric' | 'summoner' | 'phoenix_knight' | 'duelist'
+  | 'sharpshooter' | 'shade' | 'sword_muse' | 'spectral_dancer' | 'archmage' | 'hierophant' | 'arcana_lord';
 export interface SpecDef {
   name: string; base: ClassType; desc: string; parent?: Spec;
+  /** the races that can take it (every race of its base class when not set); an evolution, its parent's */
+  races?: Race[];
   /** how much more often it blocks with a shield (1.5: half again) */
   block?: number;
   /** the weapon its skills ask for (SkillDef.weapon) */
@@ -95,6 +97,7 @@ export const SPECS: Record<Spec, SpecDef> = {
   bladedancer: { name: 'Bailarín de Hojas', base: 'fighter', weapon: 'dual', desc: 'Una espada en cada mano. Sus danzas le dan a toda la party ataque, velocidad y críticos; sus hojas giran sobre los enemigos.' },
   sorcerer: { name: 'Hechicero', base: 'mystic', desc: 'Daño mágico. Fuego, hielo y rayos sobre grupos enteros.' },
   cleric: { name: 'Clérigo', base: 'mystic', desc: 'Sanador. Curaciones grandes y bendiciones para el grupo.' },
+  summoner: { name: 'Invocador', base: 'mystic', races: ['human', 'elf', 'darkelf'], desc: 'Pelea con servitores a su lado (uno, dos desde el nivel 40 y tres desde el 70): los invoca, los cura, los fortalece y les ordena atacar.' },
   // the third specialization (level 76)
   phoenix_knight: { name: 'Paladín del Fénix', base: 'fighter', parent: 'knight', block: 1.5, desc: 'Caballero renacido del fuego: su escudo arde y sus heridas se cierran solas.' },
   duelist: { name: 'Duelista', base: 'fighter', parent: 'gladiator', weapon: 'dual', charges: 8, desc: 'Gladiador que hizo de las dos espadas un arte: más fuerza acumulada, golpes sónicos letales.' },
@@ -104,7 +107,10 @@ export const SPECS: Record<Spec, SpecDef> = {
   spectral_dancer: { name: 'Bailarín Espectral', base: 'fighter', parent: 'bladedancer', weapon: 'dual', desc: 'Bailarín que danza entre la vida y la muerte: furia para la party, muerte para los que lo rodean.' },
   archmage: { name: 'Archimago', base: 'mystic', parent: 'sorcerer', desc: 'Hechicero que domina todas las escuelas: su poder no tiene techo.' },
   hierophant: { name: 'Hierofante', base: 'mystic', parent: 'cleric', desc: 'Clérigo que habla con los dioses: sus milagros alcanzan a todo el grupo.' },
+  arcana_lord: { name: 'Señor Arcano', base: 'mystic', parent: 'summoner', races: ['human', 'elf', 'darkelf'], desc: 'Invocador que ata a su servicio a un señor espectral: su servitor pelea como un jefe.' },
 };
+/** Whether a character of this race can take this specialization (server-rs data.rs SpecDef::open_to). */
+export const specOpenTo = (s: Spec, race: Race): boolean => SPECS[s].races?.includes(race) ?? true;
 /** The evolution a specialization grows into at EVOLVE_LEVEL (none for an evolution). */
 export const evolutionOf = (s: Spec | null | undefined): Spec | undefined => (s ? (Object.keys(SPECS) as Spec[]).find((e) => SPECS[e].parent === s) : undefined);
 

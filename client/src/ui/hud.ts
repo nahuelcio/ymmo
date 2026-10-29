@@ -3,6 +3,7 @@ import { RACES, CLASSES, PVP_LEVEL } from '../../../shared/src/data/classes';
 import { ITEMS } from '../../../shared/src/data/items';
 import { QUESTS, questSummary } from '../../../shared/src/data/quests';
 import { SKILLS } from '../../../shared/src/data/skills';
+import { PET_SKILLS, SERVITORS } from '../../../shared/src/data/servitors';
 import { F_DEAD } from '../../../shared/src/protocol';
 import { inPvpZone, NPCS } from '../../../shared/src/data/world';
 import { siegeZoneAt } from '../../../shared/src/data/sieges';
@@ -14,11 +15,14 @@ import { makeMovable, onLayoutReset, resetLayout, uiScale } from './movable';
 import { hudFocus, isTouchDevice, setHudFocus } from './touch';
 import { lang, t as tx, fmt } from '../lang';
 import { keyLabel, settings, type Action } from '../settings';
-import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
+import { campName, className, itemDesc, itemName, mobName, npcText, questField, questLineL, questSummaryL, raceName, servitorName, skillDesc, skillName, statusDesc, statusName, teleportName, zoneName } from '../../../shared/src/i18n';
 
 const CONSUMABLES = ['lesser_healing_potion', 'healing_potion', 'mana_potion', 'scroll_of_escape'];
-/** a skill, a consumable, or one of the character window's actions (ui/actions.ts: a chat command or the auto-attack) */
-export type Slot = { type: 'skill' | 'item' | 'action'; id: string } | null;
+/** a skill, a consumable, one of the character window's actions (ui/actions.ts: a chat command, the auto-attack, an
+ * order to the servitor), or a skill of the summoner's servitor (data/servitors.ts PET_SKILLS: its panel, ui/servitor.ts) */
+export type Slot = { type: 'skill' | 'item' | 'action' | 'pet'; id: string } | null;
+/** the cooldown a slot shows: its skill's, its servitor skill's (as the server sends it: pet.rs), or its item's */
+const cdKey = (sl: NonNullable<Slot>) => (sl.type === 'skill' ? sl.id : sl.type === 'pet' ? `pet:${sl.id}` : `item:${sl.id}`);
 const same = (a: Slot, b: Slot) => !!a && !!b && a.type === b.type && a.id === b.id;
 /** The main bar (ten slots, then the attack and roll buttons) and two extra ones above it, twelve slots each: as wide. */
 const SIZE = [10, 12, 12];
@@ -78,6 +82,10 @@ export class Hud {
   private target: HTMLDivElement;
   private tName: HTMLDivElement;
   private tHp; private tActions: HTMLDivElement;
+  /** the summoner's servitor: its name, HP and MP, under the status window while one is out */
+  private pet: HTMLDivElement;
+  /** a row per servitor out (the one out longest first), built again when they change */
+  private petRows: { id: number; row: HTMLDivElement; name: HTMLDivElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }[] = [];
   private slotEls: HTMLDivElement[][] = [];
   private st: BarState | null = null;
   private barRows: HTMLDivElement[] = [];
@@ -136,6 +144,14 @@ export class Hud {
       }
       st.addEventListener('click', () => compact(!st.classList.contains('compact')));
     }
+
+    // the servitors' window (L2's), a row each (refreshPet): a click picks one as the target and as the one our orders
+    // go to, a second one opens its panel (ui/servitor.ts)
+    this.pet = el('div', 'panel pet-frame', root);
+    this.pet.style.display = 'none';
+    setTip(this.pet, () => tx('Click: elegirlo como objetivo, y tus órdenes van a él. Doble click: su panel de acciones y habilidades.',
+      'Click: select it, and your orders go to it. Double click: its panel of actions and skills.'));
+    makeMovable(this.pet, 'pet-frame');
 
     // Target window (top-center)
     this.target = el('div', 'panel target', root);
@@ -528,7 +544,38 @@ export class Hud {
     } else if (self && inPvpZone(self.pos.x, self.pos.z)) {
       el('div', 'buff flag pvp-zone', this.buffs, tx('⚔ Zona PvP', '⚔ PvP zone')).title = tx('Zona PvP: todos están flageados y cualquiera puede atacarte.', 'PvP zone: everyone is flagged and anyone can attack you.');
     }
+    this.refreshPet();
     this.refreshSlots();
+  }
+
+  /** The servitors' window: shown while one is out, a row each, the one our orders go to marked (the party's window
+   * moves down for it, by as many rows). */
+  refreshPet() {
+    const pets = this.g.pets, sel = this.g.pet;
+    this.pet.style.display = pets.length ? '' : 'none';
+    document.documentElement.classList.toggle('has-pet', pets.length > 0);
+    document.documentElement.style.setProperty('--pets', String(pets.length));
+    if (pets.map((p) => p.id).join() !== this.petRows.map((r) => r.id).join()) {
+      this.pet.innerHTML = '';
+      this.petRows = pets.map((p) => {
+        const row = el('div', 'pet-row', this.pet), name = el('div', 'pet-name', row);
+        let click = 0;
+        row.onclick = () => {
+          const now = performance.now();
+          this.g.pickPet(p.id);
+          if (now - click < 500) (this.g.ui.servitor.open(), (click = 0));
+          else (this.g.setTarget(p.id), (click = now));
+        };
+        return { id: p.id, row, name, hp: bar(row, 'bar-hp thin'), mp: bar(row, 'bar-mp thin') };
+      });
+    }
+    pets.forEach((p, i) => {
+      const r = this.petRows[i];
+      r.row.classList.toggle('sel', pets.length > 1 && p === sel);
+      r.name.innerHTML = `<span class="lvl">${p.lvl}</span> ${esc(servitorName(p.def, lang))}${p.mode === 'stay' ? ` <span class="tt-dim">· ${tx('quieto', 'staying')}</span>` : ''}`;
+      r.hp.set(p.hp, p.maxHp);
+      r.mp.set(p.mp, p.maxMp);
+    });
   }
 
   /** Ten slots of bar b: click or key uses it, drag rearranges (across bars too), right click empties. */
@@ -558,7 +605,7 @@ export class Hud {
       setTip(s, () => {
         const sl = this.st?.bars[b][i];
         if (!sl) return '';
-        return sl.type === 'skill' ? skillTip(sl.id) : sl.type === 'action' ? actionTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
+        return sl.type === 'skill' || sl.type === 'pet' ? skillTip(sl.id) : sl.type === 'action' ? actionTip(sl.id) : itemTip(sl.id, this.itemCount(sl.id));
       });
       out.push(s);
     }
@@ -604,7 +651,7 @@ export class Hud {
         // as an action, placed by hand); and a skill or action no longer in the game (the gladiator's before its
         // dual-sword kit)
         if (!s || typeof s.id !== 'string') return null;
-        const ok = s.type === 'item' || (s.type === 'skill' && SKILLS[s.id]) || (s.type === 'action' && isPlayerAction(s.id));
+        const ok = s.type === 'item' || (s.type === 'skill' && SKILLS[s.id]) || (s.type === 'action' && isPlayerAction(s.id)) || (s.type === 'pet' && PET_SKILLS[s.id]);
         return ok ? { type: s.type, id: s.id } : null;
       }));
       const flags = (a: unknown, n: number) => Array.from({ length: n }, (_, k) => Array.isArray(a) && !!a[k]);
@@ -716,7 +763,7 @@ export class Hud {
       // a consumable that ran out keeps its place, greyed out
       s.classList.toggle('spent', sl?.type === 'item' && this.itemCount(sl.id) === 0);
       if (!sl) return;
-      const ic = sl.type === 'skill' ? skillIcon(sl.id) : sl.type === 'action' ? actionIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
+      const ic = sl.type === 'skill' || sl.type === 'pet' ? skillIcon(sl.id) : sl.type === 'action' ? actionIcon(sl.id) : itemIcon(sl.id, undefined, this.itemCount(sl.id));
       s.prepend(ic);
       el('div', 'cd', s);
       el('span', 'cd-num', s);
@@ -735,12 +782,13 @@ export class Hud {
       return runAction(this.g, sl.id);
     }
     // still cooling down for real (not a client guess): shake the slot instead of asking the server
-    const cd = this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
+    const cd = this.g.cooldowns.get(cdKey(sl));
     const cls = cd && !cd.predicted && cd.end > performance.now() ? 'denied' : 'pressed';
     this.slotEls[b][i].classList.add(cls);
     setTimeout(() => this.slotEls[b][i].classList.remove(cls), cls === 'denied' ? 250 : 120);
     if (cls === 'denied') return;
     if (sl.type === 'skill') this.g.useSkill(sl.id);
+    else if (sl.type === 'pet') this.g.petOrder('skill', sl.id);
     else this.g.useItemById(sl.id);
   }
 
@@ -779,13 +827,16 @@ export class Hud {
       if (!ov) return;
       // an action has no cooldown: the auto-attack shows its swing, as its button does (with no seconds)
       const act = sl.type === 'action';
-      const cd = act ? undefined : this.g.cooldowns.get(sl.type === 'skill' ? sl.id : `item:${sl.id}`);
+      const cd = act ? undefined : this.g.cooldowns.get(cdKey(sl));
       const rem = cd ? cd.end - now : act && sl.id === 'attack' ? arem : 0, dur = cd?.dur ?? swing;
       ov.style.height = rem > 0 ? `${(rem / dur) * 100}%` : '0';
       const num = s.querySelector('.cd-num'), left = rem > 950 && !act ? String(Math.ceil(rem / 1000)) : '';
       if (num && num.textContent !== left) num.textContent = left;
-      const noMp = sl.type === 'skill' && this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0);
+      // a servitor's skill: with its own MP, and only while the one that knows it is out
+      const pet = sl.type === 'pet' ? this.g.pets.find((p) => SERVITORS[p.def]?.skills.includes(sl.id)) : undefined;
+      const noMp = sl.type === 'skill' ? this.g.me.mp < (SKILLS[sl.id]?.mp ?? 0) : !!pet && pet.mp < (PET_SKILLS[sl.id]?.mp ?? 0);
       s.classList.toggle('nomp', noMp);
+      s.classList.toggle('nopet', sl.type === 'pet' && !pet);
       // a skill that asks for a weapon not in hand (the archer's bow, the assassin's dagger)
       const need = sl.type === 'skill' ? SKILLS[sl.id]?.weapon : undefined;
       s.classList.toggle('noweapon', !!need && need !== wielded);
@@ -827,9 +878,10 @@ export class Hud {
       const c = t.flags & F_RED ? '#ff4040' : t.flags & F_PURPLE ? '#d080ff' : '#fff';
       nameHtml = `<span style="color:${c}">${esc(r.n)}</span> <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l} ${raceName(r.race, lang)} ${className(r.cls, lang, r.spec)}</span>`;
     } else if (r.k === 'n') nameHtml = `${esc(r.n)} <span class="tt-dim">${esc(npcText(r.npc, 'title', lang))}</span>`;
+    else if (r.k === 's') nameHtml = `${esc(servitorName(r.tpl, lang))} <span class="tt-dim">${tx('Nv', 'Lv')} ${r.l} · ${esc(tx(`servitor de ${r.on}`, `${r.on}'s servitor`))}</span>`;
     else nameHtml = esc(r.item === 'adena' ? 'Adena' : itemName(r.item, lang));
     this.tName.innerHTML = nameHtml + (t.flags & F_DEAD ? ' <span class="tt-dim">(muerto)</span>' : '');
-    this.tHp.root.style.display = r.k === 'm' || r.k === 'p' ? '' : 'none';
+    this.tHp.root.style.display = r.k === 'm' || r.k === 'p' || r.k === 's' ? '' : 'none';
     this.tHp.set(t.hp, 100);
     this.tHp.text.textContent = `${t.hp}%`;
     this.tActions.innerHTML = '';

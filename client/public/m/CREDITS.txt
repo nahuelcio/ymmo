@@ -21,4 +21,10 @@ werewolf.glb: based on "werewolf" (sketchfab.com/3d-models/werewolf-2dd83cb880f0
 yeti.glb: based on "Yeti" (sketchfab.com/3d-models/yeti-daa4e743128f44c7859c5c34588518a7) by orioltron
   (sketchfab.com/orioltron): rigged onto the werewolf's skeleton, moving with its clips
 
+The summoner's servitors, made for this game: their meshes and textures generated with Tripo AI (tripo3d.ai, paid API:
+ours to use and change; spec tools/art/ai/servitors.json), each set in Blender (tools/art/blender/servitors.py) onto the
+skeleton of a mob above, to move with its clips:
+ai_war_wolf.glb on wolf.glb's; ai_mirage.glb and ai_seraphim.glb on horse.glb's; ai_soulless.glb and ai_spectral_lord.glb
+  on skeleton_mage.glb's (with KayKit Character Animations 1.1 clips). Each skeleton is moved to its model's build.
+
 Regenerate with tools/scripts/m-assets.mjs.

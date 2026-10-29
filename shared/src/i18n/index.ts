@@ -2,7 +2,7 @@ import { RAIDS } from '../data/raids';
 // Language support: Argentine Spanish (the data's native language) and English.
 import { ITEMS } from '../data/items';
 import { MOBS } from '../data/mobs';
-import { SKILLS } from '../data/skills';
+import { anySkill, SERVITORS } from '../data/servitors';
 import { QUESTS, type QuestDef } from '../data/quests';
 import { NPCS, TELEPORTS, ZONES } from '../data/world';
 import { CLASSES, GENDERS, HAIR_STYLES, RACES, SPECS, type ClassType, type Gender, type Race, type Spec } from '../data/classes';
@@ -32,8 +32,11 @@ const pick = <T>(lang: Lang, es: T, enV: T | undefined): T => (lang === 'en' && 
 export const itemName = (id: string, l: Lang) => pick(l, ITEMS[id]?.name ?? id, en.items[id]?.name);
 export const itemDesc = (id: string, l: Lang) => pick(l, ITEMS[id]?.desc, en.items[id]?.desc);
 export const mobName = (id: string, l: Lang) => pick(l, MOBS[id]?.name ?? id, en.mobs[id]);
-export const skillName = (id: string, l: Lang) => pick(l, SKILLS[id]?.name ?? id, en.skills[id]?.name);
-export const skillDesc = (id: string, l: Lang) => pick(l, SKILLS[id]?.desc ?? '', en.skills[id]?.desc);
+// a player's skill or a servitor's (data/servitors.ts PET_SKILLS)
+export const skillName = (id: string, l: Lang) => pick(l, anySkill(id)?.name ?? id, en.skills[id]?.name);
+export const skillDesc = (id: string, l: Lang) => pick(l, anySkill(id)?.desc ?? '', en.skills[id]?.desc);
+export const servitorName = (id: string, l: Lang) => (l === 'en' ? SERVITORS[id]?.nameEn : SERVITORS[id]?.name) ?? id;
+export const servitorDesc = (id: string, l: Lang) => (l === 'en' ? SERVITORS[id]?.descEn : SERVITORS[id]?.desc) ?? '';
 export const raceName = (r: Race, l: Lang) => pick(l, RACES[r].name, en.races[r]?.name);
 export const raceDesc = (r: Race, l: Lang) => pick(l, RACES[r].desc, en.races[r]?.desc);
 export const specName = (s: Spec, l: Lang) => pick(l, SPECS[s].name, en.specs[s]?.name);

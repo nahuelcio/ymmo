@@ -232,6 +232,10 @@ pub struct BuffMods {
     pub max_mp: Option<f64>,
     pub heal: Option<f64>,
     pub tune: Option<f64>,
+    /** the share of the damage taken that goes to the summoner's servitor (Transferir Dolor), and a multiplier on the
+     * servitor's stats (the summoner's passives) */
+    pub transfer: Option<f64>,
+    pub pet: Option<f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -270,6 +274,37 @@ pub struct SkillDef {
     pub spend: Option<u32>,
     /** a song ("song") or a dance ("dance"): its buff lasts the caster's tune_dur times longer */
     pub tune: Option<String>,
+    /** the servitor a summon calls (kind "summon") */
+    pub summon: Option<String>,
+}
+
+/** How many servitors a summoner may have out at once from this level on (shared/src/data/servitors.ts SERVITOR_SLOTS). */
+#[derive(Deserialize, Clone, Debug)]
+pub struct ServitorSlots {
+    pub level: i64,
+    pub n: usize,
+}
+
+/** A summoner's servitor (shared/src/data/servitors.ts): its curves are a same-level mob's times these (formulas.rs
+ * pet_stats); `skills` are pet skills (Data::pet_skill). */
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ServitorDef {
+    pub id: String,
+    pub name: String,
+    pub name_en: String,
+    pub level: i64,
+    /** "melee" bites at arm's length; "caster" and "support" strike with magic from afar */
+    pub role: String,
+    pub hp_mult: f64,
+    pub mp_mult: f64,
+    pub atk_mult: f64,
+    pub matk_mult: f64,
+    pub def_mult: f64,
+    pub atk_interval: f64,
+    pub range: f64,
+    pub speed: f64,
+    pub skills: Vec<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -379,6 +414,8 @@ pub struct SpecDef {
     pub id: String, pub base: String, pub name: String, pub name_en: String,
     /** an evolution (the third specialization) of this spec */
     pub parent: Option<String>,
+    /** the races that can take it (every race of its base class when none) */
+    pub races: Option<Vec<String>>,
     /** how much more often it blocks with a shield (1.5: half again) */
     pub block: Option<f64>,
     /** the weapon its skills ask for, and the extra critical chance (points) while holding it */
@@ -386,6 +423,11 @@ pub struct SpecDef {
     pub crit: Option<f64>,
     /** how many Force charges it can hold (the gladiator's) */
     pub charges: Option<u32>,
+}
+
+impl SpecDef {
+    /** Whether a character of this race can take it (specOpenTo() in shared/src/data/classes.ts). */
+    pub fn open_to(&self, race: &str) -> bool { self.races.as_ref().map_or(true, |r| r.iter().any(|x| x == race)) }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -504,6 +546,11 @@ struct Raw {
     set_bonus: HashMap<String, Vec<SetTier>>,
     mobs: Vec<MobDef>,
     skills: Vec<SkillDef>,
+    servitors: Vec<ServitorDef>,
+    #[serde(rename = "petSkills")]
+    pet_skills: Vec<SkillDef>,
+    #[serde(rename = "servitorSlots")]
+    servitor_slots: Vec<ServitorSlots>,
     quests: Vec<QuestDef>,
     npcs: Vec<NpcDef>,
     zones: Vec<ZoneDef>,
@@ -543,6 +590,10 @@ pub struct Data {
     /** in data order (skill lists keep it) */
     pub skills: Vec<SkillDef>,
     pub skill_by_id: HashMap<String, usize>,
+    /** the summoner's servitors, and their own skills (never a player's: skill_available would hand them to everyone) */
+    pub servitors: Vec<ServitorDef>,
+    pub pet_skills: Vec<SkillDef>,
+    pub servitor_slots: Vec<ServitorSlots>,
     pub quests: Vec<QuestDef>,
     pub npcs: Vec<NpcDef>,
     pub zones: Vec<ZoneDef>,
@@ -584,6 +635,12 @@ impl Data {
     /** The level a character needs to wear this piece (0 for anything without a grade). */
     pub fn wear_level(&self, item: &ItemDef) -> i64 { item.grade.as_ref().and_then(|g| self.grade_level.get(g)).copied().unwrap_or(0) }
     pub fn skill(&self, id: &str) -> Option<&SkillDef> { self.skill_by_id.get(id).map(|&i| &self.skills[i]) }
+    pub fn servitor(&self, id: &str) -> Option<&ServitorDef> { self.servitors.iter().find(|s| s.id == id) }
+    pub fn pet_skill(&self, id: &str) -> Option<&SkillDef> { self.pet_skills.iter().find(|s| s.id == id) }
+    /** How many servitors a summoner of this level may have out at once. */
+    pub fn pet_slots(&self, level: i64) -> usize { self.servitor_slots.iter().filter(|s| level >= s.level).last().map_or(1, |s| s.n) }
+    /** The summon skill that calls this servitor. */
+    pub fn summon_of(&self, servitor: &str) -> Option<&SkillDef> { self.skills.iter().find(|s| s.summon.as_deref() == Some(servitor)) }
     pub fn quest(&self, id: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.id == id) }
     /** The story quest a giver offers (the contracts' board offers daily_set's instead). */
     pub fn quest_by_npc(&self, npc: &str) -> Option<&QuestDef> { self.quests.iter().find(|q| q.npc == npc && !q.daily) }
@@ -666,6 +723,9 @@ pub fn d() -> &'static Data {
             mobs: raw.mobs.into_iter().map(|m| (m.id.clone(), m)).collect(),
             skills: raw.skills,
             skill_by_id,
+            servitors: raw.servitors,
+            pet_skills: raw.pet_skills,
+            servitor_slots: raw.servitor_slots,
             quests: raw.quests,
             npcs: raw.npcs,
             zones: raw.zones,

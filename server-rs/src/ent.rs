@@ -1,7 +1,7 @@
 //! Entities (port of server/src/world/entities.ts).
 use crate::collision::P;
-use crate::data::{d, Barrage, BuffMods, MobDef, Pulse, Special};
-use crate::formulas::{compute_stats, gear_mods, jround, legend_mods, mob_stats, passive_mods, Stats};
+use crate::data::{d, Barrage, BuffMods, MobDef, Pulse, ServitorDef, Special};
+use crate::formulas::{compute_stats, gear_mods, jround, legend_mods, mob_stats, passive_mods, pet_stats, Stats};
 use crate::i18n::Lang;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -218,6 +218,8 @@ pub struct Player {
     pub karma: i64,
     pub pk: i64,
     pub pvp: i64,
+    /** the summoner's servitors in this world (pet.rs), while they are out: the one out longest first */
+    pub pets: Vec<u32>,
 }
 
 impl Player {
@@ -361,6 +363,51 @@ impl Mob {
     pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
 }
 
+/** A summoner's servitor (pet.rs): it follows its owner, fights what it is told to and uses its skills when its owner
+ * presses them. It lives in its owner's world and goes along with them (realm.rs take_out / join). */
+pub struct Pet {
+    pub def: &'static ServitorDef,
+    pub owner: u32,
+    pub owner_name: String,
+    /** its owner's level, and their passives' share on its stats (formulas.rs pet_stats) */
+    pub level: i64,
+    pub power: f64,
+    pub stats: Stats,
+    pub hp: f64,
+    pub mp: f64,
+    /** what its owner cast on it (Escudo del Servitor...) */
+    pub buffs: Vec<Buff>,
+    /** told to stay there (None: it follows its owner) */
+    pub stay: Option<(f64, f64)>,
+    /** what it was told to attack (and whether that was forced on a player, as Ctrl does) */
+    pub order: Option<(u32, bool)>,
+    /** a skill of its own on its way (it walks into range first), and the one being cast: (skill, target, ends at) */
+    pub skill: Option<(String, u32, bool)>,
+    pub casting: Option<(String, u32, f64)>,
+    pub cooldowns: HashMap<String, f64>,
+    pub next_attack: f64,
+    pub last_combat: f64,
+    /** its owner's PvP, purple and red flags, copied each tick: others see it as they see them */
+    pub owner_flags: u16,
+}
+
+impl Pet {
+    pub fn new(def: &'static ServitorDef, owner: u32, owner_name: String, level: i64, power: f64) -> Pet {
+        let stats = pet_stats(def, level, power, &[]);
+        Pet {
+            def, owner, owner_name, level, power, hp: stats.max_hp, mp: stats.max_mp, stats, buffs: vec![], stay: None, order: None,
+            skill: None, casting: None, cooldowns: HashMap::new(), next_attack: 0.0, last_combat: 0.0, owner_flags: 0,
+        }
+    }
+    pub fn recalc(&mut self) {
+        let bm: Vec<&BuffMods> = self.buffs.iter().map(|b| &b.mods).collect();
+        self.stats = pet_stats(self.def, self.level, self.power, &bm);
+        self.hp = self.hp.min(self.stats.max_hp);
+        self.mp = self.mp.min(self.stats.max_mp);
+    }
+    pub fn hp_pct(&self) -> f64 { jround(self.hp / self.stats.max_hp * 100.0) }
+}
+
 pub struct Npc { pub def: &'static crate::data::NpcDef, pub next_chatter: f64, /** travelers: heading to the road's far end, and when they set off again after a rest */ pub fwd: bool, pub rest_until: f64 }
 
 pub struct GroundItem {
@@ -376,7 +423,7 @@ pub struct GroundItem {
     pub camp_id: Option<String>,
 }
 
-pub enum Kind { Player(Box<Player>), Mob(Box<Mob>), Npc(Npc), Item(GroundItem) }
+pub enum Kind { Player(Box<Player>), Mob(Box<Mob>), Npc(Npc), Item(GroundItem), Pet(Box<Pet>) }
 
 pub struct Ent { pub c: Common, pub k: Kind }
 
@@ -385,9 +432,11 @@ impl Ent {
     pub fn player_mut(&mut self) -> Option<&mut Player> { if let Kind::Player(p) = &mut self.k { Some(p) } else { None } }
     pub fn mob(&self) -> Option<&Mob> { if let Kind::Mob(m) = &self.k { Some(m) } else { None } }
     pub fn mob_mut(&mut self) -> Option<&mut Mob> { if let Kind::Mob(m) = &mut self.k { Some(m) } else { None } }
-    pub fn is_fighter(&self) -> bool { matches!(self.k, Kind::Player(_) | Kind::Mob(_)) }
+    pub fn pet(&self) -> Option<&Pet> { if let Kind::Pet(p) = &self.k { Some(p) } else { None } }
+    pub fn pet_mut(&mut self) -> Option<&mut Pet> { if let Kind::Pet(p) = &mut self.k { Some(p) } else { None } }
+    pub fn is_fighter(&self) -> bool { matches!(self.k, Kind::Player(_) | Kind::Mob(_) | Kind::Pet(_)) }
     pub fn hp_pct(&self) -> f64 {
-        match &self.k { Kind::Player(p) => p.hp_pct(), Kind::Mob(m) => m.hp_pct(), _ => 100.0 }
+        match &self.k { Kind::Player(p) => p.hp_pct(), Kind::Mob(m) => m.hp_pct(), Kind::Pet(p) => p.hp_pct(), _ => 100.0 }
     }
     pub fn flags(&self, now: f64) -> u16 {
         let base = self.c.base_flags(now);
@@ -399,6 +448,7 @@ impl Ent {
                     | if p.sitting.is_some() { F_SITTING } else { 0 } | if p.gather.is_some() { F_GATHER } else { 0 }
             }
             Kind::Mob(m) => base | if m.target.is_some() { F_COMBAT } else { 0 },
+            Kind::Pet(p) => base | p.owner_flags | if p.casting.is_some() { F_CASTING } else { 0 } | if now - p.last_combat < 4000.0 { F_COMBAT } else { 0 },
             _ => base,
         }
     }

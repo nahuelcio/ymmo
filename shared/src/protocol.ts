@@ -73,7 +73,9 @@ export interface EntMob { id: number; k: 'm'; x: number; z: number; ry: number; 
 export interface EntNpc { id: number; k: 'n'; x: number; z: number; ry: number; n: string; title: string; npc: string; hp: number; f: number }
 /** m: a Masterwork piece (its label is gold) */
 export interface EntItem { id: number; k: 'i'; x: number; z: number; ry: number; item: string; c: number; hp: number; f: number; m?: boolean }
-export type EntAdd = EntPlayer | EntMob | EntNpc | EntItem;
+/** A summoner's servitor (data/servitors.ts): tpl is its servitor id, o its owner's entity id and on their name */
+export interface EntPet { id: number; k: 's'; x: number; z: number; ry: number; n: string; l: number; hp: number; tpl: string; o: number; on: string; f: number }
+export type EntAdd = EntPlayer | EntMob | EntNpc | EntItem | EntPet;
 
 /** Compact update: [id, x, z, ry, hpPct, flags] */
 export type EntUpd = [number, number, number, number, number, number];
@@ -109,7 +111,20 @@ export interface SelfState {
   skills: string[];
   buffs: { id: string; rem: number }[];
   zone: string;
+  /** the summoner's servitors out (server-rs pet.rs), the one out longest first */
+  pets?: PetState[];
 }
+
+/** One of our servitors: its entity, servitor id (data/servitors.ts), level, HP and MP, whether it follows us or stays where it
+ * was told, whether it is fighting, and the buffs on it. */
+export interface PetState {
+  id: number; def: string; lvl: number; hp: number; maxHp: number; mp: number; maxMp: number;
+  mode: 'follow' | 'stay'; fighting: boolean; buffs: { id: string; rem: number }[];
+}
+
+/** An order to our servitor: attack our target, follow us, stay where it is, stop what it is doing, go away, or use one
+ * of its skills (force: on another player, as Ctrl does) */
+export type PetOrder = 'attack' | 'follow' | 'stay' | 'stop' | 'dismiss' | 'skill';
 
 /** One side of a trade: what is in it (u: that player's bag row; e, l, m: enchant, legacy, Masterwork), the adena, confirmed or not. */
 export interface TradeOffer { items: { u: number; i: string; c: number; e: number; l: boolean; m: boolean }[]; adena: number; ok: boolean }
@@ -140,6 +155,9 @@ export type C2S =
   | { t: 'target'; id: number | null }
   | { t: 'attack'; id: number; force: boolean }
   | { t: 'skill'; skill: string; force: boolean }
+  /** an order to one of our servitors (server-rs pet.rs pet_command): the one `id` (else the one out longest; a skill,
+   * the one that knows it) */
+  | { t: 'pet'; do: PetOrder; skill?: string; force?: boolean; id?: number }
   | { t: 'pickup'; id: number }
   | { t: 'talk'; id: number }
   | { t: 'equip'; u: number }
@@ -195,7 +213,7 @@ export type C2S =
   | { t: 'clanWhWithdraw'; npc: number; id: number; qty: number }
   | { t: 'clanWhAdena'; npc: number; amount: number }
   | { t: 'clanSkill'; npc: number; skill: string }
-  /** the skill bars' layout (client JSON, at most 4 KB), kept per character */
+  /** the skill bars' layout (client JSON, at most 8 KB), kept per character */
   | { t: 'hotbar'; data: string }
   /** one-time pick at SPEC_LEVEL */
   | { t: 'chooseSpec'; spec: Spec }

@@ -9,6 +9,7 @@ import { AdminPanel, CharacterPanel, createHelp, Dialogs, InventoryPanel, NpcPan
 import { SPEC_LEVEL } from '../../../shared/src/data/classes';
 import { ClanPanel, ClanWarehouse } from './clan';
 import { TradePanel } from './trade';
+import { ServitorPanel } from './servitor';
 
 export class UI {
   root: HTMLElement;
@@ -21,6 +22,8 @@ export class UI {
   clan: ClanPanel;
   clanWh: ClanWarehouse;
   trade: TradePanel;
+  /** the summoner's servitor: its actions and skills (a second click on it) */
+  servitor: ServitorPanel;
   minimap: Minimap;
   dialogs: Dialogs;
   help: Win;
@@ -38,6 +41,7 @@ export class UI {
     this.chat = new Chat(g, this.root);
     this.inventory = new InventoryPanel(g, this.root);
     this.character = new CharacterPanel(g, this.root);
+    this.servitor = new ServitorPanel(g, this.root);
     this.npc = new NpcPanel(g, this.root);
     this.minimap = new Minimap(g, this.root);
     this.dialogs = new Dialogs(g, this.root);
@@ -85,6 +89,7 @@ export class UI {
     }
     this.hud.onMe();
     this.character.refresh();
+    this.servitor.refresh();
     this.inventory.refreshStats();
   }
 
@@ -102,6 +107,7 @@ export class UI {
 
   update(now: number) {
     this.hud.update(now);
+    this.servitor.update(now);
     this.minimap.update(now);
   }
 

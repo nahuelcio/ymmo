@@ -1,7 +1,7 @@
-import { CLASSES, EVOLVE_LEVEL, evolutionOf, MAX_LEVEL, RACES, SPEC_LEVEL, SPECS, type Spec } from '../../../shared/src/data/classes';
+import { CLASSES, EVOLVE_LEVEL, evolutionOf, MAX_LEVEL, RACES, SPEC_LEVEL, SPECS, specOpenTo, type Spec } from '../../../shared/src/data/classes';
 import { LEGEND } from '../../../shared/src/data/legend';
 import { makeMovable } from './movable';
-import { foldable, type Slot } from './hud';
+import { foldable } from './hud';
 import { ACTION_GROUPS, actionIcon, actionTip, PLAYER_ACTIONS } from './actions';
 import { ENCHANT, enchantChance, enchanted, GRADE_COLOR, ITEMS, scrollFits, wearLevel, WORN_SLOTS, type WornSlot } from '../../../shared/src/data/items';
 import { siegeZoneAt, withTax } from '../../../shared/src/data/sieges';
@@ -17,7 +17,7 @@ import type { C2S, InvItem, PartyMember, S2C } from '../../../shared/src/protoco
 import type { Game } from '../game';
 import { bar, blockPct, glyph, hydrate, itemIcon, itemIconId, itemTip, modsText, passiveIcon, passiveTip, skillIcon, skillTip, SLOT_NAME, speedPct, tipSheet } from './common';
 import { isTouchDevice } from './touch';
-import { touchBarDrag } from './bardrag';
+import { toBar, touchBarDrag } from './bardrag';
 import { renderClanNpc } from './clan';
 import { el, esc, hideTip, setTip, Win } from './dom';
 import { GmCharEditor } from './gm-char';
@@ -393,8 +393,8 @@ export class CharacterPanel {
     }
     if (m.lvl >= SPEC_LEVEL && !m.spec) {
       el('div', 'section', b, tx('Elegí tu especialización', 'Choose your specialization'));
-      // the four of level 20; their evolutions come later, with the quest "El Despertar"
-      for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls && !SPECS[s].parent)) {
+      // those of level 20 open to its race; their evolutions come later, with the quest "El Despertar"
+      for (const sp of (Object.keys(SPECS) as Spec[]).filter((s) => SPECS[s].base === m.cls && !SPECS[s].parent && specOpenTo(s, m.race))) {
         const card = el('div', 'skill-row', b);
         const skills = allSkillsFor(m.cls, m.race, m.look.g, sp).filter((s) => s.spec).map((s) => skillName(s.id, lang)).join(' · ');
         const info = el('div', '', card);
@@ -422,14 +422,6 @@ export class CharacterPanel {
     if (isTouchDevice()) e.onclick = () => tipSheet(html()); // the tap a long press (a drag to the bar) ends in never gets here
   }
 
-  /** Dragged onto a bar it puts `slot` there; `ghost` is the icon that follows a finger (phones: a long press and a drag). */
-  private toBar(icon: HTMLElement, slot: NonNullable<Slot>, ghost: () => HTMLElement) {
-    icon.draggable = true;
-    icon.ondragstart = () => (hideTip(), (this.g.ui.hud.drag = { slot }));
-    icon.ondragend = () => (this.g.ui.hud.drag = null);
-    touchBarDrag(this.g, icon, () => slot, ghost);
-  }
-
   /** The skills as a grid of icons, four a row: the name, what each does, its level and MP on hover; the ones still to
    * learn dimmed; the learned ones drag onto the bar. Then the passives, always on (never on the bar), and the third
    * specialization's skills and passive, still to come. Phones get no hover: a tap shows the same in a sheet. */
@@ -441,7 +433,7 @@ export class CharacterPanel {
       const icon = skillIcon(s.id, grid);
       icon.classList.toggle('locked', s.level > m.lvl);
       this.tip(icon, () => skillTip(s.id));
-      if (m.skills.includes(s.id)) this.toBar(icon, { type: 'skill', id: s.id }, () => skillIcon(s.id));
+      if (m.skills.includes(s.id)) toBar(this.g, icon, { type: 'skill', id: s.id }, () => skillIcon(s.id));
     }
     const passives = passivesFor(m.cls, m.spec);
     if (passives.length) {
@@ -487,7 +479,7 @@ export class CharacterPanel {
       for (const a of PLAYER_ACTIONS.filter((x) => x.group === k)) {
         const icon = actionIcon(a.id, grid);
         this.tip(icon, () => actionTip(a.id));
-        this.toBar(icon, { type: 'action', id: a.id }, () => actionIcon(a.id));
+        toBar(this.g, icon, { type: 'action', id: a.id }, () => actionIcon(a.id));
       }
     });
     el('div', 'hint', b, isTouchDevice()

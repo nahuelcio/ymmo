@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { ENCHANT, ITEMS, GRADE_LEVEL, MASTERWORK, SET_BONUS } from '../../shared/src/data/items';
 import { MOBS } from '../../shared/src/data/mobs';
 import { SKILLS } from '../../shared/src/data/skills';
+import { PET_SKILLS, SERVITOR_SLOTS, SERVITORS } from '../../shared/src/data/servitors';
 import { dailySet, QUEST_LIST } from '../../shared/src/data/quests';
 import { NPCS, TELEPORTS, ZONES } from '../../shared/src/data/world';
 import { CAMPS } from '../../shared/src/data/camps';
@@ -48,6 +49,11 @@ const out = {
   setBonus: SET_BONUS,
   mobs: Object.values(MOBS).map((m) => ({ ...m, nameEn: mobName(m.id, 'en') })),
   skills: Object.values(SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
+  // the summoner's servitors and their own skills (server-rs pet.rs)
+  servitors: Object.values(SERVITORS).map(({ id, name, nameEn, level, role, hpMult, mpMult, atkMult, matkMult, defMult, atkInterval, range, speed, skills }) =>
+    ({ id, name, nameEn, level, role, hpMult, mpMult, atkMult, matkMult, defMult, atkInterval, range, speed, skills })),
+  petSkills: Object.values(PET_SKILLS).map((s) => ({ ...s, nameEn: skillName(s.id, 'en') })),
+  servitorSlots: SERVITOR_SLOTS,
   quests: QUEST_LIST.map((q) => ({ id: q.id, npc: q.npc, name: q.name, nameEn: questField(q, 'name', 'en'), minLevel: q.minLevel, objective: q.objective, xp: q.xp, adena: q.adena, evolve: q.evolve ?? false, daily: q.daily ?? false, rewards: q.rewards ?? [] })),
   npcs: NPCS.map((n) => ({
     id: n.id, name: n.name, kind: n.kind, x: n.x, z: n.z, ry: n.ry, shop: n.shop ?? null, craft: n.craft ?? null,
@@ -62,7 +68,7 @@ const out = {
   races: Object.entries(RACES).map(([id, r]) => ({ id, classes: r.classes, mods: r.mods, mw: r.mw })),
   genders: Object.entries(GENDERS).map(([id, g]) => ({ id, mods: g.mods })),
   classes: Object.entries(CLASSES).map(([id, c]) => ({ id, ...c, startItems: c.startItems.map(([item, count, equip]) => ({ item, count, equip })) })),
-  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null, block: SPECS[id].block ?? null, weapon: SPECS[id].weapon ?? null, crit: SPECS[id].crit ?? null, charges: SPECS[id].charges ?? null })),
+  specs: (Object.keys(SPECS) as (keyof typeof SPECS)[]).map((id) => ({ id, base: SPECS[id].base, name: SPECS[id].name, nameEn: specName(id, 'en'), parent: SPECS[id].parent ?? null, races: SPECS[id].races ?? null, block: SPECS[id].block ?? null, weapon: SPECS[id].weapon ?? null, crit: SPECS[id].crit ?? null, charges: SPECS[id].charges ?? null })),
   statuses: Object.entries(STATUSES).map(([id, s]) => ({ id, flag: s.flag })),
   raids: Object.values(RAIDS),
   // world nodes: [id, x, z, r, ry, seatY, zone]; gather rules per kind

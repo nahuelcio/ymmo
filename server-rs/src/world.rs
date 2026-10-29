@@ -23,8 +23,8 @@ pub fn now_ms() -> f64 {
 
 pub fn dist(a: &Common, b: &Common) -> f64 { (a.x - b.x).hypot(a.z - b.z) }
 
-/** A character crossing between worlds (overworld <-> raid). */
-pub struct Member { pub sid: u64, pub account_id: i64, pub char_id: i64, pub lang: Lang, pub out: Outbox }
+/** A character crossing between worlds (overworld <-> raid), and the servitor going along with them (pet.rs). */
+pub struct Member { pub sid: u64, pub account_id: i64, pub char_id: i64, pub lang: Lang, pub out: Outbox, pub pets: Vec<crate::pet::PetCarry> }
 
 pub enum HubEvent {
     /** /raid in the overworld: these members (already saved and removed) go into a new instance */
@@ -50,6 +50,8 @@ pub struct World {
     /** player entity ids, in arrival order */
     pub players: Vec<u32>,
     pub mobs: Vec<u32>,
+    /** the summoners' servitors (pet.rs) */
+    pub pets: Vec<u32>,
     pub parties: Vec<Party>,
     pub next_party: u32,
     /** trades in progress between two players of this world (trade.rs) */
@@ -89,7 +91,7 @@ pub struct World {
 impl World {
     pub fn new(db: Db, raid: Option<(&'static RaidDef, usize)>) -> World {
         let mut w = World {
-            ents: HashMap::new(), players: vec![], mobs: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
+            ents: HashMap::new(), players: vec![], mobs: vec![], pets: vec![], parties: vec![], next_party: 1, trades: vec![], next_trade: 1, camps: vec![], grid: HashMap::new(),
             now: now_ms(), next_id: 1, tick_n: 0, deferred: vec![], raid: raid.map(|r| r.0), raid_boss: None, raid_cleared_at: 0.0,
             rift: None, day: crate::formulas::loot_day(now_ms()), siege: Default::default(), arena: None, oly_queue: vec![], oly_month: -1,
             sessions: HashMap::new(), events: vec![], db, tick_cost: 0.0, nodes_gone: HashMap::new(), seats: HashMap::new(), clan_seen: 0,
@@ -151,12 +153,14 @@ impl World {
         e.c.cell = Self::key(e.c.x, e.c.z);
         self.grid.entry(e.c.cell).or_default().push(id);
         if matches!(e.k, Kind::Player(_)) { self.players.push(id); }
+        if matches!(e.k, Kind::Pet(_)) { self.pets.push(id); }
         self.ents.insert(id, e);
     }
 
     pub fn remove(&mut self, id: u32) -> Option<Ent> {
         let e = self.ents.remove(&id)?;
         if let Some(c) = self.grid.get_mut(&e.c.cell) { c.retain(|&x| x != id); }
+        if matches!(e.k, Kind::Pet(_)) { self.pets.retain(|&x| x != id); }
         if matches!(e.k, Kind::Player(_)) {
             self.players.retain(|&x| x != id);
             // a seat or tent they were in is free again (leaving the world never got them up)
@@ -282,6 +286,8 @@ impl World {
         }
         self.set_pos(pid, x, z);
         self.send(pid, json!({ "t": "teleported" }));
+        // the servitors come along
+        self.pet_to_owner(pid);
     }
 
     pub fn later(&mut self, at: f64, f: impl FnOnce(&mut World, f64) + Send + 'static) { self.deferred.push((at, Box::new(f))); }
@@ -613,6 +619,8 @@ impl World {
                 if g.mw { r["m"] = json!(true); }
                 r
             }
+            // a servitor: its servitor id, and whose it is
+            Kind::Pet(p) => json!({ "id": id, "x": x, "z": z, "ry": ry, "hp": hp, "f": f, "k": "s", "n": p.def.name, "l": p.level, "tpl": p.def.id, "o": p.owner, "on": p.owner_name }),
         }
     }
 
@@ -693,6 +701,8 @@ impl World {
         // an Olympiad Hero, and the aura it wears (the character window lets it choose)
         o.insert("hero".into(), json!(p.hero));
         o.insert("heroLook".into(), json!(p.hero_look));
+        // the servitors out (pet.rs), for their frames and their panel
+        o.insert("pets".into(), self.pet_state(pid));
         v
     }
 
@@ -718,6 +728,11 @@ impl World {
             if !self.ents.contains_key(&pid) { continue; }
             if !self.ents[&pid].c.statuses.is_empty() { self.tick_statuses(pid, now); }
             if self.ents.contains_key(&pid) { self.update_player(pid, dt, now); }
+        }
+        for id in self.pets.clone() {
+            if !self.ents.contains_key(&id) { continue; }
+            if !self.ents[&id].c.statuses.is_empty() { self.tick_statuses(id, now); }
+            if self.ents.contains_key(&id) { self.update_pet(id, dt, now); }
         }
         for mid in self.mobs.clone() {
             if !self.ents.contains_key(&mid) { continue; }

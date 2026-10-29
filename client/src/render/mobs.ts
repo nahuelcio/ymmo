@@ -161,16 +161,25 @@ function qMob(tplId: string): Rig | null {
 /** Quaternius farm and wild animals: Idle/Walk/Gallop/Eating/Death and a headbutt */
 const GAME = ['stag', 'horse', 'donkey', 'alpaca', 'bull', 'cow'] as const;
 const GRAZER: ClipSet = { idle: 'Eating', run: 'Gallop', attack: 'Attack_Headbutt', death: 'Death' };
+/** the same animals standing alert, as a mount or a summoner's unicorn does (render/servitors.ts) */
+export const STEED: ClipSet = { idle: 'Idle', run: 'Gallop', attack: 'Attack_Headbutt', death: 'Death' };
 const CREATURES = ['spider', 'wyvern', 'cobra', 'drake', 'crab', 'limule', 'golem', 'raptor', 'werewolf', 'yeti', 'forest'] as const;
-type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number];
+/** The summoner's servitors made with Tripo (tools/scripts/m-assets.mjs AI_SERVITORS), each on the skeleton of the mob
+ * it was set onto (tools/art/blender/servitors.py), moved to its build, with its clips in its own file (the soulless's
+ * and the spectral lord's KayKit's, the soulless with no death: it keels over). `?ai=0` leaves them unloaded: the old
+ * looks then. */
+export const AI_DONOR = { ai_war_wolf: 'wolf', ai_mirage: 'horse', ai_seraphim: 'horse', ai_soulless: 'skeleton_mage', ai_spectral_lord: 'skeleton_mage' } as const;
+const AI_SERVITORS = typeof location === 'undefined' || new URLSearchParams(location.search).get('ai') !== '0';
+export type Model = 'wolf' | 'fox' | (typeof GAME)[number] | 'skeleton_warrior' | 'skeleton_minion' | 'skeleton_rogue' | 'skeleton_mage' | (typeof CREATURES)[number]
+  | keyof typeof AI_DONOR;
 type Role = 'idle' | 'run' | 'attack' | 'death' | 'cast';
-type ClipSet = Partial<Record<Role, string>>;
+export type ClipSet = Partial<Record<Role, string>>;
 const ANIMAL: ClipSet = { idle: 'Idle', run: 'Gallop', attack: 'Attack', death: 'Death' };
 const CREATURE: ClipSet = { idle: 'Idle', run: 'Walk', attack: 'Attack', death: 'Death' };
 const BONES: ClipSet = { idle: 'Skeletons_Idle', run: 'Running_A', attack: 'Melee_1H_Attack_Chop', death: 'Skeletons_Death', cast: 'Ranged_Magic_Spellcasting' };
 const SKELETONS = ['skeleton_warrior', 'skeleton_minion', 'skeleton_rogue', 'skeleton_mage'] as const;
 
-interface GlbLook {
+export interface GlbLook {
   model: Model;
   /** height at mob scale 1 */
   height: number;
@@ -186,6 +195,11 @@ interface GlbLook {
   glow?: number;
   /** a translucent, glowing spirit (the wraith) */
   ghost?: boolean;
+  /** whether it hovers (a ghost does, unless this is false: a spectral knight walks on its legs) */
+  hover?: boolean;
+  /** a ghost's opacity: unset, 0.55 and seen through (depth not written); set, it writes depth, so a textured ghost
+   * folding over itself (a servitor's robe, its armour) stays clean */
+  opacity?: number;
   /** a static model that undulates along its length (the sea serpent) */
   wave?: boolean;
   /** painted with the village kit's rock (repeat count), instead of its own texture: the golems */
@@ -346,8 +360,10 @@ export function loadMobs(): Promise<void> {
     SKELETONS.forEach((m, i) => add(m, skels[i], anims.animations));
     for (const s of kit.scenes) weapons[s.name] = s;
     CREATURES.forEach((c, i) => creatures[i] && add(c, creatures[i]!, creatures[i]!.animations));
-    const game = await Promise.all(GAME.map((c) => get(c).catch((err) => (console.warn('mob model', c, err), null))));
+    const ai = AI_SERVITORS ? (Object.keys(AI_DONOR) as (keyof typeof AI_DONOR)[]) : [];
+    const [game, servitors] = await Promise.all([GAME, ai].map((list) => Promise.all(list.map((c) => get(c).catch((err) => (console.warn('mob model', c, err), null))))));
     GAME.forEach((c, i) => game[i] && add(c, game[i]!, game[i]!.animations));
+    ai.forEach((c, i) => servitors[i] && add(c, servitors[i]!, servitors[i]!.animations));
   })());
 }
 
@@ -371,7 +387,7 @@ function rockMap(n: number): THREE.Texture | null {
   return t;
 }
 function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): THREE.Material {
-  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? 'g' : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}:${l?.pale ?? ''}`;
+  const key = `${src.uuid}:${tint ?? ''}:${l?.dye ?? ''}:${l?.glow ?? ''}:${l?.ghost ? `g${l.opacity ?? ''}` : ''}:${l?.wave ? 'w' : ''}:${l?.rock ?? ''}:${l?.pale ?? ''}`;
   let m = mats.get(key);
   if (!m) {
     const s = src as THREE.MeshStandardMaterial;
@@ -382,7 +398,7 @@ function lambert(src: THREE.Material, tint: number | undefined, l?: GlbLook): TH
       name: s.name, map: (l?.rock && rockMap(l.rock)) || s.map, color,
       emissive: l?.glow ?? (glow ? (tint === undefined ? s.emissive.clone() : new THREE.Color(tint)) : 0x000000), emissiveMap: l?.glow ? null : s.emissiveMap,
     });
-    if (l?.ghost) Object.assign(mat, { transparent: true, opacity: 0.55, depthWrite: false });
+    if (l?.ghost) Object.assign(mat, { transparent: true, opacity: l.opacity ?? 0.55, depthWrite: l.opacity !== undefined });
     if (l?.pale && mat.map) {
       // the texture's shading as grey, brightened (square root, so its dark fur still reads), then tinted
       const k = l.pale.toFixed(2);
@@ -443,8 +459,15 @@ function mobWeapon(w: string): THREE.Object3D {
 }
 
 function glbMob(tplId: string): Rig | null {
-  const l = MOB_GLB[tplId], t = MOBS[tplId], src = l && loaded[l.model];
-  if (!l || !t || !src) return null;
+  const l = MOB_GLB[tplId], t = MOBS[tplId];
+  return l && t ? glbRig(l, t.scale, tplId) : null;
+}
+
+/** A model with its own skeleton and clips, as this look dresses it, at this size; `key` names its look (a mob's
+ * template, a servitor's): the parts it merges are planned once per key. Null while its file hasn't loaded. */
+export function glbRig(l: GlbLook, scale: number, key: string): Rig | null {
+  const src = loaded[l.model];
+  if (!src) return null;
   const obj = cloneSkinned(src.scene);
   let skinned: THREE.SkinnedMesh[] = [];
   obj.traverse((o) => {
@@ -457,8 +480,8 @@ function glbMob(tplId: string): Rig | null {
   });
   // a wolf is four plain-coloured parts, each with its own copy of the same skeleton: one skeleton, and one part per
   // material look (render/merge.ts)
-  let plan = mergePlans.get(tplId);
-  if (!plan) mergePlans.set(tplId, (plan = planSkinnedMerge(skinned)));
+  let plan = mergePlans.get(key);
+  if (!plan) mergePlans.set(key, (plan = planSkinnedMerge(skinned)));
   shareSkeletons(skinned);
   skinned = applySkinnedMerge(skinned, plan);
   for (const [slot, w] of [['handslotr', l.right], ['handslotl', l.left]] as const) {
@@ -468,15 +491,17 @@ function glbMob(tplId: string): Rig | null {
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   body.add(obj);
-  const height = l.height * t.scale;
+  const height = l.height * scale;
   obj.scale.multiplyScalar(height / src.height);
   obj.position.y = -src.base * (height / src.height); // feet on the ground whatever the model's origin
 
-  const animal = !l.model.startsWith('skeleton');
-  const creature = (CREATURES as readonly string[]).includes(l.model);
+  // a servitor made with Tripo plays as the mob whose skeleton it is on
+  const as: string = (AI_DONOR as Record<string, Model>)[l.model] ?? l.model;
+  const animal = !as.startsWith('skeleton');
+  const creature = (CREATURES as readonly string[]).includes(as);
   const set = { ...(creature ? CREATURE : animal ? ANIMAL : BONES), ...l.clips };
   const mixer = new THREE.AnimationMixer(obj);
-  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity, steps: [], body, float: !!l.ghost, wave: !!l.wave };
+  const a: ClipAnim = { mixer, acts: {}, w: {}, t: Infinity, steps: [], body, float: l.hover ?? !!l.ghost, wave: !!l.wave };
   for (const role of Object.keys(set) as Role[]) {
     const clip = src.clips.find((c) => c.name === set[role]);
     if (!clip) continue;
@@ -487,14 +512,14 @@ function glbMob(tplId: string): Rig | null {
   }
   // wyverns fly: no footsteps
   if (a.acts.run && l.model !== 'wyvern') a.steps = runSteps(l.model, src, a.acts.run.getClip());
-  if (l.fire) addBeastAura(root, t.scale, 'fire', [obj.getObjectByName('jaw_lower')]);
+  if (l.fire) addBeastAura(root, scale, 'fire', [obj.getObjectByName('jaw_lower')]);
   if (l.ice) {
     // the yeti's Mixamo bones (mixamorigLeftHand_38 once three.js has cleaned the name)
     const bone = (re: RegExp) => { let b: THREE.Object3D | undefined; obj.traverse((o) => { if (!b && (o as THREE.Bone).isBone && re.test(o.name)) b = o; }); return b; };
-    addBeastAura(root, t.scale, 'frost', [bone(/LeftHand(_\d+)?$/), bone(/RightHand(_\d+)?$/), bone(/Head(_\d+)?$/)]);
+    addBeastAura(root, scale, 'frost', [bone(/LeftHand(_\d+)?$/), bone(/RightHand(_\d+)?$/), bone(/Head(_\d+)?$/)]);
   }
   return {
-    root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * t.scale,
+    root, body, kind: l.kind ?? (animal ? 'beast' : 'humanoid'), legs: [], height, radius: (l.kind === 'humanoid' || !animal ? 0.4 : 0.55) * scale,
     anim: (s) => animateClips(a, s),
     dispose: () => {
       mixer.stopAllAction();

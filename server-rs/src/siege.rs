@@ -100,10 +100,10 @@ pub struct SiegeRun {
 }
 
 impl World {
-    /** A Guardian spares the side it defends (it never picks them out, and they cannot hurt it). */
+    /** A Guardian spares the side it defends (it never picks them out, and they cannot hurt it), their servitors too. */
     pub fn spares(&self, mid: u32, pid: u32) -> bool {
         let Some(fort) = self.ents.get(&mid).and_then(|e| e.mob()).and_then(|m| m.guard) else { return false };
-        self.pl(pid).is_some_and(|p| defends(p.char_id, fort))
+        self.owner_of(pid).and_then(|o| self.pl(o)).is_some_and(|p| defends(p.char_id, fort))
     }
 
     /** A player's blow on a Guardian, to its clan's count. */
